@@ -1,7 +1,7 @@
-import fnmatch
 import logging
-import os
+import subprocess
 import textwrap
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import cast
 
 from langfuse.decorators import observe
@@ -12,8 +12,6 @@ from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import AutofixRequest
-from seer.automation.codebase.code_search import CodeSearcher
-from seer.automation.codebase.models import MatchXml
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -259,134 +257,6 @@ class BaseTools:
                 cleanup_dir(tmp_dir)
             self.tmp_dir = None
 
-    @observe(name="Keyword Search")
-    @ai_track(description="Keyword Search")
-    def keyword_search(
-        self,
-        keyword: str,
-        supported_extensions: list[str],
-        in_proximity_to: str | None = None,
-    ):
-        """
-        Searches for a keyword in the codebase.
-        """
-        repo_names = self._get_repo_names()
-        all_results = []
-
-        if self.tmp_dir is None:
-            tmp_dirs = {}
-            for repo_name in repo_names:
-                repo_client = self.context.get_repo_client(
-                    repo_name=repo_name, type=self.repo_client_type
-                )
-                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-                tmp_dirs[repo_name] = (tmp_dir, tmp_repo_dir)
-
-            self.tmp_dir = tmp_dirs  # Store all tmp dirs
-            append_langfuse_observation_metadata({"keyword_search_download": True})
-        else:
-            append_langfuse_observation_metadata({"keyword_search_download": False})
-
-        for repo_name in repo_names:
-            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
-            if not tmp_repo_dir:
-                continue
-
-            searcher = CodeSearcher(
-                directory=tmp_repo_dir,
-                supported_extensions=set(supported_extensions),
-                start_path=in_proximity_to,
-            )
-
-            results = searcher.search(keyword)
-            if results:
-                for result in results:
-                    for match in result.matches:
-                        match_xml = MatchXml(
-                            path=result.relative_path,
-                            repo_name=repo_name,
-                            context=match.context,
-                        )
-                        all_results.append(match_xml.to_prompt_str())
-
-        self.context.event_manager.add_log(
-            f"Searched codebase for `{keyword}`, found {len(all_results)} result(s)."
-        )
-
-        if not all_results:
-            return "No results found."
-
-        return "\n\n".join(all_results)
-
-    @observe(name="File Search")
-    @ai_track(description="File Search")
-    def file_search(
-        self,
-        filename: str,
-    ):
-        """
-        Given a filename with extension returns the list of locations where a file with the name is found.
-        """
-        repo_names = self._get_repo_names()
-        found_files = ""
-
-        for repo_name in repo_names:
-            repo_client = self.context.get_repo_client(
-                repo_name=repo_name, type=self.repo_client_type
-            )
-            all_paths = repo_client.get_index_file_set()
-            found = [
-                path for path in all_paths if os.path.basename(path).lower() == filename.lower()
-            ]
-            if found:
-                found_files += f"\n FILES IN REPO {repo_name}:\n"
-                found_files += "\n".join([f"  {path}" for path in sorted(found)])
-
-        self.context.event_manager.add_log(f"Searching for file `{filename}`...")
-
-        if len(found_files) == 0:
-            return f"no file with name {filename} found in any repository"
-
-        return found_files
-
-    @observe(name="File Search Wildcard")
-    @ai_track(description="File Search Wildcard")
-    def file_search_wildcard(
-        self,
-        pattern: str,
-    ):
-        """
-        Given a filename pattern with wildcards, returns the list of file paths that match the pattern.
-        """
-        repo_names = self._get_repo_names()
-        found_files = ""
-
-        for repo_name in repo_names:
-            repo_client = self.context.get_repo_client(
-                repo_name=repo_name, type=self.repo_client_type
-            )
-            all_paths = repo_client.get_index_file_set()
-            found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
-            if found:
-                found_files += f"\n FILES IN REPO {repo_name}:\n"
-                found_files += "\n".join([f"  {path}" for path in sorted(found)])
-
-        self.context.event_manager.add_log(f"Searching for files with pattern `{pattern}`...")
-
-        if len(found_files) == 0:
-            return f"No files matching pattern '{pattern}' found in any repository"
-
-        return found_files
-
-    @observe(name="Ask User Question")
-    @ai_track(description="Ask User Question")
-    def ask_user_question(self, question: str):
-        """
-        Sends a question to the user on the frontend and waits for a response before continuing.
-        """
-        if isinstance(self.context, AutofixContext):
-            self.context.event_manager.ask_user_question(question)
-
     @observe(name="Search Google")
     @ai_track(description="Search Google")
     @inject
@@ -492,6 +362,162 @@ class BaseTools:
         else:
             return "Cannot fetch information for this event."
 
+    @observe(name="Grep Search")
+    @ai_track(description="Grep Search")
+    def grep_search(self, command: str, repo_name: str | None = None):
+        """
+        Runs a grep command over the downloaded repositories.
+        """
+        if not command.startswith("grep "):
+            return "Command must be a valid grep command that starts with 'grep'."
+
+        command = command.replace('\\"', '"')  # un-escape escaped quotes
+        command = command.replace("\\'", "'")  # un-escape escaped single quotes
+        command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
+
+        self.context.event_manager.add_log(f"Grepping codebase with `{command}`...")
+
+        self._ensure_repos_downloaded(repo_name)
+
+        repo_names = [repo_name] if repo_name else self._get_repo_names()
+        all_results = []
+
+        for repo_name in repo_names:
+            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
+            if not tmp_repo_dir:
+                continue
+
+            try:
+                # Run the grep command in the repo directory
+                process = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=tmp_repo_dir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if (
+                    process.returncode != 0 and process.returncode != 1
+                ):  # grep returns 1 when no matches found
+                    all_results.append(f"Results from {repo_name}: {process.stderr}")
+                elif process.stdout:
+                    all_results.append(
+                        f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                    )
+                else:
+                    all_results.append(f"Results from {repo_name}: no results found.")
+            except Exception as e:
+                all_results.append(f"Error in repo {repo_name}: {str(e)}")
+
+        if not all_results:
+            return "No results found."
+
+        return "\n\n".join(all_results)
+
+    def _ensure_repos_downloaded(self, repo_name: str | None = None):
+        """
+        Helper method to ensure repositories are downloaded to temporary directories.
+        Sets self.tmp_dir to a dict mapping repo_names to (tmp_dir, tmp_repo_dir) tuples.
+
+        Args:
+            repo_name: If provided, only ensures this specific repo is downloaded.
+                      If None, ensures all repos are downloaded.
+        """
+        if self.tmp_dir is None:
+            self.tmp_dir = {}
+
+        downloaded_something = False
+
+        if repo_name:
+            # Only download the specified repo if it's not already downloaded
+            if repo_name not in self.tmp_dir:
+                repo_client = self.context.get_repo_client(
+                    repo_name=repo_name, type=self.repo_client_type
+                )
+                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+                downloaded_something = True
+        else:
+            # Download all repos that aren't already downloaded
+            repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
+
+            if repo_names_to_download:
+
+                def download_repo(repo_name):
+                    repo_client = self.context.get_repo_client(
+                        repo_name=repo_name, type=self.repo_client_type
+                    )
+                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                    return repo_name, (tmp_dir, tmp_repo_dir)
+
+                with ThreadPoolExecutor() as executor:
+                    future_to_repo = {
+                        executor.submit(download_repo, repo_name): repo_name
+                        for repo_name in repo_names_to_download
+                    }
+                    for future in as_completed(future_to_repo):
+                        repo_name, repo_dirs = future.result()
+                        self.tmp_dir[repo_name] = repo_dirs
+
+                downloaded_something = True
+
+        # Log whether we downloaded anything new
+        append_langfuse_observation_metadata({"repo_download": downloaded_something})
+
+    @observe(name="Find Files")
+    @ai_track(description="Find Files")
+    def find_files(self, command: str, repo_name: str | None = None):
+        """
+        Runs a `find` command over the downloaded repositories to search for files.
+        """
+        if not command.startswith("find "):
+            return "Command must be a valid find command that starts with 'find'."
+
+        command = command.replace('\\"', '"')  # un-escape escaped quotes
+        command = command.replace("\\'", "'")  # un-escape escaped single quotes
+        command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
+
+        self.context.event_manager.add_log(f"Searching files with `{command}`...")
+
+        self._ensure_repos_downloaded(repo_name)
+
+        repo_names = [repo_name] if repo_name else self._get_repo_names()
+        all_results = []
+
+        for repo_name in repo_names:
+            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
+            if not tmp_repo_dir:
+                continue
+
+            try:
+                # Run the find command in the repo directory
+                process = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=tmp_repo_dir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if process.returncode != 0:
+                    all_results.append(f"Results from {repo_name}: {process.stderr}")
+                elif process.stdout:
+                    all_results.append(
+                        f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                    )
+                else:
+                    all_results.append(f"Results from {repo_name}: no files found.")
+            except Exception as e:
+                all_results.append(f"Error in repo {repo_name}: {str(e)}")
+
+        if not all_results:
+            return "No results found."
+
+        return "\n\n".join(all_results)
+
     def get_tools(self, can_access_repos: bool = True):
 
         tools = [
@@ -555,54 +581,40 @@ class BaseTools:
                         required=["file_path", "repo_name"],
                     ),
                     FunctionTool(
-                        name="keyword_search",
-                        fn=self.keyword_search,
-                        description="Searches for a keyword in the codebase.",
+                        name="grep_search",
+                        fn=self.grep_search,
+                        description="Runs a grep command over the codebase to find what you're looking for.",
                         parameters=[
                             {
-                                "name": "keyword",
+                                "name": "command",
                                 "type": "string",
-                                "description": "The keyword to search for.",
+                                "description": "The full grep command to execute. Do NOT include repo names in your command. Remember, you can get more context with the -C flag.",
                             },
                             {
-                                "name": "supported_extensions",
-                                "type": "array",
-                                "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
-                                "items": {"type": "string"},
-                            },
-                            {
-                                "name": "in_proximity_to",
+                                "name": "repo_name",
                                 "type": "string",
-                                "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
+                                "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
                             },
                         ],
-                        required=["keyword", "supported_extensions"],
+                        required=["command"],
                     ),
                     FunctionTool(
-                        name="file_search",
-                        fn=self.file_search,
-                        description="Given a filename with extension returns the list of locations where a file with the name is found.",
+                        name="find_files",
+                        fn=self.find_files,
+                        description="Runs a find command over the codebase to search for files based on various criteria.",
                         parameters=[
                             {
-                                "name": "filename",
+                                "name": "command",
                                 "type": "string",
-                                "description": "The filename with extension to search for.",
+                                "description": "The full find command to execute. Do NOT include repo names in your command. Example: 'find . -name \"*.py\" -type f'",
                             },
-                        ],
-                        required=["filename"],
-                    ),
-                    FunctionTool(
-                        name="file_search_wildcard",
-                        fn=self.file_search_wildcard,
-                        description="Searches for files in a folder using a wildcard pattern.",
-                        parameters=[
                             {
-                                "name": "pattern",
+                                "name": "repo_name",
                                 "type": "string",
-                                "description": "The wildcard pattern to match files.",
+                                "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
                             },
                         ],
-                        required=["pattern"],
+                        required=["command"],
                     ),
                     FunctionTool(
                         name="semantic_file_search",
