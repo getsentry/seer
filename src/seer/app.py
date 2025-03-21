@@ -90,7 +90,13 @@ from seer.grouping.grouping import (
     GroupingRequest,
     SimilarityResponse,
 )
-from seer.inference_models import anomaly_detection, embeddings_model, grouping_lookup
+from seer.inference_models import (
+    anomaly_detection,
+    embeddings_model,
+    grouping_lookup,
+    test_grouping_model,
+    test_severity_model,
+)
 from seer.json_api import json_api
 from seer.loading import LoadingResult
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
@@ -455,6 +461,15 @@ def ready_check(app_config: AppConfig = injected):
         smoke_status = check_smoke_test()
         logger.info(f"Celery smoke status: {smoke_status}")
         status = min(status, smoke_status)
+
+    # Only run model tests if models are already loaded
+    if status == LoadingResult.DONE:
+        # Test appropriate models based on deployment type
+        if app_config.is_grouping_enabled and not test_grouping_model():
+            status = LoadingResult.FAILED
+
+        if app_config.is_severity_enabled and not test_severity_model():
+            status = LoadingResult.FAILED
 
     if status == LoadingResult.FAILED:
         statsd.increment("seer.health.ready.500")
