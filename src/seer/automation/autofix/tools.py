@@ -383,6 +383,8 @@ class BaseTools:
         all_results = []
 
         for repo_name in repo_names:
+            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+                continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
                 continue
@@ -459,7 +461,8 @@ class BaseTools:
                     }
                     for future in as_completed(future_to_repo):
                         repo_name, repo_dirs = future.result()
-                        self.tmp_dir[repo_name] = repo_dirs
+                        if repo_name and repo_dirs:
+                            self.tmp_dir[repo_name] = repo_dirs
 
                 downloaded_something = True
 
@@ -487,6 +490,8 @@ class BaseTools:
         all_results = []
 
         for repo_name in repo_names:
+            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+                continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
                 continue
