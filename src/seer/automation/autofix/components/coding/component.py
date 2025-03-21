@@ -280,6 +280,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 model = CodeChangesPromptXml.from_xml(
                     f"<code_changes>{escape_multi_xml(code_changes_content, ['code', 'commit_message'])}</code_changes>"
                 ).to_model()
+                print(model)
                 for task in model.tasks:
                     task.repo_name = self.context.autocorrect_repo_name(task.repo_name)
                 return model
