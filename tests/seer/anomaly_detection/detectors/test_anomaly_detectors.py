@@ -14,6 +14,7 @@ from seer.anomaly_detection.detectors.anomaly_detectors import (
     MPStreamAnomalyDetector,
 )
 from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
     AlgoConfig,
     ConfidenceLevel,
     MPTimeSeriesAnomaliesSingleWindow,
@@ -61,6 +62,12 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
                     ConfidenceLevel.MEDIUM,
                     ConfidenceLevel.MEDIUM,
                     ConfidenceLevel.MEDIUM,
+                ],
+                algo_types=[
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
                 ],
             )
         )
@@ -191,7 +198,11 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         mock_utils.get_mp_dist_from_mp.return_value = np.array([0.1, 0.2])
 
         mock_scorer.stream_score.return_value = FlagsAndScores(
-            scores=[0.5], flags=["none"], thresholds=[], confidence_levels=[ConfidenceLevel.MEDIUM]
+            scores=[0.5],
+            flags=["none"],
+            thresholds=[],
+            confidence_levels=[ConfidenceLevel.MEDIUM],
+            algo_types=[AlertAlgorithmType.NONE],
         )
 
         anomalies = self.detector.detect(

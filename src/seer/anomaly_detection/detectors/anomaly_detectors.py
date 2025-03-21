@@ -177,6 +177,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             thresholds=flags_and_scores.thresholds if algo_config.return_thresholds else None,
             original_flags=original_flags,
             confidence_levels=flags_and_scores.confidence_levels,
+            algorithm_types=flags_and_scores.algo_types,
         )
 
 
@@ -286,7 +287,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 self.original_flags.append(flags_and_scores.flags[-1])
-
                 stream_flag_smoother = MajorityVoteStreamFlagSmoother()
 
                 # Apply stream smoothing to the newest flag based on the previous original flags
@@ -323,4 +323,5 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 thresholds=thresholds if algo_config.return_thresholds else None,
                 original_flags=self.original_flags,
                 confidence_levels=flags_and_scores.confidence_levels,
+                algorithm_types=flags_and_scores.algo_types,
             )

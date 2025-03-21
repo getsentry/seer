@@ -16,6 +16,7 @@ from seer.anomaly_detection.models import (
     Threshold,
     ThresholdType,
 )
+from seer.anomaly_detection.models.timeseries_anomalies import AlertAlgorithmType
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
 from seer.tags import AnomalyDetectionTags
@@ -28,6 +29,10 @@ class FlagsAndScores(BaseModel):
     scores: List[float]
     thresholds: List[List[Threshold]]
     confidence_levels: List[ConfidenceLevel]
+    algo_types: List[AlertAlgorithmType] = Field(
+        default=[],
+        description="The algorithm types used to detect the anomalies",
+    )
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,

@@ -217,7 +217,6 @@ class AnomalyDetection(BaseModel):
         Returns:
         Tuple with input timeseries and identified anomalies
         """
-
         logger.info(f"Detecting anomalies for alert ID: {alert.id}")
         ts_external: List[TimeSeriesPoint] = []
         if alert.cur_window:
@@ -271,6 +270,7 @@ class AnomalyDetection(BaseModel):
                     window_size=3,
                     original_flags=[],
                     confidence_levels=[],
+                    algorithm_types=[],
                 ),
                 algo_data=None,
                 historic=historic,
@@ -462,6 +462,7 @@ class AnomalyDetection(BaseModel):
             window_size=100,
             original_flags=[],
             confidence_levels=[],
+            algorithm_types=[],
         )
 
         historic_anomalies, prophet_df = self._batch_detect_internal(
@@ -484,6 +485,7 @@ class AnomalyDetection(BaseModel):
             window_size=historic_anomalies.window_size,
             original_flags=historic_anomalies.original_flags[-trim_current_by:],
             confidence_levels=historic_anomalies.confidence_levels[-trim_current_by:],
+            algorithm_types=historic_anomalies.algorithm_types[-trim_current_by:],
         )
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
@@ -518,6 +520,7 @@ class AnomalyDetection(BaseModel):
             window_size=agg_streamed_anomalies.window_size,
             original_flags=agg_streamed_anomalies.original_flags[-orig_curr_len:],
             confidence_levels=agg_streamed_anomalies.confidence_levels[-orig_curr_len:],
+            algorithm_types=agg_streamed_anomalies.algorithm_types[-orig_curr_len:],
         )
 
         converted_anomalies = DbAlertDataAccessor().combine_anomalies(

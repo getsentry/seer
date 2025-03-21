@@ -10,6 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field
 logger = logging.getLogger(__name__)
 
 
+class AlertAlgorithmType(StrEnum):
+    BOTH = "both"
+    MP = "mp"
+    PROPHET = "prophet"
+    NONE = "none"
+
+
 class ConfidenceLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
@@ -84,6 +91,10 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
         ..., description="The confidence levels of the anomalies"
     )
 
+    algorithm_types: List[AlertAlgorithmType] = Field(
+        ..., description="The algorithm used to detect the anomalies"
+    )
+
     def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:
         algo_data: List[Optional[Dict]] = []
         if len(self.matrix_profile) < front_pad_to_len:
@@ -96,6 +107,11 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
                 if i < len(self.confidence_levels)
                 else ConfidenceLevel.MEDIUM
             )
+            algorithm_type = (
+                self.algorithm_types[i]
+                if i < len(self.algorithm_types)
+                else AlertAlgorithmType.NONE
+            )
             algo_data.append(
                 {
                     "dist": dist,
@@ -104,6 +120,7 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
                     "r_idx": r_index,
                     "original_flag": original_flag,
                     "confidence_level": confidence_level,
+                    "algorithm_type": algorithm_type,
                 }
             )
 
@@ -118,6 +135,7 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
             map.get("r_idx"),
             map.get("original_flag"),
             map.get("confidence_level"),
+            map.get("algorithm_type"),
         )
 
     def extend(
@@ -170,6 +188,10 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
         ..., description="The confidence levels of the anomalies"
     )
 
+    algorithm_types: List[AlertAlgorithmType] = Field(
+        ..., description="The algorithm used to detect the anomalies"
+    )
+
     def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:
         algo_data: List[Optional[Dict]] = []
 
@@ -213,6 +235,12 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
                 else ConfidenceLevel.MEDIUM
             )
 
+            algorithm_type = (
+                self.algorithm_types[i]
+                if i < len(self.algorithm_types)
+                else AlertAlgorithmType.NONE
+            )
+
             algo_data.append(
                 {
                     "mp_suss": mp_suss,
@@ -220,6 +248,7 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
                     "original_flag": original_flag,
                     "use_suss": use_suss,
                     "confidence_level": confidence_level,
+                    "algorithm_type": algorithm_type,
                 }
             )
 
@@ -266,4 +295,5 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
             "original_flag": map.get("original_flag"),
             "use_suss": map.get("use_suss", True),
             "confidence_level": map.get("confidence_level"),
+            "algorithm_type": map.get("algorithm_type"),
         }

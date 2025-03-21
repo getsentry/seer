@@ -7,6 +7,7 @@ import pytest
 from seer.anomaly_detection.detectors.anomaly_scorer import CombinedAnomalyScorer
 from seer.anomaly_detection.detectors.mp_scorers import FlagsAndScores
 from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
     AlgoConfig,
     AnomalyDetectionConfig,
     ConfidenceLevel,
@@ -404,6 +405,11 @@ class TestCombinedAnomalyScorer:
                 ConfidenceLevel.HIGH,
                 ConfidenceLevel.MEDIUM,
             ],
+            algo_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.MP,
+                AlertAlgorithmType.NONE,
+            ],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -463,6 +469,11 @@ class TestCombinedAnomalyScorer:
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
+            ],
+            algo_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
             ],
         )
         # Test merging MP and Prophet results
@@ -524,6 +535,11 @@ class TestCombinedAnomalyScorer:
                 ConfidenceLevel.HIGH,
                 ConfidenceLevel.HIGH,
             ],
+            algo_types=[
+                AlertAlgorithmType.MP,
+                AlertAlgorithmType.MP,
+                AlertAlgorithmType.MP,
+            ],
         )
         # Test merging MP and Prophet results
         timestamps = np.array(
@@ -583,6 +599,11 @@ class TestCombinedAnomalyScorer:
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.HIGH,
                 ConfidenceLevel.MEDIUM,
+            ],
+            algo_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.MP,
+                AlertAlgorithmType.NONE,
             ],
         )
 
