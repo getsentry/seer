@@ -333,7 +333,7 @@ def codecov_request_endpoint(
     if data.request_type == "pr-review":
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
-        return codegen_unit_tests_endpoint(data.data)
+        return codegen_unittest(data.data, is_codecov_request=True)
     elif data.request_type == "retry-unit-tests":
         return codegen_retry_unittest(data.data)
 

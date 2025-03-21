@@ -20,6 +20,7 @@ from seer.automation.pipeline import PipelineStepTaskRequest
 class UnittestStepRequest(PipelineStepTaskRequest):
     pr_id: int
     repo_definition: RepoDefinition
+    is_codecov_request: bool
 
 
 @celery_app.task(
@@ -52,8 +53,13 @@ class UnittestStep(CodegenStep):
     def _invoke(self, **kwargs):
         self.logger.info("Executing Codegen - Unittest Step")
         self.context.event_manager.mark_running()
+        client_type = (
+            RepoClientType.CODECOV_PR_REVIEW
+            if self.request.is_codecov_request
+            else RepoClientType.CODECOV_UNIT_TEST  # CODECOV_UNIT_TEST is the autofix app
+        )
 
-        repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_UNIT_TEST)
+        repo_client = self.context.get_repo_client(type=client_type)
         pr = repo_client.repo.get_pull(self.request.pr_id)
         diff_content = repo_client.get_pr_diff_content(pr.url)
 
@@ -70,7 +76,8 @@ class UnittestStep(CodegenStep):
                 CodeUnitTestRequest(
                     diff=diff_content,
                     codecov_client_params=codecov_client_params,
-                )
+                ),
+                is_codecov_request=self.request.is_codecov_request,
             )
 
             if unittest_output:
