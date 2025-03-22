@@ -164,6 +164,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             history_mp=np.array([[0.3, 0.3, 0.3, 0.3], [0.4, 0.5, 0.6, 0.7]]),
             window_size=3,
             original_flags=["none", "none", "none"],
+            original_combined_flags=["none", "none", "none"],
         )
         self.timeseries = TimeSeries(
             timestamps=np.array([1, 2, 3]), values=np.array([1.1, 2.1, 3.1])
@@ -253,6 +254,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             history_mp=history_mp,
             window_size=window_size,
             original_flags=["none", "none", "none"],
+            original_combined_flags=["none", "none", "none"],
         )
         stream_ts_timestamps = np.array(list(range(1, len(stream_ts) + 1))) + len(history_ts)
         stream_anomalies = stream_detector.detect(
@@ -383,6 +385,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                 history_mp=np.array([0.1, 0.2, 0.3, 0.4]),
                 window_size=3,
                 original_flags=original_flags,
+                original_combined_flags=original_flags,
             )
             stream_detector.detect(
                 timeseries=TimeSeries(

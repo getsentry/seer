@@ -180,7 +180,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     confidence_levels[i] = (
                         algo_data.get("confidence_level") or ConfidenceLevel.MEDIUM
                     )  # Default to medium for backwards compatibility
-                algo_types[i] = algo_data.get("alert_algorithm_type") or AlertAlgorithmType.NONE
+                    algo_types[i] = algo_data.get("algorithm_type") or AlertAlgorithmType.NONE
             if ts[i] < timestamp_threshold:
                 num_old_points += 1
 

@@ -193,8 +193,12 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
     original_flags: list[AnomalyFlags | None] = Field(
-        ..., description="Original flags of the baseline timeseries."
+        ..., description="Original MP flags of the baseline timeseries."
     )
+    original_combined_flags: list[AnomalyFlags | None] = Field(
+        ..., description="Original combined flags of the baseline timeseries."
+    )
+
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
@@ -287,11 +291,13 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 self.original_flags.append(flags_and_scores.flags[-1])
+                self.original_combined_flags.append(flags_and_scores.flags[-1])
+
                 stream_flag_smoother = MajorityVoteStreamFlagSmoother()
 
                 # Apply stream smoothing to the newest flag based on the previous original flags
                 smoothed_flags = stream_flag_smoother.smooth(
-                    original_flags=self.original_flags,
+                    original_flags=self.original_combined_flags,
                     ad_config=ad_config,
                     algo_config=algo_config,
                     vote_threshold=0.3,

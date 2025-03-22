@@ -15,6 +15,7 @@ from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
 from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
 from seer.anomaly_detection.detectors.prophet_anomaly_detector import ProphetAnomalyDetector
 from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
     AlgoConfig,
     DynamicAlert,
     MPTimeSeriesAnomalies,
@@ -298,6 +299,12 @@ class AnomalyDetection(BaseModel):
             )
             raise ServerError("Invalid state")
 
+        # Original Combined Flags represent the original flags AFTER mp and prophet flags have been combined but BEFORE smoothing
+        original_combined_flags = [
+            "anomaly_higher_confidence" if algorithm_type != AlertAlgorithmType.NONE else "none"
+            for algorithm_type in historic.anomalies.algorithm_types
+        ]
+
         # Run stream detection
         # SuSS Window
         stream_detector = MPStreamAnomalyDetector(
@@ -306,6 +313,7 @@ class AnomalyDetection(BaseModel):
             history_mp=anomalies.matrix_profile_suss,
             window_size=anomalies.window_size,
             original_flags=original_flags,
+            original_combined_flags=original_combined_flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external),
@@ -487,12 +495,17 @@ class AnomalyDetection(BaseModel):
             confidence_levels=historic_anomalies.confidence_levels[-trim_current_by:],
             algorithm_types=historic_anomalies.algorithm_types[-trim_current_by:],
         )
+        original_combined_flags = [
+            "anomaly_higher_confidence" if algorithm_type != AlertAlgorithmType.NONE else "none"
+            for algorithm_type in historic_anomalies.algorithm_types
+        ]
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timestamps,
             history_values=historic.values,
             history_mp=historic_anomalies.matrix_profile,
             window_size=historic_anomalies.window_size,
             original_flags=historic_anomalies.original_flags,
+            original_combined_flags=original_combined_flags,
         )
         num_points_to_stream = min(max_stream_detection_len, len(current.values))
         cur_stream_ts = TimeSeries(
