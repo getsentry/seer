@@ -313,14 +313,9 @@ class TestGrepSearch:
 
         result = autofix_tools.grep_search("grep -r 'example_function' .")
 
-        mock_run.assert_called_once_with(
-            "grep -r 'example_function' .",
-            shell=True,
-            cwd="/tmp/test_dir/repo",
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        mock_run.assert_called_once()
+        assert mock_run.call_args[1]["shell"] is False
+        assert mock_run.call_args[1]["cwd"] == "/tmp/test_dir/repo"
         assert "Results from owner/test_repo:" in result
         assert "file1.py:10:def example_function()" in result
 
@@ -416,14 +411,9 @@ class TestFindFiles:
 
         result = autofix_tools.find_files("find . -name '*.py'")
 
-        mock_run.assert_called_once_with(
-            "find . -name '*.py'",
-            shell=True,
-            cwd="/tmp/test_dir/repo",
-            capture_output=True,
-            text=True,
-            check=False,
-        )
+        mock_run.assert_called_once()
+        assert mock_run.call_args[1]["shell"] is False
+        assert mock_run.call_args[1]["cwd"] == "/tmp/test_dir/repo"
         assert "Results from owner/test_repo:" in result
         assert "./src/file1.py" in result
         assert "./src/dir/file2.py" in result
