@@ -1,10 +1,10 @@
 import textwrap
 
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.agent.embeddings import GoogleProviderEmbeddings, cosine_similarity
+from seer.automation.autofixability import AutofixabilityModel
 from seer.automation.models import EventDetails
 from seer.automation.summarize.models import (
     GetFixabilityScoreRequest,
@@ -194,19 +194,22 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
 
 
 @observe(name="Get Fixability Score")
-def run_fixability_score(request: GetFixabilityScoreRequest) -> SummarizeIssueResponse:
+def run_fixability_score(
+    request: GetFixabilityScoreRequest, autofixability_model: AutofixabilityModel
+) -> SummarizeIssueResponse:
+    langfuse_context.update_current_trace(session_id=f"group:{request.group_id}")
     with Session() as session:
         db_state = session.get(DbIssueSummary, request.group_id)
         if not db_state:
             raise ValueError(f"No issue summary found for group_id: {request.group_id}")
         issue_summary = IssueSummaryWithScores.from_db_state(db_state)
 
-    fixability_score, is_fixable = evaluate_autofixability(issue_summary)
+    fixability_score, is_fixable = evaluate_autofixability(issue_summary, autofixability_model)
 
     with Session() as session:
         issue_summary.scores = SummarizeIssueScores(
             fixability_score=fixability_score,
-            fixability_score_version=1,
+            fixability_score_version=2,
             is_fixable=is_fixable,
         )
         session.merge(issue_summary.to_db_state(request.group_id))
@@ -216,29 +219,15 @@ def run_fixability_score(request: GetFixabilityScoreRequest) -> SummarizeIssueRe
 
 
 @observe(name="Evaluate Autofixability")
-def evaluate_autofixability(issue_summary: IssueSummaryWithScores) -> tuple[float, bool]:
-    fixable_range = [
-        "This issue is complex and very difficult to resolve",
-        "This issue is in the codebase, simple and easily resolved",
-    ]
-    embedding_model = GoogleProviderEmbeddings(
-        model_name="text-multilingual-embedding-002", task_type="SEMANTIC_SIMILARITY"
-    )
-
+def evaluate_autofixability(
+    issue_summary: IssueSummaryWithScores, autofixability_model: AutofixabilityModel
+) -> tuple[float, bool]:
     issue_summary_input = (
         f"Here's an issue:\n"
         f"Issue title: {issue_summary.title}\n"
         f"What's wrong: {issue_summary.whats_wrong}\n"
         f"Possible cause: {issue_summary.possible_cause}"
     )
-
-    embeddings = embedding_model.encode([*fixable_range, issue_summary_input])
-
-    similarity_scores = cosine_similarity(embeddings[2].reshape(1, -1), embeddings[:2])
-    fixable_scores = similarity_scores[:, 1] - similarity_scores[:, 0]
-
-    score = fixable_scores[0]
-
-    is_fixable = score > 0.00988  # 80th percentile
-
+    score = autofixability_model.score(issue_summary_input)
+    is_fixable = score > 0.64727825  # 80th percentile
     return score, is_fixable

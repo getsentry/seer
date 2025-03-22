@@ -28,6 +28,7 @@ from seer.automation.autofix.models import (
     AutofixRequest,
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
+from seer.automation.autofixability import AutofixabilityModel
 from seer.automation.state import LocalMemoryState
 from seer.automation.summarize.models import (
     GetFixabilityScoreRequest,
@@ -530,7 +531,7 @@ class TestSeer(unittest.TestCase):
                 possible_cause_confidence=0.8,
                 possible_cause_novelty=0.6,
                 fixability_score=0.75,
-                fixability_score_version=1,
+                fixability_score_version=2,
                 is_fixable=True,
             ),
         )
@@ -551,9 +552,12 @@ class TestSeer(unittest.TestCase):
         response_data = json.loads(response.data)
         assert response_data["group_id"] == 123
         assert response_data["scores"]["fixability_score"] == 0.75
-        assert response_data["scores"]["fixability_score_version"] == 1
+        assert response_data["scores"]["fixability_score_version"] == 2
         assert response_data["scores"]["is_fixable"] is True
-        mock_run_fixability_score.assert_called_once_with(test_data)
+
+        expected_test_data, autofixability_model = mock_run_fixability_score.call_args[0]
+        assert expected_test_data == test_data
+        assert isinstance(autofixability_model, AutofixabilityModel)
 
     @mock.patch("seer.app.run_fixability_score")
     def test_get_fixability_score_endpoint_error(self, mock_run_fixability_score):
@@ -568,7 +572,9 @@ class TestSeer(unittest.TestCase):
         )
 
         assert response.status_code == 500  # InternalServerError
-        mock_run_fixability_score.assert_called_once_with(test_data)
+        expected_test_data, autofixability_model = mock_run_fixability_score.call_args[0]
+        assert expected_test_data == test_data
+        assert isinstance(autofixability_model, AutofixabilityModel)
 
     @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.detect_anomalies")
     def test_detect_anomalies_endpoint_success(self, mock_detect_anomalies):

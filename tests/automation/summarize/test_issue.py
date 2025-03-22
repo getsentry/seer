@@ -1,12 +1,12 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import numpy as np
 import pytest
 from johen import generate
 
 from seer.automation.agent.client import LlmGenerateStructuredResponse, LlmResponseMetadata
 from seer.automation.agent.models import LlmProviderType, Usage
+from seer.automation.autofixability import AutofixabilityModel
 from seer.automation.models import IssueDetails
 from seer.automation.summarize.issue import (
     IssueSummaryForLlmToGenerate,
@@ -23,6 +23,7 @@ from seer.automation.summarize.models import (
     SummarizeIssueScores,
 )
 from seer.db import DbIssueSummary
+from seer.stubs import can_use_model_stubs
 
 
 class TestSummarizeIssue:
@@ -251,9 +252,15 @@ class TestFixabilityScore:
             ),
         )
 
+    @pytest.fixture
+    def autofixability_model(self):
+        return AutofixabilityModel("models/autofixability_v0/embeddings")
+
     @patch("seer.automation.summarize.issue.evaluate_autofixability")
     @patch("seer.automation.summarize.issue.Session")
-    def test_run_fixability_score(self, mock_session, mock_evaluate_autofixability):
+    def test_run_fixability_score(
+        self, mock_session, mock_evaluate_autofixability, autofixability_model
+    ):
         # Setup mocks
         mock_db_session = Mock()
         mock_session.return_value.__enter__.return_value = mock_db_session
@@ -284,7 +291,7 @@ class TestFixabilityScore:
         request = GetFixabilityScoreRequest(group_id=123)
 
         # Call the function
-        result = run_fixability_score(request)
+        result = run_fixability_score(request, autofixability_model)
 
         # Assertions
         mock_db_session.get.assert_called_once_with(DbIssueSummary, 123)
@@ -295,11 +302,11 @@ class TestFixabilityScore:
         assert result.group_id == 123
         assert result.scores is not None
         assert result.scores.fixability_score == 0.75
-        assert result.scores.fixability_score_version == 1
+        assert result.scores.fixability_score_version == 2
         assert result.scores.is_fixable is True
 
     @patch("seer.automation.summarize.issue.Session")
-    def test_run_fixability_score_no_summary(self, mock_session):
+    def test_run_fixability_score_no_summary(self, mock_session, autofixability_model):
         # Setup mocks
         mock_db_session = Mock()
         mock_session.return_value.__enter__.return_value = mock_db_session
@@ -310,67 +317,30 @@ class TestFixabilityScore:
 
         # Call the function and expect exception
         with pytest.raises(ValueError, match="No issue summary found for group_id: 123"):
-            run_fixability_score(request)
+            run_fixability_score(request, autofixability_model)
 
-    @patch("seer.automation.summarize.issue.GoogleProviderEmbeddings")
-    def test_evaluate_autofixability(self, mock_embeddings_class):
-        # Setup mock for embeddings
-        mock_embeddings = Mock()
-        mock_embeddings_class.return_value = mock_embeddings
-
-        # Create mock embeddings
-        mock_embeddings_results = np.array(
-            [
-                [0.1, 0.2, 0.3],  # First range: not fixable
-                [0.8, 0.7, 0.9],  # Second range: very fixable
-                [0.7, 0.6, 0.8],  # Issue embedding: more similar to fixable
-            ]
-        )
-        mock_embeddings.encode.return_value = mock_embeddings_results
-
-        # Create sample issue summary with proper scores
-        issue_summary = IssueSummaryWithScores(
-            title="Null Pointer Exception",
-            whats_wrong="App crashes when clicking submit with empty form",
-            session_related_issues="No related issues",
-            possible_cause="Missing null check on form data",
+    def test_evaluate_autofixability(self, autofixability_model: AutofixabilityModel):
+        issue_summary_fixable = IssueSummaryWithScores(
+            title="KeyError: Overwriting 'message' in LogRecord during logging of similar issues embeddings",
+            whats_wrong="**KeyError** in logging: Attempt to overwrite 'message'. Occurs when logging **extra** data.  Happens in `group_similar_issues_embeddings.py`.",
+            session_related_issues="",
+            possible_cause="The `extra` parameter in `logger.info` contains a key named 'message', which conflicts with the LogRecord's internal 'message' attribute.  This is a **logging configuration issue**.",
             scores=SummarizeIssueScores(
-                possible_cause_confidence=0.9,
-                possible_cause_novelty=0.4,
+                possible_cause_confidence=0.95,
+                possible_cause_novelty=0.85,
             ),
         )
-
-        # Call the function with proper mocking of cosine_similarity
-        with patch("seer.automation.summarize.issue.cosine_similarity") as mock_cosine_similarity:
-            # Mock the cosine similarity to return values that indicate the issue is fixable
-            # The score needs to be high enough to pass the threshold check (> 0.00988)
-            mock_cosine_similarity.return_value = np.array(
-                [[0.2, 0.9]]
-            )  # More similar to fixable example
-
-            score, is_fixable = evaluate_autofixability(issue_summary)
-
-            # Assertions
-            mock_embeddings_class.assert_called_once_with(
-                model_name="text-multilingual-embedding-002", task_type="SEMANTIC_SIMILARITY"
-            )
-
-            expected_input = (
-                f"Here's an issue:\n"
-                f"Issue title: {issue_summary.title}\n"
-                f"What's wrong: {issue_summary.whats_wrong}\n"
-                f"Possible cause: {issue_summary.possible_cause}"
-            )
-
-            mock_embeddings.encode.assert_called_once()
-            encode_args = mock_embeddings.encode.call_args[0][0]
-            assert "This issue is complex and very difficult to resolve" in encode_args
-            assert "This issue is in the codebase, simple and easily resolved" in encode_args
-            assert expected_input in encode_args
-
-            mock_cosine_similarity.assert_called_once()
-            assert score > 0
+        score, is_fixable = evaluate_autofixability(issue_summary_fixable, autofixability_model)
+        assert isinstance(score, float)
+        assert 0 < score < 1
+        assert isinstance(is_fixable, bool)
+        if not can_use_model_stubs():
             assert is_fixable
+            assert score == pytest.approx(0.68511546, abs=1e-5)
+        assert (
+            str(autofixability_model)
+            == f"AutofixabilityModel(model_path={autofixability_model.model_path})"
+        )
 
     def test_issue_summary_db_conversions(self, sample_issue_summary):
         # Test to_db_state
@@ -385,12 +355,12 @@ class TestFixabilityScore:
         # Update with fixability scores
         sample_issue_summary.scores.fixability_score = 0.85
         sample_issue_summary.scores.is_fixable = True
-        sample_issue_summary.scores.fixability_score_version = 1
+        sample_issue_summary.scores.fixability_score_version = 2
 
         db_state = sample_issue_summary.to_db_state(456)
         assert db_state.fixability_score == 0.85
         assert db_state.is_fixable is True
-        assert db_state.fixability_score_version == 1
+        assert db_state.fixability_score_version == 2
 
         # Test from_db_state
         db_summary = DbIssueSummary(

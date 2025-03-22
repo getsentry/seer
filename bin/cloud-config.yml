@@ -44,6 +44,7 @@ write_files:
                                    -v /mnt/disks/mydir2:/app/data \
                                    -e SEVERITY_ENABLED=false \
                                    -e GROUPING_ENABLED=true \
+                                   -e AUTOFIXABILITY_SCORING_ENABLED=false \
                                    -e PORT=80 \
                                    -e SENTRY_BASE_URL=values.sentry_base_url \
                                    -e DATABASE_URL=postgresql+psycopg://root:seer@10.128.0.7/seer \
