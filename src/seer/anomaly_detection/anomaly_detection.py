@@ -1,12 +1,13 @@
 import datetime
 import logging
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
+from datadog.dogstatsd.base import statsd
 from pydantic import BaseModel
 
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
@@ -14,7 +15,9 @@ from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
 from seer.anomaly_detection.detectors import MPBatchAnomalyDetector, MPStreamAnomalyDetector
 from seer.anomaly_detection.detectors.prophet_anomaly_detector import ProphetAnomalyDetector
 from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
     AlgoConfig,
+    DynamicAlert,
     MPTimeSeriesAnomalies,
     MPTimeSeriesAnomaliesSingleWindow,
     TimeSeries,
@@ -141,6 +144,58 @@ class AnomalyDetection(BaseModel):
 
         return timeseries, batch_anomalies, prophet_df
 
+    @sentry_sdk.trace
+    def _save_and_fire_pruning_task(
+        self,
+        timepoint: TimeSeriesPoint,
+        streamed_anomalies: MPTimeSeriesAnomaliesSingleWindow,
+        algo_data: Optional[dict],
+        historic: DynamicAlert,
+        config: AnomalyDetectionConfig,
+        alert_data_accessor: AlertDataAccessor,
+        queue_cleanup_predict_task: bool,
+        force_cleanup: bool,
+    ) -> None:
+        # Save new data point
+        alert_data_accessor.save_timepoint(
+            external_alert_id=historic.external_alert_id,
+            timepoint=timepoint,
+            anomaly=streamed_anomalies,
+            anomaly_algo_data=algo_data,
+        )
+
+        if queue_cleanup_predict_task:
+            # Delayed import due to circular imports
+            from seer.anomaly_detection.tasks import cleanup_timeseries_and_predict
+
+            try:
+                # Set flag and create new task for cleanup if we have enough history and too many old points or not enough predictions remaining
+                cleanup_predict_config = historic.cleanup_predict_config
+                if alert_data_accessor.can_queue_cleanup_predict_task(
+                    historic.external_alert_id,
+                    apply_time_threshold=not force_cleanup,  # if we are forcing cleanup, we should ignore the time threshold check
+                ) and (
+                    force_cleanup
+                    or (
+                        cleanup_predict_config.num_old_points
+                        >= cleanup_predict_config.num_acceptable_points
+                        or cleanup_predict_config.num_predictions_remaining
+                        <= cleanup_predict_config.num_acceptable_predictions
+                    )
+                ):
+                    alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
+                    cleanup_timeseries_and_predict.apply_async(
+                        (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
+                        countdown=random.randint(
+                            0, config.time_period * 45
+                        ),  # Wait between 0 - time_period * 45 seconds before queuing so the tasks are not all queued at the same time and stll have a chance to run before nex detection call
+                    )
+            except Exception as e:
+                # Reset task and capture exception
+                alert_data_accessor.reset_cleanup_predict_task(historic.external_alert_id)
+                sentry_sdk.capture_exception(e)
+                logger.exception(e)
+
     @inject
     @sentry_sdk.trace
     def _online_detect(
@@ -163,7 +218,6 @@ class AnomalyDetection(BaseModel):
         Returns:
         Tuple with input timeseries and identified anomalies
         """
-
         logger.info(f"Detecting anomalies for alert ID: {alert.id}")
         ts_external: List[TimeSeriesPoint] = []
         if alert.cur_window:
@@ -205,6 +259,29 @@ class AnomalyDetection(BaseModel):
         # Confirm that there is enough data (after purge)
         min_data = self._min_required_timesteps(historic.config.time_period)
         if len(historic.timeseries.timestamps) < min_data:
+            # If there is not enough data, we will not detect any anomalies. We still should save the timepoint
+            # so that we can detect anomalies in the future.
+            self._save_and_fire_pruning_task(
+                timepoint=ts_external[0],
+                streamed_anomalies=MPTimeSeriesAnomaliesSingleWindow(
+                    flags=["none"] * len(ts_external),
+                    scores=[0.0] * len(ts_external),
+                    thresholds=[],
+                    matrix_profile=np.array([]),
+                    window_size=3,
+                    original_flags=[],
+                    confidence_levels=[],
+                    algorithm_types=[],
+                ),
+                algo_data=None,
+                historic=historic,
+                config=config,
+                alert_data_accessor=alert_data_accessor,
+                queue_cleanup_predict_task=(
+                    len(historic.timeseries.timestamps) == min_data - 1
+                ),  # we queue cleanup task if we have just enough data to detect anomalies in the next call
+                force_cleanup=True,
+            )
             logger.error(f"Not enough timeseries data. At least {min_data} data points required")
             raise ClientError(
                 f"Not enough timeseries data. At least {min_data} data points required"
@@ -222,8 +299,13 @@ class AnomalyDetection(BaseModel):
             )
             raise ServerError("Invalid state")
 
-        # Run stream detection
+        # Original Combined Flags represent the original flags AFTER mp and prophet flags have been combined but BEFORE smoothing
+        original_combined_flags = [
+            "anomaly_higher_confidence" if algorithm_type != AlertAlgorithmType.NONE else "none"
+            for algorithm_type in historic.anomalies.algorithm_types
+        ]
 
+        # Run stream detection
         # SuSS Window
         stream_detector = MPStreamAnomalyDetector(
             history_timestamps=historic.timeseries.timestamps,
@@ -231,6 +313,7 @@ class AnomalyDetection(BaseModel):
             history_mp=anomalies.matrix_profile_suss,
             window_size=anomalies.window_size,
             original_flags=original_flags,
+            original_combined_flags=original_combined_flags,
         )
         streamed_anomalies = stream_detector.detect(
             convert_external_ts_to_internal(ts_external),
@@ -276,54 +359,21 @@ class AnomalyDetection(BaseModel):
         streamed_anomalies_online = alert_data_accessor.combine_anomalies(
             streamed_anomalies, None, anomalies.use_suss[-num_anomlies:]
         )
-
-        # Save new data point
-        alert_data_accessor.save_timepoint(
-            external_alert_id=alert.id,
+        self._save_and_fire_pruning_task(
             timepoint=ts_external[0],
-            anomaly=streamed_anomalies,
-            anomaly_algo_data=streamed_anomalies_online.get_anomaly_algo_data(len(ts_external))[0],
+            streamed_anomalies=streamed_anomalies,
+            algo_data=streamed_anomalies_online.get_anomaly_algo_data(len(ts_external))[0],
+            historic=historic,
+            config=config,
+            alert_data_accessor=alert_data_accessor,
+            queue_cleanup_predict_task=True,
+            force_cleanup=False,
         )
-
-        # Delayed import due to circular imports
-        from seer.anomaly_detection.tasks import cleanup_timeseries_and_predict
-
-        try:
-            # Set flag and create new task for cleanup if too many old points or not enough predictions remaining
-            cleanup_predict_config = historic.cleanup_predict_config
-            if alert_data_accessor.can_queue_cleanup_predict_task(historic.external_alert_id) and (
-                cleanup_predict_config.num_old_points
-                >= cleanup_predict_config.num_acceptable_points
-                or cleanup_predict_config.num_predictions_remaining
-                <= cleanup_predict_config.num_acceptable_predictions
-            ):
-                alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
-                cleanup_timeseries_and_predict.apply_async(
-                    (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
-                    countdown=random.randint(
-                        0, config.time_period * 60
-                    ),  # Wait between 0 - time_period * 60 seconds before queuing so the tasks are not all queued at the same time
-                )
-        except Exception as e:
-            # Reset task and capture exception
-            alert_data_accessor.reset_cleanup_predict_task(historic.external_alert_id)
-            sentry_sdk.capture_exception(e)
-            logger.exception(e)
 
         return ts_external, streamed_anomalies_online
 
     def _min_required_timesteps(self, time_period, min_num_days=7):
         return int(min_num_days * 24 * 60 / time_period)
-
-    def _adjust_time_budget_for_combo_detection(
-        self, time_budget_ms: int | None, num_rows: int, num_rows_per_day: int
-    ):
-        if time_budget_ms is not None:
-            if num_rows > num_rows_per_day:
-                time_budget_ms = time_budget_ms // (num_rows // num_rows_per_day)
-            else:
-                time_budget_ms = time_budget_ms // 2
-        return time_budget_ms
 
     def _shift_current_by(
         self, history: TimeSeries, current: TimeSeries, num_rows: int, inplace: bool = False
@@ -385,11 +435,11 @@ class AnomalyDetection(BaseModel):
         trim_current_by = 0
         time_period = ad_config.time_period
         num_rows_per_day = (24 * 60) // time_period
-        prophet_batching_num_rows = int(
-            num_rows_per_day * algo_config.combo_detection_prophet_batching_interval_days
+        max_stream_detection_len = int(
+            algo_config.max_stream_days_for_combo_detection[time_period] * num_rows_per_day
         )
-        max_stream_detection_len = (
-            algo_config.max_stream_days_for_combo_detection * num_rows_per_day
+        max_batch_detection_len = int(
+            algo_config.max_batch_days_for_combo_detection[time_period] * num_rows_per_day
         )
         if orig_curr_len > max_stream_detection_len:
             trim_current_by = orig_curr_len - max_stream_detection_len
@@ -400,10 +450,17 @@ class AnomalyDetection(BaseModel):
                 history=historic, current=current, num_rows=trim_current_by
             )
 
+        if len(historic.values) > max_batch_detection_len:
+            trim_historic_by = len(historic.values) - max_batch_detection_len
+            logger.info(
+                f"Limiting batch detection to last {max_batch_detection_len} datapoints of the original {len(historic.values)} datapoints."
+            )
+            historic.values = historic.values[trim_historic_by:]
+            historic.timestamps = historic.timestamps[trim_historic_by:]
         # Adjust time budget based on the number of rows in the current time series
-        time_budget_ms = self._adjust_time_budget_for_combo_detection(
-            time_budget_ms, len(current.values), prophet_batching_num_rows
-        )
+        time_budget_ms = (
+            time_budget_ms // 2 if time_budget_ms else None
+        )  # Splitting between batch and stream detection
 
         agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=[],
@@ -413,65 +470,56 @@ class AnomalyDetection(BaseModel):
             window_size=100,
             original_flags=[],
             confidence_levels=[],
+            algorithm_types=[],
         )
-        initial_history = True
-        while len(current.values) > 0:
-            # Run batch detect on history data
-            historic_anomalies, prophet_df = self._batch_detect_internal(
-                ts_internal=historic,
-                config=ad_config,
-                window_size=None,
-                time_budget_ms=time_budget_ms,
-                algo_config=algo_config,
-                prophet_forecast_len_days=algo_config.combo_detection_prophet_batching_interval_days,
-            )
 
-            if initial_history:
-                # When batch is run for the first time, we need to capture the anomalies for the last trim_current_by points
-                # because we will be shifting the current data in the next iteration
-                agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
-                    flags=historic_anomalies.flags[-trim_current_by:],
-                    scores=historic_anomalies.scores[-trim_current_by:],
-                    thresholds=(
-                        historic_anomalies.thresholds[-trim_current_by:]
-                        if historic_anomalies.thresholds
-                        else None
-                    ),
-                    matrix_profile=historic_anomalies.matrix_profile[-trim_current_by:],
-                    window_size=historic_anomalies.window_size,
-                    original_flags=historic_anomalies.original_flags[-trim_current_by:],
-                    confidence_levels=historic_anomalies.confidence_levels[-trim_current_by:],
-                )
-                initial_history = False
+        historic_anomalies, prophet_df = self._batch_detect_internal(
+            ts_internal=historic,
+            config=ad_config,
+            window_size=None,
+            time_budget_ms=time_budget_ms,
+            algo_config=algo_config,
+            prophet_forecast_len_days=max_stream_detection_len,  # This ensures that the there is only prophet detection run always
+        )
+        agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
+            flags=historic_anomalies.flags[-trim_current_by:],
+            scores=historic_anomalies.scores[-trim_current_by:],
+            thresholds=(
+                historic_anomalies.thresholds[-trim_current_by:]
+                if historic_anomalies.thresholds
+                else None
+            ),
+            matrix_profile=historic_anomalies.matrix_profile[-trim_current_by:],
+            window_size=historic_anomalies.window_size,
+            original_flags=historic_anomalies.original_flags[-trim_current_by:],
+            confidence_levels=historic_anomalies.confidence_levels[-trim_current_by:],
+            algorithm_types=historic_anomalies.algorithm_types[-trim_current_by:],
+        )
+        original_combined_flags = [
+            "anomaly_higher_confidence" if algorithm_type != AlertAlgorithmType.NONE else "none"
+            for algorithm_type in historic_anomalies.algorithm_types
+        ]
+        stream_detector = MPStreamAnomalyDetector(
+            history_timestamps=historic.timestamps,
+            history_values=historic.values,
+            history_mp=historic_anomalies.matrix_profile,
+            window_size=historic_anomalies.window_size,
+            original_flags=historic_anomalies.original_flags,
+            original_combined_flags=original_combined_flags,
+        )
+        num_points_to_stream = min(max_stream_detection_len, len(current.values))
+        cur_stream_ts = TimeSeries(
+            timestamps=current.timestamps[0:num_points_to_stream],
+            values=current.values[0:num_points_to_stream],
+        )
 
-            # Run stream detection on current data
-            stream_detector = MPStreamAnomalyDetector(
-                history_timestamps=historic.timestamps,
-                history_values=historic.values,
-                history_mp=historic_anomalies.matrix_profile,
-                window_size=historic_anomalies.window_size,
-                original_flags=historic_anomalies.original_flags,
-            )
-
-            num_points_to_stream = min(prophet_batching_num_rows, len(current.values))
-            cur_stream_ts = TimeSeries(
-                timestamps=current.timestamps[0:num_points_to_stream],
-                values=current.values[0:num_points_to_stream],
-            )
-
-            streamed_anomalies = stream_detector.detect(
-                cur_stream_ts,
-                ad_config,
-                time_budget_ms=time_budget_ms,
-                prophet_df=prophet_df,
-            )
-            agg_streamed_anomalies = agg_streamed_anomalies.extend(streamed_anomalies)
-            self._shift_current_by(
-                history=historic,
-                current=current,
-                num_rows=num_points_to_stream,
-                inplace=True,
-            )
+        streamed_anomalies = stream_detector.detect(
+            cur_stream_ts,
+            ad_config,
+            time_budget_ms=time_budget_ms,
+            prophet_df=prophet_df,
+        )
+        agg_streamed_anomalies = agg_streamed_anomalies.extend(streamed_anomalies)
 
         final_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=agg_streamed_anomalies.flags[-orig_curr_len:],
@@ -485,6 +533,7 @@ class AnomalyDetection(BaseModel):
             window_size=agg_streamed_anomalies.window_size,
             original_flags=agg_streamed_anomalies.original_flags[-orig_curr_len:],
             confidence_levels=agg_streamed_anomalies.confidence_levels[-orig_curr_len:],
+            algorithm_types=agg_streamed_anomalies.algorithm_types[-orig_curr_len:],
         )
 
         converted_anomalies = DbAlertDataAccessor().combine_anomalies(
@@ -527,16 +576,22 @@ class AnomalyDetection(BaseModel):
         sentry_sdk.set_tag(AnomalyDetectionTags.MODE, mode)
 
         if isinstance(request.context, AlertInSeer):
-            sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
-            ts, anomalies = self._online_detect(request.context, request.config)
+            with statsd.timed("seer.anomaly_detection.detect.online_detect_duration"):
+                statsd.increment("seer.anomaly_detection.detect.online_detect")
+                sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
+                ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
-            ts, anomalies = self._combo_detect(
-                request.context, request.config, time_budget_ms=time_budget_ms
-            )
+            with statsd.timed("seer.anomaly_detection.detect.combo_detect_duration"):
+                statsd.increment("seer.anomaly_detection.detect.combo_detect")
+                ts, anomalies = self._combo_detect(
+                    request.context, request.config, time_budget_ms=time_budget_ms
+                )
         else:
-            ts, anomalies, _ = self._batch_detect(
-                request.context, request.config, time_budget_ms=time_budget_ms
-            )
+            with statsd.timed("seer.anomaly_detection.detect.batch_detect_duration"):
+                statsd.increment("seer.anomaly_detection.detect.batch_detect")
+                ts, anomalies, _ = self._batch_detect(
+                    request.context, request.config, time_budget_ms=time_budget_ms
+                )
         self._update_anomalies(ts, anomalies)
         return DetectAnomaliesResponse(success=True, timeseries=ts)
 
@@ -588,11 +643,9 @@ class AnomalyDetection(BaseModel):
         time_elapsed = datetime.datetime.now() - time_start
         time_allocated = datetime.timedelta(milliseconds=time_budget_ms)
         if time_elapsed > time_allocated:
-            sentry_sdk.set_extra("time_taken", time_elapsed)
-            sentry_sdk.set_extra("time_allocated", time_allocated)
-            sentry_sdk.capture_message(
-                "batch_detection_took_too_long",
-                level="error",
+            logger.error(
+                "batch_detection_took+_too_long",
+                extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
             )
             raise ServerError(
                 "Batch detection took too long"

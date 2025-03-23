@@ -1,8 +1,8 @@
-import fnmatch
 import logging
-import os
+import subprocess
 import textwrap
-from typing import Literal, TypeAlias
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Literal, TypeAlias, cast
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
@@ -11,13 +11,14 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.codebase.code_search import CodeSearcher
-from seer.automation.codebase.models import MatchXml
+from seer.automation.autofix.models import AutofixRequest
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
+from seer.automation.models import EventDetails, Profile, SentryEventData
 from seer.dependency_injection import inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
+from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
 
@@ -268,134 +269,6 @@ class BaseTools:
                 cleanup_dir(tmp_dir)
             self.tmp_dir = None
 
-    @observe(name="Keyword Search")
-    @ai_track(description="Keyword Search")
-    def keyword_search(
-        self,
-        keyword: str,
-        supported_extensions: list[str],
-        in_proximity_to: str | None = None,
-    ):
-        """
-        Searches for a keyword in the codebase.
-        """
-        repo_names = self._get_repo_names()
-        all_results = []
-
-        if self.tmp_dir is None:
-            tmp_dirs = {}
-            for repo_name in repo_names:
-                repo_client = self.context.get_repo_client(
-                    repo_name=repo_name, type=self.repo_client_type
-                )
-                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-                tmp_dirs[repo_name] = (tmp_dir, tmp_repo_dir)
-
-            self.tmp_dir = tmp_dirs  # Store all tmp dirs
-            append_langfuse_observation_metadata({"keyword_search_download": True})
-        else:
-            append_langfuse_observation_metadata({"keyword_search_download": False})
-
-        for repo_name in repo_names:
-            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
-            if not tmp_repo_dir:
-                continue
-
-            searcher = CodeSearcher(
-                directory=tmp_repo_dir,
-                supported_extensions=set(supported_extensions),
-                start_path=in_proximity_to,
-            )
-
-            results = searcher.search(keyword)
-            if results:
-                for result in results:
-                    for match in result.matches:
-                        match_xml = MatchXml(
-                            path=result.relative_path,
-                            repo_name=repo_name,
-                            context=match.context,
-                        )
-                        all_results.append(match_xml.to_prompt_str())
-
-        self.context.event_manager.add_log(
-            f"Searched codebase for `{keyword}`, found {len(all_results)} result(s)."
-        )
-
-        if not all_results:
-            return "No results found."
-
-        return "\n\n".join(all_results)
-
-    @observe(name="File Search")
-    @ai_track(description="File Search")
-    def file_search(
-        self,
-        filename: str,
-    ):
-        """
-        Given a filename with extension returns the list of locations where a file with the name is found.
-        """
-        repo_names = self._get_repo_names()
-        found_files = ""
-
-        for repo_name in repo_names:
-            repo_client = self.context.get_repo_client(
-                repo_name=repo_name, type=self.repo_client_type
-            )
-            all_paths = repo_client.get_index_file_set()
-            found = [
-                path for path in all_paths if os.path.basename(path).lower() == filename.lower()
-            ]
-            if found:
-                found_files += f"\n FILES IN REPO {repo_name}:\n"
-                found_files += "\n".join([f"  {path}" for path in sorted(found)])
-
-        self.context.event_manager.add_log(f"Searching for file `{filename}`...")
-
-        if len(found_files) == 0:
-            return f"no file with name {filename} found in any repository"
-
-        return found_files
-
-    @observe(name="File Search Wildcard")
-    @ai_track(description="File Search Wildcard")
-    def file_search_wildcard(
-        self,
-        pattern: str,
-    ):
-        """
-        Given a filename pattern with wildcards, returns the list of file paths that match the pattern.
-        """
-        repo_names = self._get_repo_names()
-        found_files = ""
-
-        for repo_name in repo_names:
-            repo_client = self.context.get_repo_client(
-                repo_name=repo_name, type=self.repo_client_type
-            )
-            all_paths = repo_client.get_index_file_set()
-            found = [path for path in all_paths if fnmatch.fnmatch(path, pattern)]
-            if found:
-                found_files += f"\n FILES IN REPO {repo_name}:\n"
-                found_files += "\n".join([f"  {path}" for path in sorted(found)])
-
-        self.context.event_manager.add_log(f"Searching for files with pattern `{pattern}`...")
-
-        if len(found_files) == 0:
-            return f"No files matching pattern '{pattern}' found in any repository"
-
-        return found_files
-
-    @observe(name="Ask User Question")
-    @ai_track(description="Ask User Question")
-    def ask_user_question(self, question: str):
-        """
-        Sends a question to the user on the frontend and waits for a response before continuing.
-        """
-        if isinstance(self.context, AutofixContext):
-            self.context.event_manager.ask_user_question(question)
-
     @observe(name="Search Google")
     @ai_track(description="Search Google")
     @inject
@@ -407,6 +280,260 @@ class BaseTools:
         return llm_client.generate_text_from_web_search(
             prompt=question, model=GeminiProvider(model_name="gemini-2.0-flash-001")
         )
+
+    @observe(name="Get Profile")
+    @ai_track(description="Get Profile")
+    @inject
+    def get_profile(self, event_id: str, rpc_client: RpcClient = injected):
+        """
+        Fetches a profile for a specific transaction event.
+        """
+        # get full event id and TraceEvent payload
+        state = self.context.state.get()
+        if not isinstance(self.context, AutofixContext) or not isinstance(
+            state.request, AutofixRequest
+        ):
+            return "No trace available. Cannot fetch profiles."
+
+        trace_tree = state.request.trace_tree
+        if trace_tree is None:
+            return "No trace available. Cannot fetch profiles."
+        event = trace_tree.get_event_by_id(event_id)
+        if event is None:
+            return "Invalid event ID."
+        if event.profile_id is None:
+            return "No profile available for this transaction."
+
+        self.context.event_manager.add_log(f"Studying profile for `{event.title}`...")
+
+        # if profile available, fetch it via Seer RPC
+        profile_data = rpc_client.call(
+            "get_profile_details",
+            organization_id=trace_tree.org_id,
+            project_id=event.project_id,
+            profile_id=event.profile_id,
+        )  # expecting data compatible with Profile model
+        if not profile_data:
+            return "Could not fetch profile."
+        try:
+            profile = Profile.model_validate(profile_data)
+            return profile.format_profile(context_before=100, context_after=100)
+        except Exception as e:
+            logger.exception(f"Could not parse profile from tool call: {e}")
+            return "Could not fetch profile."
+
+    @observe(name="Get Trace Event Details")
+    @ai_track(description="Get Trace Event Details")
+    @inject
+    def get_trace_event_details(self, event_id: str, rpc_client: RpcClient = injected):
+        """
+        Fetches the spans under a selected transaction event or the stacktrace under an error event.
+        """
+        # get full event id and TraceEvent payload
+        state = self.context.state.get()
+        if not isinstance(self.context, AutofixContext) or not isinstance(
+            state.request, AutofixRequest
+        ):
+            return "No trace available. Cannot fetch details."
+
+        trace_tree = state.request.trace_tree
+        if trace_tree is None:
+            return "No trace available. Cannot fetch details."
+        event = trace_tree.get_event_by_id(event_id)
+        if event is None:
+            return "Invalid event ID."
+        full_event_id = event.event_id
+        if not full_event_id:
+            return "Cannot fetch information for this event."
+
+        if event.is_transaction:
+            # if it's a transaction, use the spans already in the payload
+            self.context.event_manager.add_log(f"Studying spans under `{event.title}`...")
+            return event.format_spans_tree()
+        elif event.is_error:
+            # if it's an error, fetch the event details via Seer RPC
+            self.context.event_manager.add_log(f"Studying connected error `{event.title}`...")
+
+            project_id = event.project_id
+            error_event_id = event.event_id
+            error_data = rpc_client.call(
+                "get_error_event_details",
+                project_id=project_id,
+                event_id=error_event_id,
+            )  # expecting data compatible with SentryEventData model
+            if not error_data:
+                return "Could not fetch error event details."
+            data = cast(SentryEventData, error_data)
+            try:
+                error_event_details = EventDetails.from_event(data)
+                self.context.process_event_paths(error_event_details)
+                return error_event_details.format_event_without_breadcrumbs()
+            except Exception as e:
+                logger.exception(f"Could not parse error event details from tool call: {e}")
+                return "Could not fetch error event details."
+        else:
+            return "Cannot fetch information for this event."
+
+    @observe(name="Grep Search")
+    @ai_track(description="Grep Search")
+    def grep_search(self, command: str, repo_name: str | None = None):
+        """
+        Runs a grep command over the downloaded repositories.
+        """
+        if not command.startswith("grep "):
+            return "Command must be a valid grep command that starts with 'grep'."
+
+        command = command.replace('\\"', '"')  # un-escape escaped quotes
+        command = command.replace("\\'", "'")  # un-escape escaped single quotes
+        command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
+
+        self.context.event_manager.add_log(f"Grepping codebase with `{command}`...")
+
+        self._ensure_repos_downloaded(repo_name)
+
+        repo_names = [repo_name] if repo_name else self._get_repo_names()
+        all_results = []
+
+        for repo_name in repo_names:
+            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+                continue
+            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
+            if not tmp_repo_dir:
+                continue
+
+            try:
+                # Run the grep command in the repo directory
+                process = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=tmp_repo_dir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if (
+                    process.returncode != 0 and process.returncode != 1
+                ):  # grep returns 1 when no matches found
+                    all_results.append(f"Results from {repo_name}: {process.stderr}")
+                elif process.stdout:
+                    all_results.append(
+                        f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                    )
+                else:
+                    all_results.append(f"Results from {repo_name}: no results found.")
+            except Exception as e:
+                all_results.append(f"Error in repo {repo_name}: {str(e)}")
+
+        if not all_results:
+            return "No results found."
+
+        return "\n\n".join(all_results)
+
+    def _ensure_repos_downloaded(self, repo_name: str | None = None):
+        """
+        Helper method to ensure repositories are downloaded to temporary directories.
+        Sets self.tmp_dir to a dict mapping repo_names to (tmp_dir, tmp_repo_dir) tuples.
+
+        Args:
+            repo_name: If provided, only ensures this specific repo is downloaded.
+                      If None, ensures all repos are downloaded.
+        """
+        if self.tmp_dir is None:
+            self.tmp_dir = {}
+
+        downloaded_something = False
+
+        if repo_name:
+            # Only download the specified repo if it's not already downloaded
+            if repo_name not in self.tmp_dir:
+                repo_client = self.context.get_repo_client(
+                    repo_name=repo_name, type=self.repo_client_type
+                )
+                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+                downloaded_something = True
+        else:
+            # Download all repos that aren't already downloaded
+            repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
+
+            if repo_names_to_download:
+
+                def download_repo(repo_name):
+                    repo_client = self.context.get_repo_client(
+                        repo_name=repo_name, type=self.repo_client_type
+                    )
+                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                    return repo_name, (tmp_dir, tmp_repo_dir)
+
+                with ThreadPoolExecutor() as executor:
+                    future_to_repo = {
+                        executor.submit(download_repo, repo_name): repo_name
+                        for repo_name in repo_names_to_download
+                    }
+                    for future in as_completed(future_to_repo):
+                        repo_name, repo_dirs = future.result()
+                        if repo_name and repo_dirs:
+                            self.tmp_dir[repo_name] = repo_dirs
+
+                downloaded_something = True
+
+        # Log whether we downloaded anything new
+        append_langfuse_observation_metadata({"repo_download": downloaded_something})
+
+    @observe(name="Find Files")
+    @ai_track(description="Find Files")
+    def find_files(self, command: str, repo_name: str | None = None):
+        """
+        Runs a `find` command over the downloaded repositories to search for files.
+        """
+        if not command.startswith("find "):
+            return "Command must be a valid find command that starts with 'find'."
+
+        command = command.replace('\\"', '"')  # un-escape escaped quotes
+        command = command.replace("\\'", "'")  # un-escape escaped single quotes
+        command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
+
+        self.context.event_manager.add_log(f"Searching files with `{command}`...")
+
+        self._ensure_repos_downloaded(repo_name)
+
+        repo_names = [repo_name] if repo_name else self._get_repo_names()
+        all_results = []
+
+        for repo_name in repo_names:
+            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+                continue
+            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
+            if not tmp_repo_dir:
+                continue
+
+            try:
+                # Run the find command in the repo directory
+                process = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=tmp_repo_dir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if process.returncode != 0:
+                    all_results.append(f"Results from {repo_name}: {process.stderr}")
+                elif process.stdout:
+                    all_results.append(
+                        f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                    )
+                else:
+                    all_results.append(f"Results from {repo_name}: no files found.")
+            except Exception as e:
+                all_results.append(f"Error in repo {repo_name}: {str(e)}")
+
+        if not all_results:
+            return "No results found."
+
+        return "\n\n".join(all_results)
 
     def get_tools(self, can_access_repos: bool = True):
 
@@ -471,54 +598,40 @@ class BaseTools:
                         required=["file_path", "repo_name"],
                     ),
                     FunctionTool(
-                        name="keyword_search",
-                        fn=self.keyword_search,
-                        description="Searches for a keyword in the codebase.",
+                        name="grep_search",
+                        fn=self.grep_search,
+                        description="Runs a grep command over the codebase to find what you're looking for.",
                         parameters=[
                             {
-                                "name": "keyword",
+                                "name": "command",
                                 "type": "string",
-                                "description": "The keyword to search for.",
+                                "description": "The full grep command to execute. Do NOT include repo names in your command. Remember, you can get more context with the -C flag.",
                             },
                             {
-                                "name": "supported_extensions",
-                                "type": "array",
-                                "description": "The str[] of supported extensions to search in. Include the dot in the extension. For example, ['.py', '.js'].",
-                                "items": {"type": "string"},
-                            },
-                            {
-                                "name": "in_proximity_to",
+                                "name": "repo_name",
                                 "type": "string",
-                                "description": "Optional path to search in proximity to, the results will be ranked based on proximity to this path.",
+                                "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
                             },
                         ],
-                        required=["keyword", "supported_extensions"],
+                        required=["command"],
                     ),
                     FunctionTool(
-                        name="file_search",
-                        fn=self.file_search,
-                        description="Given a filename with extension returns the list of locations where a file with the name is found.",
+                        name="find_files",
+                        fn=self.find_files,
+                        description="Runs a find command over the codebase to search for files based on various criteria.",
                         parameters=[
                             {
-                                "name": "filename",
+                                "name": "command",
                                 "type": "string",
-                                "description": "The filename with extension to search for.",
+                                "description": "The full find command to execute. Do NOT include repo names in your command. Example: 'find . -name \"*.py\" -type f'",
                             },
-                        ],
-                        required=["filename"],
-                    ),
-                    FunctionTool(
-                        name="file_search_wildcard",
-                        fn=self.file_search_wildcard,
-                        description="Searches for files in a folder using a wildcard pattern.",
-                        parameters=[
                             {
-                                "name": "pattern",
+                                "name": "repo_name",
                                 "type": "string",
-                                "description": "The wildcard pattern to match files.",
+                                "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
                             },
                         ],
-                        required=["pattern"],
+                        required=["command"],
                     ),
                     FunctionTool(
                         name="semantic_file_search",
@@ -602,5 +715,52 @@ class BaseTools:
         #             required=["question"],
         #         )
         #     )
+
+        run_request = self.context.state.get().request
+        if (
+            isinstance(self.context, AutofixContext)
+            and isinstance(run_request, AutofixRequest)
+            and not run_request.options.disable_interactivity
+            and (run_request.invoking_user and run_request.invoking_user.id == 3283725)
+        ):  # TODO temporary guard for Rohan (@roaga) to test in prod
+            trace_tree = run_request.trace_tree
+
+            if (
+                trace_tree and trace_tree.events
+            ):  # Only add trace events tool if there are events in the trace
+                tools.append(
+                    FunctionTool(
+                        name="get_trace_event_details",
+                        fn=self.get_trace_event_details,
+                        description="Read detailed information about a specific event in the trace. You can view stack traces for connected errors and view the granular spans that make up other events, like endpoint calls, background jobs, and page loads.",
+                        parameters=[
+                            {
+                                "name": "event_id",
+                                "type": "string",
+                                "description": "The ID of the transaction event to fetch the details for.",
+                            },
+                        ],
+                        required=["event_id"],
+                    )
+                )
+
+            if trace_tree and any(
+                event.profile_id is not None for event in trace_tree._get_all_events()
+            ):  # Only add profile tool if there are events with profile_ids in the trace
+                tools.append(
+                    FunctionTool(
+                        name="get_profile_for_trace_event",
+                        fn=self.get_profile,
+                        description="Read a record of the exact code execution for a specific event in the trace (any event marked with 'profile available').",
+                        parameters=[
+                            {
+                                "name": "event_id",
+                                "type": "string",
+                                "description": "The event ID of the event to fetch the profile for.",
+                            },
+                        ],
+                        required=["event_id"],
+                    )
+                )
 
         return tools

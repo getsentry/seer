@@ -29,7 +29,7 @@ from seer.automation.models import (
     ThreadDetails,
 )
 from seer.automation.state import DbStateRunTypes
-from seer.automation.summarize.issue import IssueSummary, IssueSummaryWithScores
+from seer.automation.summarize.issue import IssueSummaryWithScores
 from seer.automation.summarize.models import SummarizeIssueScores
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
 

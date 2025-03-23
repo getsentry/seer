@@ -30,6 +30,8 @@ from seer.automation.autofix.models import (
     AutofixCreateBranchUpdatePayload,
     AutofixCreatePrUpdatePayload,
     AutofixEvaluationRequest,
+    AutofixFeedback,
+    AutofixFeedbackPayload,
     AutofixRequest,
     AutofixResolveCommentThreadPayload,
     AutofixRestartFromPointPayload,
@@ -334,6 +336,32 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
     except Exception as e:
         logger.error(f"Error committing changes for run {run_id}: {e}")
         raise
+
+
+def receive_feedback(request: AutofixUpdateRequest):
+    autofix_state = get_autofix_state(run_id=request.run_id)
+
+    if not autofix_state:
+        raise ValueError("Autofix state not found")
+
+    payload = cast(AutofixFeedbackPayload, request.payload)
+
+    with autofix_state.update() as cur:
+        if cur.feedback is None:
+            cur.feedback = AutofixFeedback()
+
+        if payload.action == "root_cause_thumbs_up":
+            cur.feedback.root_cause_thumbs_up = True
+            cur.feedback.root_cause_thumbs_down = False
+        elif payload.action == "root_cause_thumbs_down":
+            cur.feedback.root_cause_thumbs_up = False
+            cur.feedback.root_cause_thumbs_down = True
+        elif payload.action == "solution_thumbs_up":
+            cur.feedback.solution_thumbs_up = True
+            cur.feedback.solution_thumbs_down = False
+        elif payload.action == "solution_thumbs_down":
+            cur.feedback.solution_thumbs_up = False
+            cur.feedback.solution_thumbs_down = True
 
 
 @inject
@@ -857,7 +885,10 @@ def resolve_comment_thread(request: AutofixUpdateRequest):
     with state.update() as cur:
         if request.payload.is_agent_comment and step_index + 1 < len(state.get().steps):
             cur.steps[step_index + 1].agent_comment_thread = None
-        elif request.payload.thread_id == cur.steps[step_index].active_comment_thread.id:
+        elif (
+            not cur.steps[step_index].active_comment_thread
+            or request.payload.thread_id == cur.steps[step_index].active_comment_thread.id
+        ):
             cur.steps[step_index].active_comment_thread = None
         else:
             raise ValueError("No matching comment thread found; unable to resolve thread")

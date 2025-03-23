@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from seer.anomaly_detection.models import ConfidenceLevel
+from seer.anomaly_detection.models import AlertAlgorithmType, ConfidenceLevel
 from seer.anomaly_detection.models.timeseries_anomalies import MPTimeSeriesAnomalies
 
 
@@ -22,6 +22,10 @@ class TestConverters(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
             ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+            ],
         )
 
     def test_get_anomaly_algo_data_with_padding(self):
@@ -37,6 +41,7 @@ class TestConverters(unittest.TestCase):
                 "original_flag": "none",
                 "use_suss": True,
                 "confidence_level": ConfidenceLevel.MEDIUM,
+                "algorithm_type": AlertAlgorithmType.NONE,
             },
             {
                 "mp_suss": {"dist": 0.3, "idx": 1, "l_idx": 2, "r_idx": 3},
@@ -44,6 +49,7 @@ class TestConverters(unittest.TestCase):
                 "original_flag": "none",
                 "use_suss": True,
                 "confidence_level": ConfidenceLevel.MEDIUM,
+                "algorithm_type": AlertAlgorithmType.NONE,
             },
         ]
 
@@ -61,6 +67,7 @@ class TestConverters(unittest.TestCase):
                 "original_flag": "none",
                 "use_suss": True,
                 "confidence_level": ConfidenceLevel.MEDIUM,
+                "algorithm_type": AlertAlgorithmType.NONE,
             },
             {
                 "mp_suss": {"dist": 0.3, "idx": 1, "l_idx": 2, "r_idx": 3},
@@ -68,6 +75,7 @@ class TestConverters(unittest.TestCase):
                 "original_flag": "none",
                 "use_suss": True,
                 "confidence_level": ConfidenceLevel.MEDIUM,
+                "algorithm_type": AlertAlgorithmType.NONE,
             },
         ]
 

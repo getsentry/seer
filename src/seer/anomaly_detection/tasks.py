@@ -72,7 +72,7 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
         if alert is None:
             raise ValueError(f"Alert with id {alert_id} not found")
         if len(alert.timeseries) == 0:
-            logger.warn(f"Alert with id {alert_id} has no timeseries")
+            logger.warning(f"Alert with id {alert_id} has no timeseries")
         else:
             config = AnomalyDetectionConfig(
                 time_period=alert.config["time_period"],

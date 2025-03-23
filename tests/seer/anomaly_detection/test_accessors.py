@@ -6,6 +6,7 @@ import numpy as np
 
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
     Anomaly,
     ConfidenceLevel,
     MPTimeSeriesAnomalies,
@@ -46,6 +47,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
             ],
+            algorithm_types=[AlertAlgorithmType.NONE, AlertAlgorithmType.NONE],
         )
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
@@ -204,6 +206,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                     ConfidenceLevel.MEDIUM,
                     ConfidenceLevel.MEDIUM,
                 ],
+                algorithm_types=[
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                ],
             ),
             anomaly_algo_data={
                 "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
@@ -246,6 +254,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                     ConfidenceLevel.MEDIUM,
                     ConfidenceLevel.MEDIUM,
                     ConfidenceLevel.MEDIUM,
+                ],
+                algorithm_types=[
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
                 ],
             ),
             anomaly_algo_data={"window_size": 1},
@@ -333,6 +347,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
             ]
             * 700,
+            algorithm_types=[AlertAlgorithmType.NONE] * 700,
         )
 
         alert_data_accessor = DbAlertDataAccessor()
@@ -393,8 +408,14 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
             ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+            ],
         )
-
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
             organization_id=organization_id,
@@ -454,6 +475,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
             ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -510,6 +535,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
             ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+            ],
         )
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
@@ -540,6 +569,9 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             dynamic_alert.last_queued_at = datetime.now()
             session.commit()
             assert not alert_data_accessor.can_queue_cleanup_predict_task(external_alert_id)
+            assert not alert_data_accessor.can_queue_cleanup_predict_task(
+                external_alert_id, apply_time_threshold=False
+            )
 
         with self.assertRaises(Exception):
             alert_data_accessor.can_queue_cleanup_predict_task(999)
@@ -566,6 +598,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             confidence_levels=[
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
+            ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
             ],
         )
         alert_data_accessor = DbAlertDataAccessor()
@@ -616,6 +652,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             confidence_levels=[
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
+            ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
             ],
         )
         alert_data_accessor = DbAlertDataAccessor()
@@ -673,6 +713,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
             ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+            ],
         )
         fixed_thresholds = [
             Threshold(type=ThresholdType.MP_DIST_IQR, timestamp=10.0, upper=1.0, lower=1.0),
@@ -695,6 +741,12 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
                 ConfidenceLevel.MEDIUM,
+            ],
+            algorithm_types=[
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
+                AlertAlgorithmType.NONE,
             ],
         )
 
@@ -773,6 +825,7 @@ class TestDbAlertDataAccessor(unittest.TestCase):
                 "original_flag": "none",
                 "use_suss": True,
                 "confidence_level": ConfidenceLevel.HIGH,
+                "algorithm_type": AlertAlgorithmType.NONE,
             },
         )
 

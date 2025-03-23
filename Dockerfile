@@ -50,6 +50,7 @@ RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh ./grpcserver.sh
 # Copy source code
 COPY src/ src/
 COPY pyproject.toml .
+COPY .test_durations .
 
 # Copy the supervisord.conf file into the container
 COPY supervisord.conf /etc/supervisord.conf

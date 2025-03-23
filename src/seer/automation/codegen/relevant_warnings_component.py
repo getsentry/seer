@@ -1,4 +1,6 @@
+import bisect
 import logging
+import re
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -11,7 +13,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
-from seer.automation.codebase.models import StaticAnalysisWarning
+from seer.automation.codebase.models import Location, StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -36,7 +38,7 @@ from seer.rpc import RpcClient
 
 class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
     """
-    Filter out warnings from files that aren't affected by the PR.
+    Filter out warnings that aren't on the PR diff lines.
     """
 
     context: CodegenContext
@@ -65,9 +67,88 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             result.append(Path(*parts).as_posix())
         return result
 
-    def _does_warning_match_a_target_file(
-        self, warning: StaticAnalysisWarning, target_filenames: set[str]
+    def _build_filepath_mapping(self, pr_files: list[PrFile]) -> dict[str, PrFile]:
+        """Build mapping of possible filepaths to PR files, including truncated variations."""
+        filepath_to_pr_file: dict[str, PrFile] = {}
+        for pr_file in pr_files:
+            pr_path = Path(pr_file.filename)
+            filepath_to_pr_file[pr_path.as_posix()] = pr_file
+            for truncated in self._left_truncated_paths(pr_path, max_num_paths=1):
+                filepath_to_pr_file[truncated] = pr_file
+        return filepath_to_pr_file
+
+    def _is_warning_in_diff(
+        self,
+        warning: StaticAnalysisWarning,
+        filepath_to_pr_file: dict[str, PrFile],
     ) -> bool:
+        matching_pr_files = self._get_matching_pr_files(warning, filepath_to_pr_file)
+        warning_location = Location.from_encoded(warning.encoded_location)
+        for pr_file in matching_pr_files:
+            hunk_ranges = self._get_sorted_hunk_ranges(pr_file)
+            if self._do_ranges_overlap(
+                (int(warning_location.start_line), int(warning_location.end_line)),
+                hunk_ranges,
+            ):
+                return True
+
+        return False
+
+    def _get_sorted_hunk_ranges(self, pr_file: PrFile) -> list[tuple[int, int]]:
+        """Returns sorted tuples of 1-indexed line numbers (start_inclusive, end_exclusive) in the updated pr file.
+
+        Determined by parsing git diff hunk headers of the form:
+        @@ -n,m +p,q @@ where:
+        - n: start line in original file
+        - m: number of lines from original file
+        - p: start line in modified file
+        - q: number of lines in modified file
+
+        For example, given this diff:
+        @@ -1,3 +1,4 @@
+        def hello():
+            print("hello")
+        +    print("world")  # Line 3 is added
+        print("goodbye")
+
+        @@ -20,3 +21,4 @@
+            print("end")
+        +    print("new end")  # Line 22 is added
+            return
+
+        This would return [(1,5), (21,25)] representing the modified file's hunk ranges.
+
+        Args:
+            pr_file: PrFile object containing the patch/diff (sorted by line number)
+
+        Returns:
+            List of sorted tuples containing 1-indexed line numbers (start_inclusive, end_exclusive) in the updated file
+        """
+        patch_lines = pr_file.patch.split("\n")
+        hunk_ranges: list[tuple[int, int]] = []
+
+        for line in patch_lines:
+            if line.startswith("@@"):
+                try:
+                    match = re.match(r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@", line)
+                    if match:
+                        _, _, new_start, num_lines = map(int, match.groups())
+                        hunk_ranges.append((new_start, new_start + num_lines))
+                except Exception:
+                    self.logger.warning(f"Could not parse hunk header: {line}")
+                    continue
+
+        return hunk_ranges
+
+    def _get_matching_pr_files(
+        self, warning: StaticAnalysisWarning, filepath_to_pr_file: dict[str, PrFile]
+    ) -> list[PrFile]:
+        """Find PR files that may match a warning's location.
+        This handles cases where the warning location and PR file paths may be specified differently:
+        - With different numbers of parent directories
+        - With or without a repo prefix
+        - With relative vs absolute paths
+        """
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
 
@@ -79,32 +160,48 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
                 f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
             )
 
-        possible_matches_from_warning = {
+        warning_filepath_variations = {
             path.as_posix(),
             *self._left_truncated_paths(path, max_num_paths=2),
         }
-        matches = possible_matches_from_warning & target_filenames
-        if matches:
-            self.logger.info(f"{warning.encoded_location=} {matches=}")
-        return bool(matches)
+
+        return [
+            filepath_to_pr_file[filepath]
+            for filepath in warning_filepath_variations & set(filepath_to_pr_file)
+        ]
+
+    def _do_ranges_overlap(
+        self, warning_range: tuple[int, int], sorted_hunk_ranges: list[tuple[int, int]]
+    ) -> bool:
+        if not sorted_hunk_ranges or not warning_range:
+            return False
+        target_start, target_end = warning_range
+        # Handle special case of single line warning by making end inclusive
+        if target_start == target_end:
+            target_end += 1
+        index = bisect.bisect_left(sorted_hunk_ranges, (target_start,))
+        return (index > 0 and sorted_hunk_ranges[index - 1][1] > target_start) or (
+            index < len(sorted_hunk_ranges) and sorted_hunk_ranges[index][0] < target_end
+        )
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
-        left_truncated_target_filenames = {
-            left_truncated
-            for filename in request.target_filenames
-            for left_truncated in self._left_truncated_paths(Path(filename), max_num_paths=1)
-        }
-        possible_matches_from_targets = (
-            set(request.target_filenames) | left_truncated_target_filenames
-        )
-        warnings = [
-            warning
-            for warning in request.warnings
-            if self._does_warning_match_a_target_file(warning, possible_matches_from_targets)
-        ]
-        return FilterWarningsOutput(warnings=warnings)
+        filepath_to_pr_file = self._build_filepath_mapping(request.pr_files)
+
+        filtered_warnings: list[StaticAnalysisWarning] = []
+        for warning in request.warnings:
+            try:
+                if self._is_warning_in_diff(warning, filepath_to_pr_file):
+                    filtered_warnings.append(warning)
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to evaluate warning, skipping: {warning.id} ({warning.encoded_location})",
+                    exc_info=e,
+                )
+                continue
+
+        return FilterWarningsOutput(warnings=filtered_warnings)
 
 
 def _fetch_issues_for_pr_file_cache_key(

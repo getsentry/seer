@@ -125,7 +125,10 @@ def handle_out_of_memory(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except OutOfMemoryError:
+        except (OutOfMemoryError, RuntimeError) as e:
+            # Only handle CUDA-related RuntimeErrors
+            if isinstance(e, RuntimeError) and "CUDA" not in str(e):
+                raise
             logger.warning("Ran out of memory, clearing cache and retrying once")
             gc.collect()
             torch.cuda.empty_cache()

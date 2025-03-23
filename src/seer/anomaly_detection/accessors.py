@@ -23,6 +23,7 @@ from seer.anomaly_detection.models import (
 )
 from seer.anomaly_detection.models.cleanup_predict import CleanupPredictConfig
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeSeriesPoint
+from seer.anomaly_detection.models.timeseries_anomalies import AlertAlgorithmType
 from seer.db import (
     DbDynamicAlert,
     DbDynamicAlertTimeSeries,
@@ -78,7 +79,9 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         return NotImplemented
 
     @abc.abstractmethod
-    def can_queue_cleanup_predict_task(self, external_alert_id: int):
+    def can_queue_cleanup_predict_task(
+        self, external_alert_id: int, apply_time_threshold: bool = True
+    ) -> bool:
         return NotImplemented
 
     @abc.abstractmethod
@@ -120,6 +123,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         confidence_levels = [
             ConfidenceLevel.MEDIUM
         ] * n_points  # Default to medium confidence level
+        algo_types = [AlertAlgorithmType.NONE] * n_points
 
         n_predictions = len(db_alert.prophet_predictions)
         prophet_timestamps = np.full(n_predictions, None)
@@ -176,6 +180,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
                     confidence_levels[i] = (
                         algo_data.get("confidence_level") or ConfidenceLevel.MEDIUM
                     )  # Default to medium for backwards compatibility
+                    algo_types[i] = algo_data.get("algorithm_type") or AlertAlgorithmType.NONE
             if ts[i] < timestamp_threshold:
                 num_old_points += 1
 
@@ -211,6 +216,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             original_flags=original_flags,
             use_suss=use_suss,
             confidence_levels=confidence_levels,
+            algorithm_types=algo_types,
         )
 
         return DynamicAlert(
@@ -382,7 +388,9 @@ class DbAlertDataAccessor(AlertDataAccessor):
             session.commit()
 
     @sentry_sdk.trace
-    def can_queue_cleanup_predict_task(self, alert_id: int) -> bool:
+    def can_queue_cleanup_predict_task(
+        self, alert_id: int, apply_time_threshold: bool = True
+    ) -> bool:
         """
         Checks if cleanup_predict task can be queued based on current flag or previous time of queueing
         """
@@ -394,13 +402,15 @@ class DbAlertDataAccessor(AlertDataAccessor):
             if not dynamic_alert:
                 raise ClientError(f"Alert with id {alert_id} not found")
 
-            queued_at_threshold = datetime.now() - timedelta(hours=12)
-
-            return (
-                dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
-                or dynamic_alert.last_queued_at is not None
-                and dynamic_alert.last_queued_at < queued_at_threshold
-            )
+            if apply_time_threshold:
+                queued_at_threshold = datetime.now() - timedelta(hours=12)
+                return (
+                    dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
+                    or dynamic_alert.last_queued_at is not None
+                    and dynamic_alert.last_queued_at < queued_at_threshold
+                )
+            else:
+                return dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
 
     @sentry_sdk.trace
     def reset_cleanup_predict_task(self, alert_id: int) -> None:
@@ -484,6 +494,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
             original_flags=combined_original_flags,
             use_suss=use_suss,
             confidence_levels=anomalies_suss.confidence_levels,
+            algorithm_types=anomalies_suss.algorithm_types,
         )
 
     @sentry_sdk.trace

@@ -314,10 +314,33 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
             Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
               - `short_description`: a short, fluff-free, information-dense description of the problem caused by not addressing the warning.
-                This description must focus on the problem and not the warning itself. It should be at most 10 words.
+                This description must focus on the problem and not the warning itself. It should be at most 20 words.
               - `short_justification`: a short, fluff-free, information-dense summary of your analysis for why the warning is relevant to the issue. This justification should be at most 15 words.
             """
         ).format(
             error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
             formatted_warning=formatted_warning,
+        )
+
+
+class RetryUnitTestPrompts:
+    @staticmethod
+    def format_continue_unit_tests_prompt(code_coverage_info: str, test_result_info: str):
+        return textwrap.dedent(
+            """\
+            The tests you have generated so far are not sufficient to cover all the changes in the codebase. You need to continue generating unit tests to address the gaps in coverage and fix any failing tests.
+
+            To help you with this, you have access to code coverage information at a file level attached as a JSON in addtion to test result information also in a JSON format.
+
+            Using the information and instructions provided, update the unit tests to ensure robust code coverage as well as fix any failing tests. Use the exact same format you used previously to regenerate tests. Your changes will be appended as a new commit to the branch of the existing PR.
+
+            Here is the code coverage information:
+            {code_coverage_info}
+
+            Here is the test result information:
+            {test_result_info}
+            """
+        ).format(
+            code_coverage_info=code_coverage_info,
+            test_result_info=test_result_info,
         )

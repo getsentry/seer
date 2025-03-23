@@ -545,11 +545,17 @@ class RepoClient:
 
         return matching_file.patch
 
-    def _create_branch(self, branch_name):
+    def _create_branch(self, branch_name, from_feature_branch=False):
+        if from_feature_branch:
+            return self._create_branch_from_feature_branch(branch_name)
+
         ref = self.repo.create_git_ref(
             ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
         )
         return ref
+
+    def _create_branch_from_feature_branch(self, branch_name):
+        return self.repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=self.base_commit_sha)
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
@@ -610,6 +616,7 @@ class RepoClient:
         file_patches: list[FilePatch] | None = None,
         file_changes: list[FileChange] | None = None,
         branch_name: str | None = None,
+        from_feature_branch: bool = False,
     ) -> GitRef | None:
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
@@ -617,12 +624,12 @@ class RepoClient:
         new_branch_name = sanitize_branch_name(branch_name or pr_title)
 
         try:
-            branch_ref = self._create_branch(new_branch_name)
+            branch_ref = self._create_branch(new_branch_name, from_feature_branch)
         except GithubException as e:
             # only use the random suffix if the branch already exists
             if e.status == 409 or e.status == 422:
                 new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
-                branch_ref = self._create_branch(new_branch_name)
+                branch_ref = self._create_branch(new_branch_name, from_feature_branch)
             else:
                 raise e
 
@@ -682,7 +689,9 @@ class RepoClient:
         description: str,
         provided_base: str | None = None,
     ) -> PullRequest:
-        if pulls := self.repo.get_pulls(state="open", head=branch.ref):
+        pulls = self.repo.get_pulls(state="open", head=f"{self.repo_owner}:{branch.ref}")
+
+        if pulls.totalCount > 0:
             logger.error(
                 f"Branch {branch.ref} already has an open PR.",
                 extra={
@@ -714,7 +723,7 @@ class RepoClient:
                     draft=False,
                 )
             else:
-                logger.exception(f"Error creating PR")
+                logger.exception("Error creating PR")
                 raise e
 
     def get_index_file_set(
@@ -822,11 +831,24 @@ class RepoClient:
         response.raise_for_status()
         return response.json()["html_url"]
 
+    def post_unit_test_reference_to_original_pr_codecov_app(
+        self, original_pr_url: str, unit_test_pr_url: str
+    ):
+        original_pr_id = int(original_pr_url.split("/")[-1])
+        repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
+        url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
+        comment = f"Codecov has generated a new [PR]({unit_test_pr_url}) with unit tests for this PR. View the new PR({unit_test_pr_url}) to review the changes."
+        params = {"body": comment}
+        headers = self._get_auth_headers()
+        response = requests.post(url, headers=headers, json=params)
+        response.raise_for_status()
+        return response.json()["html_url"]
+
     def post_unit_test_not_generated_message_to_original_pr(self, original_pr_url: str):
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
         url = f"https://api.github.com/repos/{repo_name}/issues/{original_pr_id}/comments"
-        comment = "Sentry has determined that unit tests already exist on this PR or that they are not necessary."
+        comment = f"Sentry has determined that unit tests are not necessary for this PR."
         params = {"body": comment}
         headers = self._get_auth_headers()
         response = requests.post(url, headers=headers, json=params)
@@ -864,3 +886,40 @@ class RepoClient:
             start_line=comment.get("start_line", GithubObject.NotSet),
         )
         return review_comment.html_url
+
+    def push_new_commit_to_pr(
+        self,
+        pr,
+        commit_message: str,
+        file_patches: list[FilePatch] | None = None,
+        file_changes: list[FileChange] | None = None,
+    ):
+        if not file_patches and not file_changes:
+            raise ValueError("Must provide file_patches or file_changes")
+        branch_name = pr.head.ref
+        tree_elements = []
+        if file_patches:
+            for patch in file_patches:
+                element = self.process_one_file_for_git_commit(branch_ref=branch_name, patch=patch)
+                if element:
+                    tree_elements.append(element)
+        elif file_changes:
+            for change in file_changes:
+                element = self.process_one_file_for_git_commit(
+                    branch_ref=branch_name, change=change
+                )
+                if element:
+                    tree_elements.append(element)
+        if not tree_elements:
+            logger.warning("No valid changes to commit")
+            return None
+        latest_sha = self.get_branch_head_sha(branch_name)
+        latest_commit = self.repo.get_git_commit(latest_sha)
+        base_tree = latest_commit.tree
+        new_tree = self.repo.create_git_tree(tree_elements, base_tree)
+        new_commit = self.repo.create_git_commit(
+            message=commit_message, tree=new_tree, parents=[latest_commit]
+        )
+        branch_ref = self.repo.get_git_ref(f"heads/{branch_name}")
+        branch_ref.edit(sha=new_commit.sha)
+        return new_commit

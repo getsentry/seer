@@ -177,6 +177,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             thresholds=flags_and_scores.thresholds if algo_config.return_thresholds else None,
             original_flags=original_flags,
             confidence_levels=flags_and_scores.confidence_levels,
+            algorithm_types=flags_and_scores.algo_types,
         )
 
 
@@ -192,8 +193,12 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
     original_flags: list[AnomalyFlags | None] = Field(
-        ..., description="Original flags of the baseline timeseries."
+        ..., description="Original MP flags of the baseline timeseries."
     )
+    original_combined_flags: list[AnomalyFlags | None] = Field(
+        ..., description="Original combined flags of the baseline timeseries."
+    )
+
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
@@ -258,11 +263,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if time_allocated is not None and i % batch_size == 0:
                     time_elapsed = datetime.datetime.now() - time_start
                     if time_allocated is not None and time_elapsed > time_allocated:
-                        sentry_sdk.set_extra("time_taken", time_elapsed)
-                        sentry_sdk.set_extra("time_allocated", time_allocated)
-                        sentry_sdk.capture_message(
+                        logger.error(
                             "stream_detection_took_too_long",
-                            level="error",
+                            extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
                         )
                         raise ServerError("Stream detection took too long")
 
@@ -288,12 +291,13 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 self.original_flags.append(flags_and_scores.flags[-1])
+                self.original_combined_flags.append(flags_and_scores.flags[-1])
 
                 stream_flag_smoother = MajorityVoteStreamFlagSmoother()
 
                 # Apply stream smoothing to the newest flag based on the previous original flags
                 smoothed_flags = stream_flag_smoother.smooth(
-                    original_flags=self.original_flags,
+                    original_flags=self.original_combined_flags,
                     ad_config=ad_config,
                     algo_config=algo_config,
                     vote_threshold=0.3,
@@ -325,4 +329,5 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 thresholds=thresholds if algo_config.return_thresholds else None,
                 original_flags=self.original_flags,
                 confidence_levels=flags_and_scores.confidence_levels,
+                algorithm_types=flags_and_scores.algo_types,
             )
