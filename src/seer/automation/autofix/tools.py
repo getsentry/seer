@@ -65,7 +65,9 @@ class BaseTools:
             """
         ).format(query=query, valid_file_paths=valid_file_paths)
 
-        if len(repo_names) < 100:  # structured output can't handle too many in Literal
+        if 2 <= len(repo_names) < 100:
+            # Lower bound avoids Gemini-Pydantic incompatibility.
+            # Upper bound is b/c structured output can't handle too many options in a Literal.
             RepoName: TypeAlias = Literal[tuple(repo_names)]  # type: ignore[valid-type]
         else:
             RepoName: TypeAlias = str  # type: ignore[no-redef]

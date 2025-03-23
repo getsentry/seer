@@ -88,6 +88,7 @@ class TestSemanticFileSearch:
         "repo_names",
         (
             ["owner/repo", "owner/another-repo"],
+            ["owner/another-repo"],  # fall back to str RepoName
             ["owner/repo", "owner/another-repo"] * 100,  # fall back to str RepoName
         ),
     )
