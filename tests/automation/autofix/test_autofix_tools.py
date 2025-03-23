@@ -1,7 +1,9 @@
+import textwrap
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from seer.automation.agent.client import LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
@@ -80,6 +82,47 @@ class TestSemanticFileSearch:
         )
         expected = "This file might be what you're looking for: `src/file1.py`. Contents:\n\ntest file contents"
         assert result == expected
+
+    @pytest.mark.vcr()
+    @pytest.mark.parametrize(
+        "repo_names",
+        (
+            ["owner/repo", "owner/another-repo"],
+            ["owner/another-repo"],  # fall back to str RepoName
+            ["owner/repo", "owner/another-repo"] * 100,  # fall back to str RepoName
+        ),
+    )
+    def test_semantic_file_search_completion(self, autofix_tools: BaseTools, repo_names: list[str]):
+        query = "find the file which tests google's LLM"
+        valid_file_paths = textwrap.dedent(
+            """
+            FILES IN REPO owner/repo:
+            src/
+            └──something.py
+            tests/
+            └──another/
+                └──test_thing.py
+            ------------
+            FILES IN REPO owner/another-repo:
+            src/
+            └──clients/
+                ├──claude.py
+                ├──gemini.py
+                └──openai.py
+            tests/
+            └──clients/
+                ├──test_claude.py
+                ├──test_gemini.py
+                └──test_openai.py
+            """
+        )
+
+        llm_client = LlmClient()
+        file_location = autofix_tools._semantic_file_search_completion(
+            query, valid_file_paths, repo_names, llm_client
+        )
+        assert file_location.repo_name == "owner/another-repo"
+        assert file_location.file_path == "tests/clients/test_gemini.py"
 
     def test_semantic_file_search_not_found_no_file_path(self, autofix_tools: BaseTools):
         dummy_repo = MagicMock(full_name="owner/test_repo")
