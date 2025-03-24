@@ -58,7 +58,7 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
         try:
             comments_data = json.loads(comments_json)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format inside <comments>: {e}")
+            raise ValueError(f"Invalid JSON format inside <comments>: {comments_json}. Error: {e}")
 
         if not isinstance(comments_data, list):
             raise ValueError("Expected a list of JSON objects inside <comments>")
