@@ -20,7 +20,7 @@ gcloud compute instances create-with-container seer-benchmark-1 \
     --container-privileged \
     --container-stdin \
     --container-tty \
-    --container-env=SEVERITY_ENABLED=true,GROUPING_ENABLED=true,PORT=80,SENTRY_BASE_URL=values.sentry_base_url,DATABASE_URL=postgresql\+psycopg://root:seer@10.128.0.7/seer \
+    --container-env=SEVERITY_ENABLED=true,GROUPING_ENABLED=true,AUTOFIXABILITY_SCORING_ENABLED=true,PORT=80,SENTRY_BASE_URL=values.sentry_base_url,DATABASE_URL=postgresql\+psycopg://root:seer@10.128.0.7/seer \
     --no-shielded-secure-boot \
     --shielded-vtpm \
     --shielded-integrity-monitoring \
