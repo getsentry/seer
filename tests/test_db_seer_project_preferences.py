@@ -1,6 +1,6 @@
-import pytest
 from datetime import datetime
 
+import pytest
 from sqlalchemy.exc import IntegrityError
 
 from seer.db import DbSeerProjectPreference, Session

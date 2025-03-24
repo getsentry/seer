@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest import mock
 
-
+from seer.app import app
 from seer.automation.models import RepoDefinition, SeerProjectPreference
 from seer.automation.preferences import (
     GetSeerProjectPreferenceRequest,
@@ -13,7 +13,6 @@ from seer.automation.preferences import (
     set_seer_project_preference,
 )
 from seer.db import DbSeerProjectPreference
-from seer.app import app
 
 
 class TestSeerProjectPreferenceModel(unittest.TestCase):
