@@ -23,3 +23,5 @@ Seasonalities = external.Seasonalities
 Threshold = timeseries_anomalies.Threshold
 ThresholdType = timeseries_anomalies.ThresholdType
 ProphetPrediction = timeseries.ProphetPrediction
+ConfidenceLevel = timeseries_anomalies.ConfidenceLevel
+AlertAlgorithmType = timeseries_anomalies.AlertAlgorithmType

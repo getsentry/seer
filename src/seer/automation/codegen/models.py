@@ -1,12 +1,14 @@
 import datetime
 from enum import Enum
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from seer.automation.agent.models import Message
 from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition
+from seer.db import DbRunMemory
 
 
 class CodegenStatus(str, Enum):
@@ -45,6 +47,7 @@ class CodeUnitTestOutput(BaseComponentOutput):
 class CodegenBaseRequest(BaseModel):
     repo: RepoDefinition
     pr_id: int  # The PR number
+    codecov_status: dict[str, bool] | None = None
 
 
 class CodegenUnitTestsRequest(CodegenBaseRequest):
@@ -131,6 +134,7 @@ class CodePrReviewOutput(BaseComponentOutput):
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
+    callback_url: str
     organization_id: int
     warnings: list[StaticAnalysisWarning]
     commit_sha: str
@@ -157,16 +161,16 @@ class CodegenRelevantWarningsStateResponse(BaseModel):
 
 
 class PrFile(BaseModel):
-    # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28
     filename: str
     patch: str
     status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
     changes: int
+    sha: str
 
 
 class FilterWarningsRequest(BaseComponentRequest):
     warnings: list[StaticAnalysisWarning]
-    target_filenames: list[str]
+    pr_files: list[PrFile]
 
 
 class FilterWarningsOutput(BaseComponentOutput):
@@ -222,4 +226,16 @@ class CodecovTaskRequest(BaseModel):
         | CodegenPrClosedRequest
     )
     external_owner_id: str
-    request_type: Literal["unit-tests", "pr-review", "relevant-warnings", "pr-closed"]
+    request_type: Literal["unit-tests", "pr-review", "relevant-warnings", "pr-closed", "retry-unit-tests"]
+
+
+class UnitTestRunMemory(BaseModel):
+    run_id: int
+    memory: dict[str, list[Message]] = Field(default_factory=dict)
+
+    def to_db_model(self) -> DbRunMemory:
+        return DbRunMemory(run_id=self.run_id, value=self.model_dump(mode="json"))
+
+    @classmethod
+    def from_db_model(cls, model: DbRunMemory) -> "UnitTestRunMemory":
+        return cls.model_validate(model.value)

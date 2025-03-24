@@ -255,6 +255,30 @@ class DbPrIdToAutofixRunIdMapping(Base):
     )
 
 
+class DbPrContextToUnitTestGenerationRunIdMapping(Base):
+    __tablename__ = "codegen_unit_test_generation_pr_context_to_run_id"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    owner: Mapped[str] = mapped_column(String, nullable=False)
+    pr_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    repo: Mapped[str] = mapped_column(String, nullable=False)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey(DbRunState.id, ondelete="CASCADE"), nullable=False
+    )
+    iterations = mapped_column(Integer, nullable=False, default=0)
+    original_pr_url: Mapped[str] = mapped_column(String, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("provider", "pr_id", "repo", "owner", "original_pr_url"),
+        Index(
+            "ix_unit_test_context_repo_owner_pr_id_pr_url",
+            "owner",
+            "repo",
+            "pr_id",
+            "original_pr_url",
+        ),
+    )
+
+
 def create_grouping_partition(target: Any, connection: Connection, **kw: Any) -> None:
     for i in range(100):
         connection.execute(
@@ -388,6 +412,9 @@ class DbIssueSummary(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
+    fixability_score: Mapped[float] = mapped_column(Float, nullable=True)
+    is_fixable: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    fixability_score_version: Mapped[int] = mapped_column(Integer, nullable=True)
 
 
 class DbDynamicAlertTimeSeriesHistory(Base):

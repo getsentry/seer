@@ -1,6 +1,7 @@
 import json
 import time
 import unittest
+from typing import cast
 from unittest import mock
 
 import httpx
@@ -21,13 +22,23 @@ from seer.anomaly_detection.models.external import (
     StoreDataResponse,
 )
 from seer.app import app
-from seer.automation.autofix.models import AutofixContinuation, AutofixEvaluationRequest
+from seer.automation.autofix.models import (
+    AutofixContinuation,
+    AutofixEvaluationRequest,
+    AutofixRequest,
+)
+from seer.automation.autofix.runs import create_initial_autofix_run
 from seer.automation.state import LocalMemoryState
-from seer.automation.summarize.models import SummarizeIssueRequest
+from seer.automation.summarize.models import (
+    GetFixabilityScoreRequest,
+    SummarizeIssueRequest,
+    SummarizeIssueResponse,
+    SummarizeIssueScores,
+)
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.db import DbGroupingRecord, DbSmokeTest, ProcessRequest, Session
 from seer.dependency_injection import Module, resolve
-from seer.exceptions import ClientError
+from seer.exceptions import ClientError, ServerError
 from seer.grouping.grouping import CreateGroupingRecordData, CreateGroupingRecordsRequest
 from seer.inference_models import dummy_deferred, reset_loading_state, start_loading
 from seer.smoke_test import smoke_test
@@ -505,6 +516,60 @@ class TestSeer(unittest.TestCase):
         assert response.status_code == 500  # InternalServerError
         mock_run_summarize_issue.assert_called_once_with(test_data)
 
+    @mock.patch("seer.app.run_fixability_score")
+    def test_get_fixability_score_endpoint_success(self, mock_run_fixability_score):
+        """Test a successful run of get_fixability_score endpoint"""
+        # Create a mock response
+        mock_response = SummarizeIssueResponse(
+            group_id=123,
+            headline="Test Error",
+            whats_wrong="Something is broken",
+            trace="No related issues",
+            possible_cause="Bad code",
+            scores=SummarizeIssueScores(
+                possible_cause_confidence=0.8,
+                possible_cause_novelty=0.6,
+                fixability_score=0.75,
+                fixability_score_version=1,
+                is_fixable=True,
+            ),
+        )
+        mock_run_fixability_score.return_value = mock_response
+
+        # Create test data
+        test_data = GetFixabilityScoreRequest(group_id=123)
+
+        # Make the request
+        response = app.test_client().post(
+            "/v1/automation/summarize/fixability",
+            data=test_data.json(),
+            content_type="application/json",
+        )
+
+        # Assertions
+        assert response.status_code == 200
+        response_data = json.loads(response.data)
+        assert response_data["group_id"] == 123
+        assert response_data["scores"]["fixability_score"] == 0.75
+        assert response_data["scores"]["fixability_score_version"] == 1
+        assert response_data["scores"]["is_fixable"] is True
+        mock_run_fixability_score.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.run_fixability_score")
+    def test_get_fixability_score_endpoint_error(self, mock_run_fixability_score):
+        """Test that get_fixability_score_endpoint handles exceptions correctly"""
+        mock_run_fixability_score.side_effect = ValueError("No issue summary found")
+        test_data = GetFixabilityScoreRequest(group_id=123)
+
+        response = app.test_client().post(
+            "/v1/automation/summarize/fixability",
+            data=test_data.json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 500  # InternalServerError
+        mock_run_fixability_score.assert_called_once_with(test_data)
+
     @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.detect_anomalies")
     def test_detect_anomalies_endpoint_success(self, mock_detect_anomalies):
         """Test a successful run of detect_anomalies end point"""
@@ -538,6 +603,19 @@ class TestSeer(unittest.TestCase):
         assert response.json["success"] is False
         mock_detect_anomalies.assert_called_once_with(test_data)
 
+    @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.detect_anomalies")
+    def test_detect_anomalies_endpoint_server_error(self, mock_detect_anomalies):
+        """Test that detect_anomalies endpoint handles server errors correctly"""
+        mock_detect_anomalies.side_effect = ServerError("Test server error")
+        test_data = next(generate(DetectAnomaliesRequest))
+
+        with pytest.raises(ServerError, match="Test server error"):
+            app.test_client().post(
+                "/v1/anomaly-detection/detect",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
+
     @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.store_data")
     def test_store_data_endpoint_success(self, mock_store_data):
         """Test a successful run of store_data end point"""
@@ -570,6 +648,19 @@ class TestSeer(unittest.TestCase):
         assert response.json["message"] == "Test error"
         assert response.json["success"] is False
         mock_store_data.assert_called_once_with(test_data)
+
+    @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.store_data")
+    def test_store_data_endpoint_server_error(self, mock_store_data):
+        """Test that store_data endpoint handles server errors correctly"""
+        mock_store_data.side_effect = ServerError("Test server error")
+        test_data = next(generate(StoreDataRequest))
+
+        with pytest.raises(ServerError, match="Test server error"):
+            app.test_client().post(
+                "/v1/anomaly-detection/store",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
 
     @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.delete_alert_data")
     def test_delete_alert_data_endpoint_success(self, mock_delete_alert_data):
@@ -605,6 +696,19 @@ class TestSeer(unittest.TestCase):
         assert response.json["success"] is False
         mock_delete_alert_data.assert_called_once_with(test_data)
 
+    @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.delete_alert_data")
+    def test_delete_alert_data_endpoint_server_error(self, mock_delete_alert_data):
+        """Test that delete_alert_data endpoint handles server errors correctly"""
+        mock_delete_alert_data.side_effect = ServerError("Test server error")
+        test_data = next(generate(DeleteAlertDataRequest))
+
+        with pytest.raises(ServerError, match="Test server error"):
+            app.test_client().post(
+                "/v1/anomaly-detection/delete-alert-data",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
+
 
 @parametrize(count=1)
 def test_prepared_statements_disabled(
@@ -615,7 +719,7 @@ def test_prepared_statements_disabled(
         ProcessRequest,
         ProcessRequest,
         ProcessRequest,
-    ]
+    ],
 ):
     with Session() as session:
         # This would cause postgresql to issue prepared statements.  Remove logic from bootup connect args to validate.
@@ -718,7 +822,7 @@ class TestGetAutofixState:
 
         response = app.test_client().post(
             "/v1/automation/autofix/state",
-            data=json.dumps({"group_id": 400}),
+            data=json.dumps({"group_id": 400, "check_repo_access": False}),
             content_type="application/json",
         )
         assert response.status_code == 200
@@ -736,7 +840,7 @@ class TestGetAutofixState:
 
         response = app.test_client().post(
             "/v1/automation/autofix/state",
-            data=json.dumps({"run_id": 500}),
+            data=json.dumps({"run_id": 500, "check_repo_access": False}),
             content_type="application/json",
         )
         assert response.status_code == 200
@@ -753,12 +857,37 @@ class TestGetAutofixState:
 
         response = app.test_client().post(
             "/v1/automation/autofix/state",
-            data=json.dumps({"group_id": 999}),
+            data=json.dumps({"group_id": 999, "check_repo_access": False}),
             content_type="application/json",
         )
         assert response.status_code == 200
         data = json.loads(response.get_data(as_text=True))
         assert data == {"group_id": None, "run_id": None, "state": None}
+
+    @mock.patch("seer.app.update_repo_access")
+    @mock.patch("seer.app.get_autofix_state")
+    def test_get_autofix_state_endpoint_with_check_repo_access(
+        self, mock_get_autofix_state, mock_update_repo_access
+    ):
+        state_obj = create_initial_autofix_run(next(generate(AutofixRequest)))
+
+        state = state_obj.get()
+        request = cast(AutofixRequest, state.request)
+
+        mock_get_autofix_state.return_value = state_obj
+
+        response = app.test_client().post(
+            "/v1/automation/autofix/state",
+            data=json.dumps({"group_id": request.issue.id, "check_repo_access": True}),
+            content_type="application/json",
+        )
+        assert response.status_code == 200
+        data = json.loads(response.get_data(as_text=True))
+        assert data["group_id"] == state.request.issue.id
+        assert data["run_id"] == state.run_id
+
+        mock_get_autofix_state.assert_called_once_with(group_id=1, run_id=None)
+        mock_update_repo_access.assert_called_once()
 
     @mock.patch("seer.app.get_autofix_state_from_pr_id")
     def test_get_autofix_state_from_pr_endpoint(self, mock_get_autofix_state_from_pr_id):

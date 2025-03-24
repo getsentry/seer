@@ -55,14 +55,14 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             )
 
             existing_test_design_response = llm_client.generate_text(
-                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                 prompt=CodingUnitTestPrompts.format_find_unit_test_pattern_step_msg(
                     diff_str=request.diff
                 ),
             )
 
             llm_client.generate_text(
-                model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                 prompt=CodingUnitTestPrompts.format_plan_step_msg(
                     diff_str=request.diff,
                     has_coverage_info=code_coverage_data,
@@ -76,7 +76,7 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                         diff_str=request.diff, test_design_hint=existing_test_design_response
                     ),
                     system_prompt=CodingUnitTestPrompts.format_system_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet@20240620"),
+                    model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     run_name="Generate Unit Tests",
                 ),
             )
@@ -115,4 +115,6 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                 file_changes.append(change)
             else:
                 logger.warning(f"Unsupported task type: {task.type}")
+
+        self.context.store_memory("unit_test_memory", agent.memory)
         return CodeUnitTestOutput(diffs=file_changes)

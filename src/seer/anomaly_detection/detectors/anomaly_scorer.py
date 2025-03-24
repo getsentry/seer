@@ -4,6 +4,7 @@ import logging
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import sentry_sdk
 from pydantic import BaseModel, Field
 
 from seer.anomaly_detection.detectors.mp_cascading_scorer import MPCascadingScorer
@@ -16,8 +17,10 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
+    ConfidenceLevel,
     Directions,
 )
+from seer.anomaly_detection.models.timeseries_anomalies import AlertAlgorithmType
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ServerError
 
@@ -73,6 +76,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         description="The ProphetScorer to use for scoring against the prophet model",
     )
 
+    @sentry_sdk.trace
     @inject
     def batch_score(
         self,
@@ -223,14 +227,20 @@ class CombinedAnomalyScorer(AnomalyScorer):
     ) -> FlagsAndScores:
 
         # todo: return prophet thresholds
-        def merge(timestamps, mp_flags, prophet_map):
+        def merge(timestamps, mp_flags_and_scores, prophet_map):
+            mp_flags = mp_flags_and_scores.flags
+            mp_confidence_levels = mp_flags_and_scores.confidence_levels
             flags = []
+            algo_types = []
             missing = 0
             found = 0
             previous_mp_flag: AnomalyFlags = "none"
             missing_timestamps = []
-            for timestamp, mp_flag in zip(timestamps, mp_flags):
+            for timestamp, mp_flag, mp_confidence_level in zip(
+                timestamps, mp_flags, mp_confidence_levels
+            ):
                 pd_dt = float(timestamp)
+                algo_type = AlertAlgorithmType.NONE
                 if pd_dt in prophet_map["flag"]:
                     found += 1
                     prophet_flag = prophet_map["flag"][pd_dt]
@@ -249,9 +259,15 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         mp_flag == "anomaly_higher_confidence"
                         and prophet_flag == "anomaly_higher_confidence"
                     ):
+                        algo_type = AlertAlgorithmType.BOTH
                         flags.append("anomaly_higher_confidence")
+
                     elif prophet_score >= 2.0:
+                        algo_type = AlertAlgorithmType.PROPHET
                         flags.append(prophet_flag)
+                    elif mp_confidence_level == ConfidenceLevel.HIGH:
+                        algo_type = AlertAlgorithmType.MP
+                        flags.append(mp_flag)
                     else:
                         flags.append("none")
                 else:
@@ -259,7 +275,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     missing_timestamps.append(timestamp)
                     flags.append(mp_flag)
                 previous_mp_flag = mp_flag
-
+                algo_types.append(algo_type)
             if missing > 0:
                 logger.warning(
                     "Some of the MP flags did not have corresponding prophet flags",
@@ -279,15 +295,17 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         ),
                     },
                 )
-            return flags
+            return flags, algo_types
 
         prophet_predictions_map = prophet_predictions.set_index("ds")[
             ["flag", "score", "y", "yhat", "yhat_lower", "yhat_upper"]
         ].to_dict()
-        flags = merge(timestamps, mp_flags_and_scores.flags, prophet_predictions_map)
+        flags, algo_types = merge(timestamps, mp_flags_and_scores, prophet_predictions_map)
 
         return FlagsAndScores(
             flags=flags,
             scores=mp_flags_and_scores.scores,
             thresholds=mp_flags_and_scores.thresholds,
+            confidence_levels=mp_flags_and_scores.confidence_levels,
+            algo_types=algo_types,
         )

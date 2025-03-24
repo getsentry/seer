@@ -21,7 +21,7 @@ stub_module = Module()
 def traces_sampler(sampling_context: dict):
     if "wsgi_environ" in sampling_context:
         path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
-        if path_info and path_info.startswith("/health/"):
+        if path_info and path_info.startswith("/health/live"):
             return 0.0
 
     return 1.0

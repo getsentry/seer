@@ -11,10 +11,12 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
+    ConfidenceLevel,
     Sensitivities,
     Threshold,
     ThresholdType,
 )
+from seer.anomaly_detection.models.timeseries_anomalies import AlertAlgorithmType
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError
 from seer.tags import AnomalyDetectionTags
@@ -26,6 +28,11 @@ class FlagsAndScores(BaseModel):
     flags: List[AnomalyFlags]
     scores: List[float]
     thresholds: List[List[Threshold]]
+    confidence_levels: List[ConfidenceLevel]
+    algo_types: List[AlertAlgorithmType] = Field(
+        default=[],
+        description="The algorithm types used to detect the anomalies",
+    )
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
@@ -133,6 +140,7 @@ class MPLowVarianceScorer(MPScorer):
         scores = []
         flags = []
         thresholds = []
+        confidence_levels = []
         if values.std() > self.std_threshold:
             sentry_sdk.set_tag(AnomalyDetectionTags.LOW_VARIATION_TS, 0)
             return None
@@ -152,7 +160,12 @@ class MPLowVarianceScorer(MPScorer):
                     )
                 ]
             )
-        return FlagsAndScores(flags=flags, scores=scores, thresholds=thresholds)
+            confidence_levels.append(
+                ConfidenceLevel.MEDIUM
+            )  # Default to medium confidence for low variance
+        return FlagsAndScores(
+            flags=flags, scores=scores, thresholds=thresholds, confidence_levels=confidence_levels
+        )
 
     @inject
     def stream_score(
@@ -184,4 +197,5 @@ class MPLowVarianceScorer(MPScorer):
             flags=[flag],
             scores=[score],
             thresholds=[[threshold]],
+            confidence_levels=[ConfidenceLevel.MEDIUM],  # Default to medium for low variance
         )

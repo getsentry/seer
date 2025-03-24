@@ -17,7 +17,7 @@ class ConfidenceRequest(BaseComponentRequest):
 
 
 class ConfidenceOutput(BaseComponentOutput):
-    comment: str | None = None
+    question: str | None = None
     output_confidence_score: float
     proceed_confidence_score: float
 
@@ -25,13 +25,13 @@ class ConfidenceOutput(BaseComponentOutput):
 class ConfidencePrompts:
     @staticmethod
     def format_system_msg() -> str:
-        return "You were an principle engineer responsible for debugging and fixing an issue in a codebase. You have memory of the previous conversation and analysis. But now you are reflecting on the analysis so far. Your goal is to verbalize any uncertainties that affected your answer, your confidence in your final answer, and your confidence in proceeding to the next step. You will decide whether to leave a brief comment on the document for your team to respond to, but only if significant concerns remain. You will also score your confidence."
+        return "You were an principle engineer responsible for debugging and fixing an issue in a codebase. You have memory of the previous conversation and analysis. But now you are reflecting on the analysis so far. Your goal is to verbalize any uncertainties that affected your answer, your confidence in your final answer, and your confidence in proceeding to the next step. You will decide whether to leave a brief question on the document for your team to respond to, but only if significant concerns remain. You will also score your confidence."
 
     @staticmethod
     def format_default_msg(step_goal_description: str, next_step_goal_description: str) -> str:
         return textwrap.dedent(
             """\
-            Think through the uncertainties and open questions, if any, that appeared during your analysis. Is there a missing piece of the puzzle? Anywhere you had to make an assumption or speculate? Any opportunities for a better answer? Anywhere you need more context or an opinion from the team? Be hypercritical. If there are uncertainties or open questions your team should be aware of when reading your final answer, leave a brief (under 30 words) comment/question on the document. If there is nothing worth surfacing, return None/null for the comment.
+            Think through the uncertainties and open questions, if any, that appeared during your analysis. Is there a missing piece of the puzzle? Anywhere you had to make an assumption or speculate? Any opportunities for a better answer? Anywhere you need more context or an opinion from the team? Be hypercritical. If there are uncertainties or open questions your team should be aware of when reading your final answer, leave a brief (under 50 words) and specific question on the document. If there is nothing worth surfacing, return None/null for the question.
 
             Then score your confidence in the correctness of your final {step_goal_description} with an float between 0 and 1. The more uncertainties there are, the lower your confidence should be.
             Then based on your findings so far, score your confidence in successfully completing the next step, {next_step_goal_description}, with an float between 0 and 1. The more uncertain you are about your correctness, or if it seems hard to do the next step based on what you know, the lower your confidence should be.
@@ -69,4 +69,8 @@ class ConfidenceComponent(BaseComponent[ConfidenceRequest, ConfidenceOutput]):
                 output_confidence_score=0.5,
                 proceed_confidence_score=0.5,
             )
+
+        if data.question:
+            self.context.event_manager.on_confidence_question(data.question)
+
         return data

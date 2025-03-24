@@ -1,23 +1,23 @@
 import textwrap
-from typing import Optional
 
-from seer.automation.autofix.prompts import format_code_map, format_instruction, format_summary
-from seer.automation.models import Profile
+from seer.automation.autofix.prompts import (
+    format_code_map,
+    format_instruction,
+    format_summary,
+    format_trace_tree,
+)
+from seer.automation.models import Profile, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
 class RootCauseAnalysisPrompts:
     @staticmethod
-    def format_system_msg(has_tools: bool = True):
+    def format_system_msg():
         return textwrap.dedent(
-            f"""\
+            """\
             You are an exceptional AI system that is amazing at researching bugs in codebases.
 
-            {
-                "You have tools to search a codebase to gather relevant information. Please use the tools as many times as you want to gather relevant information."
-                if has_tools
-                else ""
-            }
+            You have tools to search a codebase to gather relevant information. Please use the tools as many times as you want to gather relevant information.
 
             # Guidelines:
             - Your job is to simply gather all information needed to understand what happened, not to propose fixes.
@@ -30,10 +30,10 @@ class RootCauseAnalysisPrompts:
     def format_default_msg(
         event: str,
         repos_str: str,
-        instruction: Optional[str] = None,
-        summary: Optional[IssueSummary] = None,
-        code_map: Optional[Profile] = None,
-        has_tools: bool = True,
+        instruction: str | None = None,
+        summary: IssueSummary | None = None,
+        code_map: Profile | None = None,
+        trace_tree: TraceTree | None = None,
     ):
         return textwrap.dedent(
             """\
@@ -46,19 +46,19 @@ class RootCauseAnalysisPrompts:
             Given the issue: {summary_str}
             {error_str}
             {code_map_str}
+            {trace_tree_str}
             {instruction_str}
             </issue_details>"""
         ).format(
             explore_msg=(
                 "Gather all information needed to understand what happened, from the entry point of the code to the error."
-                if has_tools
-                else "Figure out how and why this issue happened, from the entry point of the code to the error."
             ),
             error_str=event,
             repos_str=repos_str,
             instruction_str=format_instruction(instruction),
             summary_str=format_summary(summary),
             code_map_str=format_code_map(code_map),
+            trace_tree_str=format_trace_tree(trace_tree),
         )
 
     @staticmethod

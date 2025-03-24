@@ -162,7 +162,7 @@ def task_to_file_change(
         result = find_original_snippet(
             chunk.original_chunk,
             file_content,
-            threshold=0.75,
+            threshold=0.90,
             initial_line_threshold=0.95,
         )
 

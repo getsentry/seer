@@ -32,7 +32,7 @@ class TestConfidenceComponent:
         mock_llm_client = MagicMock()
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=ConfidenceOutput(
-                comment="Need more information about the error handling.",
+                question="Need more information about the error handling.",
                 output_confidence_score=0.75,
                 proceed_confidence_score=0.85,
             ),
@@ -56,7 +56,7 @@ class TestConfidenceComponent:
             output = component.invoke(request)
 
         assert output is not None
-        assert output.comment == "Need more information about the error handling."
+        assert output.question == "Need more information about the error handling."
         assert output.output_confidence_score == 0.75
         assert output.proceed_confidence_score == 0.85
 
@@ -73,7 +73,7 @@ class TestConfidenceComponent:
         mock_llm_client = MagicMock()
         mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
             parsed=ConfidenceOutput(
-                comment=None,
+                question=None,
                 output_confidence_score=0.95,
                 proceed_confidence_score=0.90,
             ),
@@ -97,7 +97,7 @@ class TestConfidenceComponent:
             output = component.invoke(request)
 
         assert output is not None
-        assert output.comment is None
+        assert output.question is None
         assert output.output_confidence_score == 0.95
         assert output.proceed_confidence_score == 0.90
 
@@ -127,4 +127,4 @@ class TestConfidenceComponent:
         assert output is not None
         assert output.output_confidence_score == 0.5
         assert output.proceed_confidence_score == 0.5
-        assert output.comment is None
+        assert output.question is None

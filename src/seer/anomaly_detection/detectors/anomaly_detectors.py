@@ -87,6 +87,24 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             prophet_df=prophet_df,
         )
 
+    @sentry_sdk.trace
+    def _stumpy_mp(
+        self,
+        ts_values: npt.NDArray[np.float64],
+        window_size: int,
+        algo_config: AlgoConfig,
+        mp_utils: MPUtils,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        mp = stumpy.stump(
+            ts_values,
+            m=max(3, window_size),
+            ignore_trivial=algo_config.mp_ignore_trivial,
+            normalize=False,  # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
+        )
+
+        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
+        return mp, mp_dist
+
     @inject
     @sentry_sdk.trace
     def _compute_matrix_profile(
@@ -125,15 +143,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         if window_size <= 0:
             raise ServerError("Invalid window size")
         # Get the matrix profile for the time series
-        mp = stumpy.stump(
-            ts_values,
-            m=max(3, window_size),
-            ignore_trivial=algo_config.mp_ignore_trivial,
-            normalize=False,
-        )
-
-        # We do not normalize the matrix profile here as normalizing during stream detection later is not straighforward.
-        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
+        mp, mp_dist = self._stumpy_mp(ts_values, window_size, algo_config, mp_utils)
 
         flags_and_scores = scorer.batch_score(
             values=ts_values,
@@ -166,6 +176,8 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             window_size=window_size,
             thresholds=flags_and_scores.thresholds if algo_config.return_thresholds else None,
             original_flags=original_flags,
+            confidence_levels=flags_and_scores.confidence_levels,
+            algorithm_types=flags_and_scores.algo_types,
         )
 
 
@@ -181,8 +193,12 @@ class MPStreamAnomalyDetector(AnomalyDetector):
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
     original_flags: list[AnomalyFlags | None] = Field(
-        ..., description="Original flags of the baseline timeseries."
+        ..., description="Original MP flags of the baseline timeseries."
     )
+    original_combined_flags: list[AnomalyFlags | None] = Field(
+        ..., description="Original combined flags of the baseline timeseries."
+    )
+
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
@@ -247,11 +263,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 if time_allocated is not None and i % batch_size == 0:
                     time_elapsed = datetime.datetime.now() - time_start
                     if time_allocated is not None and time_elapsed > time_allocated:
-                        sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
-                        sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
-                        sentry_sdk.capture_message(
+                        logger.error(
                             "stream_detection_took_too_long",
-                            level="error",
+                            extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
                         )
                         raise ServerError("Stream detection took too long")
 
@@ -277,12 +291,13 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 self.original_flags.append(flags_and_scores.flags[-1])
+                self.original_combined_flags.append(flags_and_scores.flags[-1])
 
                 stream_flag_smoother = MajorityVoteStreamFlagSmoother()
 
                 # Apply stream smoothing to the newest flag based on the previous original flags
                 smoothed_flags = stream_flag_smoother.smooth(
-                    original_flags=self.original_flags,
+                    original_flags=self.original_combined_flags,
                     ad_config=ad_config,
                     algo_config=algo_config,
                     vote_threshold=0.3,
@@ -313,4 +328,6 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 window_size=self.window_size,
                 thresholds=thresholds if algo_config.return_thresholds else None,
                 original_flags=self.original_flags,
+                confidence_levels=flags_and_scores.confidence_levels,
+                algorithm_types=flags_and_scores.algo_types,
             )

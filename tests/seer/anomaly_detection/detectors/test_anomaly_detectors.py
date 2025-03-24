@@ -13,7 +13,12 @@ from seer.anomaly_detection.detectors.anomaly_detectors import (
     MPBatchAnomalyDetector,
     MPStreamAnomalyDetector,
 )
-from seer.anomaly_detection.models import AlgoConfig, MPTimeSeriesAnomaliesSingleWindow
+from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
+    AlgoConfig,
+    ConfidenceLevel,
+    MPTimeSeriesAnomaliesSingleWindow,
+)
 from seer.anomaly_detection.models.external import AnomalyDetectionConfig
 from seer.anomaly_detection.models.timeseries import TimeSeries
 from seer.exceptions import ServerError
@@ -52,6 +57,18 @@ class TestMPBatchAnomalyDetector(unittest.TestCase):
                 scores=[0.1, 6.5, 4.8, 0.2],
                 flags=["none", "anomaly_higher_confidence", "anomaly_higher_confidence", "none"],
                 thresholds=[],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                ],
+                algo_types=[
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                ],
             )
         )
 
@@ -147,6 +164,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             history_mp=np.array([[0.3, 0.3, 0.3, 0.3], [0.4, 0.5, 0.6, 0.7]]),
             window_size=3,
             original_flags=["none", "none", "none"],
+            original_combined_flags=["none", "none", "none"],
         )
         self.timeseries = TimeSeries(
             timestamps=np.array([1, 2, 3]), values=np.array([1.1, 2.1, 3.1])
@@ -181,7 +199,11 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
         mock_utils.get_mp_dist_from_mp.return_value = np.array([0.1, 0.2])
 
         mock_scorer.stream_score.return_value = FlagsAndScores(
-            scores=[0.5], flags=["none"], thresholds=[]
+            scores=[0.5],
+            flags=["none"],
+            thresholds=[],
+            confidence_levels=[ConfidenceLevel.MEDIUM],
+            algo_types=[AlertAlgorithmType.NONE],
         )
 
         anomalies = self.detector.detect(
@@ -232,6 +254,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
             history_mp=history_mp,
             window_size=window_size,
             original_flags=["none", "none", "none"],
+            original_combined_flags=["none", "none", "none"],
         )
         stream_ts_timestamps = np.array(list(range(1, len(stream_ts) + 1))) + len(history_ts)
         stream_anomalies = stream_detector.detect(
@@ -362,6 +385,7 @@ class TestMPStreamAnomalyDetector(unittest.TestCase):
                 history_mp=np.array([0.1, 0.2, 0.3, 0.4]),
                 window_size=3,
                 original_flags=original_flags,
+                original_combined_flags=original_flags,
             )
             stream_detector.detect(
                 timeseries=TimeSeries(

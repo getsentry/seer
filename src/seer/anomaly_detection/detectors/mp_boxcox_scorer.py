@@ -1,10 +1,9 @@
-import datetime
+import logging
 import sys
 from typing import Dict, List, Tuple
 
 import numpy as np
 import numpy.typing as npt
-import sentry_sdk
 from pydantic import Field
 from scipy import special, stats
 
@@ -13,12 +12,15 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
+    ConfidenceLevel,
     Sensitivities,
     Threshold,
     ThresholdType,
 )
 from seer.dependency_injection import inject, injected
-from seer.exceptions import ClientError, ServerError
+from seer.exceptions import ClientError
+
+logger = logging.getLogger(__name__)
 
 
 class MPBoxCoxScorer(MPScorer):
@@ -139,25 +141,17 @@ class MPBoxCoxScorer(MPScorer):
         scores = []
         flags = []
         thresholds = []
-        time_allocated = datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
-        time_start = datetime.datetime.now()
-        batch_size = 10 if len(mp_dist) > 10 else 1
+        confidence_levels = []
         for i, score in enumerate(z_scores):
-            if time_allocated is not None and i % batch_size == 0:
-                time_elapsed = datetime.datetime.now() - time_start
-                if time_allocated is not None and time_elapsed > time_allocated:
-                    sentry_sdk.set_extra("time_taken_for_batch_detection", time_elapsed)
-                    sentry_sdk.set_extra("time_allocated_for_batch_detection", time_allocated)
-                    sentry_sdk.capture_message(
-                        "batch_detection_took_too_long",
-                        level="error",
-                    )
-                    raise ServerError("Batch detection took too long")
             flag: AnomalyFlags = "none"
             location_thresholds: List[Threshold] = []
 
             if std != 0 and not np.isnan(score) and score > threshold:
                 flag = "anomaly_higher_confidence"
+
+            confidence_level = (
+                ConfidenceLevel.HIGH if score >= threshold * 2 else ConfidenceLevel.MEDIUM
+            )
             cur_thresholds = [
                 Threshold(
                     type=ThresholdType.BOX_COX_THRESHOLD,
@@ -173,8 +167,10 @@ class MPBoxCoxScorer(MPScorer):
             flags.append(flag)
             cur_thresholds.extend(location_thresholds)
             thresholds.append(cur_thresholds)
-
-        return FlagsAndScores(flags=flags, scores=scores, thresholds=thresholds)
+            confidence_levels.append(confidence_level)
+        return FlagsAndScores(
+            flags=flags, scores=scores, thresholds=thresholds, confidence_levels=confidence_levels
+        )
 
     @inject
     def stream_score(
@@ -203,6 +199,9 @@ class MPBoxCoxScorer(MPScorer):
             if std == 0 or np.isnan(score) or score <= threshold
             else "anomaly_higher_confidence"
         )
+        confidence_level = (
+            ConfidenceLevel.HIGH if score >= threshold * 2 else ConfidenceLevel.MEDIUM
+        )
         thresholds: List[Threshold] = [
             Threshold(
                 type=ThresholdType.BOX_COX_THRESHOLD,
@@ -217,4 +216,5 @@ class MPBoxCoxScorer(MPScorer):
             flags=[flag],
             scores=[score],
             thresholds=[thresholds],
+            confidence_levels=[confidence_level],
         )

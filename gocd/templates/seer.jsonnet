@@ -3,14 +3,10 @@ local pipedream = import 'github.com/getsentry/gocd-jsonnet/libs/pipedream.libso
 
 local pipedream_config = {
   name: 'seer',
-  auto_deploy: false,
+  auto_deploy: true,
   exclude_regions: [
-    'customer-1',
-    'customer-2',
     'customer-3',
-    'customer-4',
     'customer-6',
-    'customer-7',
   ],
   materials: {
     seer_repo: {

@@ -1,12 +1,26 @@
 import abc
 import logging
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Dict, List, Optional
 
+import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
+
+
+class AlertAlgorithmType(StrEnum):
+    BOTH = "both"
+    MP = "mp"
+    PROPHET = "prophet"
+    NONE = "none"
+
+
+class ConfidenceLevel(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class ThresholdType(Enum):
@@ -73,6 +87,14 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
         default=[], description="The original flags of the time series"
     )
 
+    confidence_levels: List[ConfidenceLevel] = Field(
+        ..., description="The confidence levels of the anomalies"
+    )
+
+    algorithm_types: List[AlertAlgorithmType] = Field(
+        ..., description="The algorithm used to detect the anomalies"
+    )
+
     def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:
         algo_data: List[Optional[Dict]] = []
         if len(self.matrix_profile) < front_pad_to_len:
@@ -80,6 +102,16 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
 
         for i, (dist, index, l_index, r_index) in enumerate(self.matrix_profile):
             original_flag = self.original_flags[i] if i < len(self.original_flags) else "none"
+            confidence_level = (
+                self.confidence_levels[i]
+                if i < len(self.confidence_levels)
+                else ConfidenceLevel.MEDIUM
+            )
+            algorithm_type = (
+                self.algorithm_types[i]
+                if i < len(self.algorithm_types)
+                else AlertAlgorithmType.NONE
+            )
             algo_data.append(
                 {
                     "dist": dist,
@@ -87,6 +119,8 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
                     "l_idx": l_index,
                     "r_idx": r_index,
                     "original_flag": original_flag,
+                    "confidence_level": confidence_level,
+                    "algorithm_type": algorithm_type,
                 }
             )
 
@@ -100,7 +134,23 @@ class MPTimeSeriesAnomaliesSingleWindow(TimeSeriesAnomalies):
             map.get("l_idx"),
             map.get("r_idx"),
             map.get("original_flag"),
+            map.get("confidence_level"),
+            map.get("algorithm_type"),
         )
+
+    def extend(
+        self, other: "MPTimeSeriesAnomaliesSingleWindow"
+    ) -> "MPTimeSeriesAnomaliesSingleWindow":
+        self.window_size = other.window_size
+        self.flags.extend(other.flags)
+        self.scores.extend(other.scores)
+        if self.thresholds is not None and other.thresholds is not None:
+            self.thresholds.extend(other.thresholds)
+        elif other.thresholds is not None:
+            self.thresholds = other.thresholds
+        self.matrix_profile = np.append(self.matrix_profile, other.matrix_profile)
+        self.original_flags.extend(other.original_flags)
+        return self
 
 
 class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
@@ -132,6 +182,14 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
 
     use_suss: list[bool] = Field(
         ..., description="Whether the SuSS window was used to detect anomalies"
+    )
+
+    confidence_levels: List[ConfidenceLevel] = Field(
+        ..., description="The confidence levels of the anomalies"
+    )
+
+    algorithm_types: List[AlertAlgorithmType] = Field(
+        ..., description="The algorithm used to detect the anomalies"
     )
 
     def get_anomaly_algo_data(self, front_pad_to_len: int) -> List[Optional[Dict]]:
@@ -170,7 +228,18 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
                     "r_idx": r_index_fixed,
                 }
             original_flag = self.original_flags[i] if i < len(self.original_flags) else "none"
-            use_suss = self.use_suss[len(self.use_suss) - front_pad_to_len + i]
+            use_suss = True  # Default to true since we are only using SuSS window
+            confidence_level = (
+                self.confidence_levels[i]
+                if i < len(self.confidence_levels)
+                else ConfidenceLevel.MEDIUM
+            )
+
+            algorithm_type = (
+                self.algorithm_types[i]
+                if i < len(self.algorithm_types)
+                else AlertAlgorithmType.NONE
+            )
 
             algo_data.append(
                 {
@@ -178,6 +247,8 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
                     "mp_fixed": mp_fixed,
                     "original_flag": original_flag,
                     "use_suss": use_suss,
+                    "confidence_level": confidence_level,
+                    "algorithm_type": algorithm_type,
                 }
             )
 
@@ -223,4 +294,6 @@ class MPTimeSeriesAnomalies(TimeSeriesAnomalies):
             "mp_fixed": mp_fixed,
             "original_flag": map.get("original_flag"),
             "use_suss": map.get("use_suss", True),
+            "confidence_level": map.get("confidence_level"),
+            "algorithm_type": map.get("algorithm_type"),
         }

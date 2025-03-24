@@ -3,6 +3,7 @@ import random
 from langfuse.decorators import observe
 from rapidfuzz import fuzz, process
 
+VALID_RANDOM_SUFFIX_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 VALID_BRANCH_NAME_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-/"
 
 
@@ -76,18 +77,35 @@ def find_original_snippet(
             snippet_index = 0
 
             while actual_end < len(file_lines) and snippet_index < len(snippet_lines):
+                # Skip empty lines in the file but don't increment snippet_index
                 if not file_lines[actual_end].strip():
                     actual_end += 1
                     continue
 
-                if snippet_index == len(snippet_lines):
-                    break
+                # Skip empty lines in the snippet but don't increment actual_end
+                if not snippet_lines[snippet_index].strip():
+                    snippet_index += 1
+                    continue
 
-                actual_end += 1
-                snippet_index += 1
+                # Compare current lines
+                line_score = (
+                    fuzz.ratio(snippet_lines[snippet_index], file_lines[actual_end]) / 100.0
+                )
+                if line_score >= threshold:
+                    actual_end += 1
+                    snippet_index += 1
+                else:
+                    # If this line doesn't match well, try the next file line
+                    actual_end += 1
 
-            best_score = full_score
-            best_match = ("\n".join(file_lines[start_index:actual_end]), start_index, actual_end)
+            # Make sure we've matched all snippet lines
+            if snippet_index >= len(snippet_lines):
+                best_score = full_score
+                best_match = (
+                    "\n".join(file_lines[start_index:actual_end]),
+                    start_index,
+                    actual_end,
+                )
 
     return best_match
 
@@ -99,12 +117,13 @@ def sanitize_branch_name(title: str) -> str:
     """
     kebab_case = title.replace(" ", "-").replace("_", "-").lower()
     sanitized = "".join(c for c in kebab_case if c in VALID_BRANCH_NAME_CHARS)
+    sanitized = sanitized.rstrip("/")
     return sanitized
 
 
 def generate_random_string(n=6) -> str:
     """Generate a random n character string."""
-    return "".join(random.choice(VALID_BRANCH_NAME_CHARS) for _ in range(n))
+    return "".join(random.choice(VALID_RANDOM_SUFFIX_CHARS) for _ in range(n))
 
 
 def remove_code_backticks(text: str) -> str:

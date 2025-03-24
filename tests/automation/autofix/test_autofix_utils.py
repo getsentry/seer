@@ -1,7 +1,12 @@
 import textwrap
 import unittest
 
-from seer.automation.autofix.utils import find_original_snippet
+from seer.automation.autofix.utils import (
+    VALID_RANDOM_SUFFIX_CHARS,
+    find_original_snippet,
+    generate_random_string,
+    sanitize_branch_name,
+)
 
 
 class TestFindOriginalSnippet(unittest.TestCase):
@@ -68,14 +73,14 @@ class TestFindOriginalSnippet(unittest.TestCase):
         file_contents = textwrap.dedent(
             """\
             def example_function():
-                print('Hello world!')  # Missing comma
+                print('Hello world!')
 
             def unrelated_function():
                 pass
             """
-        )
+        )  # missing comma
         expected_result = (
-            "def example_function():\n    print('Hello world!')  # Missing comma",
+            "def example_function():\n    print('Hello world!')",
             0,
             2,
         )
@@ -92,3 +97,65 @@ class TestFindOriginalSnippet(unittest.TestCase):
             """
         )
         self.assertIsNone(find_original_snippet(snippet, file_contents))
+
+
+class TestSanitizeBranchName(unittest.TestCase):
+    def test_basic_sanitization(self):
+        """Test that spaces and underscores are converted to hyphens and text is lowercased."""
+        title = "Hello World_Example"
+        expected = "hello-world-example"
+        self.assertEqual(sanitize_branch_name(title), expected)
+
+    def test_removes_invalid_characters(self):
+        """Test that characters not in VALID_BRANCH_NAME_CHARS are removed."""
+        title = "feature!@#$%^&*(-)+=;:'\"<>,.?branch"
+        expected = "feature-branch"
+        self.assertEqual(sanitize_branch_name(title), expected)
+
+    def test_strips_trailing_slashes(self):
+        """Test the new functionality that strips trailing slashes."""
+        title = "feature/branch/"
+        expected = "feature/branch"
+        self.assertEqual(sanitize_branch_name(title), expected)
+
+        # Test with multiple trailing slashes
+        title = "feature/branch///"
+        expected = "feature/branch"
+        self.assertEqual(sanitize_branch_name(title), expected)
+
+    def test_does_not_strip_middle_slashes(self):
+        """Test that slashes in the middle of the branch name are preserved."""
+        title = "feature/branch/name"
+        expected = "feature/branch/name"
+        self.assertEqual(sanitize_branch_name(title), expected)
+
+
+class TestGenerateRandomString(unittest.TestCase):
+    def test_output_length(self):
+        """Test that the output string has the expected length."""
+        length = 8
+        result = generate_random_string(length)
+        self.assertEqual(len(result), length)
+
+        # Test default length
+        result = generate_random_string()
+        self.assertEqual(len(result), 6)
+
+    def test_characters_used(self):
+        """Test that only characters from VALID_RANDOM_SUFFIX_CHARS are used."""
+        # Test with a longer string to have a higher chance of detecting issues
+        result = generate_random_string(100)
+        for char in result:
+            self.assertIn(char, VALID_RANDOM_SUFFIX_CHARS)
+
+    def test_no_invalid_chars(self):
+        """Test that slashes and dashes are not included in the generated string."""
+        result = generate_random_string(1000)  # Generate a long string for better testing
+        self.assertNotIn("-", result)
+        self.assertNotIn("/", result)
+
+    def test_randomness(self):
+        """Test that two calls produce different results."""
+        result1 = generate_random_string()
+        result2 = generate_random_string()
+        self.assertNotEqual(result1, result2)
