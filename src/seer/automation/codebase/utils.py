@@ -14,7 +14,7 @@ language_to_extensions = {
     "c_sharp": [".cs"],
     "commonlisp": [".lisp"],
     "cpp": [".cpp", ".cxx", ".cc", ".hpp"],
-    "css": [".css"],
+    "css": [".css", ".scss", ".sass"],
     "dockerfile": ["Dockerfile"],
     "dot": [".dot"],
     "elisp": [".el"],
