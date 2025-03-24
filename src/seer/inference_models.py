@@ -9,6 +9,7 @@ import numpy as np
 import sentry_sdk
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
+from seer.automation.autofixability import AutofixabilityModel
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.grouping.grouping import GroupingLookup
@@ -51,6 +52,11 @@ def grouping_lookup() -> GroupingLookup:
         model_path=model_path("issue_grouping_v0/embeddings"),
         data_path=model_path("issue_grouping_v0/data.pkl"),
     )
+
+
+@deferred_loading("AUTOFIXABILITY_SCORING_ENABLED")
+def autofixability_model() -> AutofixabilityModel:
+    return AutofixabilityModel(model_path("autofixability_v0/embeddings"))
 
 
 @deferred_loading("ANOMALY_DETECTION_ENABLED")

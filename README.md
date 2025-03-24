@@ -202,7 +202,7 @@ In CI, we split the tests into groups to run in parallel. The groups are divided
 
 The durations are stored in the `.test_durations` file.
 
-To update the durations, run:
+To update the durations, run in a `make shell`:
 ```bash
 pip install pytest-split
 pytest --store-durations
