@@ -292,11 +292,16 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 self.original_flags.append(flags_and_scores.flags[-1])
-                self.original_combined_flags.append(
-                    "anomaly_higher_confidence"
-                    if flags_and_scores.algo_types[-1] != AlertAlgorithmType.NONE
-                    else "none"
-                )
+
+                # if algo_types is empty, then default to MP logic
+                if len(flags_and_scores.algo_types) == 0:
+                    self.original_combined_flags.append(flags_and_scores.flags[-1])
+                else:
+                    self.original_combined_flags.append(
+                        "anomaly_higher_confidence"
+                        if flags_and_scores.algo_types[-1] != AlertAlgorithmType.NONE
+                        else "none"
+                    )
 
                 stream_flag_smoother = MajorityVoteStreamFlagSmoother()
 
