@@ -226,7 +226,9 @@ class CodecovTaskRequest(BaseModel):
         | CodegenPrClosedRequest
     )
     external_owner_id: str
-    request_type: Literal["unit-tests", "pr-review", "relevant-warnings", "pr-closed", "retry-unit-tests"]
+    request_type: Literal[
+        "unit-tests", "pr-review", "relevant-warnings", "pr-closed", "retry-unit-tests"
+    ]
 
 
 class UnitTestRunMemory(BaseModel):
