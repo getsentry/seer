@@ -17,6 +17,7 @@ from seer.anomaly_detection.detectors.smoothers import (
 )
 from seer.anomaly_detection.detectors.window_size_selectors import WindowSizeSelector
 from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
@@ -291,7 +292,11 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 self.original_flags.append(flags_and_scores.flags[-1])
-                self.original_combined_flags.append(flags_and_scores.flags[-1])
+                self.original_combined_flags.append(
+                    "anomaly_higher_confidence"
+                    if flags_and_scores.algo_types[-1] != AlertAlgorithmType.NONE
+                    else "none"
+                )
 
                 stream_flag_smoother = MajorityVoteStreamFlagSmoother()
 
