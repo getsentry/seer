@@ -186,7 +186,7 @@ class BaseTools:
 
         # Use the _build_file_tree_string method from the repo client
         tree_representation = repo_client._build_file_tree_string(files_under_path)
-        return f"<directory tree>\n{tree_representation}\n</directory tree>"
+        return f"<directory_tree>\n{tree_representation}\n</directory_tree>"
 
     def _get_potential_abs_paths(self, path: str, repo_name: str | None = None) -> str:
         """
