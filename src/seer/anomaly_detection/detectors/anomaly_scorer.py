@@ -149,7 +149,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
         window_size: int,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
-
         # If we are going to apply prophet scoring, use a higher sensitivity for MP scoring
         ad_config_for_mp = (
             ad_config
@@ -174,7 +173,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             # logger.warning("The prophet_df is None or empty, skipping prophet scoring")
             return mp_flags_and_scores
 
-        # Lookup row in prophet_df for streamed_timestam and update y and actual with the new streamed value
+        # Lookup row in prophet_df for streamed_timestamp and update y and actual with the new streamed value
         row_exists = (prophet_df["ds"] == streamed_timestamp).any()
         if not row_exists:
             logger.warning(
@@ -225,7 +224,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
         prophet_predictions: pd.DataFrame,
         ad_config: AnomalyDetectionConfig,
     ) -> FlagsAndScores:
-
         # todo: return prophet thresholds
         def merge(timestamps, mp_flags_and_scores, prophet_map):
             mp_flags = mp_flags_and_scores.flags

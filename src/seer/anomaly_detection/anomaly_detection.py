@@ -644,7 +644,7 @@ class AnomalyDetection(BaseModel):
         time_allocated = datetime.timedelta(milliseconds=time_budget_ms)
         if time_elapsed > time_allocated:
             logger.error(
-                "batch_detection_took+_too_long",
+                "batch_detection_took_too_long",
                 extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
             )
             raise ServerError(
