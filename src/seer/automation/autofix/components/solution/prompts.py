@@ -92,7 +92,7 @@ class SolutionPrompts:
         )
 
     @staticmethod
-    def solution_formatter_msg(root_cause: RootCauseAnalysisItem | str):
+    def solution_formatter_msg():
         return textwrap.dedent(
             """\
             Format the discussed plan exactly into a list of steps in the plan to fix the issue. Exclude steps that are not part of the fix, such as adding tests and logs.
@@ -105,7 +105,7 @@ class SolutionPrompts:
 
             Then, provide a concise summary of the solution. This summary must be less than 30 words and must be an information-dense single summary and must not contain filler words such as "The application..." or "The fix...".
               - Use a "matter of fact" tone, such as "Add correct validation of `foo` to the `process_task` function."."""
-        ).format(root_cause_str=SolutionPrompts.format_root_cause(root_cause))
+        )
 
     @staticmethod
     def solution_proposal_msg():

@@ -1,3 +1,4 @@
+import json
 import logging
 
 from langfuse.decorators import observe
@@ -5,9 +6,10 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
-from seer.automation.agent.models import Message
+from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionRequest
 from seer.automation.autofix.components.solution.prompts import SolutionPrompts
 from seer.automation.autofix.prompts import format_repo_prompt
@@ -24,12 +26,66 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
     def _prefill_initial_memory(self, request: SolutionRequest) -> list[Message]:
         memory: list[Message] = []
 
-        root_cause_memory = self.context.get_memory("root_cause_analysis")
-        if root_cause_memory:
-            memory.extend(root_cause_memory)
+        relevant_files = []
+        if isinstance(request.root_cause_and_fix, RootCauseAnalysisItem):
+            relevant_files_root_cause = list(
+                {
+                    (event.relevant_code_file.file_path, event.relevant_code_file.repo_name): {
+                        "file_path": event.relevant_code_file.file_path,
+                        "repo_name": event.relevant_code_file.repo_name,
+                    }
+                    for event in (
+                        request.root_cause_and_fix.root_cause_reproduction
+                        if request.root_cause_and_fix.root_cause_reproduction
+                        else []
+                    )
+                    if event.relevant_code_file
+                }.values()
+            )
+            relevant_files.extend(relevant_files_root_cause)
+
+        expanded_files_messages = []
+        for i, file in enumerate(relevant_files):
+            file_content = None
+            try:
+                file_content = (
+                    self.context.get_file_contents(
+                        path=file["file_path"], repo_name=file["repo_name"]
+                    )
+                    if file["file_path"]
+                    else None
+                )
+            except Exception as e:
+                logger.exception(f"Error getting file contents in memory prefill: {e}")
+                file_content = None
+
+            if file_content:
+                agent_message = Message(
+                    role="tool_use",
+                    content=f"Expand document: {file['file_path']} in {file['repo_name']}",
+                    tool_calls=[
+                        ToolCall(
+                            id=str(i),
+                            function="expand_document",
+                            args=json.dumps(
+                                {"file_path": file["file_path"], "repo_name": file["repo_name"]}
+                            ),
+                        )
+                    ],
+                )
+                user_message = Message(
+                    role="tool",
+                    content=file_content,
+                    tool_call_id=str(i),
+                    tool_call_function="expand_document",
+                )
+                memory.append(agent_message)
+                memory.append(user_message)
+                expanded_files_messages.append(agent_message)
+                expanded_files_messages.append(user_message)
 
         with self.context.state.update() as cur:
-            cur.steps[-1].initial_memory_length = len(memory) + 1
+            cur.steps[-1].initial_memory_length = len(expanded_files_messages) + 1
 
         return memory
 
@@ -62,11 +118,17 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 name="Solution",
             )
 
+            # pass in last message from RCA memory instead of root cause timeline
+            root_cause_memory = self.context.get_memory("root_cause_analysis")
+            root_cause_raw = None
+            if root_cause_memory:
+                root_cause_raw = root_cause_memory[-1].content
+
             if not request.initial_memory:
                 agent.add_user_message(
                     SolutionPrompts.format_default_msg(
                         event=request.event_details.format_event(),
-                        root_cause=request.root_cause_and_fix,
+                        root_cause=root_cause_raw if root_cause_raw else request.root_cause_and_fix,
                         summary=request.summary,
                         repos_str=repos_str,
                         original_instruction=request.original_instruction,
@@ -88,15 +150,6 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         run_config=RunConfig(
                             model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                             system_prompt=SolutionPrompts.format_system_msg(),
-                            prompt=SolutionPrompts.format_default_msg(
-                                event=request.event_details.format_event(),
-                                root_cause=request.root_cause_and_fix,
-                                summary=request.summary,
-                                repos_str=repos_str,
-                                original_instruction=request.original_instruction,
-                                code_map=request.profile,
-                                trace_tree=request.trace_tree,
-                            ),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
                             max_iterations=64,
@@ -158,7 +211,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
 
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
-                    prompt=SolutionPrompts.solution_formatter_msg(request.root_cause_and_fix),
+                    prompt=SolutionPrompts.solution_formatter_msg(),
                     model=GeminiProvider.model("gemini-2.0-flash-001"),
                     response_format=SolutionOutput,
                     run_name="Solution Extraction & Formatting",
