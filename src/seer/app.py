@@ -71,6 +71,14 @@ from seer.automation.codegen.tasks import (
     codegen_unittest,
     get_unittest_state,
 )
+from seer.automation.preferences import (
+    GetSeerProjectPreferenceRequest,
+    GetSeerProjectPreferenceResponse,
+    SetSeerProjectPreferenceRequest,
+    SetSeerProjectPreferenceResponse,
+    get_seer_project_preference,
+    set_seer_project_preference,
+)
 from seer.automation.summarize.issue import run_fixability_score, run_summarize_issue
 from seer.automation.summarize.models import (
     GetFixabilityScoreRequest,
@@ -344,6 +352,20 @@ def codecov_request_endpoint(
         return codegen_retry_unittest(data.data)
 
     raise ValueError(f"Unsupported request_type: {data.request_type}")
+
+
+@json_api(blueprint, "/v1/project-preference")
+def get_seer_project_preference_endpoint(
+    data: GetSeerProjectPreferenceRequest,
+) -> GetSeerProjectPreferenceResponse:
+    return get_seer_project_preference(data)
+
+
+@json_api(blueprint, "/v1/project-preference/set")
+def set_seer_project_preference_endpoint(
+    data: SetSeerProjectPreferenceRequest,
+) -> SetSeerProjectPreferenceResponse:
+    return set_seer_project_preference(data)
 
 
 @json_api(blueprint, "/v1/automation/summarize/issue")

@@ -107,7 +107,7 @@ class TestUnittestStep(unittest.TestCase):
             pr_title=pr_title,
             file_changes=file_changes_payload,
             branch_name=branch_name,
-            from_feature_branch=True,
+            from_base_sha=True,
         )
         repo_client.create_pr_from_branch.assert_called_once_with(
             branch="branch_ref",

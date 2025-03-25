@@ -19,6 +19,14 @@ def format_instruction(instruction: str | None):
     )
 
 
+def format_repo_instructions(repo: RepoDefinition):
+    return (
+        f"\n<repo_instructions>\n{repo.instructions.rstrip()}\n</repo_instructions>"
+        if hasattr(repo, "instructions") and repo.instructions
+        else ""
+    )
+
+
 def format_repo_prompt(
     readable_repos: list[RepoDefinition], unreadable_repos: list[RepoDefinition] = []
 ):
@@ -29,7 +37,14 @@ def format_repo_prompt(
         """\
         You have the following repositories to work with:
         {names_list_str}"""
-    ).format(names_list_str="\n".join([f"- {repo.full_name}" for repo in readable_repos]))
+    ).format(
+        names_list_str="\n".join(
+            [
+                f"<repo>\n{repo.full_name}{format_repo_instructions(repo)}\n</repo>"
+                for repo in readable_repos
+            ]
+        )
+    )
 
     if unreadable_repos:
         unreadable_str = textwrap.dedent(
