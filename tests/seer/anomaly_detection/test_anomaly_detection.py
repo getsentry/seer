@@ -8,6 +8,7 @@ import pandas as pd
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
 from seer.anomaly_detection.models import (
+    AlertAlgorithmType,
     ConfidenceLevel,
     DynamicAlert,
     MPTimeSeries,
@@ -59,6 +60,7 @@ class TestAnomalyDetection(unittest.TestCase):
                         ConfidenceLevel.MEDIUM,
                     ]
                     * data_length,
+                    algorithm_types=[AlertAlgorithmType.NONE] * data_length,
                 ),
                 prophet_predictions=ProphetPrediction(
                     timestamps=np.array([]),
@@ -162,6 +164,7 @@ class TestAnomalyDetection(unittest.TestCase):
                     original_flags=[],
                     use_suss=[],
                     confidence_levels=[],
+                    algorithm_types=[],
                 ),
                 pd.DataFrame(
                     {
@@ -374,6 +377,7 @@ class TestAnomalyDetection(unittest.TestCase):
                 ConfidenceLevel.MEDIUM,
             ]
             * len(self.ts_timestamps),
+            algorithm_types=[AlertAlgorithmType.NONE] * len(self.ts_timestamps),
         )
 
         new_timestamp = len(self.ts_values) + datetime.now().timestamp() + 1

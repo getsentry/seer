@@ -1,8 +1,12 @@
 import textwrap
-from typing import Optional
 
-from seer.automation.autofix.prompts import format_code_map, format_instruction, format_summary
-from seer.automation.models import Profile
+from seer.automation.autofix.prompts import (
+    format_code_map,
+    format_instruction,
+    format_summary,
+    format_trace_tree,
+)
+from seer.automation.models import Profile, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -26,9 +30,10 @@ class RootCauseAnalysisPrompts:
     def format_default_msg(
         event: str,
         repos_str: str,
-        instruction: Optional[str] = None,
-        summary: Optional[IssueSummary] = None,
-        code_map: Optional[Profile] = None,
+        instruction: str | None = None,
+        summary: IssueSummary | None = None,
+        code_map: Profile | None = None,
+        trace_tree: TraceTree | None = None,
     ):
         return textwrap.dedent(
             """\
@@ -41,6 +46,7 @@ class RootCauseAnalysisPrompts:
             Given the issue: {summary_str}
             {error_str}
             {code_map_str}
+            {trace_tree_str}
             {instruction_str}
             </issue_details>"""
         ).format(
@@ -52,6 +58,7 @@ class RootCauseAnalysisPrompts:
             instruction_str=format_instruction(instruction),
             summary_str=format_summary(summary),
             code_map_str=format_code_map(code_map),
+            trace_tree_str=format_trace_tree(trace_tree),
         )
 
     @staticmethod

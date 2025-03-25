@@ -36,15 +36,18 @@ class TestCodecovClient(unittest.TestCase):
     def test_fetch_test_results_for_commit_success_with_results(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.text = "Mock test results data"
-        mock_response.json.return_value = {"count": 1}
+        mock_response.json.return_value = {
+            "count": 1,
+            "results": [{"name": "Test", "failure_message": "Error occurred"}],
+        }
         mock_get.return_value = mock_response
 
         result = CodecovClient.fetch_test_results_for_commit(
             "owner", "repo", "commit_sha", config=MockConfig()
         )
 
-        self.assertEqual(result, "Mock test results data")
+        expected = [{"name": "Test", "failure_message": "Error occurred"}]
+        self.assertEqual(result, expected)
         mock_get.assert_called_once()
 
     @patch("integrations.codecov.codecov_client.requests.get")

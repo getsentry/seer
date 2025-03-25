@@ -1,17 +1,20 @@
 import contextlib
 import functools
+import logging
 import os
 import threading
 from typing import Any, Callable, TypeVar
 
+import numpy as np
 import sentry_sdk
 
 from seer.anomaly_detection.anomaly_detection import AnomalyDetection
+from seer.automation.autofixability import AutofixabilityModel
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 from seer.grouping.grouping import GroupingLookup
 from seer.loading import LoadingResult
-from seer.severity.severity_inference import SeverityInference
+from seer.severity.severity_inference import SeverityInference, SeverityRequest
 
 root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
 
@@ -49,6 +52,11 @@ def grouping_lookup() -> GroupingLookup:
         model_path=model_path("issue_grouping_v0/embeddings"),
         data_path=model_path("issue_grouping_v0/data.pkl"),
     )
+
+
+@deferred_loading("AUTOFIXABILITY_SCORING_ENABLED")
+def autofixability_model() -> AutofixabilityModel:
+    return AutofixabilityModel(model_path("autofixability_v0/embeddings"))
 
 
 @deferred_loading("ANOMALY_DETECTION_ENABLED")
@@ -127,3 +135,42 @@ def initialize_models(start_model_loading: bool, config: AppConfig = injected):
         import torch
 
         torch.set_num_threads(torch_num_threads)
+
+
+def test_grouping_model() -> bool:
+    """Test if the grouping model is working properly.
+
+    Returns:
+        bool: True if the model is working, False otherwise.
+    """
+    try:
+        test_text = "Test message for grouping model"
+        embedding = grouping_lookup().encode_text(test_text)
+        if embedding is None or len(embedding) == 0:
+            raise ValueError("Grouping model returned empty embedding")
+        if not np.all(np.isfinite(embedding)):
+            raise ValueError("Grouping model returned non-numeric values in the embedding")
+
+        logging.getLogger(__name__).info("Grouping model test call successful")
+        return True
+    except Exception as e:
+        logging.getLogger(__name__).exception("Grouping model test call failed")
+        sentry_sdk.capture_exception(e)
+        return False
+
+
+def test_severity_model() -> bool:
+    """Test if the severity model is working properly.
+
+    Returns:
+        bool: True if the model is working, False otherwise.
+    """
+    try:
+        test_request = SeverityRequest(message="Test message for severity model")
+        embeddings_model().severity_score(test_request)
+        logging.getLogger(__name__).info("Severity model test call successful")
+        return True
+    except Exception as e:
+        logging.getLogger(__name__).exception("Severity model test call failed")
+        sentry_sdk.capture_exception(e)
+        return False

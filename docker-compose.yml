@@ -38,6 +38,7 @@ services:
             - ~/.config/gcloud:/root/.config/gcloud
             # Codecov test artifacts
             - ./.artifacts:/app/.artifacts
+            - ./.test_durations:/app/.test_durations
         healthcheck:
             test: curl --fail http://localhost:9091/health/ready || exit 1
             interval: 5s
@@ -53,6 +54,7 @@ services:
             - AUTOFIX_ENABLED=1
             - SEVERITY_ENABLED=1
             - GROUPING_ENABLED=1
+            - AUTOFIXABILITY_SCORING_ENABLED=1
             - ANOMALY_DETECTION_ENABLED=1
             - CELERY_WORKER_ENABLE=true
             - PORT=9091

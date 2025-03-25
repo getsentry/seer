@@ -88,6 +88,7 @@ class AppConfig(BaseModel):
     ANOMALY_DETECTION_ENABLED: ParseBool = False
     GROUPING_ENABLED: ParseBool = False
     SEVERITY_ENABLED: ParseBool = False
+    AUTOFIXABILITY_SCORING_ENABLED: ParseBool = False
     AUTOFIX_ENABLED: ParseBool = False
     GRPC_SERVER_ENABLE: ParseBool = False
     HOSTNAME: str = Field(default_factory=gethostname)
@@ -101,6 +102,7 @@ class AppConfig(BaseModel):
         self.ANOMALY_DETECTION_ENABLED = False
         self.GROUPING_ENABLED = False
         self.SEVERITY_ENABLED = False
+        self.AUTOFIXABILITY_SCORING_ENABLED = False
         self.AUTOFIX_ENABLED = False
         self.GRPC_SERVER_ENABLE = False
 
@@ -111,6 +113,10 @@ class AppConfig(BaseModel):
     @property
     def is_grouping_enabled(self):
         return self.GROUPING_ENABLED
+
+    @property
+    def is_autofixability_scoring_enabled(self):
+        return self.AUTOFIXABILITY_SCORING_ENABLED
 
     @property
     def is_autofix_enabled(self):

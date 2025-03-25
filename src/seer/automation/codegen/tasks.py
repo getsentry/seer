@@ -13,6 +13,7 @@ from seer.automation.codegen.relevant_warnings_step import (
     RelevantWarningsStep,
     RelevantWarningsStepRequest,
 )
+from seer.automation.codegen.retry_unittest_step import RetryUnittestStep, RetryUnittestStepRequest
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.codegen.unittest_step import UnittestStep, UnittestStepRequest
 from seer.automation.state import DbState, DbStateRunTypes
@@ -63,8 +64,25 @@ def create_initial_relevant_warnings_run(
     return state
 
 
+def create_subsequent_unittest_run(request: CodegenBaseRequest) -> DbState[CodegenContinuation]:
+    state = CodegenContinuationState.new(
+        CodegenContinuation(request=request),
+        group_id=request.pr_id,
+        t=DbStateRunTypes.UNIT_TESTS_RETRY,
+    )
+
+    with state.update() as cur:
+        cur.status = CodegenStatus.PENDING
+        cur.signals = []
+        cur.mark_triggered()
+
+    return state
+
+
 @inject
-def codegen_unittest(request: CodegenBaseRequest, app_config: AppConfig = injected):
+def codegen_unittest(
+    request: CodegenBaseRequest, app_config: AppConfig = injected, is_codecov_request: bool = False
+):
     state = create_initial_unittest_run(request)
 
     cur_state = state.get()
@@ -77,6 +95,7 @@ def codegen_unittest(request: CodegenBaseRequest, app_config: AppConfig = inject
         run_id=cur_state.run_id,
         pr_id=request.pr_id,
         repo_definition=request.repo,
+        is_codecov_request=is_codecov_request,
     )
     UnittestStep.get_signature(unittest_request, queue=app_config.CELERY_WORKER_QUEUE).apply_async()
 
@@ -131,3 +150,22 @@ def codegen_relevant_warnings(
     ).apply_async()
 
     return CodegenRelevantWarningsResponse(run_id=cur_state.run_id)
+
+
+@inject
+def codegen_retry_unittest(request: CodegenBaseRequest, app_config: AppConfig = injected):
+    state = create_subsequent_unittest_run(request)
+
+    cur_state = state.get()
+
+    retry_unittest_request = RetryUnittestStepRequest(
+        run_id=cur_state.run_id,
+        pr_id=request.pr_id,
+        repo_definition=request.repo,
+        codecov_status=request.codecov_status,
+    )
+    RetryUnittestStep.get_signature(
+        retry_unittest_request, queue=app_config.CELERY_WORKER_QUEUE
+    ).apply_async()
+
+    return CodegenUnitTestsResponse(run_id=cur_state.run_id)

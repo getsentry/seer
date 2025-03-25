@@ -59,12 +59,6 @@ class AutofixStatus(enum.Enum):
         return frozenset((cls.COMPLETED, cls.ERROR, cls.CANCELLED))
 
 
-class ProblemDiscoveryResult(BaseModel):
-    status: Literal["CONTINUE", "CANCELLED"]
-    description: str
-    reasoning: str
-
-
 class AutofixUserDetails(BaseModel):
     id: Annotated[int, Examples(specialized.unsigned_ints)]
     display_name: str
@@ -255,6 +249,8 @@ class CodebaseState(BaseModel):
 class AutofixFeedback(BaseModel):
     root_cause_thumbs_up: bool | None = None
     root_cause_thumbs_down: bool | None = None
+    solution_thumbs_up: bool | None = None
+    solution_thumbs_down: bool | None = None
 
 
 class AutofixGroupState(BaseModel):
@@ -467,7 +463,12 @@ class AutofixResolveCommentThreadPayload(BaseModel):
 
 class AutofixFeedbackPayload(BaseModel):
     type: Literal[AutofixUpdateType.FEEDBACK]
-    action: Literal["root_cause_thumbs_up", "root_cause_thumbs_down"]
+    action: Literal[
+        "root_cause_thumbs_up",
+        "root_cause_thumbs_down",
+        "solution_thumbs_up",
+        "solution_thumbs_down",
+    ]
 
 
 class AutofixUpdateRequest(BaseModel):

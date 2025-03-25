@@ -8,6 +8,9 @@ from seer.automation.models import (
     Line,
     Profile,
     ProfileFrame,
+    Span,
+    TraceEvent,
+    TraceTree,
 )
 
 
@@ -436,7 +439,7 @@ def test_profile_format_no_relevant_functions():
         ],
     )
 
-    expected = "→ main (app.py)\n  → helper (utils.py)"
+    expected = "└─ main (app.py:1)\n   └─ helper (utils.py:5)"
     assert profile.format_profile() == expected
 
 
@@ -482,7 +485,10 @@ def test_profile_format_with_relevant_functions():
     # Should only show the relevant function with context
     formatted = profile.format_profile(context_before=1, context_after=1)
     expected = (
-        "...\n  → process_data (utils.py)\n  → relevant_func (core.py)\n  → cleanup (utils.py)"
+        "...\n"
+        "   ├─ process_data (utils.py:5)\n"
+        "   ├─ relevant_func (core.py:10)\n"
+        "   └─ cleanup (utils.py:15)"
     )
     assert formatted == expected
 
@@ -528,7 +534,12 @@ def test_profile_format_with_multiple_relevant_functions():
 
     # Should show both relevant functions with context
     formatted = profile.format_profile(context_before=1, context_after=1)
-    expected = "→ main (app.py)\n  → relevant_func1 (core.py)\n  → process_data (utils.py)\n  → relevant_func2 (core.py)"
+    expected = (
+        "└─ main (app.py:1)\n"
+        "   ├─ relevant_func1 (core.py:5)\n"
+        "   ├─ process_data (utils.py:10)\n"
+        "   └─ relevant_func2 (core.py:15)"
+    )
     assert formatted == expected
 
 
@@ -568,7 +579,9 @@ def test_profile_format_with_nested_relevant_functions():
 
     # Should show the nested structure leading to the relevant function
     formatted = profile.format_profile(context_before=2, context_after=0)
-    expected = "→ main (app.py)\n  → outer (core.py)\n    → relevant_func (core.py)"
+    expected = (
+        "└─ main (app.py:1)\n" "   └─ outer (core.py:5)\n" "      └─ relevant_func (core.py:10)"
+    )
     assert formatted == expected
 
 
@@ -613,11 +626,13 @@ def test_profile_format_with_custom_context():
 
     # Test with minimal context
     minimal_context = profile.format_profile(context_before=0, context_after=0)
-    assert minimal_context == "...\n  → relevant_func (core.py)\n..."
+    assert minimal_context == "...\n   ├─ relevant_func (core.py:10)\n..."
 
     # Test with asymmetric context
     asymmetric_context = profile.format_profile(context_before=1, context_after=0)
-    assert asymmetric_context == "...\n  → func1 (utils.py)\n  → relevant_func (core.py)\n..."
+    assert (
+        asymmetric_context == "...\n   ├─ func1 (utils.py:5)\n   ├─ relevant_func (core.py:10)\n..."
+    )
 
 
 def test_stacktraceframe_filtering():
@@ -679,3 +694,369 @@ def test_stacktraceframe_filtering():
         "key4": ["value1", "value2", {"list_key": "normal"}],
     }
     assert trimmed_vars == expected_trimmed_vars
+
+
+def test_trace_tree_format_empty():
+    """Test formatting an empty trace tree"""
+    trace_tree = TraceTree(trace_id="empty-trace")
+    formatted = trace_tree.format_trace_tree()
+    assert formatted == "Trace (empty)"
+
+
+def test_trace_tree_format_simple():
+    """Test formatting a simple trace tree with one event"""
+    trace_tree = TraceTree(
+        trace_id="simple-trace",
+        events=[
+            TraceEvent(
+                event_id="abcdef1234567890abcdef1234567890",
+                title="My Transaction",
+                is_transaction=True,
+                platform="python",
+                duration="200ms",
+            )
+        ],
+    )
+
+    formatted = trace_tree.format_trace_tree()
+    expected = "Trace\n└─ My Transaction (200ms) (event ID: abcdef1) (python)"
+    assert formatted == expected
+
+
+def test_trace_tree_format_complex():
+    """Test formatting a complex trace tree with nested events and all attributes"""
+    trace_tree = TraceTree(
+        trace_id="complex-trace",
+        events=[
+            TraceEvent(
+                event_id="abcdef1234567890abcdef1234567890",
+                title="Root Transaction",
+                is_transaction=True,
+                platform="python",
+                duration="500ms",
+                profile_id="profile1234567890abcdef",
+                project_slug="main-project",
+                project_id=12345,
+                children=[
+                    TraceEvent(
+                        event_id="bcdef1234567890abcdef1234567891",
+                        title="Child Transaction",
+                        is_transaction=True,
+                        platform="javascript",
+                        duration="300ms",
+                        children=[
+                            TraceEvent(
+                                event_id="cdef1234567890abcdef1234567892",
+                                title="Error Event",
+                                is_error=True,
+                                platform="javascript",
+                            ),
+                        ],
+                    ),
+                    TraceEvent(
+                        event_id="defgh1234567890abcdef1234567893",
+                        title="External Service",
+                        is_transaction=True,
+                        platform="go",
+                        duration="150ms",
+                        is_current_project=False,
+                        project_slug="external-project",
+                        project_id=67890,
+                    ),
+                ],
+            )
+        ],
+    )
+
+    formatted = trace_tree.format_trace_tree()
+    expected = (
+        "Trace\n"
+        "└─ Root Transaction (500ms) (event ID: abcdef1) (project: main-project) (python) (profile available)\n"
+        "   ├─ Child Transaction (300ms) (event ID: bcdef12) (javascript)\n"
+        "   │  └─ ERROR: Error Event (event ID: cdef123) (javascript)\n"
+        "   └─ External Service (150ms) (event ID: defgh12) (project: external-project) (go)"
+    )
+    assert formatted == expected
+
+
+def test_trace_tree_format_with_repetition():
+    """Test formatting a trace tree with repeated events"""
+    trace_tree = TraceTree(
+        trace_id="repeat-trace",
+        events=[
+            TraceEvent(
+                event_id="abcdef1234567890abcdef1234567890",
+                title="API Request",
+                is_transaction=True,
+                platform="python",
+                duration="100ms",
+                children=[
+                    # Three identical DB queries in sequence
+                    TraceEvent(
+                        event_id="dbquery1234567890abcdef1234567891",
+                        title="DB Query",
+                        is_transaction=True,
+                        platform="sql",
+                        duration="20ms",
+                    ),
+                    TraceEvent(
+                        event_id="dbquery2234567890abcdef1234567892",
+                        title="DB Query",
+                        is_transaction=True,
+                        platform="sql",
+                        duration="20ms",
+                    ),
+                    TraceEvent(
+                        event_id="dbquery3234567890abcdef1234567893",
+                        title="DB Query",
+                        is_transaction=True,
+                        platform="sql",
+                        duration="20ms",
+                    ),
+                    # Different event after the repeats
+                    TraceEvent(
+                        event_id="render1234567890abcdef1234567894",
+                        title="Render Template",
+                        is_transaction=True,
+                        platform="python",
+                        duration="30ms",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    formatted = trace_tree.format_trace_tree()
+    expected = (
+        "Trace\n"
+        "└─ API Request (100ms) (event ID: abcdef1) (python)\n"
+        "   ├─ DB Query (20ms) (event ID: dbquery) (sql) (repeated 3 times)\n"
+        "   └─ Render Template (30ms) (event ID: render1) (python)"
+    )
+    assert formatted == expected
+
+
+def test_trace_tree_id_lookup():
+    """Test the ID lookup functions in TraceTree"""
+    full_event_id = "abcdef1234567890abcdef1234567890"
+    full_profile_id = "profile1234567890abcdef"
+
+    trace_tree = TraceTree(
+        trace_id="id-lookup-trace",
+        events=[
+            TraceEvent(
+                event_id=full_event_id,
+                title="Transaction",
+                is_transaction=True,
+                profile_id=full_profile_id,
+            )
+        ],
+    )
+
+    # Test event ID lookup
+    assert trace_tree.get_full_event_id("abcdef1") == full_event_id
+    assert trace_tree.get_full_event_id("xyz123") is None
+
+    # Test getting full event object by ID
+    event = trace_tree.get_event_by_id("abcdef1")
+    assert event is not None
+    assert event.event_id == full_event_id
+    assert event.title == "Transaction"
+    assert event.is_transaction is True
+    assert event.profile_id == full_profile_id
+
+    # Test with non-existent ID
+    assert trace_tree.get_event_by_id("xyz123") is None
+
+
+def test_trace_tree_nested_with_repetition():
+    """Test a more complex trace tree with nested repetitions"""
+    trace_tree = TraceTree(
+        trace_id="complex-repeat-trace",
+        events=[
+            TraceEvent(
+                event_id="root1234567890abcdef1234567890",
+                title="Web Request",
+                is_transaction=True,
+                platform="python",
+                duration="800ms",
+                children=[
+                    # Two identical auth checks
+                    TraceEvent(
+                        event_id="auth1234567890abcdef1234567891",
+                        title="Auth Check",
+                        is_transaction=True,
+                        platform="python",
+                        duration="50ms",
+                    ),
+                    TraceEvent(
+                        event_id="auth2234567890abcdef1234567892",
+                        title="Auth Check",
+                        is_transaction=True,
+                        platform="python",
+                        duration="50ms",
+                    ),
+                    # Service call with nested repeats
+                    TraceEvent(
+                        event_id="svc1234567890abcdef1234567893",
+                        title="Service Call",
+                        is_transaction=True,
+                        platform="python",
+                        duration="400ms",
+                        children=[
+                            # Three identical cache lookups
+                            TraceEvent(
+                                event_id="cache1234567890abcdef1234567894",
+                                title="Cache Lookup",
+                                is_transaction=True,
+                                platform="redis",
+                                duration="10ms",
+                            ),
+                            TraceEvent(
+                                event_id="cache2234567890abcdef1234567895",
+                                title="Cache Lookup",
+                                is_transaction=True,
+                                platform="redis",
+                                duration="10ms",
+                            ),
+                            TraceEvent(
+                                event_id="cache3234567890abcdef1234567896",
+                                title="Cache Lookup",
+                                is_transaction=True,
+                                platform="redis",
+                                duration="10ms",
+                            ),
+                            # One error at the same level
+                            TraceEvent(
+                                event_id="error1234567890abcdef1234567897",
+                                title="Database Error",
+                                is_error=True,
+                                platform="postgresql",
+                            ),
+                        ],
+                    ),
+                ],
+            )
+        ],
+    )
+
+    formatted = trace_tree.format_trace_tree()
+    expected = (
+        "Trace\n"
+        "└─ Web Request (800ms) (event ID: root123) (python)\n"
+        "   ├─ Auth Check (50ms) (event ID: auth123) (python) (repeated 2 times)\n"
+        "   └─ Service Call (400ms) (event ID: svc1234) (python)\n"
+        "      ├─ Cache Lookup (10ms) (event ID: cache12) (redis) (repeated 3 times)\n"
+        "      └─ ERROR: Database Error (event ID: error12) (postgresql)"
+    )
+    assert formatted == expected
+
+
+def test_trace_event_format_spans_tree():
+    """Test formatting a spans tree with mixed patterns and special characters"""
+    event = TraceEvent(
+        event_id="event123",
+        title="Transaction with mixed spans",
+        is_transaction=True,
+        spans=[
+            Span(
+                span_id="http1",
+                title="HTTP POST /api/submit",
+                duration="850ms",
+                data={"method": "POST", "path": "/api/submit", "status_code": 201},
+                children=[
+                    Span(
+                        span_id="auth1",
+                        title="JWT Validation",
+                        duration="15ms",
+                        data={"user_id": 12345, "scopes": ["read", "write"]},
+                    ),
+                    Span(
+                        span_id="db1",
+                        title="SELECT FROM users",
+                        duration="25ms",
+                        data={"db": "postgres", "rows": 1},
+                    ),
+                    Span(
+                        span_id="db2",
+                        title="SELECT FROM users",
+                        duration="25ms",
+                        data={"db": "postgres", "rows": 1},
+                    ),
+                    Span(
+                        span_id="db3",
+                        title="INSERT INTO events",
+                        duration="45ms",
+                        data={"db": "postgres", "affected_rows": 1},
+                    ),
+                    Span(
+                        span_id="special1",
+                        title="Process data: user=jsmith&type=admin",
+                        duration="120ms",
+                    ),
+                    Span(
+                        span_id="cache1",
+                        title="Redis Cache",
+                        duration="75ms",
+                        data={"cache": "redis", "key": "user:12345"},
+                        children=[
+                            Span(span_id="cache_op1", title="Connect", duration="5ms"),
+                            Span(span_id="cache_op2", title="Get", duration="8ms"),
+                            Span(span_id="cache_op3", title="Get", duration="8ms"),
+                            Span(span_id="cache_op4", title="Set", duration="12ms"),
+                        ],
+                    ),
+                ],
+            ),
+            Span(
+                span_id="resp1",
+                title="Format Response",
+                duration="35ms",
+                data={"format": "JSON", "size": "24.5KB"},
+            ),
+        ],
+    )
+
+    formatted = event.format_spans_tree()
+    expected = (
+        "Spans for Transaction with mixed spans\n"
+        "├─ HTTP POST /api/submit (850ms)\n"
+        "│   {\n"
+        '│     "method": "POST",\n'
+        '│     "path": "/api/submit",\n'
+        '│     "status_code": 201\n'
+        "│   }\n"
+        "│  ├─ JWT Validation (15ms)\n"
+        "│  │   {\n"
+        '│  │     "user_id": 12345,\n'
+        '│  │     "scopes": [\n'
+        '│  │       "read",\n'
+        '│  │       "write"\n'
+        "│  │     ]\n"
+        "│  │   }\n"
+        "│  ├─ SELECT FROM users (25ms) (repeated 2 times)\n"
+        "│  │   {\n"
+        '│  │     "db": "postgres",\n'
+        '│  │     "rows": 1\n'
+        "│  │   }\n"
+        "│  ├─ INSERT INTO events (45ms)\n"
+        "│  │   {\n"
+        '│  │     "db": "postgres",\n'
+        '│  │     "affected_rows": 1\n'
+        "│  │   }\n"
+        "│  ├─ Process data: user=jsmith&type=admin (120ms)\n"
+        "│  └─ Redis Cache (75ms)\n"
+        "│      {\n"
+        '│        "cache": "redis",\n'
+        '│        "key": "user:12345"\n'
+        "│      }\n"
+        "│     ├─ Connect (5ms)\n"
+        "│     ├─ Get (8ms) (repeated 2 times)\n"
+        "│     └─ Set (12ms)\n"
+        "└─ Format Response (35ms)\n"
+        "    {\n"
+        '      "format": "JSON",\n'
+        '      "size": "24.5KB"\n'
+        "    }"
+    )
+    assert formatted == expected
