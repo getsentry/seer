@@ -1031,7 +1031,7 @@ class EAPTrace(BaseModel):
     trace: list[dict] = Field(..., description="List of spans in the trace")
     timestamp: datetime.datetime = Field(..., description="Known timestamp of a span in the trace")
 
-    def _get_transaction_spans(self, trace) -> list[dict]:
+    def _get_transaction_spans(self, trace: list[dict] | dict) -> list[dict]:
         """
         Filters the trace to only include the transaction spans.
         """
