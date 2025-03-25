@@ -6,15 +6,16 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 from sqlalchemy.dialects.postgresql import insert
 
-from seer.automation.agent.embeddings import GoogleProviderEmbeddings 
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
-from seer.db import DbReviewCommentEmbedding, Session
 from seer.configuration import AppConfig
+from seer.db import DbReviewCommentEmbedding, Session
 from seer.dependency_injection import inject, injected
+
 
 class PrClosedStepRequest(PipelineStepTaskRequest):
     pr_id: int
@@ -25,6 +26,7 @@ class CommentAnalyzer:
     """
     Handles comment analysis logic
     """
+
     @inject
     def __init__(self, config: AppConfig = injected):
         self.bot_id = str(config.GITHUB_CODECOV_PR_REVIEW_APP_ID)

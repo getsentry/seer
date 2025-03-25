@@ -228,7 +228,6 @@ class RepoClient:
         elif type in (RepoClientType.CODECOV_PR_REVIEW, RepoClientType.CODECOV_PR_CLOSED):
             return cls(*get_codecov_pr_review_app_credentials(), repo_def)
 
-
         return cls(*get_read_app_credentials(), repo_def)
 
     @property

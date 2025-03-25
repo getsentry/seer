@@ -1,4 +1,3 @@
-from seer.dependency_injection import resolve
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -16,14 +15,17 @@ from seer.automation.models import RepoDefinition
 from seer.automation.state import DbStateRunTypes
 from seer.configuration import AppConfig
 from seer.db import DbReviewCommentEmbedding, Session
+from seer.dependency_injection import resolve
 
 bot_id = "41898282"
+
 
 @pytest.fixture(autouse=True)
 def setup_github_app_id():
     app_config = resolve(AppConfig)
     app_config.GITHUB_CODECOV_PR_REVIEW_APP_ID = bot_id
     yield
+
 
 @pytest.fixture
 def repo_definition():

@@ -128,7 +128,7 @@ def codegen_pr_closed(request: CodegenBaseRequest, app_config: AppConfig = injec
         pr_id=request.pr_id,
         repo_definition=request.repo,
     )
-    
+
     step = PrClosedStep(pr_closed_request.model_dump(), DbStateRunTypes.PR_CLOSED)
     step.invoke()
 
