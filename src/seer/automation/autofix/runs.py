@@ -1,7 +1,9 @@
+from typing import cast
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, CodebaseState
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.preferences import GetSeerProjectPreferenceRequest, get_seer_project_preference
 from seer.automation.state import DbState, DbStateRunTypes
 
 
@@ -12,8 +14,15 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
         t=DbStateRunTypes.AUTOFIX,
     )
 
+    preference = get_seer_project_preference(
+        GetSeerProjectPreferenceRequest(project_id=request.project_id)
+    ).preference
+
     with state.update() as cur:
-        create_initial_codebase_states(cur)
+        if preference:
+            cur.request.repos = preference.repositories
+
+        create_missing_codebase_states(cur)
         set_accessible_repos(cur)
 
         cur.mark_triggered()
@@ -24,7 +33,7 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     return state
 
 
-def create_initial_codebase_states(cur: AutofixContinuation) -> None:
+def create_missing_codebase_states(cur: AutofixContinuation) -> None:
     for repo in cur.request.repos:
         if repo.external_id not in cur.codebases:
             cur.codebases[repo.external_id] = CodebaseState(

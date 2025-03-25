@@ -141,6 +141,7 @@ class RepoClient:
     repo_name: str
     repo_external_id: str
     base_commit_sha: str
+    base_branch: str
 
     supported_providers = ["github"]
 
@@ -173,7 +174,10 @@ class RepoClient:
         self.repo_owner = repo_definition.owner
         self.repo_name = repo_definition.name
         self.repo_external_id = repo_definition.external_id
-        self.base_commit_sha = repo_definition.base_commit_sha or self.get_default_branch_head_sha()
+        self.base_branch = repo_definition.branch_name or self.get_default_branch()
+        self.base_commit_sha = repo_definition.base_commit_sha or self.get_branch_head_sha(
+            self.base_branch
+        )
 
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
@@ -238,9 +242,6 @@ class RepoClient:
 
     def get_branch_head_sha(self, branch: str):
         return self.repo.get_branch(branch).commit.sha
-
-    def get_default_branch_head_sha(self):
-        return self.get_branch_head_sha(self.get_default_branch())
 
     def compare(self, base: str, head: str):
         return self.repo.compare(base, head)
@@ -545,17 +546,16 @@ class RepoClient:
 
         return matching_file.patch
 
-    def _create_branch(self, branch_name, from_feature_branch=False):
-        if from_feature_branch:
-            return self._create_branch_from_feature_branch(branch_name)
-
+    def _create_branch(self, branch_name, from_base_sha=False):
         ref = self.repo.create_git_ref(
-            ref=f"refs/heads/{branch_name}", sha=self.get_default_branch_head_sha()
+            ref=f"refs/heads/{branch_name}",
+            sha=(
+                self.base_commit_sha
+                if from_base_sha
+                else self.get_branch_head_sha(self.base_branch)
+            ),
         )
         return ref
-
-    def _create_branch_from_feature_branch(self, branch_name):
-        return self.repo.create_git_ref(ref=f"refs/heads/{branch_name}", sha=self.base_commit_sha)
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
@@ -616,7 +616,7 @@ class RepoClient:
         file_patches: list[FilePatch] | None = None,
         file_changes: list[FileChange] | None = None,
         branch_name: str | None = None,
-        from_feature_branch: bool = False,
+        from_base_sha: bool = False,
     ) -> GitRef | None:
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
@@ -624,12 +624,12 @@ class RepoClient:
         new_branch_name = sanitize_branch_name(branch_name or pr_title)
 
         try:
-            branch_ref = self._create_branch(new_branch_name, from_feature_branch)
+            branch_ref = self._create_branch(new_branch_name, from_base_sha)
         except GithubException as e:
             # only use the random suffix if the branch already exists
             if e.status == 409 or e.status == 422:
                 new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
-                branch_ref = self._create_branch(new_branch_name, from_feature_branch)
+                branch_ref = self._create_branch(new_branch_name, from_base_sha)
             else:
                 raise e
 
@@ -667,7 +667,9 @@ class RepoClient:
         branch_ref.edit(sha=new_commit.sha)
 
         # Check that the changes were made
-        comparison = self.repo.compare(self.get_default_branch_head_sha(), branch_ref.object.sha)
+        comparison = self.repo.compare(
+            self.get_branch_head_sha(self.base_branch), branch_ref.object.sha
+        )
 
         if comparison.ahead_by < 1:
             # Remove the branch if there are no changes
@@ -708,7 +710,7 @@ class RepoClient:
             return self.repo.create_pull(
                 title=title,
                 body=description,
-                base=provided_base or self.get_default_branch(),
+                base=provided_base or self.base_branch or self.get_default_branch(),
                 head=branch.ref,
                 draft=True,
             )
@@ -718,7 +720,7 @@ class RepoClient:
                 return self.repo.create_pull(
                     title=title,
                     body=description,
-                    base=provided_base or self.get_default_branch(),
+                    base=provided_base or self.base_branch or self.get_default_branch(),
                     head=branch.ref,
                     draft=False,
                 )

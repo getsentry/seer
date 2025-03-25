@@ -48,6 +48,7 @@ def repo_definition():
         name="seer",
         external_id="123",
         base_commit_sha="test_sha",
+        branch_name="test_branch",
     )
 
 
@@ -64,6 +65,7 @@ class TestRepoClient:
         assert repo_client.repo_name == "seer"
         assert repo_client.repo_external_id == "123"
         assert repo_client.base_commit_sha == "test_sha"
+        assert repo_client.base_branch == "test_branch"
 
     def test_repo_client_initialization_without_base_commit_sha(
         self, mock_github, mock_get_github_auth
@@ -71,8 +73,11 @@ class TestRepoClient:
         repo_def_without_sha = RepoDefinition(
             provider="github", owner="getsentry", name="seer", external_id="123"
         )
+        mock_github.get_repo.return_value.get_branch.return_value.commit.sha = "default_sha"
+        mock_github.get_repo.return_value.default_branch = "main"
         client = RepoClient.from_repo_definition(repo_def_without_sha, "read")
         assert client.base_commit_sha == "default_sha"
+        assert client.base_branch == "main"
 
     def test_repo_client_accepts_github_provider(self, mock_github, mock_get_github_auth):
         client = RepoClient.from_repo_definition(
@@ -424,7 +429,7 @@ class TestRepoClient:
         mock_create_branch.assert_called_with("autofix/test-pr", False)
 
     @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
-    def test_create_branch_from_changes_from_feature_branch(
+    def test_create_branch_from_changes_from_base_sha(
         self, mock_create_branch, repo_client, mock_github
     ):
         mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
@@ -434,7 +439,7 @@ class TestRepoClient:
             pr_title="autofix/Test PR",
             file_patches=[next(generate(FileChange))],
             file_changes=[],
-            from_feature_branch=True,
+            from_base_sha=True,
         )
         assert result is not None
         mock_create_branch.assert_called_with("autofix/test-pr", True)
