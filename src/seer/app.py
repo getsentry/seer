@@ -369,10 +369,8 @@ def summarize_trace_endpoint(data: SummarizeTraceRequest) -> SummarizeTraceRespo
     except APITimeoutError as e:
         statsd.increment("seer.automation.summarize.trace.api_timeout")
         raise GatewayTimeout from e
-    except ServerError:
-        statsd.increment("seer.automation.summarize.trace.server_error")
-        raise
     except Exception as e:
+        statsd.increment("seer.automation.summarize.trace.server_error")
         logger.exception("Error summarizing trace")
         raise InternalServerError from e
 

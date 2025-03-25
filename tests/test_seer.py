@@ -745,17 +745,29 @@ class TestSeer(unittest.TestCase):
     @mock.patch("seer.app.summarize_trace")
     def test_summarize_trace_endpoint_error(self, mock_summarize_trace):
         """Test that summarize_trace endpoint handles exceptions correctly"""
-        mock_summarize_trace.side_effect = ServerError("Test server error")
+
+        mock_summarize_trace.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/automation/summarize/trace"
+            ),
+        )
         test_data = next(generate(SummarizeTraceRequest))
 
-        with pytest.raises(ServerError, match="Test server error"):
-            app.test_client().post(
-                "/v1/automation/summarize/trace",
-                data=test_data.model_dump_json(),
-                content_type="application/json",
-            )
+        response = app.test_client().post(
+            "/v1/automation/summarize/trace",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 504
+        mock_summarize_trace.side_effect = Exception("Test error")
+        test_data = next(generate(SummarizeTraceRequest))
 
-        mock_summarize_trace.assert_called_once_with(test_data)
+        response = app.test_client().post(
+            "/v1/automation/summarize/trace",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 500
 
 
 @parametrize(count=1)

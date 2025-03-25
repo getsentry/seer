@@ -1082,11 +1082,11 @@ def test_eap_trace_get_transaction_spans_empty():
     trace = EAPTrace(trace_id="empty-trace", trace=[], timestamp=datetime.datetime.now())
 
     # Test empty trace
-    result = trace._get_transaction_spans([])
-    assert result == []
+    result = trace.get_and_format_trace()
+    assert result == ""
 
 
-def test_eap_trace_get_transaction_spans_simple():
+def test_get_and_format_trace():
     """Test _get_transaction_spans with a simple trace"""
     trace_data = [
         {"id": "span1", "name": "Transaction 1", "is_transaction": True, "children": []},
@@ -1096,7 +1096,12 @@ def test_eap_trace_get_transaction_spans_simple():
 
     trace = EAPTrace(trace_id="simple-trace", trace=trace_data, timestamp=datetime.datetime.now())
 
-    result = trace._get_transaction_spans(trace_data)
-    assert len(result) == 2
-    assert result[0]["id"] == "span1"
-    assert result[1]["id"] == "span3"
+    result = trace.get_and_format_trace()
+    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />
+<span id="span2" name="Non-Transaction Span" is_transaction="False" />
+<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    assert result == expected
+
+    result = trace.get_and_format_trace(only_transactions=True)
+    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />\n<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    assert result == expected
