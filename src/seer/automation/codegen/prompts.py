@@ -208,7 +208,7 @@ class CodingCodeReviewPrompts:
                 - The correct file name ("{{file_name}}").
                 - The specific line number requiring the comment.
                 - Clear, professional, and actionable feedback.
-            - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review.
+            - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review. Please ensure you insert a comma between each JSON object except for the last one.
             - Wrap the comments in a <comments> and </comments> block.
             """
         ).format(
