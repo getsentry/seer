@@ -159,7 +159,7 @@ def run_autofix_root_cause(
         logger.warning(f"Ignoring job, state {cur_state.status}")
         return
 
-    if not validate_repo_branches_exist(state, AutofixEventManager(state)):
+    if not validate_repo_branches_exist(cur_state.request.repos, AutofixEventManager(state)):
         return
 
     RootCauseStep.get_signature(

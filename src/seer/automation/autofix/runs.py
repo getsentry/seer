@@ -6,6 +6,7 @@ from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, CodebaseState
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.models import RepoDefinition
 from seer.automation.preferences import GetSeerProjectPreferenceRequest, get_seer_project_preference
 from seer.automation.state import DbState, DbStateRunTypes
 
@@ -37,9 +38,9 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
 
 
 def validate_repo_branches_exist(
-    state: ContinuationState, event_manager: AutofixEventManager
+    repos: list[RepoDefinition], event_manager: AutofixEventManager
 ) -> bool:
-    for repo in state.get().request.repos:
+    for repo in repos:
         if repo.provider == "github":
             if repo.branch_name:
                 try:
