@@ -37,6 +37,7 @@ class RootCauseStepRequest(PipelineStepTaskRequest):
 @celery_app.task(
     time_limit=AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
+    acks_late=True,
 )
 def root_cause_task(*args, request: Any):
     return RootCauseStep(request).invoke()
@@ -64,6 +65,7 @@ class RootCauseStep(AutofixPipelineStep):
     @ai_track(description="Autofix - Root Cause Step")
     @inject
     def _invoke(self, app_config: AppConfig = injected):
+        print("RootCauseStep _invoke")
         self.context.event_manager.send_root_cause_analysis_start()
 
         if not self.request.initial_memory:
