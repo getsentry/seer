@@ -444,7 +444,7 @@ class BaseTools:
                     tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
                     return repo_name, (tmp_dir, tmp_repo_dir)
 
-                with ThreadPoolExecutor() as executor:
+                with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
                     future_to_repo = {
                         executor.submit(download_repo, repo_name): repo_name
                         for repo_name in repo_names_to_download
