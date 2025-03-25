@@ -601,8 +601,8 @@ class RepoClient:
     # 100644 is the git code for creating a Regular non-executable file
     # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
     return InputGitTreeElement(
-            path=path, mode="100644", type="blob", sha=blob.sha if blob else None
-        )
+        path=path, mode="100644", type="blob", sha=blob.sha if blob else None
+    )
 
     def get_branch_ref(self, branch_name: str) -> GitRef | None:
         try:
