@@ -592,12 +592,15 @@ class RepoClient:
         if path.startswith("/"):
             path = path[1:]
 
-        # don't create a blob if the file is being deleted
-        blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None
+    # don't create a blob if the file is being deleted
+    blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None
 
-        # 100644 is the git code for creating a Regular non-executable file
-        # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
-        return InputGitTreeElement(
+    if patch_type == "A" and blob is None:
+        return None
+
+    # 100644 is the git code for creating a Regular non-executable file
+    # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
+    return InputGitTreeElement(
             path=path, mode="100644", type="blob", sha=blob.sha if blob else None
         )
 
