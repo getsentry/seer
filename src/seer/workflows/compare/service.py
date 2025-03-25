@@ -1,6 +1,6 @@
 import logging
 
-from seer.events import log_seer_event, SeerEventNames
+from seer.events import SeerEventNames, log_seer_event
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
 from seer.workflows.compare.processor import DataProcessor
 from seer.workflows.compare.scorer import CohortsMetricsScorer
