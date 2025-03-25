@@ -1,9 +1,74 @@
 import json
 import re
-from typing import Any
+import time
+import random
+import logging
+from functools import wraps
+from typing import Any, Callable, TypeVar, cast
 
 import tree_sitter_languages
 
+T = TypeVar("T")
+
+
+def with_exponential_backoff(
+    max_retries: int = 5,
+    initial_delay: float = 1.0,
+    max_delay: float = 60.0,
+    backoff_factor: float = 2.0,
+    jitter: bool = True,
+    error_types: tuple = ("overloaded_error",),
+):
+    """
+    Decorator that implements retry with exponential backoff for API calls.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds between retries
+        max_delay: Maximum delay in seconds between retries
+        backoff_factor: Factor to increase the delay with each retry
+        jitter: Whether to add randomness to the delay to prevent synchronized retries
+        error_types: Tuple of error types to retry on
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            retries = 0
+            delay = initial_delay
+            
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    error_info = str(e)
+                    retry_error = False
+                    
+                    # Check if this is an error we should retry
+                    for error_type in error_types:
+                        if f"'type': '{error_type}'" in error_info:
+                            retry_error = True
+                            break
+                    
+                    # If not a retryable error, or we've used all retries, raise the exception
+                    if not retry_error or retries >= max_retries:
+                        logging.error(f"Failed after {retries} retries: {error_info}")
+                        raise
+                    
+                    retries += 1
+                    # Calculate delay with exponential backoff
+                    actual_delay = min(delay * (backoff_factor ** (retries - 1)), max_delay)
+                    # Add jitter if enabled (up to 20% random variation)
+                    if jitter:
+                        actual_delay = actual_delay * (0.8 + 0.4 * random.random())
+                    
+                    logging.warning(
+                        f"Retrying request after error: {error_info}. "
+                        f"Retry {retries}/{max_retries}, waiting {actual_delay:.2f}s"
+                    )
+                    time.sleep(actual_delay)
+            
+        return wrapper
+    return decorator
 
 def replace_newlines_not_in_quotes(value):
     # Split the string by both single and double quotes, replace \n outside quotes, and reassemble

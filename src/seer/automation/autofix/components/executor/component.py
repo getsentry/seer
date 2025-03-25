@@ -1,5 +1,6 @@
 from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
+import logging
 
 from seer.automation.agent.agent import GptAgent
 from seer.automation.agent.models import Message
@@ -33,16 +34,20 @@ class ExecutorComponent(BaseComponent[ExecutorRequest, ExecutorOutput]):
             stop_message="<DONE>",
         )
 
-        execution_agent.run(
-            ExecutionPrompts.format_default_msg(
-                retriever_dump=request.retriever_dump,
-                documents=request.documents,
-                repo_name=request.repo_name,
-                error_message=request.event_details.title,
-                exceptions=request.event_details.exceptions,
-                task=request.task,
+        try:
+            execution_agent.run(
+                ExecutionPrompts.format_default_msg(
+                    retriever_dump=request.retriever_dump,
+                    documents=request.documents,
+                    repo_name=request.repo_name,
+                    error_message=request.event_details.title,
+                    exceptions=request.event_details.exceptions,
+                    task=request.task,
+                )
             )
-        )
+        except Exception as e:
+            logging.error(f"ExecutorComponent failed: {str(e)}")
+            raise
 
         with self.context.state.update() as cur:
             cur.usage += execution_agent.usage
