@@ -65,7 +65,6 @@ class RootCauseStep(AutofixPipelineStep):
     @ai_track(description="Autofix - Root Cause Step")
     @inject
     def _invoke(self, app_config: AppConfig = injected):
-        print("RootCauseStep _invoke")
         self.context.event_manager.send_root_cause_analysis_start()
 
         if not self.request.initial_memory:
