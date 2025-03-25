@@ -306,10 +306,8 @@ class TestFixabilityScore:
         assert result.scores.fixability_score == 0.75
         assert result.scores.fixability_score_version == 2
         assert result.scores.is_fixable is True
-        assert (
-            result.scores.possible_cause_confidence == scores_current["possible_cause_confidence"]
-        )
-        assert result.scores.possible_cause_novelty == scores_current["possible_cause_novelty"]
+        for score_name, score_value in scores_current.items():
+            assert getattr(result.scores, score_name) == score_value
 
     @patch("seer.automation.summarize.issue.Session")
     def test_run_fixability_score_no_summary(self, mock_session, autofixability_model):
