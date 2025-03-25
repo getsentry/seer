@@ -58,8 +58,6 @@ class AppConfig(BaseModel):
     GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY: str | None = None
     GITHUB_CODECOV_PR_REVIEW_APP_ID: str | None = None
     GITHUB_CODECOV_PR_REVIEW_PRIVATE_KEY: str | None = None
-    GITHUB_CODECOV_PR_CLOSED_APP_ID: str | None = None
-    GITHUB_CODECOV_PR_CLOSED_PRIVATE_KEY: str | None = None
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""

@@ -6,19 +6,15 @@ from langfuse.decorators import observe
 from sentry_sdk.ai.monitoring import ai_track
 from sqlalchemy.dialects.postgresql import insert
 
-from celery_app.app import celery_app
-from seer.automation.agent.embeddings import GoogleProviderEmbeddings
-from seer.automation.autofix.config import (
-    AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
-    AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
-)
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings 
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.state import DbStateRunTypes
 from seer.db import DbReviewCommentEmbedding, Session
-
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 class PrClosedStepRequest(PipelineStepTaskRequest):
     pr_id: int
@@ -29,13 +25,13 @@ class CommentAnalyzer:
     """
     Handles comment analysis logic
     """
-
-    def __init__(self, bot_username: str = "codecov-ai-reviewer[bot]"):
-        self.bot_username = bot_username
+    @inject
+    def __init__(self, bot_id: str = None, config: AppConfig = injected):
+        self.bot_id = bot_id or str(config.GITHUB_CODECOV_PR_REVIEW_APP_ID)
 
     def is_bot_comment(self, comment: PullRequestComment) -> bool:
-        """Check if comment is authored by bot"""
-        return comment.user.login == self.bot_username
+        """Check if comment is authored by bot using app ID"""
+        return str(comment.user.id) == self.bot_id
 
     def analyze_reactions(self, comment: PullRequestComment) -> tuple[bool, bool]:
         """
@@ -49,14 +45,6 @@ class CommentAnalyzer:
         is_good_pattern = upvotes >= downvotes
         is_bad_pattern = downvotes > upvotes
         return is_good_pattern, is_bad_pattern
-
-
-@celery_app.task(
-    time_limit=AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
-    soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
-)
-def pr_closed_task(*args, request: dict[str, Any]):
-    PrClosedStep(request, DbStateRunTypes.PR_CLOSED).invoke()
 
 
 class PrClosedStep(CodegenStep):
@@ -74,7 +62,7 @@ class PrClosedStep(CodegenStep):
 
     @staticmethod
     def get_task():
-        return pr_closed_task
+        pass
 
     def __init__(self, request: dict[str, Any], type: DbStateRunTypes):
         super().__init__(request, type)
@@ -90,11 +78,15 @@ class PrClosedStep(CodegenStep):
                 f"bad_pattern={is_bad_pattern}"
             )
 
-            model = GoogleProviderEmbeddings.model(
-                "text-embedding-005", task_type="CODE_RETRIEVAL_QUERY"
-            )
-            # encode() expects list[str], returns 2D array
-            embedding = model.encode([comment.body])[0]
+            try:
+                model = GoogleProviderEmbeddings.model(
+                    "text-embedding-005", task_type="SEMANTIC_SIMILARITY"
+                )
+                # encode() expects list[str], returns 2D array
+                embedding = model.encode([comment.body])[0]
+            except Exception as e:
+                logger.warning(f"Failed to generate embeddings for comment {comment.id}: {e}")
+                embedding = None
 
             with Session() as session:
                 insert_stmt = insert(DbReviewCommentEmbedding).values(

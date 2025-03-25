@@ -125,10 +125,9 @@ def codegen_pr_closed(request: CodegenBaseRequest, app_config: AppConfig = injec
         pr_id=request.pr_id,
         repo_definition=request.repo,
     )
-
-    PrClosedStep.get_signature(
-        pr_closed_request, queue=app_config.CELERY_WORKER_QUEUE
-    ).apply_async()
+    
+    step = PrClosedStep(pr_closed_request.model_dump(), DbStateRunTypes.PR_CLOSED)
+    step.invoke()
 
     return CodegenPrClosedResponse(run_id=cur_state.run_id)
 
