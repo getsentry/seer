@@ -868,7 +868,7 @@ class RepoDefinition(BaseModel):
     )
     instructions: str | None = Field(
         default=None,
-        description="Custom instructions for the repo, like a .cursorrules, if this is not provided, we'll look at those files.",
+        description="Custom instructions when working in this repo.",
     )
     base_commit_sha: str | None = None
     provider_raw: str | None = None
