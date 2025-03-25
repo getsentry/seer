@@ -1,12 +1,13 @@
 from typing import cast
 
+from github import GithubException
+
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, CodebaseState
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.preferences import GetSeerProjectPreferenceRequest, get_seer_project_preference
 from seer.automation.state import DbState, DbStateRunTypes
-from github import GithubException
 
 
 def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContinuation]:
