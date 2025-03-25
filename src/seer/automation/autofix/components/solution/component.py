@@ -88,15 +88,6 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         run_config=RunConfig(
                             model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                             system_prompt=SolutionPrompts.format_system_msg(),
-                            prompt=SolutionPrompts.format_default_msg(
-                                event=request.event_details.format_event(),
-                                root_cause=request.root_cause_and_fix,
-                                summary=request.summary,
-                                repos_str=repos_str,
-                                original_instruction=request.original_instruction,
-                                code_map=request.profile,
-                                trace_tree=request.trace_tree,
-                            ),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
                             max_iterations=64,
