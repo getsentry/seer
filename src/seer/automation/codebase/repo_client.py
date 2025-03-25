@@ -595,6 +595,10 @@ class RepoClient:
         # don't create a blob if the file is being deleted
         blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None
 
+        # Prevent creating tree elements with None SHA for file additions
+        if patch_type == "A" and blob is None:
+            return None
+
         # 100644 is the git code for creating a Regular non-executable file
         # https://stackoverflow.com/questions/737673/how-to-read-the-mode-field-of-git-ls-trees-output
         return InputGitTreeElement(
