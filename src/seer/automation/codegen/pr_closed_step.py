@@ -26,8 +26,8 @@ class CommentAnalyzer:
     Handles comment analysis logic
     """
     @inject
-    def __init__(self, bot_id: str = None, config: AppConfig = injected):
-        self.bot_id = bot_id or str(config.GITHUB_CODECOV_PR_REVIEW_APP_ID)
+    def __init__(self, config: AppConfig = injected):
+        self.bot_id = str(config.GITHUB_CODECOV_PR_REVIEW_APP_ID)
 
     def is_bot_comment(self, comment: PullRequestComment) -> bool:
         """Check if comment is authored by bot using app ID"""

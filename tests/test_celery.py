@@ -30,7 +30,6 @@ def test_detected_celery_jobs():
                 "seer.automation.codegen.retry_unittest_step.retry_unittest_task",
                 "seer.automation.tasks.delete_data_for_ttl",
                 "seer.smoke_test.smoke_test",
-                "seer.automation.codegen.pr_closed_step.pr_closed_task",
             ]
         )
 

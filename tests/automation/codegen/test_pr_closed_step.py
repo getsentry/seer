@@ -1,3 +1,4 @@
+from seer.dependency_injection import resolve
 import unittest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -9,13 +10,20 @@ from seer.automation.codegen.pr_closed_step import (
     CommentAnalyzer,
     PrClosedStep,
     PrClosedStepRequest,
-    pr_closed_task,
 )
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import RepoDefinition
 from seer.automation.state import DbStateRunTypes
-from seer.db import DbReviewCommentEmbedding, Session, db
+from seer.configuration import AppConfig
+from seer.db import DbReviewCommentEmbedding, Session
 
+bot_id = "41898282"
+
+@pytest.fixture(autouse=True)
+def setup_github_app_id():
+    app_config = resolve(AppConfig)
+    app_config.GITHUB_CODECOV_PR_REVIEW_APP_ID = bot_id
+    yield
 
 @pytest.fixture
 def repo_definition():
@@ -105,13 +113,6 @@ class TestPrClosedStep(unittest.TestCase):
         }
         self.request = PrClosedStepRequest(**self.request_data)
 
-    @patch("seer.automation.codegen.pr_closed_step.PrClosedStep")
-    def test_pr_closed_task(self, mock_step_class):
-        pr_closed_task(request=self.request_data)
-
-        mock_step_class.assert_called_once_with(self.request_data, DbStateRunTypes.PR_CLOSED)
-        mock_step_class.return_value.invoke.assert_called_once()
-
     @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
     @patch("seer.automation.codegen.step.CodegenStep._instantiate_context")
     def test_invoke_no_comments(self, mock_instantiate_context, _):
@@ -153,7 +154,7 @@ class TestPrClosedStep(unittest.TestCase):
         comment = MagicMock(spec=[])
         comment.id = 456
         comment.user = MagicMock(spec=[])
-        comment.user.login = "codecov-ai-reviewer[bot]"
+        comment.user.id = bot_id
         comment.body = "wrap this in try-catch"
 
         reaction = MagicMock(spec=[])
@@ -172,7 +173,7 @@ class TestPrClosedStep(unittest.TestCase):
             "html_url": "https://github.com/org/repo/pull/123#discussion_r456",
             "path": "src/file.py",
             "position": 42,
-            "user": {"login": "codecov-ai-reviewer[bot]"},
+            "user": {"id": bot_id},
             "created_at": now.isoformat(),
             "updated_at": now.isoformat(),
             "body": "wrap this in try-catch",
@@ -197,7 +198,7 @@ class TestPrClosedStep(unittest.TestCase):
         step.context.event_manager.mark_completed.assert_called_once()
 
     def test_comment_analyzer(self):
-        analyzer = CommentAnalyzer(bot_username="codecov-ai-reviewer[bot]")
+        analyzer = CommentAnalyzer()
 
         comment = MagicMock()
         comment.get_reactions.return_value = [
