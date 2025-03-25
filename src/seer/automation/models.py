@@ -483,6 +483,7 @@ class ProfileFrame(TypedDict):
     filename: str
     lineno: int
     in_app: bool
+    duration_ns: NotRequired[float]
     children: NotRequired[list["ProfileFrame"]]
 
 
@@ -586,14 +587,16 @@ class Profile(BaseModel):
             # Format the current node
             function_name = node.get("function", "Unknown function")
             filename = node.get("filename", "Unknown file")
-            location_info = f" ({filename})"
+            location_info = f" ({filename}:{node.get('lineno', '')})"
+            duration_ms = node.get("duration_ns", -1) / 1_000_000
+            duration_info = f" - {duration_ms:.0f}ms" if duration_ms >= 0 else ""
 
             # Add tree structure characters
             if is_last:
-                result.append(f"{prefix}└─ {function_name}{location_info}")
+                result.append(f"{prefix}└─ {function_name}{location_info}{duration_info}")
                 child_prefix = f"{prefix}   "
             else:
-                result.append(f"{prefix}├─ {function_name}{location_info}")
+                result.append(f"{prefix}├─ {function_name}{location_info}{duration_info}")
                 child_prefix = f"{prefix}│  "
 
             # Recursively format children

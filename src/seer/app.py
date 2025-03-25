@@ -94,6 +94,7 @@ from seer.grouping.grouping import (
 )
 from seer.inference_models import (
     anomaly_detection,
+    autofixability_model,
     embeddings_model,
     grouping_lookup,
     test_grouping_model,
@@ -345,7 +346,7 @@ def codecov_request_endpoint(
     if data.request_type == "pr-review":
         return codegen_pr_review_endpoint(data.data)
     elif data.request_type == "unit-tests":
-        return codegen_unit_tests_endpoint(data.data)
+        return codegen_unittest(data.data, is_codecov_request=True)
     elif data.request_type == "pr-closed":
         return codegen_pr_closed_endpoint(data.data)
     elif data.request_type == "retry-unit-tests":
@@ -367,8 +368,9 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
 
 @json_api(blueprint, "/v1/automation/summarize/fixability")
 def get_fixability_score_endpoint(data: GetFixabilityScoreRequest) -> SummarizeIssueResponse:
+    model = autofixability_model()
     try:
-        return run_fixability_score(data)
+        return run_fixability_score(data, model)
     except APITimeoutError as e:
         raise GatewayTimeout from e
     except Exception as e:

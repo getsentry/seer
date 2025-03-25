@@ -95,7 +95,9 @@ def create_subsequent_unittest_run(request: CodegenBaseRequest) -> DbState[Codeg
 
 
 @inject
-def codegen_unittest(request: CodegenBaseRequest, app_config: AppConfig = injected):
+def codegen_unittest(
+    request: CodegenBaseRequest, app_config: AppConfig = injected, is_codecov_request: bool = False
+):
     state = create_initial_unittest_run(request)
 
     cur_state = state.get()
@@ -108,6 +110,7 @@ def codegen_unittest(request: CodegenBaseRequest, app_config: AppConfig = inject
         run_id=cur_state.run_id,
         pr_id=request.pr_id,
         repo_definition=request.repo,
+        is_codecov_request=is_codecov_request,
     )
     UnittestStep.get_signature(unittest_request, queue=app_config.CELERY_WORKER_QUEUE).apply_async()
 

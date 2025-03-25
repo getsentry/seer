@@ -1,4 +1,5 @@
 import logging
+import shlex
 import subprocess
 import textwrap
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -171,39 +172,35 @@ class BaseTools:
             return "COMMIT HISTORY:\n" + "\n".join(commit_history)
         return "No commit history found for the given file. Either the file path or repo name is incorrect, or it is just unavailable right now."
 
-    @observe(name="List Directory")
-    @ai_track(description="List Directory")
-    def list_directory(self, path: str, repo_name: str | None = None) -> str:
+    @observe(name="Tree")
+    @ai_track(description="Tree")
+    def tree(self, path: str, repo_name: str | None = None) -> str:
         """
-        Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.
+        Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_paths = repo_client.get_index_file_set()
         normalized_path = self._normalize_path(path)
 
-        # Filter paths to include only those directly under the specified path + remove duplicates and sort
-        unique_direct_children = sorted(
-            set(
-                p[len(normalized_path) :].split("/")[0]
-                for p in all_paths
-                if p.startswith(normalized_path) and p != normalized_path
-            )
-        )
+        # Filter paths to include all files under the specified path
+        files_under_path = [
+            {"path": p, "status": ""}
+            for p in all_paths
+            if p.startswith(normalized_path) and p != normalized_path
+        ]
 
-        # Separate directories and files
-        dirs, files = self._separate_dirs_and_files(
-            normalized_path, unique_direct_children, all_paths
-        )
-
-        if not dirs and not files:
+        if not files_under_path:
             # show potential corrected paths if nothing was found here
             other_paths = self._get_potential_abs_paths(path, repo_name)
             return f"<no entries found in directory '{path or '/'}'/>\n{other_paths}".strip()
 
-        self.context.event_manager.add_log(f"Looking at contents of `{path}` in `{repo_name}`...")
+        self.context.event_manager.add_log(
+            f"Viewing directory tree for `{path}` in `{repo_name}`..."
+        )
 
-        joined = self._format_list_directory_output(dirs, files)
-        return f"<entries>\n{joined}\n</entries>"
+        # Use the _build_file_tree_string method from the repo client
+        tree_representation = repo_client._build_file_tree_string(files_under_path)
+        return f"<directory_tree>\n{tree_representation}\n</directory_tree>"
 
     def _get_potential_abs_paths(self, path: str, repo_name: str | None = None) -> str:
         """
@@ -236,33 +233,6 @@ class BaseTools:
         """
         normalized_path = path.strip("/") + "/" if path.strip("/") else ""
         return normalized_path
-
-    def _format_list_directory_output(self, dirs: list[str], files: list[str]) -> str:
-        output = []
-        if dirs:
-            output.append("Directories:")
-            output.extend(f"  {d}/" for d in dirs)
-        if files:
-            if dirs:
-                output.append("")  # Add a blank line between dirs and files
-            output.append("Files:")
-            output.extend(f"  {f}" for f in files)
-
-        joined = "\n".join(output)
-        return joined
-
-    def _separate_dirs_and_files(
-        self, parent_path: str, direct_children: list[str], all_paths: set
-    ) -> tuple[list[str], list[str]]:
-        dirs = []
-        files = []
-        for child in direct_children:
-            full_path = f"{parent_path}{child}"
-            if any(p.startswith(full_path + "/") for p in all_paths):
-                dirs.append(child)
-            else:
-                files.append(child)
-        return dirs, files
 
     def cleanup(self):
         if self.tmp_dir:
@@ -396,6 +366,12 @@ class BaseTools:
         repo_names = [repo_name] if repo_name else self._get_repo_names()
         all_results = []
 
+        # Parse the command into a list of arguments
+        try:
+            cmd_args = shlex.split(command)
+        except Exception as e:
+            return f"Error parsing grep command: {str(e)}"
+
         for repo_name in repo_names:
             if self.tmp_dir is None or repo_name not in self.tmp_dir:
                 continue
@@ -406,8 +382,8 @@ class BaseTools:
             try:
                 # Run the grep command in the repo directory
                 process = subprocess.run(
-                    command,
-                    shell=True,
+                    cmd_args,
+                    shell=False,
                     cwd=tmp_repo_dir,
                     capture_output=True,
                     text=True,
@@ -503,6 +479,12 @@ class BaseTools:
         repo_names = [repo_name] if repo_name else self._get_repo_names()
         all_results = []
 
+        # Parse the command into a list of arguments
+        try:
+            cmd_args = shlex.split(command)
+        except Exception as e:
+            return f"Error parsing find command: {str(e)}"
+
         for repo_name in repo_names:
             if self.tmp_dir is None or repo_name not in self.tmp_dir:
                 continue
@@ -513,8 +495,8 @@ class BaseTools:
             try:
                 # Run the find command in the repo directory
                 process = subprocess.run(
-                    command,
-                    shell=True,
+                    cmd_args,
+                    shell=False,
                     cwd=tmp_repo_dir,
                     capture_output=True,
                     text=True,
@@ -559,9 +541,9 @@ class BaseTools:
             tools.extend(
                 [
                     FunctionTool(
-                        name="list_directory",
-                        fn=self.list_directory,
-                        description="Given the path for a directory in this codebase, returns the immediate contents of the directory such as files and direct subdirectories. Does not include nested directories.",
+                        name="tree",
+                        fn=self.tree,
+                        description="Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.",
                         parameters=[
                             {
                                 "name": "path",
