@@ -1088,6 +1088,42 @@ def test_eap_trace_get_transaction_spans_empty():
 
 def test_get_and_format_trace():
     """Test _get_transaction_spans with a simple trace"""
+
+    trace_data = [
+        {"id": "span1", "name": "Transaction 1", "is_transaction": True, "children": []},
+        {
+            "id": "span2",
+            "name": "Non-Transaction Span",
+            "is_transaction": False,
+            "children": [
+                {
+                    "id": "span2_1",
+                    "name": "Non-Transaction Span 1",
+                    "is_transaction": False,
+                    "children": [],
+                },
+                {
+                    "id": "span2_2",
+                    "name": "Non-Transaction Span 2",
+                    "is_transaction": False,
+                    "children": [],
+                },
+            ],
+        },
+        {"id": "span3", "name": "Transaction 2", "is_transaction": True, "children": []},
+    ]
+
+    trace = EAPTrace(trace_id="simple-trace", trace=trace_data, timestamp=datetime.datetime.now())
+
+    result = trace.get_and_format_trace()
+    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />
+<span id="span2" name="Non-Transaction Span" is_transaction="False">
+    <span id="span2_1" name="Non-Transaction Span 1" is_transaction="False" />
+    <span id="span2_2" name="Non-Transaction Span 2" is_transaction="False" />
+</span>
+<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    assert result == expected
+
     trace_data = [
         {"id": "span1", "name": "Transaction 1", "is_transaction": True, "children": []},
         {"id": "span2", "name": "Non-Transaction Span", "is_transaction": False, "children": []},
