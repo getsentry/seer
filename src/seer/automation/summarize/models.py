@@ -37,8 +37,8 @@ class SummarizeIssueResponse(BaseModel):
 
 class SummarizeTraceRequest(BaseModel):
     trace_id: str
-    trace: EAPTrace
     only_transactions: bool = False
+    trace: EAPTrace
 
 
 class SummarizeTraceResponse(BaseModel):

@@ -23,14 +23,15 @@ def summarize_trace(
     llm_client: LlmClient = injected,
 ) -> SummarizeTraceResponse:
     logger.info(f"Summarizing trace: {request.trace_id}")
-    trace = request.trace
-    only_transactions = request.only_transactions
+    trace, only_transactions = request.trace, request.only_transactions
     trace_str = trace.get_and_format_trace(only_transactions)
 
     prompt = _get_prompt(trace_str, only_transactions)
 
     completion = llm_client.generate_structured(
-        model=GeminiProvider.model("gemini-2.0"),
+        model=GeminiProvider.model(
+            "gemini-2.0-flash-001",
+        ),
         prompt=prompt,
         response_format=TraceSummaryForLlmToGenerate,
         temperature=0.0,
@@ -69,7 +70,7 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
 
             2. **Flow Overview**: Summarize the entire trace flow in 3-5 bullet points, focusing on the main sequence of operations from start to finish.
 
-            3. **Performance Analysis**:
+            3. **Performance Characteristics**:
             - Identify critical path operations that contribute most to the total duration
             - Highlight relationships between spans where one span is blocking another
             - Point out potential parallelization opportunities
