@@ -32,7 +32,10 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
     @ai_track(description="Generate unit tests")
     @inject
     def invoke(
-        self, request: CodeUnitTestRequest, llm_client: LlmClient = injected
+        self,
+        request: CodeUnitTestRequest,
+        is_codecov_request: bool,
+        llm_client: LlmClient = injected,
     ) -> CodeUnitTestOutput | None:
         with BaseTools(self.context, repo_client_type=RepoClientType.CODECOV_UNIT_TEST) as tools:
             agent = LlmAgent(
@@ -95,10 +98,13 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
         if not coding_output.tasks:
             raise ValueError("No tasks found in coding output")
         file_changes: list[FileChange] = []
+        client_type = (
+            RepoClientType.CODECOV_PR_REVIEW
+            if is_codecov_request
+            else RepoClientType.CODECOV_UNIT_TEST
+        )
         for task in coding_output.tasks:
-            repo_client = self.context.get_repo_client(
-                task.repo_name, type=RepoClientType.CODECOV_UNIT_TEST
-            )
+            repo_client = self.context.get_repo_client(task.repo_name, type=client_type)
             if task.type == "file_change":
                 file_content, _ = repo_client.get_file_content(task.file_path)
                 if not file_content:
