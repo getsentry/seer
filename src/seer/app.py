@@ -76,7 +76,10 @@ from seer.automation.summarize.models import (
     GetFixabilityScoreRequest,
     SummarizeIssueRequest,
     SummarizeIssueResponse,
+    SummarizeTraceRequest,
+    SummarizeTraceResponse,
 )
+from seer.automation.summarize.traces import summarize_trace
 from seer.automation.utils import ConsentError, raise_if_no_genai_consent
 from seer.bootup import bootup, module
 from seer.configuration import AppConfig
@@ -354,6 +357,23 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
         raise GatewayTimeout from e
     except Exception as e:
         logger.exception("Error summarizing issue")
+        raise InternalServerError from e
+
+
+@json_api(blueprint, "/v1/automation/summarize/trace")
+def summarize_trace_endpoint(data: SummarizeTraceRequest) -> SummarizeTraceResponse:
+    try:
+        response = summarize_trace(data)
+        statsd.increment("seer.automation.summarize.trace.success")
+        return response
+    except APITimeoutError as e:
+        statsd.increment("seer.automation.summarize.trace.api_timeout")
+        raise GatewayTimeout from e
+    except ServerError:
+        statsd.increment("seer.automation.summarize.trace.server_error")
+        raise
+    except Exception as e:
+        logger.exception("Error summarizing trace")
         raise InternalServerError from e
 
 

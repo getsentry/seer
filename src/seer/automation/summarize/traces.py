@@ -1,9 +1,11 @@
 import textwrap
+from venv import logger
 
+from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.models import EAPTrace
+from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
 from seer.dependency_injection import inject, injected
 
 
@@ -14,12 +16,15 @@ class TraceSummaryForLlmToGenerate(BaseModel):
     suggested_investigations: str
 
 
+@observe(name="Summarize Trace")
 @inject
 def summarize_trace(
-    trace: EAPTrace,
-    only_transactions: bool = False,
+    request: SummarizeTraceRequest,
     llm_client: LlmClient = injected,
-) -> str:
+) -> SummarizeTraceResponse:
+    logger.info(f"Summarizing trace: {request.trace_id}")
+    trace = request.trace
+    only_transactions = request.only_transactions
     trace_str = trace.get_and_format_trace(only_transactions)
 
     prompt = _get_prompt(trace_str, only_transactions)
@@ -29,11 +34,16 @@ def summarize_trace(
         prompt=prompt,
         response_format=TraceSummaryForLlmToGenerate,
         temperature=0.0,
-        max_tokens=512,
+        max_tokens=1024,
     )
     trace_summary = completion.parsed
 
-    return trace_summary
+    return SummarizeTraceResponse(
+        summary=trace_summary.summary,
+        key_observations=trace_summary.key_observations,
+        performance_characteristics=trace_summary.performance_characteristics,
+        suggested_investigations=trace_summary.suggested_investigations,
+    )
 
 
 def _get_prompt(trace_str: str, only_transactions: bool) -> str:
