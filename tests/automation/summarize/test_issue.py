@@ -265,6 +265,11 @@ class TestFixabilityScore:
         mock_db_session = Mock()
         mock_session.return_value.__enter__.return_value = mock_db_session
 
+        scores_current = {
+            "possible_cause_confidence": 0.8,
+            "possible_cause_novelty": 0.6,
+        }
+
         # Create a proper mock of DbIssueSummary with all required attributes
         mock_db_summary = Mock(spec=DbIssueSummary)
         mock_db_summary.summary = {
@@ -272,10 +277,7 @@ class TestFixabilityScore:
             "whats_wrong": "Something is broken",
             "session_related_issues": "No related issues",
             "possible_cause": "Bad code",
-            "scores": {
-                "possible_cause_confidence": 0.8,
-                "possible_cause_novelty": 0.6,
-            },
+            "scores": scores_current,
         }
         # Add the new fixability-related fields
         mock_db_summary.fixability_score = None
@@ -304,6 +306,10 @@ class TestFixabilityScore:
         assert result.scores.fixability_score == 0.75
         assert result.scores.fixability_score_version == 2
         assert result.scores.is_fixable is True
+        assert (
+            result.scores.possible_cause_confidence == scores_current["possible_cause_confidence"]
+        )
+        assert result.scores.possible_cause_novelty == scores_current["possible_cause_novelty"]
 
     @patch("seer.automation.summarize.issue.Session")
     def test_run_fixability_score_no_summary(self, mock_session, autofixability_model):

@@ -207,11 +207,9 @@ def run_fixability_score(
     fixability_score, is_fixable = evaluate_autofixability(issue_summary, autofixability_model)
 
     with Session() as session:
-        issue_summary.scores = SummarizeIssueScores(
-            fixability_score=fixability_score,
-            fixability_score_version=2,
-            is_fixable=is_fixable,
-        )
+        issue_summary.scores.fixability_score = fixability_score
+        issue_summary.scores.fixability_score_version = 2
+        issue_summary.scores.is_fixable = is_fixable
         session.merge(issue_summary.to_db_state(request.group_id))
         session.commit()
 
