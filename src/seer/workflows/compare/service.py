@@ -1,5 +1,6 @@
 import logging
 
+from seer.events import SeerEventNames, log_seer_event
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
 from seer.workflows.compare.processor import DataProcessor
 from seer.workflows.compare.scorer import CohortsMetricsScorer
@@ -79,4 +80,11 @@ def compare_cohort(request: CompareCohortsRequest) -> CompareCohortsResponse:
         This is a simplified entry point that creates a new service instance for each call, since the service is cheap to create.
         In the future, if the service becomes more complex, we can consider implementing a singleton pattern.
     """
+    log_seer_event(
+        SeerEventNames.COMPARATIVE_WORKFLOWS_STARTED,
+        {
+            "config": request.config.model_dump(mode="json"),
+            "meta": request.meta.model_dump(mode="json"),
+        },
+    )
     return CompareService().compare_cohort(request)

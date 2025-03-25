@@ -24,6 +24,8 @@ class SeerEventNames(StrEnum):
     AUTOFIX_CODING_COMPLETED = "autofix_coding_completed"  # Autofix completed coding the solution
     AUTOFIX_COMPLETED = "autofix_completed"  # Autofix full run completed successfully
 
+    COMPARATIVE_WORKFLOWS_STARTED = "comparative_workflows_started"  # Comparative workflows started
+
 
 def log_seer_event(name: SeerEventNames, event_metadata: dict | None = None):
     """Log a Seer event to the database.
