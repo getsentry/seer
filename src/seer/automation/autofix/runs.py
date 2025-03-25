@@ -1,4 +1,5 @@
 from typing import cast
+
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, CodebaseState
 from seer.automation.autofix.state import ContinuationState
