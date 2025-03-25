@@ -1,6 +1,8 @@
 #!/bin/bash
 
-/devinfra/scripts/checks/googlecloud/checkcloudbuild.py \
-  "${GO_REVISION_SEER_REPO}" \
+/devinfra/scripts/checks/googlecloud/check_cloudbuild.py \
   sentryio \
-  "us-central1-docker.pkg.dev/sentryio/seer/image"
+  seer \
+  seer-builder \
+  "${GO_REVISION_SEER_REPO}" \
+  main
