@@ -6,6 +6,7 @@ from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.preferences import GetSeerProjectPreferenceRequest, get_seer_project_preference
 from seer.automation.state import DbState, DbStateRunTypes
+from github import GithubException
 
 
 def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContinuation]:
@@ -42,7 +43,7 @@ def validate_repo_branches_exist(
             if repo.branch_name:
                 try:
                     RepoClient.from_repo_definition(repo, "read")
-                except Exception as e:
+                except GithubException as e:
                     if e.status == 404:
                         event_manager.on_error(
                             f"The branch {repo.branch_name} does not exist in the repository {repo.full_name} or Autofix doesn't have access to it."
