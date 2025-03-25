@@ -34,6 +34,24 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     return state
 
 
+def validate_repo_branches_exist(
+    state: ContinuationState, event_manager: AutofixEventManager
+) -> bool:
+    for repo in state.get().request.repos:
+        if repo.provider == "github":
+            if repo.branch_name:
+                try:
+                    RepoClient.from_repo_definition(repo, "read")
+                except Exception as e:
+                    if e.status == 404:
+                        event_manager.on_error(
+                            f"The branch {repo.branch_name} does not exist in the repository {repo.full_name} or Autofix doesn't have access to it."
+                        )
+                    return False
+
+    return True
+
+
 def create_missing_codebase_states(cur: AutofixContinuation) -> None:
     for repo in cur.request.repos:
         if repo.external_id not in cur.codebases:
