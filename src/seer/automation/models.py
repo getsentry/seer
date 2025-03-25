@@ -1,3 +1,4 @@
+import datetime
 import json
 import textwrap
 from typing import Annotated, Any, List, Literal, NotRequired, Optional
@@ -1023,3 +1024,89 @@ class FileChange(BaseModel):
             return None
 
         return file_contents.replace(self.reference_snippet, "")
+
+
+class EAPTrace(BaseModel):
+    trace_id: str = Field(..., description="ID of the trace")
+    trace: list[dict] = Field(..., description="List of spans in the trace")
+    timestamp: datetime.datetime = Field(..., description="Known timestamp of a span in the trace")
+
+    def _get_transaction_spans(self, trace) -> list[dict]:
+        """
+        Filters the trace to only include the transaction spans.
+        """
+        # Base case: empty trace
+        if not trace:
+            return []
+
+        # Process list of spans
+        if isinstance(trace, list):
+            transaction_spans = []
+            for span in trace:
+                transaction_spans.extend(self._get_transaction_spans(span))
+            return transaction_spans
+
+        # Process single span
+        transaction_spans = []
+
+        # Keep transaction spans
+        if trace.get("is_transaction"):
+            # Create new span with same attributes but only transaction children
+            transaction_span = trace.copy()
+            transaction_span["children"] = self._get_transaction_spans(trace.get("children", []))
+            transaction_spans.append(transaction_span)
+        # For non-transaction spans, just process children
+        else:
+            transaction_spans.extend(self._get_transaction_spans(trace.get("children", [])))
+
+        return transaction_spans
+
+    def get_and_format_trace(self, only_transactions=False) -> str:
+        """
+        Formats the trace as a string of tags.
+        """
+        trace = self.trace
+        if only_transactions:
+            trace = self._get_transaction_spans(self.trace)
+
+        def format_span_as_tag(span, depth=0):
+            # Calculate indentation for this level
+            indent = "    " * depth
+
+            # Prepare attributes
+            attrs = []
+            for key, value in span.items():
+                if key != "children":
+                    attrs.append(f'{key}="{value}"')
+            attrs_str = " ".join(attrs)
+
+            # Determine tag name based on is_transaction
+            tag_name = "txn" if span.get("is_transaction") else "span"
+
+            # Check if span has children
+            if not span.get("children"):
+                # Self-closing tag for spans without children
+                return f"{indent}<{tag_name} {attrs_str} />"
+            else:
+                # Opening tag
+                tag_start = f"{indent}<{tag_name} {attrs_str}>"
+
+                # Format children recursively with increased depth
+                children = []
+                for child in span["children"]:
+                    children.append(format_span_as_tag(child, depth + 1))
+
+                # Join children with appropriate indentation
+                child_content = "\n" + "\n".join(children)
+
+                # End tag with proper indentation
+                tag_end = f"\n{indent}</{tag_name}>"
+
+                return f"{tag_start}{child_content}{tag_end}"
+
+        # Format each transaction span
+        formatted = []
+        for span in trace:
+            formatted.append(format_span_as_tag(span, 0))
+
+        return "\n".join(formatted)
