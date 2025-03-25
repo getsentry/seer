@@ -1,6 +1,9 @@
+import datetime
+
 import pytest
 
 from seer.automation.models import (
+    EAPTrace,
     FileChange,
     FileChangeError,
     FilePatch,
@@ -1060,3 +1063,40 @@ def test_trace_event_format_spans_tree():
         "    }"
     )
     assert formatted == expected
+
+
+def test_eap_trace_basic_creation():
+    """Test basic creation of an EAPTrace object"""
+    trace_data = [
+        {"id": "span1", "name": "Main Transaction", "is_transaction": True, "children": []}
+    ]
+
+    trace = EAPTrace(trace_id="trace-123", trace=trace_data, timestamp=datetime.datetime.now())
+
+    assert trace.trace_id == "trace-123"
+    assert trace.trace == trace_data
+
+
+def test_eap_trace_get_transaction_spans_empty():
+    """Test _get_transaction_spans with empty trace"""
+    trace = EAPTrace(trace_id="empty-trace", trace=[], timestamp=datetime.datetime.now())
+
+    # Test empty trace
+    result = trace._get_transaction_spans([])
+    assert result == []
+
+
+def test_eap_trace_get_transaction_spans_simple():
+    """Test _get_transaction_spans with a simple trace"""
+    trace_data = [
+        {"id": "span1", "name": "Transaction 1", "is_transaction": True, "children": []},
+        {"id": "span2", "name": "Non-Transaction Span", "is_transaction": False, "children": []},
+        {"id": "span3", "name": "Transaction 2", "is_transaction": True, "children": []},
+    ]
+
+    trace = EAPTrace(trace_id="simple-trace", trace=trace_data, timestamp=datetime.datetime.now())
+
+    result = trace._get_transaction_spans(trace_data)
+    assert len(result) == 2
+    assert result[0]["id"] == "span1"
+    assert result[1]["id"] == "span3"
