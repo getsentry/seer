@@ -284,9 +284,7 @@ class DbSeerProjectPreference(Base):
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False, primary_key=True)
     organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     repositories: Mapped[List[dict]] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
-    )
+
 
     __table_args__ = (UniqueConstraint("organization_id", "project_id"),)
 
