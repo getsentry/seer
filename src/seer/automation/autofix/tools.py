@@ -126,7 +126,19 @@ class BaseTools:
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
-    def expand_document(self, file_path: str, repo_name: str):
+    def expand_document(self, file_path: str, repo_name: str | None = None):
+        # If repo_name is not provided, try to determine it automatically
+        if repo_name is None:
+            repo_names = self._get_repo_names()
+            if len(repo_names) == 1:
+                # If there's only one repository, use it automatically
+                repo_name = repo_names[0]
+                self.context.event_manager.add_log(f"Automatically using repository: {repo_name}")
+            else:
+                # If there are multiple repositories, we need the user to specify which one
+                repos_list = ", ".join(repo_names)
+                return f"Repository name not specified. Please specify one of the following repositories: {repos_list}"
+
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
@@ -520,7 +532,6 @@ class BaseTools:
         return "\n\n".join(all_results)
 
     def get_tools(self, can_access_repos: bool = True):
-
         tools = [
             FunctionTool(
                 name="google_search",
@@ -576,10 +587,10 @@ class BaseTools:
                             {
                                 "name": "repo_name",
                                 "type": "string",
-                                "description": "Name of the repository containing the file.",
+                                "description": "Name of the repository containing the file. If omitted and there's only one repository, that repository will be used automatically.",
                             },
                         ],
-                        required=["file_path", "repo_name"],
+                        required=["file_path"],
                     ),
                     FunctionTool(
                         name="grep_search",
