@@ -155,20 +155,20 @@ def summarize_issue(
                 temperature=0.0,
                 max_tokens=512,
             )
-
-            issue_summary = completion.parsed
-            return IssueSummaryWithScores(
-                **issue_summary.model_dump(),
-                scores=SummarizeIssueScores(
-                    possible_cause_confidence=issue_summary.possible_cause_confidence_score,
-                    possible_cause_novelty=issue_summary.possible_cause_novelty_score,
-                ),
-            )
         except Exception as e:
             # Only retry if the error is context-limit-related
             if "token" in str(e).lower():
                 return None
             raise
+
+        issue_summary = completion.parsed
+        return IssueSummaryWithScores(
+            **issue_summary.model_dump(),
+            scores=SummarizeIssueScores(
+                possible_cause_confidence=issue_summary.possible_cause_confidence_score,
+                possible_cause_novelty=issue_summary.possible_cause_novelty_score,
+            ),
+        )
 
     result = _generate_summary(full_context=True)
     if result is None:
