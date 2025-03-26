@@ -170,6 +170,13 @@ jobs:
     name: Finish Tests
     needs: [test, typecheck]
     runs-on: ubuntu-latest
+    if: always()
     steps:
-      - name: Tests completed
-        run: echo "All tests completed successfully"
+      - name: Check test results
+        run: |
+          if [[ "${{ needs.test.result }}" == "success" && "${{ needs.typecheck.result }}" == "success" ]]; then
+            echo "All tests completed successfully"
+          else
+            echo "Tests failed. Check the logs for details."
+            exit 1
+          fi
