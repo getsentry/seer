@@ -2,69 +2,48 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from seer.automation.autofix.models import (
-    AutofixContinuation,
-    AutofixRequest,
-    AutofixRequestOptions,
-    IssueDetails,
-)
-from seer.automation.autofix.runs import create_initial_autofix_run
+from seer.automation.autofix.models import AutofixContinuation, CodebaseState
+from seer.automation.autofix.runs import update_repo_access
+from seer.automation.autofix.state import ContinuationState
+from seer.automation.models import RepoDefinition
 
 
-@pytest.fixture
-def mock_request():
-    return AutofixRequest(
-        organization_id=1,
-        project_id=2,
-        repos=[],
-        issue=IssueDetails(id=123, title="Test Issue", short_id="TEST-123", events=[]),
-        invoking_user=None,
-        instruction=None,
-        options=AutofixRequestOptions(),
-    )
+class TestUpdateRepoAccess:
+    @patch("seer.automation.autofix.runs.RepoClient")
+    def test_update_repo_access_with_missing_codebase(self, mock_repo_client):
+        # Mock RepoClient methods
+        mock_repo_client.check_repo_read_access.return_value = True
+        mock_repo_client.check_repo_write_access.return_value = True
 
+        # Create a test repo definition with an external ID
+        test_repo = RepoDefinition(
+            provider="github",
+            owner="test-owner",
+            name="test-repo",
+            external_id="123456789",  # This ID is not in the codebases dict yet
+            branch_name=None,
+            instructions=None,
+            base_commit_sha=None,
+            provider_raw="integrations:github"
+        )
 
-class TestRuns:
-    @pytest.fixture(autouse=True)
-    def setup_mocks(self):
-        self.mock_event_manager = patch("seer.automation.autofix.runs.AutofixEventManager").start()
-        self.mock_continuation_state = patch(
-            "seer.automation.autofix.runs.ContinuationState"
-        ).start()
-        self.mock_autofix_continuation = patch(
-            "seer.automation.autofix.runs.AutofixContinuation"
-        ).start()
-        yield
-        patch.stopall()
+        # Create a mock continuation with the test repo but without a codebase entry
+        mock_continuation = AutofixContinuation(
+            request=MagicMock(repos=[test_repo]),
+            codebases={},  # Empty codebases dict - the repo's external_id is not here
+        )
 
-    def test_create_initial_autofix_run(self, mock_request):
-        # Set up mock for ContinuationState
-        mock_state = MagicMock()
-        self.mock_continuation_state.new.return_value = mock_state
-
-        expected_state = AutofixContinuation(request=mock_request)
-        self.mock_autofix_continuation.return_value = expected_state
-
+        # Create a mock state that will return our mock continuation
+        mock_state = MagicMock(spec=ContinuationState)
+        mock_state.update.return_value.__enter__.return_value = mock_continuation
+        
         # Call the function
-        result = create_initial_autofix_run(mock_request)
-
-        # Assertions
-        self.mock_autofix_continuation.assert_called_once_with(request=mock_request)
-        mock_state.update.assert_called_once()
-
-        self.mock_event_manager.assert_called_once_with(mock_state)
-        self.mock_event_manager.return_value.send_root_cause_analysis_will_start.assert_called_once()
-
-        assert result == mock_state
-
-    @pytest.mark.parametrize("exception_class", [ValueError, TypeError, RuntimeError])
-    def test_create_initial_autofix_run_error_handling(self, mock_request, exception_class):
-        # Set up mock to raise an exception
-        self.mock_continuation_state.new.side_effect = exception_class("Test error")
-
-        # Call the function and check if it raises the expected exception
-        with pytest.raises(exception_class):
-            create_initial_autofix_run(mock_request)
-
-        # Assert that the event manager was not called due to the exception
-        self.mock_event_manager.assert_not_called()
+        update_repo_access(mock_state)
+        
+        # Verify that the repo was added to codebases
+        assert test_repo.external_id in mock_continuation.codebases
+        assert isinstance(mock_continuation.codebases[test_repo.external_id], CodebaseState)
+        
+        # Verify that is_readable and is_writeable were set correctly
+        assert mock_continuation.codebases[test_repo.external_id].is_readable
+        assert mock_continuation.codebases[test_repo.external_id].is_writeable
