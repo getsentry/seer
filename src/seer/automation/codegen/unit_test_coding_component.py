@@ -122,5 +122,8 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
             else:
                 logger.warning(f"Unsupported task type: {task.type}")
 
-        self.context.store_memory("unit_test_memory", agent.memory)
+        # Store the memory from both agents
+        combined_memory = planning_agent.memory + implementation_agent.memory
+        self.context.store_memory("unit_test_memory", combined_memory)
+        
         return CodeUnitTestOutput(diffs=file_changes)

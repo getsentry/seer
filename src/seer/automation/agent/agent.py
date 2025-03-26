@@ -83,6 +83,9 @@ class LlmAgent:
         self.iterations += 1
         self.usage += completion.metadata.usage
 
+        # Manage memory size periodically to prevent context overflow
+        self.manage_memory_size(run_config)
+
         return self.memory
 
     def should_continue(self, run_config: RunConfig) -> bool:
@@ -106,6 +109,33 @@ class LlmAgent:
 
         # Continue in all other cases
         return True
+
+    def manage_memory_size(self, run_config: RunConfig):
+        # Summarize conversation history when it gets too large.
+        if self.iterations > 0 and self.iterations % 8 == 0 and len(self.memory) > 10:
+            # Get the first few messages (system prompt and user query)
+            initial_messages = self.memory[:2]
+            
+            # Get the last few tool calls and responses
+            recent_messages = self.memory[-6:] if len(self.memory) > 6 else self.memory
+            
+            summary_prompt = f"Summarize the key findings and decisions from our conversation so far."
+            self.memory.append(Message(role="user", content=summary_prompt))
+            
+            summary_completion = self.client.generate_text(
+                messages=self.memory,
+                model=run_config.model,
+                system_prompt="Provide a concise summary of the key information and decisions so far.",
+                temperature=0.0,
+            )
+            
+            # Create a new memory with: initial messages + summary + recent messages
+            new_memory = initial_messages.copy()
+            new_memory.append(Message(role="user", content="Here's a summary of our previous conversation:"))
+            new_memory.append(summary_completion.message)
+            new_memory.extend(recent_messages)
+            
+            self.memory = new_memory
 
     @observe(name="Agent Run")
     def run(self, run_config: RunConfig):

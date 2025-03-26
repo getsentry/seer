@@ -29,22 +29,25 @@ class CodingUnitTestPrompts:
             """\
             You are given the below code changes as a diff:
             {diff_str}
-
+            
             # Your goal:
-            Provide the most actionable and effective steps to add unit tests to ensure test coverage for all the changes in the diff.
-
-            Since you are an exceptional principal engineer, your unit tests should not just add trivial tests, but should add meaningful ones that test all changed functionality. Your list of steps should be detailed enough so that following it exactly will lead to complete test coverage of the code changed in the given diff.
-
-            When ready with your final answer, detail the precise plan to add unit tests.
-
+            Analyze these changes and create a clear, concise plan for unit tests that will cover the changes.
+            
+            You should focus on PLANNING only at this stage - don't write any actual test code yet.
+            
+            Your plan should include:
+            1. Which files need to be created or modified to add tests
+            2. What functionality needs to be tested
+            3. What test scenarios should be covered
+            4. Any special testing considerations for this code
+            
+            Since you are an exceptional principal engineer, your plan should be focused and actionable.
+            
             # Guidelines:
-            - No placeholders are allowed, the unit test must be clear and detailed.
-            - Make sure you use the tools provided to look through the codebase and at the files you are changing before outputting your suggested fix.
-            - The unit tests must be comprehensive. Do not provide temporary examples, placeholders, or incomplete ones.
-            - In your suggested unit tests, whenever you are providing code, provide explicit diffs to show the exact changes that need to be made.
-            - All your changes should be in test files.
-            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
-            - You also MUST think step-by-step before giving the final answer."""
+            - Keep your plan concise but complete
+            - Make sure you use the tools provided to look through the codebase before planning
+            - EVERY TIME before you use a tool, think step-by-step about what information you need
+            - You also MUST think step-by-step before giving the final plan"""
         ).format(diff_str=diff_str)
 
         if has_coverage_info:
