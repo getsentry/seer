@@ -1,6 +1,9 @@
+import datetime
+
 import pytest
 
 from seer.automation.models import (
+    EAPTrace,
     FileChange,
     FileChangeError,
     FilePatch,
@@ -1060,3 +1063,81 @@ def test_trace_event_format_spans_tree():
         "    }"
     )
     assert formatted == expected
+
+
+def test_eap_trace_basic_creation():
+    """Test basic creation of an EAPTrace object"""
+    trace_data = [
+        {"id": "span1", "name": "Main Transaction", "is_transaction": True, "children": []}
+    ]
+
+    trace = EAPTrace(trace_id="trace-123", trace=trace_data, timestamp=datetime.datetime.now())
+
+    assert trace.trace_id == "trace-123"
+    assert trace.trace == trace_data
+
+
+def test_eap_trace_get_transaction_spans_empty():
+    """Test _get_transaction_spans with empty trace"""
+    trace = EAPTrace(trace_id="empty-trace", trace=[], timestamp=datetime.datetime.now())
+
+    # Test empty trace
+    result = trace.get_and_format_trace()
+    assert result == ""
+
+
+def test_get_and_format_trace():
+    """Test _get_transaction_spans with a simple trace"""
+
+    trace_data = [
+        {"id": "span1", "name": "Transaction 1", "is_transaction": True, "children": []},
+        {
+            "id": "span2",
+            "name": "Non-Transaction Span",
+            "is_transaction": False,
+            "children": [
+                {
+                    "id": "span2_1",
+                    "name": "Non-Transaction Span 1",
+                    "is_transaction": False,
+                    "children": [],
+                },
+                {
+                    "id": "span2_2",
+                    "name": "Non-Transaction Span 2",
+                    "is_transaction": False,
+                    "children": [],
+                },
+            ],
+        },
+        {"id": "span3", "name": "Transaction 2", "is_transaction": True, "children": []},
+    ]
+
+    trace = EAPTrace(trace_id="simple-trace", trace=trace_data, timestamp=datetime.datetime.now())
+
+    result = trace.get_and_format_trace()
+    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />
+<span id="span2" name="Non-Transaction Span" is_transaction="False">
+    <span id="span2_1" name="Non-Transaction Span 1" is_transaction="False" />
+    <span id="span2_2" name="Non-Transaction Span 2" is_transaction="False" />
+</span>
+<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    assert result == expected
+
+    trace_data = [
+        {"id": "span1", "name": "Transaction 1", "is_transaction": True, "children": []},
+        {"id": "span2", "name": "Non-Transaction Span", "is_transaction": False, "children": []},
+        {"id": "span3", "name": "Transaction 2", "is_transaction": True, "children": []},
+    ]
+
+    trace = EAPTrace(trace_id="simple-trace", trace=trace_data, timestamp=datetime.datetime.now())
+
+    result = trace.get_and_format_trace()
+    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />
+<span id="span2" name="Non-Transaction Span" is_transaction="False" />
+<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    assert result == expected
+
+    result = trace.get_and_format_trace(only_transactions=True)
+    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />\n<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    assert result == expected

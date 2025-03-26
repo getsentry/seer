@@ -2,7 +2,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from seer.automation.models import IssueDetails
+from seer.automation.models import EAPTrace, IssueDetails
 
 
 class SummarizeIssueRequest(BaseModel):
@@ -33,3 +33,16 @@ class SummarizeIssueResponse(BaseModel):
     trace: str
     possible_cause: str
     scores: SummarizeIssueScores | None = None
+
+
+class SummarizeTraceRequest(BaseModel):
+    trace_id: str
+    only_transactions: bool = False
+    trace: EAPTrace
+
+
+class SummarizeTraceResponse(BaseModel):
+    summary: str
+    key_observations: str
+    performance_characteristics: str
+    suggested_investigations: str

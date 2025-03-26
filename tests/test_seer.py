@@ -35,6 +35,8 @@ from seer.automation.summarize.models import (
     SummarizeIssueRequest,
     SummarizeIssueResponse,
     SummarizeIssueScores,
+    SummarizeTraceRequest,
+    SummarizeTraceResponse,
 )
 from seer.configuration import AppConfig, provide_test_defaults
 from seer.db import DbGroupingRecord, DbSmokeTest, ProcessRequest, Session
@@ -714,6 +716,58 @@ class TestSeer(unittest.TestCase):
                 data=test_data.model_dump_json(),
                 content_type="application/json",
             )
+
+    @mock.patch("seer.app.summarize_trace")
+    def test_summarize_trace_endpoint_success(self, mock_summarize_trace):
+        """Test a successful run of summarize_trace end point"""
+        mock_summarize_trace.return_value = SummarizeTraceResponse(
+            summary="Test summary",
+            key_observations="Test key observations",
+            performance_characteristics="Test performance characteristics",
+            suggested_investigations="Test suggested investigations",
+        )
+        test_data = next(generate(SummarizeTraceRequest))
+
+        response = app.test_client().post(
+            "/v1/automation/summarize/trace",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json["summary"] == "Test summary"
+        assert response.json["key_observations"] == "Test key observations"
+        assert response.json["performance_characteristics"] == "Test performance characteristics"
+        assert response.json["suggested_investigations"] == "Test suggested investigations"
+
+        mock_summarize_trace.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.summarize_trace")
+    def test_summarize_trace_endpoint_error(self, mock_summarize_trace):
+        """Test that summarize_trace endpoint handles exceptions correctly"""
+
+        mock_summarize_trace.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/automation/summarize/trace"
+            ),
+        )
+        test_data = next(generate(SummarizeTraceRequest))
+
+        response = app.test_client().post(
+            "/v1/automation/summarize/trace",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 504
+        mock_summarize_trace.side_effect = Exception("Test error")
+        test_data = next(generate(SummarizeTraceRequest))
+
+        response = app.test_client().post(
+            "/v1/automation/summarize/trace",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 500
 
 
 @parametrize(count=1)
