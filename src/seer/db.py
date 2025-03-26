@@ -285,7 +285,6 @@ class DbSeerProjectPreference(Base):
     organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     repositories: Mapped[List[dict]] = mapped_column(JSON, nullable=False)
 
-
     __table_args__ = (UniqueConstraint("organization_id", "project_id"),)
 
 
