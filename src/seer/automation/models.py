@@ -1035,6 +1035,27 @@ class FileChange(BaseModel):
         return file_contents.replace(self.reference_snippet, "")
 
 
+class SeerProjectPreference(BaseModel):
+    organization_id: int
+    project_id: int
+    repositories: list[RepoDefinition]
+
+    def to_db_model(self) -> DbSeerProjectPreference:
+        return DbSeerProjectPreference(
+            organization_id=self.organization_id,
+            project_id=self.project_id,
+            repositories=[repo.model_dump() for repo in self.repositories],
+        )
+
+    @classmethod
+    def from_db_model(cls, db_model: DbSeerProjectPreference) -> "SeerProjectPreference":
+        return cls(
+            organization_id=db_model.organization_id,
+            project_id=db_model.project_id,
+            repositories=db_model.repositories,
+        )
+
+
 class EAPTrace(BaseModel):
     trace_id: str = Field(..., description="ID of the trace")
     trace: list[dict] = Field(..., description="List of spans in the trace")
@@ -1119,24 +1140,3 @@ class EAPTrace(BaseModel):
             formatted.append(format_span_as_tag(span, 0))
 
         return "\n".join(formatted)
-
-
-class SeerProjectPreference(BaseModel):
-    organization_id: int
-    project_id: int
-    repositories: list[RepoDefinition]
-
-    def to_db_model(self) -> DbSeerProjectPreference:
-        return DbSeerProjectPreference(
-            organization_id=self.organization_id,
-            project_id=self.project_id,
-            repositories=[repo.model_dump() for repo in self.repositories],
-        )
-
-    @classmethod
-    def from_db_model(cls, db_model: DbSeerProjectPreference) -> "SeerProjectPreference":
-        return cls(
-            organization_id=db_model.organization_id,
-            project_id=db_model.project_id,
-            repositories=db_model.repositories,
-        )
