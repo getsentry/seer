@@ -36,7 +36,7 @@ def test_detected_celery_jobs():
         assert set(k for k in celery_app.conf.beat_schedule.keys()) == set(
             [
                 "Check and mark recent autofix runs every hour",
-                "Delete old Automation runs for 90 day time-to-live",
+                "Delete old Automation runs for 30 day time-to-live",
                 "Clean up old disabled timeseries every week",
                 "Clean up old timeseries and prophet history every week",
             ]
@@ -72,7 +72,7 @@ def test_autofix_beat_jobs():
         assert set(k for k in app.conf.beat_schedule.keys()) == set(
             [
                 "Check and mark recent autofix runs every hour",
-                "Delete old Automation runs for 90 day time-to-live",
+                "Delete old Automation runs for 30 day time-to-live",
             ]
         )
 
