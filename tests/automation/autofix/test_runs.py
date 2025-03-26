@@ -24,7 +24,7 @@ class TestUpdateRepoAccess:
             branch_name=None,
             instructions=None,
             base_commit_sha=None,
-            provider_raw="integrations:github"
+            provider_raw="integrations:github",
         )
 
         # Create a mock continuation with the test repo but without a codebase entry
@@ -36,14 +36,14 @@ class TestUpdateRepoAccess:
         # Create a mock state that will return our mock continuation
         mock_state = MagicMock(spec=ContinuationState)
         mock_state.update.return_value.__enter__.return_value = mock_continuation
-        
+
         # Call the function
         update_repo_access(mock_state)
-        
+
         # Verify that the repo was added to codebases
         assert test_repo.external_id in mock_continuation.codebases
         assert isinstance(mock_continuation.codebases[test_repo.external_id], CodebaseState)
-        
+
         # Verify that is_readable and is_writeable were set correctly
         assert mock_continuation.codebases[test_repo.external_id].is_readable
         assert mock_continuation.codebases[test_repo.external_id].is_writeable
