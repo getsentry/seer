@@ -29,20 +29,20 @@ class CodingUnitTestPrompts:
             """\
             You are given the below code changes as a diff:
             {diff_str}
-            
+
             # Your goal:
             Analyze these changes and create a clear, concise plan for unit tests that will cover the changes.
-            
+
             You should focus on PLANNING only at this stage - don't write any actual test code yet.
-            
+
             Your plan should include:
             1. Which files need to be created or modified to add tests
             2. What functionality needs to be tested
             3. What test scenarios should be covered
             4. Any special testing considerations for this code
-            
+
             Since you are an exceptional principal engineer, your plan should be focused and actionable.
-            
+
             # Guidelines:
             - Keep your plan concise but complete
             - Make sure you use the tools provided to look through the codebase before planning

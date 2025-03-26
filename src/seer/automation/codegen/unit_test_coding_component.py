@@ -125,5 +125,5 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
         # Store the memory from both agents
         combined_memory = planning_agent.memory + implementation_agent.memory
         self.context.store_memory("unit_test_memory", combined_memory)
-        
+
         return CodeUnitTestOutput(diffs=file_changes)
