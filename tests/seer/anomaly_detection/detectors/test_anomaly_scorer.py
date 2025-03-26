@@ -381,6 +381,7 @@ class TestCombinedAnomalyScorer:
         mock_mp_scorer_stream_score.assert_called_once()
         mock_prophet_scorer_stream_score.assert_not_called()
 
+    @pytest.mark.skip(reason="MP overrides Prophet is disabled for now")
     def test_mp_overrides_prophet(
         self,
     ):
