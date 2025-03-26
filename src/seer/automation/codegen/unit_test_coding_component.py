@@ -78,11 +78,11 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
                     prompt=CodingUnitTestPrompts.format_unit_test_msg(
                         diff_str=request.diff,
                         test_design_hint=existing_test_design_response,
-                        max_iterations=64,
                     ),
                     system_prompt=CodingUnitTestPrompts.format_system_msg(),
                     model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     run_name="Generate Unit Tests",
+                    max_iterations=64,
                 ),
             )
 
