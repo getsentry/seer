@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(time_limit=30)
 def delete_data_for_ttl():
-    logger.info("Deleting old automation runs and issue summaries for 90 day time-to-live")
-    before = datetime.datetime.now() - datetime.timedelta(days=90)  # over 90 days old
+    logger.info("Deleting old automation runs and issue summaries for 30 day time-to-live")
+    before = datetime.datetime.now() - datetime.timedelta(days=30)  # over 30 days old
     deleted_run_count = delete_all_runs_before(before)
     deleted_summary_count = delete_all_summaries_before(before)
     logger.info(f"Deleted {deleted_run_count} runs")

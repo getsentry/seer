@@ -29,7 +29,7 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
         sender.add_periodic_task(
             crontab(minute="0", hour="0"),  # run once a day
             delete_data_for_ttl.signature(kwargs={}, queue=config.CELERY_WORKER_QUEUE),
-            name="Delete old Automation runs for 90 day time-to-live",
+            name="Delete old Automation runs for 30 day time-to-live",
         )
 
     if config.GRPC_SERVER_ENABLE:
