@@ -17,7 +17,6 @@ from seer.anomaly_detection.models import (
     AlgoConfig,
     AnomalyDetectionConfig,
     AnomalyFlags,
-    ConfidenceLevel,
     Directions,
 )
 from seer.anomaly_detection.models.timeseries_anomalies import AlertAlgorithmType
@@ -263,9 +262,9 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     elif prophet_score >= 2.0:
                         algo_type = AlertAlgorithmType.PROPHET
                         flags.append(prophet_flag)
-                    elif mp_confidence_level == ConfidenceLevel.HIGH:
-                        algo_type = AlertAlgorithmType.MP
-                        flags.append(mp_flag)
+                    # elif mp_confidence_level == ConfidenceLevel.HIGH:
+                    #     algo_type = AlertAlgorithmType.MP
+                    #     flags.append(mp_flag)
                     else:
                         flags.append("none")
                 else:
