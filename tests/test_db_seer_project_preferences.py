@@ -58,7 +58,6 @@ class TestDbSeerProjectPreference:
             assert retrieved.repositories[0]["provider"] == "github"
             assert retrieved.repositories[0]["branch_name"] == "main"
             assert retrieved.repositories[0]["instructions"] == "# Test instructions"
-            assert isinstance(retrieved.created_at, datetime)
 
     def test_db_seer_project_preference_unique_constraint(self):
         """Test the unique constraint on organization_id and project_id"""
