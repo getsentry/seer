@@ -1120,7 +1120,7 @@ class EAPTrace(BaseModel):
 
         return "\n".join(formatted)
 
-      
+
 class SeerProjectPreference(BaseModel):
     organization_id: int
     project_id: int
