@@ -23,6 +23,7 @@ from pydantic_xml import BaseXmlModel
 from typing_extensions import TypedDict
 
 from seer.automation.utils import process_repo_provider, unescape_xml_chars
+from seer.db import DbSeerProjectPreference
 
 
 class StacktraceFrame(BaseModel):
@@ -865,8 +866,16 @@ class RepoDefinition(BaseModel):
     owner: str
     name: str
     external_id: Annotated[str, Examples(specialized.ascii_words)]
-    base_commit_sha: Optional[str] = None
-    provider_raw: Optional[str] = None
+    branch_name: str | None = Field(
+        default=None,
+        description="The branch that Autofix will work on, otherwise the default branch will be used.",
+    )
+    instructions: str | None = Field(
+        default=None,
+        description="Custom instructions when working in this repo.",
+    )
+    base_commit_sha: str | None = None
+    provider_raw: str | None = None
 
     @property
     def full_name(self):
@@ -1110,3 +1119,24 @@ class EAPTrace(BaseModel):
             formatted.append(format_span_as_tag(span, 0))
 
         return "\n".join(formatted)
+
+      
+class SeerProjectPreference(BaseModel):
+    organization_id: int
+    project_id: int
+    repositories: list[RepoDefinition]
+
+    def to_db_model(self) -> DbSeerProjectPreference:
+        return DbSeerProjectPreference(
+            organization_id=self.organization_id,
+            project_id=self.project_id,
+            repositories=[repo.model_dump() for repo in self.repositories],
+        )
+
+    @classmethod
+    def from_db_model(cls, db_model: DbSeerProjectPreference) -> "SeerProjectPreference":
+        return cls(
+            organization_id=db_model.organization_id,
+            project_id=db_model.project_id,
+            repositories=db_model.repositories,
+        )

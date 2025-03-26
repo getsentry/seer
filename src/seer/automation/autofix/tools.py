@@ -17,7 +17,7 @@ from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.models import EventDetails, Profile, SentryEventData
-from seer.dependency_injection import inject, injected
+from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
 from seer.rpc import RpcClient
 
@@ -444,7 +444,7 @@ class BaseTools:
                     tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
                     return repo_name, (tmp_dir, tmp_repo_dir)
 
-                with ThreadPoolExecutor() as executor:
+                with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
                     future_to_repo = {
                         executor.submit(download_repo, repo_name): repo_name
                         for repo_name in repo_names_to_download

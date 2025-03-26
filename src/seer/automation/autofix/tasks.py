@@ -48,7 +48,7 @@ from seer.automation.autofix.models import (
     DefaultStep,
     Step,
 )
-from seer.automation.autofix.runs import create_initial_autofix_run
+from seer.automation.autofix.runs import create_initial_autofix_run, validate_repo_branches_exist
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.autofix.steps.coding_step import AutofixCodingStep, AutofixCodingStepRequest
 from seer.automation.autofix.steps.root_cause_step import RootCauseStep, RootCauseStepRequest
@@ -157,6 +157,9 @@ def run_autofix_root_cause(
     # Process has no further work.
     if cur_state.status in AutofixStatus.terminal():
         logger.warning(f"Ignoring job, state {cur_state.status}")
+        return
+
+    if not validate_repo_branches_exist(cur_state.request.repos, AutofixEventManager(state)):
         return
 
     RootCauseStep.get_signature(
