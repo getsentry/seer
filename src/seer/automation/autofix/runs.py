@@ -37,14 +37,15 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
         else:
             cur.request.repos = []
         for trace_connected_preference in trace_connected_preferences:
-            for repo in trace_connected_preference.repositories:
-                if not any(
-                    existing_repo.provider == repo.provider
-                    and existing_repo.owner == repo.owner
-                    and existing_repo.name == repo.name
-                    for existing_repo in cur.request.repos
-                ):
-                    cur.request.repos.append(repo)
+            if trace_connected_preference:
+                for repo in trace_connected_preference.repositories:
+                    if not any(
+                        existing_repo.provider == repo.provider
+                        and existing_repo.owner == repo.owner
+                        and existing_repo.name == repo.name
+                        for existing_repo in cur.request.repos
+                    ):
+                        cur.request.repos.append(repo)
 
         create_missing_codebase_states(cur)
         set_accessible_repos(cur)
