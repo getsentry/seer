@@ -374,12 +374,10 @@ class DbAlertDataAccessor(AlertDataAccessor):
             # Store the alert timeseries and the prophet predictions in the history table prior to deleting the alert
             history_values = [
                 {
-                    "dynamic_alert_id": existing.external_alert_id,
+                    "alert_id": existing.external_alert_id,
                     "timestamp": existing.timeseries[i].timestamp,
                     "value": existing.timeseries[i].value,
                     "anomaly_type": existing.timeseries[i].anomaly_type,
-                    "anomaly_score": existing.timeseries[i].anomaly_score,
-                    "anomaly_algo_data": existing.timeseries[i].anomaly_algo_data,
                 }
                 for i in range(len(existing.timeseries))
             ]
@@ -387,21 +385,23 @@ class DbAlertDataAccessor(AlertDataAccessor):
             update_stmt = stmt.on_conflict_do_nothing()
             session.execute(update_stmt)
 
-            prophet_predictions_history_values = [
-                {
-                    "dynamic_alert_id": existing.prophet_predictions[i].dynamic_alert_id,
-                    "timestamp": existing.prophet_predictions[i].timestamp,
-                    "yhat": existing.prophet_predictions[i].yhat,
-                    "yhat_lower": existing.prophet_predictions[i].yhat_lower,
-                    "yhat_upper": existing.prophet_predictions[i].yhat_upper,
-                }
-                for i in range(len(existing.prophet_predictions))
-            ]
-            stmt = insert(DbProphetAlertTimeSeriesHistory).values(
-                prophet_predictions_history_values
-            )
-            update_stmt = stmt.on_conflict_do_nothing()
-            session.execute(update_stmt)
+            # There may not be generated prophet predictions so skip in those cases
+            if existing.prophet_predictions:
+                prophet_predictions_history_values = [
+                    {
+                        "alert_id": existing.prophet_predictions[i].dynamic_alert_id,
+                        "timestamp": existing.prophet_predictions[i].timestamp,
+                        "yhat": existing.prophet_predictions[i].yhat,
+                        "yhat_lower": existing.prophet_predictions[i].yhat_lower,
+                        "yhat_upper": existing.prophet_predictions[i].yhat_upper,
+                    }
+                    for i in range(len(existing.prophet_predictions))
+                ]
+                stmt = insert(DbProphetAlertTimeSeriesHistory).values(
+                    prophet_predictions_history_values
+                )
+                update_stmt = stmt.on_conflict_do_nothing()
+                session.execute(update_stmt)
 
             session.delete(existing)
             session.commit()
