@@ -18,7 +18,9 @@ from seer.anomaly_detection.models.external import AnomalyDetectionConfig, TimeS
 from seer.db import (
     DbDynamicAlert,
     DbDynamicAlertTimeSeries,
+    DbDynamicAlertTimeSeriesHistory,
     DbProphetAlertTimeSeries,
+    DbProphetAlertTimeSeriesHistory,
     Session,
     TaskStatus,
 )
@@ -616,6 +618,30 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             data_purge_flag=TaskStatus.NOT_QUEUED,
         )
 
+        # Add some prophet predictions to the alert manually
+        with Session() as session:
+            alert = (
+                session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).first()
+            )
+            prophet_predictions = [
+                DbProphetAlertTimeSeries(
+                    dynamic_alert_id=alert.id,
+                    timestamp=datetime.now(),
+                    yhat=1.0,
+                    yhat_lower=0.5,
+                    yhat_upper=1.5,
+                ),
+                DbProphetAlertTimeSeries(
+                    dynamic_alert_id=alert.id,
+                    timestamp=datetime.now() + timedelta(hours=1),
+                    yhat=2.0,
+                    yhat_lower=1.5,
+                    yhat_upper=2.5,
+                ),
+            ]
+            alert.prophet_predictions = prophet_predictions
+            session.commit()
+
         alert_data_accessor.delete_alert_data(external_alert_id)
 
         with Session() as session:
@@ -626,6 +652,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             )
 
             assert dynamic_alert is None
+            assert session.query(DbDynamicAlertTimeSeriesHistory).count() == 2
+            assert session.query(DbProphetAlertTimeSeriesHistory).count() == 2
 
         with self.assertRaises(Exception):
             alert_data_accessor.delete_alert_data(999)
