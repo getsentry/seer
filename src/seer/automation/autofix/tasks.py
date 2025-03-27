@@ -322,8 +322,14 @@ def run_autofix_push_changes(
         )
 
 
-@celery_app.task(time_limit=30, soft_time_limit=25)
-def commit_changes_task(run_id, repo_external_id, make_pr):
+@celery_app.task(
+    bind=True,
+    time_limit=30,
+    soft_time_limit=25,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def commit_changes_task(self, run_id, repo_external_id, make_pr):
     try:
         state = ContinuationState(run_id)
         event_manager = AutofixEventManager(state)
