@@ -73,7 +73,7 @@ class GoogleProviderEmbeddings:
         """
         is_texts_str = isinstance(texts, str)
         if is_texts_str:
-            texts = [texts]
+            texts = [texts]  # type: ignore[list-item]
 
         model = self.get_client()
         text_to_embedding: dict[str, list[float]] = {}
