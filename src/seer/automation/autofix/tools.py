@@ -705,8 +705,7 @@ class BaseTools:
             isinstance(self.context, AutofixContext)
             and isinstance(run_request, AutofixRequest)
             and not run_request.options.disable_interactivity
-            and (run_request.invoking_user and run_request.invoking_user.id == 3283725)
-        ):  # TODO temporary guard for Rohan (@roaga) to test in prod
+        ):
             trace_tree = run_request.trace_tree
 
             if (
