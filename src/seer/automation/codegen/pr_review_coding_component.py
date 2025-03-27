@@ -56,6 +56,9 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                 max_tokens=8192,
             )
 
+            if not formatted_response:
+                return None
+
             for comment in formatted_response.parsed:
                 if comment.suggestion:
                     comment.body += f"\n```suggestion\n{comment.suggestion}\n```"
