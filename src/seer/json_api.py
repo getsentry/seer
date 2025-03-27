@@ -2,6 +2,7 @@ import functools
 import hashlib
 import hmac
 import inspect
+import json
 import logging
 from typing import Any, Callable, Type, TypeVar, get_type_hints
 
@@ -130,6 +131,12 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             try:
                 result: BaseModel = implementation(request_annotation.model_validate(data))
             except ValidationError as e:
+                logger.exception(
+                    "Validation error",
+                    extra={
+                        "request": json.dumps(request),
+                    },
+                )
                 capture_alert(data)
                 sentry_sdk.capture_exception(e)
                 raise BadRequest(str(e))
