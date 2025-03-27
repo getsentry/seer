@@ -30,7 +30,7 @@ from sqlalchemy import (
     select,
     text,
 )
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 
 from seer.configuration import AppConfig
@@ -475,4 +475,36 @@ class DbProphetAlertTimeSeriesHistory(Base):
     yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
     saved_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
+
+
+class DbReviewCommentEmbedding(Base):
+    """Store PR review comments with their embeddings for pattern matching per organization"""
+
+    __tablename__ = "review_comments_embedding"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    owner: Mapped[str] = mapped_column(String, nullable=False)
+    repo: Mapped[str] = mapped_column(String, nullable=False)
+    pr_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    body: Mapped[str] = mapped_column(String, nullable=False)
+    is_good_pattern: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
+    comment_metadata: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
+
+    __table_args__ = (
+        UniqueConstraint("provider", "pr_id", "repo", "owner"),
+        Index("ix_review_comments_repo_owner_pr", "owner", "repo", "pr_id"),
+        Index(
+            "ix_review_comments_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 200},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        Index("ix_review_comments_is_good_pattern", "is_good_pattern"),
     )

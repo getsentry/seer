@@ -58,6 +58,10 @@ class CodegenPrReviewRequest(CodegenBaseRequest):
     pass
 
 
+class CodegenPrClosedRequest(CodegenBaseRequest):
+    pass
+
+
 class CodegenContinuation(CodegenState):
     request: CodegenBaseRequest
 
@@ -82,6 +86,10 @@ class CodegenPrReviewResponse(CodegenBaseResponse):
 
 
 class CodegenUnitTestsResponse(CodegenBaseResponse):
+    pass
+
+
+class CodegenPrClosedResponse(CodegenBaseResponse):
     pass
 
 
@@ -211,9 +219,16 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
 
 
 class CodecovTaskRequest(BaseModel):
-    data: CodegenUnitTestsRequest | CodegenPrReviewRequest | CodegenRelevantWarningsRequest
+    data: (
+        CodegenUnitTestsRequest
+        | CodegenPrReviewRequest
+        | CodegenRelevantWarningsRequest
+        | CodegenPrClosedRequest
+    )
     external_owner_id: str
-    request_type: Literal["unit-tests", "pr-review", "relevant-warnings", "retry-unit-tests"]
+    request_type: Literal[
+        "unit-tests", "pr-review", "relevant-warnings", "pr-closed", "retry-unit-tests"
+    ]
 
 
 class UnitTestRunMemory(BaseModel):
