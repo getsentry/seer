@@ -123,17 +123,39 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
 
+
             if not isinstance(data, dict):
                 sentry_sdk.capture_message(f"Data is not an object: {type(data)}")
-                raise BadRequest("Data is not an object")
+                return ApiErrorResponse(
+                    code="INVALID_REQUEST_FORMAT",
+                    message="Request data must be a JSON object",
+                    details={"received_type": str(type(data))}
+                ).to_response()
 
             try:
                 result: BaseModel = implementation(request_annotation.model_validate(data))
             except ValidationError as e:
                 capture_alert(data)
                 sentry_sdk.capture_exception(e)
-                raise BadRequest(str(e))
-
+                
+                # Extract validation details for better error messages
+                validation_details = {}
+                for error in e.errors():
+                    field = error["loc"][0] if error.get("loc") else "unknown"
+                    validation_details[field] = error["msg"]
+                
+                return ApiErrorResponse(
+                    code="VALIDATION_ERROR",
+                    message="Request validation failed",
+                    details={
+                        "validation_errors": validation_details,
+                        "help": (
+                            "Please ensure all required fields are provided with valid values. "
+                            "The stacktrace field must contain valid stacktrace information."
+                        )
+                    }
+                ).to_response()
+                
             return result.model_dump()
 
         functools.update_wrapper(wrapper, implementation)
