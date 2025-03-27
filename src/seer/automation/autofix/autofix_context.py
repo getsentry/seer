@@ -130,7 +130,9 @@ class AutofixContext(PipelineContext):
         return RepoClient.from_repo_definition(repo, type)
 
     def autocorrect_repo_name(self, repo_name: str) -> str | None:
-        repo_names = [repo.full_name for repo in self.repos]
+        repo_names = [
+            repo.full_name for repo in self.repos if repo.provider in RepoClient.supported_providers
+        ]
         if repo_name and repo_name not in repo_names:
             # Try to find a repo name that contains the provided one to autocorrect
             matching_repos = [r for r in repo_names if repo_name.lower() in r.lower()]
