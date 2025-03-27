@@ -10,10 +10,7 @@ from seer.automation.autofix.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
-from seer.automation.codegen.prompts import (
-    CodingCodeReviewPrompts,
-    CodingUnitTestPrompts,
-)
+from seer.automation.codegen.prompts import CodingCodeReviewPrompts, CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.automation.utils import extract_text_inside_tags
 from seer.dependency_injection import inject, injected
