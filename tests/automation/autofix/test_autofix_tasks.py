@@ -85,6 +85,12 @@ def autofix_root_cause_run():
         return AutofixContinuation.model_validate_json(f.read())
 
 
+@pytest.fixture
+def autofix_root_cause_and_solution_run():
+    with open("tests/data/autofix_root_cause_and_solution_run.json") as f:
+        return AutofixContinuation.model_validate_json(f.read())
+
+
 @pytest.fixture(autouse=True)
 def lru_clear():
     yield
@@ -369,29 +375,26 @@ def test_autofix_run_question_asking(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
-@pytest.mark.skip(reason="Flakily causes seg faults.")
-def test_autofix_run_coding(autofix_root_cause_run: AutofixContinuation):
+def test_autofix_run_coding(autofix_root_cause_and_solution_run: AutofixContinuation):
     with Session() as session:
         session.add(
             DbRunState(
-                id=autofix_root_cause_run.run_id,
+                id=autofix_root_cause_and_solution_run.run_id,
                 group_id=1,
-                value=autofix_root_cause_run.model_dump(mode="json"),
+                value=autofix_root_cause_and_solution_run.model_dump(mode="json"),
             )
         )
         session.commit()
 
     with eager_celery():
-        run_autofix_solution(
+        run_autofix_coding(
             AutofixUpdateRequest(
-                run_id=autofix_root_cause_run.run_id,
-                payload=AutofixRootCauseUpdatePayload(
-                    custom_root_cause="we should uncomment out the unit test parts"
-                ),
+                run_id=autofix_root_cause_and_solution_run.run_id,
+                payload=AutofixSolutionUpdatePayload(solution_selected=True, mode="fix"),
             )
         )
 
-    continuation = get_autofix_state(run_id=autofix_root_cause_run.run_id)
+    continuation = get_autofix_state(run_id=autofix_root_cause_and_solution_run.run_id)
 
     assert continuation is not None
 
