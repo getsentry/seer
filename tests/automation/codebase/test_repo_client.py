@@ -4,7 +4,7 @@ import pytest
 from github import GithubException, UnknownObjectException
 from johen import generate
 
-from seer.automation.codebase.repo_client import RepoClient, RepoClientType
+from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import FileChange, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import resolve
