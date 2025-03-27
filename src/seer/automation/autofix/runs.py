@@ -40,9 +40,7 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
             if trace_connected_preference:
                 for repo in trace_connected_preference.repositories:
                     if not any(
-                        existing_repo.provider == repo.provider
-                        and existing_repo.owner == repo.owner
-                        and existing_repo.name == repo.name
+                        existing_repo.external_id == repo.external_id
                         for existing_repo in cur.request.repos
                     ):
                         cur.request.repos.append(repo)
