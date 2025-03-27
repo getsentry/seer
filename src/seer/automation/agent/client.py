@@ -458,9 +458,13 @@ class AnthropicProvider:
             "not_found_error",
         )
         return (
-            isinstance(exception, anthropic.AnthropicError)
-            and any(error in str(exception) for error in retryable_errors)
-        ) or isinstance(exception, LlmStreamTimeoutError)
+            (
+                isinstance(exception, anthropic.AnthropicError)
+                and any(error in str(exception) for error in retryable_errors)
+            )
+            or isinstance(exception, LlmStreamTimeoutError)
+            or "incomplete chunked read" in str(exception)
+        )
 
     @observe(as_type="generation", name="Anthropic Generation")
     @inject
