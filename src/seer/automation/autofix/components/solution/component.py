@@ -119,10 +119,13 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             )
 
             # pass in last message from RCA memory instead of root cause timeline
-            root_cause_memory = self.context.get_memory("root_cause_analysis")
             root_cause_raw = None
-            if root_cause_memory:
-                root_cause_raw = root_cause_memory[-1].content
+            if isinstance(request.root_cause_and_fix, str):  # custom root cause
+                root_cause_raw = request.root_cause_and_fix
+            else:
+                root_cause_memory = self.context.get_memory("root_cause_analysis")
+                if root_cause_memory:
+                    root_cause_raw = root_cause_memory[-1].content
 
             if not request.initial_memory:
                 agent.add_user_message(

@@ -58,9 +58,11 @@ class GoogleProviderEmbeddings:
             ):
                 yield subbatch
 
-    def encode(self, texts: list[str], auto_truncate: bool = True) -> npt.NDArray[np.float64]:
+    def encode(self, texts: str | list[str], auto_truncate: bool = True) -> npt.NDArray[np.float64]:
         """
-        Returns embeddings with shape `(len(texts), output_dimensionality)`.
+        Returns embeddings with shape `(output_dimensionality,)` if `texts` is a string, or
+        `(len(texts), output_dimensionality)` if it's a list of strings.
+
         Embeddings are already normalized.
 
         This method handles batching for you, and prevents duplicate texts from being encoded
@@ -69,6 +71,10 @@ class GoogleProviderEmbeddings:
         By default, texts are truncated to 2048 tokens.
         Setting `auto_truncate=False` to disables truncation, but can result in API errors if a text exceeds this limit.
         """
+        is_texts_str = isinstance(texts, str)
+        if is_texts_str:
+            texts = [texts]  # type: ignore[list-item]
+
         model = self.get_client()
         text_to_embedding: dict[str, list[float]] = {}
         texts_unique = list({text: None for text in texts})
@@ -91,7 +97,10 @@ class GoogleProviderEmbeddings:
                 }
             )
 
-        return np.array([text_to_embedding[text] for text in texts])
+        embeddings = np.array([text_to_embedding[text] for text in texts])
+        if is_texts_str:
+            return embeddings[0]
+        return embeddings
 
 
 def cosine_similarity(embeddings_a: np.ndarray, embeddings_b: np.ndarray) -> np.ndarray:
