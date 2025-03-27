@@ -1,5 +1,3 @@
-from typing import cast
-
 from github import GithubException
 
 from seer.automation.autofix.event_manager import AutofixEventManager
@@ -18,13 +16,35 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
         t=DbStateRunTypes.AUTOFIX,
     )
 
+    main_project_id = request.project_id
+    trace_connected_project_ids = (
+        request.trace_tree.get_all_project_ids() if request.trace_tree else []
+    )
+
     preference = get_seer_project_preference(
-        GetSeerProjectPreferenceRequest(project_id=request.project_id)
+        GetSeerProjectPreferenceRequest(project_id=main_project_id)
     ).preference
+    trace_connected_preferences = [
+        get_seer_project_preference(
+            GetSeerProjectPreferenceRequest(project_id=project_id)
+        ).preference
+        for project_id in trace_connected_project_ids
+    ]
 
     with state.update() as cur:
         if preference:
             cur.request.repos = preference.repositories
+        else:
+            cur.request.repos = []
+        for trace_connected_preference in trace_connected_preferences:
+            for repo in trace_connected_preference.repositories:
+                if not any(
+                    existing_repo.provider == repo.provider
+                    and existing_repo.owner == repo.owner
+                    and existing_repo.name == repo.name
+                    for existing_repo in cur.request.repos
+                ):
+                    cur.request.repos.append(repo)
 
         create_missing_codebase_states(cur)
         set_accessible_repos(cur)

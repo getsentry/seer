@@ -860,6 +860,10 @@ class TraceTree(BaseModel):
         collect_events(self.events)
         return all_events
 
+    def get_all_project_ids(self) -> list[int]:
+        """Return a list of all project IDs in the trace tree"""
+        return list(set(event.project_id for event in self._get_all_events() if event.project_id))
+
 
 class RepoDefinition(BaseModel):
     provider: Annotated[str, Examples(("github", "integrations:github"))]
