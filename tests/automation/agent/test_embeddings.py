@@ -97,5 +97,5 @@ class TestGoogleProviderEmbeddings:
         assert isinstance(embeddings, np.ndarray)
         assert embeddings.ndim == 2
         for text, embedding in zip(texts, embeddings, strict=True):
-            embedding_expected = model.encode([text])[0]
+            embedding_expected = model.encode(text)
             assert np.allclose(embedding, embedding_expected, atol=1e-4)

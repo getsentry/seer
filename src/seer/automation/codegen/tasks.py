@@ -1,6 +1,7 @@
 from seer.automation.codegen.models import (
     CodegenBaseRequest,
     CodegenContinuation,
+    CodegenPrClosedResponse,
     CodegenPrReviewResponse,
     CodegenRelevantWarningsRequest,
     CodegenRelevantWarningsResponse,
@@ -8,6 +9,7 @@ from seer.automation.codegen.models import (
     CodegenUnitTestsResponse,
     CodegenUnitTestsStateRequest,
 )
+from seer.automation.codegen.pr_closed_step import PrClosedStep, PrClosedStepRequest
 from seer.automation.codegen.pr_review_step import PrReviewStep, PrReviewStepRequest
 from seer.automation.codegen.relevant_warnings_step import (
     RelevantWarningsStep,
@@ -37,6 +39,19 @@ def create_initial_unittest_run(request: CodegenBaseRequest) -> DbState[CodegenC
 def create_initial_pr_review_run(request: CodegenBaseRequest) -> DbState[CodegenContinuation]:
     state = CodegenContinuationState.new(
         CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.PR_REVIEW
+    )
+
+    with state.update() as cur:
+        cur.status = CodegenStatus.PENDING
+        cur.signals = []
+        cur.mark_triggered()
+
+    return state
+
+
+def create_initial_pr_closed_run(request: CodegenBaseRequest) -> DbState[CodegenContinuation]:
+    state = CodegenContinuationState.new(
+        CodegenContinuation(request=request), group_id=request.pr_id, t=DbStateRunTypes.PR_CLOSED
     )
 
     with state.update() as cur:
@@ -100,6 +115,24 @@ def codegen_unittest(
     UnittestStep.get_signature(unittest_request, queue=app_config.CELERY_WORKER_QUEUE).apply_async()
 
     return CodegenUnitTestsResponse(run_id=cur_state.run_id)
+
+
+@inject
+def codegen_pr_closed(request: CodegenBaseRequest, app_config: AppConfig = injected):
+    state = create_initial_pr_closed_run(request)
+
+    cur_state = state.get()
+
+    pr_closed_request = PrClosedStepRequest(
+        run_id=cur_state.run_id,
+        pr_id=request.pr_id,
+        repo_definition=request.repo,
+    )
+
+    step = PrClosedStep(pr_closed_request.model_dump(), DbStateRunTypes.PR_CLOSED)
+    step.invoke()
+
+    return CodegenPrClosedResponse(run_id=cur_state.run_id)
 
 
 def get_unittest_state(request: CodegenUnitTestsStateRequest):
