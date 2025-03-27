@@ -59,6 +59,7 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
         change_describer = ChangeDescriptionComponent(self.context)
         codebase_changes: list[CodebaseChange] = []
         cur_state = self.context.state.get()
+
         for codebase_state in cur_state.codebases.values():
             if codebase_state.file_changes:
                 if not codebase_state.repo_external_id:

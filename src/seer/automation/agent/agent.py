@@ -1,4 +1,5 @@
 import contextlib
+import json
 import logging
 from typing import Optional
 
@@ -7,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from seer.automation.agent.client import LlmClient, LlmProvider
 from seer.automation.agent.models import Message, ToolCall, Usage
-from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.agent.utils import parse_json_with_keys
 from seer.automation.utils import AgentError
 from seer.dependency_injection import inject, injected
@@ -45,7 +46,7 @@ class LlmAgent:
         self,
         config: AgentConfig,
         client: LlmClient = injected,
-        tools: Optional[list[FunctionTool]] = None,
+        tools: Optional[list[FunctionTool | ClaudeTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "Agent",
     ):
@@ -157,19 +158,25 @@ class LlmAgent:
             tool_call_function=tool_call.function,
         )
 
-    def get_tool_by_name(self, name: str) -> FunctionTool:
+    def get_tool_by_name(self, name: str) -> FunctionTool | ClaudeTool:
         try:
             return next(tool for tool in self.tools if tool.name == name)
         except StopIteration:
             raise AgentError() from ValueError(f"Invalid tool name: {name}")
 
-    def parse_tool_arguments(self, tool: FunctionTool, args: str) -> dict:
-        try:
-            return parse_json_with_keys(
-                args, [param["name"] for param in tool.parameters if isinstance(param["name"], str)]
-            )
-        except Exception as e:
-            raise AgentError() from ValueError(f"Invalid tool arguments: {args}\nException: {e}")
+    def parse_tool_arguments(self, tool: FunctionTool | ClaudeTool, args: str) -> dict:
+        if isinstance(tool, FunctionTool):
+            try:
+                return parse_json_with_keys(
+                    args,
+                    [param["name"] for param in tool.parameters if isinstance(param["name"], str)],
+                )
+            except Exception as e:
+                raise AgentError() from ValueError(
+                    f"Invalid tool arguments: {args}\nException: {e}"
+                )
+        elif isinstance(tool, ClaudeTool):
+            return json.loads(args)
 
     def process_tool_calls(self, tool_calls: list[ToolCall]):
         for tool_call in tool_calls:

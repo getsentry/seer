@@ -15,7 +15,7 @@ from seer.automation.agent.models import (
     ToolCall,
     Usage,
 )
-from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import create_insight_output
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
@@ -35,7 +35,7 @@ class AutofixAgent(LlmAgent):
         self,
         config: AgentConfig,
         context: AutofixContext,
-        tools: Optional[list[FunctionTool]] = None,
+        tools: Optional[list[FunctionTool | ClaudeTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "Agent",
     ):

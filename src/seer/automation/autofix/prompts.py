@@ -28,10 +28,16 @@ def format_repo_instructions(repo: RepoDefinition):
 
 
 def format_repo_prompt(
-    readable_repos: list[RepoDefinition], unreadable_repos: list[RepoDefinition] = []
+    readable_repos: list[RepoDefinition],
+    unreadable_repos: list[RepoDefinition] = [],
+    is_using_claude_tools: bool = False,
 ):
     if not readable_repos:
         return "You can't access repositories or look up code, but you're still amazing at solving the problem regardless. Do so without looking up code."
+
+    multi_repo_suffix = ""
+    if len(readable_repos) > 1 and is_using_claude_tools:
+        multi_repo_suffix = "\n\nYou can access multiple repositories, when passing in a path to the `str_replace_editor` tool, you will need to use the format `repo_name:path` to access a specific file or directory in a specific repository, such as `owner/repo:src/foo/bar.py`."
 
     readable_str = textwrap.dedent(
         """\
@@ -53,9 +59,9 @@ def format_repo_prompt(
             {names_list_str}"""
         ).format(names_list_str="\n".join([f"- {repo.full_name}" for repo in unreadable_repos]))
 
-        return readable_str + "\n\n" + unreadable_str
+        return readable_str + "\n\n" + unreadable_str + multi_repo_suffix
 
-    return readable_str
+    return readable_str + multi_repo_suffix
 
 
 def format_summary(summary: IssueSummary | None) -> str:
