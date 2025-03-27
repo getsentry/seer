@@ -39,10 +39,24 @@ class GroupingRequest(BaseModel):
     @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
-        if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
-        return v
+        if not isinstance(v, str):
+            raise ValueError(
+                "stacktrace must be a string containing the error trace information"
+            )
 
+        # Basic preprocessing
+        v = v.strip()
+
+        if not v:
+            raise ValueError(
+                "stacktrace must be provided and not empty for similarity comparison"
+            )
+            
+        if len(v) < 10:  # Minimum reasonable length for a stacktrace
+            raise ValueError(
+                "stacktrace appears too short - please provide complete error trace information"
+            )
+        return v
 
 class GroupingResponse(BaseModel):
     parent_hash: str
