@@ -10,10 +10,7 @@ from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmC
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.coding.models import (
-    CodingOutput,
-    CodingRequest,
-)
+from seer.automation.autofix.components.coding.models import CodingOutput, CodingRequest
 from seer.automation.autofix.components.coding.prompts import CodingPrompts
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.prompts import format_repo_prompt
