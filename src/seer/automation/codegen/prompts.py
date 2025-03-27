@@ -199,20 +199,27 @@ class CodingCodeReviewPrompts:
             - Use the following JSON format for each comment:
                 {{
                     "path": "{{file_name}}",
-                    "line": The end line line of the code block where you are suggesting changes,
                     "body": "Your comment text here",
-                    "start_line": The starting line of the code block where you are suggesting changes,
+                    "start_line": The starting line number of the code block where you are suggesting changes. This must be strictly lower than the end line number.
+                    "line": The end line number of the code block where you are suggesting changes,
                     "code_suggestion": "If you have a code suggestion, provide it here. Ensure you are properly escaping special characters"
                 }}
             - Ensure each comment includes:
                 - The correct file name ("{{file_name}}").
-                - The specific line number requiring the comment.
+                - The specific line numbers requiring the comment.
                 - Clear, professional, and actionable feedback.
-            - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review. Please ensure you insert a comma between each JSON object except for the last one.
+            - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review.
             - Wrap the comments in a <comments> and </comments> block.
             """
         ).format(
             diff_str=diff_str,
+        )
+
+    @staticmethod
+    def pr_review_formatter_msg():
+        return textwrap.dedent(
+            """\
+            Format the comments into a list of JSON objects, ready to be used in a GitHub pull request review. Please ensure you insert a comma between each JSON object except for the last one."""
         )
 
 
