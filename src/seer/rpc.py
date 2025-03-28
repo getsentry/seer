@@ -110,7 +110,7 @@ class SentryRpcClient(RpcClient):
         return base_url
 
     def _generate_request_signature(self, url_path: str, body: bytes) -> str:
-        signature_input = b"%s:%s" % (url_path.encode("utf8"), body)
+        signature_input = body  # Remove url_path from signature calculation
         signature = hmac.new(
             self.shared_secret.encode("utf-8"), signature_input, hashlib.sha256
         ).hexdigest()
