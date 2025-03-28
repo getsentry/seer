@@ -33,7 +33,6 @@ class AutofixCodingStepRequest(PipelineStepTaskRequest):
 @celery_app.task(
     time_limit=AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
-    acks_late=True,
 )
 def autofix_coding_task(*args, request: dict[str, Any]):
     AutofixCodingStep(request).invoke()

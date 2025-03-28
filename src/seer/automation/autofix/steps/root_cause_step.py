@@ -37,7 +37,6 @@ class RootCauseStepRequest(PipelineStepTaskRequest):
 @celery_app.task(
     time_limit=AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
-    acks_late=True,
 )
 def root_cause_task(*args, request: Any):
     return RootCauseStep(request).invoke()
