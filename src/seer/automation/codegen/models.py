@@ -129,6 +129,7 @@ class CodePrReviewOutput(BaseComponentOutput):
         line: int
         body: str
         start_line: int
+        suggestion: str | None = None
 
     comments: list[Comment]
 

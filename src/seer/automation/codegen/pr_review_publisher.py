@@ -57,6 +57,9 @@ class PrReviewPublisher:
     ) -> List[GithubPrReviewComment]:
         comments = []
         for comment in pr_review.comments:
+            # TODO: rare case where start_line is greater than end line. Fix with a better prompt.
+            if comment.line <= comment.start_line:
+                continue
             comments.append(
                 GithubPrReviewComment(
                     commit_id=commit_id,
