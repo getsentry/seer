@@ -300,3 +300,58 @@ def batch_texts_by_token_count(
     if batch:
         # The last batch didn't hit max_tokens. It needs to be yielded.
         yield batch
+
+
+def format_value(v):
+    """Format a value without extra quotes for dictionary formatting."""
+    if isinstance(v, str):
+        return v
+    elif isinstance(v, dict):
+        return format_dict(v)
+    elif isinstance(v, list):
+        return format_list(v)
+    else:
+        return str(v)
+
+
+def format_dict(d, indent=2):
+    """Format a dictionary with proper indentation and without extra quotes around values."""
+    if not d:
+        return "{}"
+    lines = ["{"]
+    items = list(d.items())
+    for i, (k, v) in enumerate(items):
+        indent_str = " " * indent
+        formatted_v = format_value(v)
+        is_last = i == len(items) - 1
+        comma = "" if is_last else ","
+
+        if "\n" in formatted_v:
+            # Handle multiline values
+            v_lines = formatted_v.split("\n")
+            lines.append(f'{indent_str}"{k}": {v_lines[0]}')
+            for j, line in enumerate(v_lines[1:]):
+                # Add comma only to the last line of the value if this is not the last key-value pair
+                if j == len(v_lines) - 2 and not is_last:
+                    lines.append(f"{indent_str}{line}{comma}")
+                else:
+                    lines.append(f"{indent_str}{line}")
+        else:
+            lines.append(f'{indent_str}"{k}": {formatted_v}{comma}')
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def format_list(lst, indent=2):
+    """Format a list with proper indentation and without extra quotes around values."""
+    if not lst:
+        return "[]"
+    lines = ["["]
+    for i, item in enumerate(lst):
+        indent_str = " " * indent
+        formatted_item = format_value(item)
+        is_last = i == len(lst) - 1
+        comma = "" if is_last else ","
+        lines.append(f"{indent_str}{formatted_item}{comma}")
+    lines.append("]")
+    return "\n".join(lines)
