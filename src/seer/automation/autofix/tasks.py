@@ -294,9 +294,9 @@ def run_autofix_push_changes(
             queue=app_config.CELERY_WORKER_QUEUE,
         )
 
-        # Wait for the task to complete with a 30-second timeout
-        # Celery will kill the task if it doesn't complete in 30 seconds
-        result.get(timeout=30)
+        # Wait for the task to complete with a 60-second timeout
+        # Celery will kill the task if it doesn't complete in 60 seconds
+        result.get(timeout=60)
 
         return AutofixUpdateEndpointResponse(
             run_id=request.run_id,
@@ -322,7 +322,7 @@ def run_autofix_push_changes(
         )
 
 
-@celery_app.task(time_limit=30, soft_time_limit=25)
+@celery_app.task(time_limit=60, soft_time_limit=55)
 def commit_changes_task(run_id, repo_external_id, make_pr):
     try:
         state = ContinuationState(run_id)
@@ -334,7 +334,7 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
             make_pr=make_pr,
         )
     except SoftTimeLimitExceeded:
-        logger.error(f"Soft time limit (25s) exceeded when committing changes for run {run_id}")
+        logger.error(f"Soft time limit (55s) exceeded when committing changes for run {run_id}")
         raise
     except Exception as e:
         logger.error(f"Error committing changes for run {run_id}: {e}")
