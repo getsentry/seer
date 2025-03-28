@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 
 import torch
 from scipy.special import softmax
@@ -18,18 +19,17 @@ def _load_model(model_path: str) -> SentenceTransformer:
     return SentenceTransformer(model_path, device=model_device)
 
 
+@dataclass
 class AutofixabilityModel:
-    def __init__(self, model_path: str):
-        self.model_path = model_path
-        self.model = _load_model(model_path)
+    model_path: str
+
+    def __post_init__(self):
+        self.model = _load_model(self.model_path)
         self.fixable_range = [
             "This issue is complex and very difficult to resolve",
             "This issue is in the codebase, simple and easily resolved",
         ]
         self.embeddings_fixable = self.model.encode(self.fixable_range)
-
-    def __repr__(self):
-        return f"AutofixabilityModel(model_path={self.model_path})"
 
     def score(self, issue_summary_input: str) -> float:
         embedding_issue_summary = self.model.encode(issue_summary_input)
