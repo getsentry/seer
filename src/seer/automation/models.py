@@ -1,5 +1,4 @@
 import datetime
-import json
 import textwrap
 from typing import Annotated, Any, List, Literal, NotRequired, Optional
 from xml.etree import ElementTree as ET
@@ -691,7 +690,7 @@ class TraceEvent(BaseModel):
 
             # Add the span data as JSON if available
             if span.data:
-                data_str = json.dumps(span.data, indent=2)
+                data_str = format_dict(span.data)
                 data_lines = data_str.split("\n")
                 for data_line in data_lines:
                     lines.append(f"{data_prefix} {data_line}")
