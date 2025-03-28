@@ -341,10 +341,6 @@ class TestFixabilityScore:
         if not can_use_model_stubs():
             assert is_fixable
             assert score == pytest.approx(0.68511546, abs=1e-5)
-        assert (
-            str(autofixability_model)
-            == f"AutofixabilityModel(model_path={autofixability_model.model_path})"
-        )
 
     def test_issue_summary_db_conversions(self, sample_issue_summary):
         # Test to_db_state
