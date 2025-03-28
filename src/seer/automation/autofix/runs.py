@@ -107,5 +107,5 @@ def set_accessible_repos(cur: AutofixContinuation) -> None:
 
 def update_repo_access(state: ContinuationState) -> None:
     with state.update() as cur:
-        create_missing_codebase_states(cur)  # Add this line
+        create_missing_codebase_states(cur)
         set_accessible_repos(cur)
