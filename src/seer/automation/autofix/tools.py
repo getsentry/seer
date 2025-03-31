@@ -13,7 +13,14 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.component import create_insight_output
+from seer.automation.autofix.components.insight_sharing.models import (
+    InsightSharingOutput,
+    InsightSharingType,
+)
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.codebase.file_patches import make_file_patches
+from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -88,7 +95,7 @@ class BaseTools:
     @observe(name="Semantic File Search")
     @ai_track(description="Semantic File Search")
     @inject
-    def semantic_file_search(self, query: str, llm_client: LlmClient = injected):
+    def semantic_file_search(self, query: str, llm_client: LlmClient = injected, **kwargs: Any):
         repo_names = self._get_repo_names()
         files_per_repo = {}
         for repo_name in repo_names:
@@ -127,7 +134,7 @@ class BaseTools:
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
-    def expand_document(self, file_path: str, repo_name: str):
+    def expand_document(self, file_path: str, repo_name: str, **kwargs: Any):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
@@ -141,7 +148,7 @@ class BaseTools:
 
     @observe(name="View Diff")
     @ai_track(description="View Diff")
-    def view_diff(self, file_path: str, repo_name: str, commit_sha: str):
+    def view_diff(self, file_path: str, repo_name: str, commit_sha: str, **kwargs: Any):
         """
         Given a file path, repository name, and commit SHA, returns the diff for the file in the given commit.
         """
@@ -159,7 +166,7 @@ class BaseTools:
 
     @observe(name="Explain File")
     @ai_track(description="Explain File")
-    def explain_file(self, file_path: str, repo_name: str):
+    def explain_file(self, file_path: str, repo_name: str, **kwargs: Any):
         """
         Given a file path and repository name, returns recent commits and related files.
         """
@@ -175,7 +182,7 @@ class BaseTools:
 
     @observe(name="Tree")
     @ai_track(description="Tree")
-    def tree(self, path: str, repo_name: str | None = None) -> str:
+    def tree(self, path: str, repo_name: str | None = None, **kwargs: Any) -> str:
         """
         Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.
         """
@@ -262,7 +269,7 @@ class BaseTools:
     @observe(name="Search Google")
     @ai_track(description="Search Google")
     @inject
-    def google_search(self, question: str, llm_client: LlmClient = injected):
+    def google_search(self, question: str, llm_client: LlmClient = injected, **kwargs: Any):
         """
         Searches Google to answer a question.
         """
@@ -274,7 +281,7 @@ class BaseTools:
     @observe(name="Get Profile")
     @ai_track(description="Get Profile")
     @inject
-    def get_profile(self, event_id: str, rpc_client: RpcClient = injected):
+    def get_profile(self, event_id: str, rpc_client: RpcClient = injected, **kwargs: Any):
         """
         Fetches a profile for a specific transaction event.
         """
@@ -315,7 +322,9 @@ class BaseTools:
     @observe(name="Get Trace Event Details")
     @ai_track(description="Get Trace Event Details")
     @inject
-    def get_trace_event_details(self, event_id: str, rpc_client: RpcClient = injected):
+    def get_trace_event_details(
+        self, event_id: str, rpc_client: RpcClient = injected, **kwargs: Any
+    ):
         """
         Fetches the spans under a selected transaction event or the stacktrace under an error event.
         """
@@ -366,7 +375,7 @@ class BaseTools:
 
     @observe(name="Grep Search")
     @ai_track(description="Grep Search")
-    def grep_search(self, command: str, repo_name: str | None = None):
+    def grep_search(self, command: str, repo_name: str | None = None, **kwargs: Any):
         """
         Runs a grep command over the downloaded repositories.
         """
@@ -479,7 +488,7 @@ class BaseTools:
 
     @observe(name="Find Files")
     @ai_track(description="Find Files")
-    def find_files(self, command: str, repo_name: str | None = None):
+    def find_files(self, command: str, repo_name: str | None = None, **kwargs: Any):
         """
         Runs a `find` command over the downloaded repositories to search for files.
         """
@@ -604,6 +613,9 @@ class BaseTools:
         if error:
             return error
 
+        tool_call_id = kwargs.get("tool_call_id", None)
+        current_memory_index = kwargs.get("current_memory_index", -1)
+
         command_handlers = {
             "view": self._handle_view_command,
             "str_replace": self._handle_str_replace_command,
@@ -614,7 +626,13 @@ class BaseTools:
 
         handler = command_handlers.get(command)
         if handler:
-            return handler(kwargs, repo_name, path)
+            return handler(
+                kwargs,
+                repo_name,
+                path,
+                tool_call_id=tool_call_id,
+                current_memory_index=current_memory_index,
+            )
 
         return f"Error: Unknown command '{command}'"
 
@@ -633,6 +651,7 @@ class BaseTools:
         path: str,
         repo_name: str,
         commit_message: str = "COMMIT",
+        tool_call_id: str | None = None,
     ) -> FileChange:
         """Helper method to create a FileChange instance."""
         return FileChange(
@@ -642,6 +661,7 @@ class BaseTools:
             new_snippet=new_snippet,
             path=path,
             repo_name=repo_name,
+            tool_call_id=tool_call_id,
         )
 
     def _apply_file_change(self, repo_name: str, file_change: FileChange) -> str:
@@ -654,7 +674,9 @@ class BaseTools:
             return f"Error: Failed to apply changes to file: {str(e)}"
 
     @observe(name="View")
-    def _handle_view_command(self, kwargs: dict[str, Any], repo_name: str, path: str) -> str:
+    def _handle_view_command(
+        self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
+    ) -> str:
         """Handles the view command to display file contents with optional line range."""
         try:
             view_range = kwargs.get("view_range", [])
@@ -676,15 +698,27 @@ class BaseTools:
                     if start_line >= end_line:
                         return "Error: Invalid line range - start must be less than end"
                     lines = lines[start_line:end_line]
+                    self.context.event_manager.add_log(
+                        f"Looking at lines `{start_line+1}` to `{end_line}` of `{path}`..."
+                    )
                 except (ValueError, IndexError):
                     return "Error: Invalid line range format"
+            else:
+                self.context.event_manager.add_log(f"Looking at `{path}`...")
 
             return "\n".join(f"{i+1}: {line}" for i, line in enumerate(lines))
         except ValueError as e:
             return str(e)
 
     @observe(name="String Replace")
-    def _handle_str_replace_command(self, kwargs: dict[str, Any], repo_name: str, path: str) -> str:
+    def _handle_str_replace_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
         """Handles the string replace command to replace text in a file."""
         old_str = kwargs.get("old_str")
         new_str = kwargs.get("new_str")
@@ -692,25 +726,86 @@ class BaseTools:
             return "Error: old_str and new_str are required for str_replace command"
 
         try:
-            file_contents = self._get_file_contents(path, repo_name)
-            file_change = self._create_file_change("edit", old_str, new_str, path, repo_name)
-            file_change.apply(file_contents)
+            file_change = self._create_file_change(
+                "edit", old_str, new_str, path, repo_name, tool_call_id=tool_call_id
+            )
+
+            self.context.event_manager.add_log(f"Making an edit to `{path}` in `{repo_name}`...")
+
+            document = BaseDocument(
+                path=path,
+                repo_name=repo_name,
+                text=self.context.get_file_contents(path, repo_name),
+            )
+
+            file_diff, _ = make_file_patches([file_change], [path], [document])
+
+            if not file_diff:
+                return "Error: No changes were made to the file."
+
+            self.context.event_manager.send_insight(
+                InsightSharingOutput(
+                    insight=f"Edited `{path}` in `{repo_name}`.",
+                    change_diff=file_diff,
+                    generated_at_memory_index=current_memory_index,
+                    type=InsightSharingType.FILE_CHANGE,
+                )
+            )
+
             return self._apply_file_change(repo_name, file_change)
         except ValueError as e:
             return str(e)
 
     @observe(name="Create File")
-    def _handle_create_command(self, kwargs: dict[str, Any], repo_name: str, path: str) -> str:
+    def _handle_create_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
         """Handles the create command to create a new file."""
         file_text = kwargs.get("file_text", "")
         if not file_text:
             return "Error: file_text is required for create command"
 
-        file_change = self._create_file_change("create", file_text, file_text, path, repo_name)
+        file_change = self._create_file_change(
+            "create", file_text, file_text, path, repo_name, tool_call_id=tool_call_id
+        )
+
+        document = BaseDocument(
+            path=path,
+            repo_name=repo_name,
+            text="",
+        )
+
+        file_diff, _ = make_file_patches([file_change], [path], [document])
+
+        if not file_diff:
+            return "Error: No changes were made to the file."
+
+        self.context.event_manager.add_log(f"Creating a new file `{path}` in `{repo_name}`...")
+        self.context.event_manager.send_insight(
+            InsightSharingOutput(
+                insight=f"Created file `{path}` in `{repo_name}`.",
+                change_diff=file_diff,
+                generated_at_memory_index=current_memory_index,
+                type=InsightSharingType.FILE_CHANGE,
+            )
+        )
+
         return self._apply_file_change(repo_name, file_change)
 
     @observe(name="Insert Text")
-    def _handle_insert_command(self, kwargs: dict[str, Any], repo_name: str, path: str) -> str:
+    def _handle_insert_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
         """Handles the insert command to insert text at a specific line."""
         try:
             insert_line = kwargs.get("insert_line")
@@ -730,14 +825,38 @@ class BaseTools:
             lines.insert(insert_line, new_str)
             new_file_contents = "\n".join(lines)
             file_change = self._create_file_change(
-                "edit", file_contents, new_file_contents, path, repo_name
+                "edit", file_contents, new_file_contents, path, repo_name, tool_call_id=tool_call_id
             )
+
+            document = BaseDocument(
+                path=path,
+                repo_name=repo_name,
+                text=self.context.get_file_contents(path, repo_name),
+            )
+
+            file_diff, _ = make_file_patches([file_change], [path], [document])
+
+            if not file_diff:
+                return "Error: No changes were made to the file."
+
+            self.context.event_manager.add_log(f"Making a change to `{path}` in `{repo_name}`...")
+            self.context.event_manager.send_insight(
+                InsightSharingOutput(
+                    insight=f"Edited `{path}` in `{repo_name}`.",
+                    change_diff=file_diff,
+                    generated_at_memory_index=current_memory_index,
+                    type=InsightSharingType.FILE_CHANGE,
+                )
+            )
+
             return self._apply_file_change(repo_name, file_change)
         except ValueError as e:
             return str(e)
 
     @observe(name="Undo Edit")
-    def _handle_undo_edit_command(self, kwargs: dict[str, Any], repo_name: str, path: str) -> str:
+    def _handle_undo_edit_command(
+        self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
+    ) -> str:
         """Handles the undo edit command to remove file changes."""
         with self.context.state.update() as cur:
             for repo in cur.request.repos:
@@ -748,13 +867,17 @@ class BaseTools:
 
                     # Remove all file changes for this path
                     codebase.file_changes = [fc for fc in codebase.file_changes if fc.path != path]
+
+                    self.context.event_manager.add_log(
+                        f"Undoing edits to `{path}` in `{repo_name}`..."
+                    )
+
                     return "File changes undone successfully."
             return "Error: No file changes found to undo."
 
     def get_tools(
         self, can_access_repos: bool = True, include_claude_tools: bool = False
     ) -> list[ClaudeTool | FunctionTool]:
-
         tools: list[ClaudeTool | FunctionTool] = [
             FunctionTool(
                 name="google_search",

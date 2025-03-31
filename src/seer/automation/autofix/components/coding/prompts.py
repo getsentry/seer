@@ -122,7 +122,7 @@ class CodingPrompts:
             filter_str=(
                 "Use the planned solution to inform the test, but do NOT implement the solution. Only write the test."
                 if mode == "test"
-                else "You should exactly follow the final_solution_plan, do not add any additional steps or changes. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution."
+                else "You should exactly follow the final_solution_plan, do not add any additional steps or changes."
             ),
             has_fix_guidelines=(
                 "- Follow the planned solution EXACTLY, but you can add on to it or modify it if necessary to make the solution work as a complete implementation. Do not add any unnecessary changes."

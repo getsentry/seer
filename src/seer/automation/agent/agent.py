@@ -149,7 +149,9 @@ class LlmAgent:
 
         tool = self.get_tool_by_name(tool_call.function)
         kwargs = self.parse_tool_arguments(tool, tool_call.args)
-        tool_result = tool.call(**kwargs)
+        tool_result = tool.call(
+            **kwargs, tool_call_id=tool_call.id, current_memory_index=max(0, len(self.memory) - 1)
+        )
 
         return Message(
             role="tool",

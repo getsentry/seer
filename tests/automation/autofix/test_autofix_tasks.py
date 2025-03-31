@@ -6,6 +6,7 @@ from johen import generate
 
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingType
 from seer.automation.autofix.event_manager import AutofixEventManager
 from seer.automation.autofix.models import (
     AutofixCommentThreadPayload,
@@ -51,9 +52,10 @@ from seer.automation.autofix.tasks import (
     run_autofix_solution,
     truncate_memory_to_match_insights,
     update_code_change,
+    truncate_file_changes_to_match_memory,
 )
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.models import FilePatch, Hunk, Line, RepoDefinition
+from seer.automation.models import FileChange, FilePatch, Hunk, Line, RepoDefinition
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
 from seer.dependency_injection import resolve
 from seer.rpc import DummyRpcClient, RpcClient
@@ -750,6 +752,7 @@ def test_truncate_memory_to_match_insights():
                 stacktrace_context=[],
                 breadcrumb_context=[],
                 generated_at_memory_index=4,
+                type=InsightSharingType.FILE_CHANGE,
             ),
             InsightSharingOutput(
                 insight="Insight 3",
@@ -781,14 +784,14 @@ def test_truncate_memory_to_match_insights():
     ]
 
     # Test case 1: Normal truncation with tool calls
-    truncated_memory = truncate_memory_to_match_insights(memory, 3, step)
+    truncated_memory = truncate_memory_to_match_insights(memory, 3, step, False, False)
     assert len(truncated_memory) == 6  # Up to and including tool responses
     assert truncated_memory[-2].content == "Tool response 1"
     assert truncated_memory[-1].content == "Tool response 2"
 
     # Test case 2: No insights
     step.insights = []
-    truncated_memory = truncate_memory_to_match_insights(memory, 0, step)
+    truncated_memory = truncate_memory_to_match_insights(memory, 0, step, False, False)
     assert (
         len(truncated_memory) == step.initial_memory_length
     )  # Should use initial_memory_length when no insights
@@ -805,7 +808,7 @@ def test_truncate_memory_to_match_insights():
             generated_at_memory_index=2,
         )
     ]
-    truncated_memory = truncate_memory_to_match_insights(memory, 2, step)
+    truncated_memory = truncate_memory_to_match_insights(memory, 2, step, False, False)
     assert len(truncated_memory) == 3
     assert truncated_memory[-1].content == "User message 2"
 
@@ -821,26 +824,130 @@ def test_truncate_memory_to_match_insights():
         )
     ]
     memory_incomplete = memory[:4]  # Remove the last tool response
-    truncated_memory = truncate_memory_to_match_insights(memory_incomplete, 4, step)
+    truncated_memory = truncate_memory_to_match_insights(memory_incomplete, 4, step, False, False)
     assert len(truncated_memory) == 4  # Should exclude incomplete tool calls
     assert truncated_memory[-1].content == "Assistant response 2"
 
     # Test case 5: Memory index less than initial_memory_length
     step.initial_memory_length = 3
     step.insights = []
-    truncated_memory = truncate_memory_to_match_insights(memory, 1, step)
+    truncated_memory = truncate_memory_to_match_insights(memory, 1, step, False, False)
     assert len(truncated_memory) == 3
     assert truncated_memory[-1].content == "User message 2"
 
     # Test case 6: Memory index beyond memory length
-    truncated_memory = truncate_memory_to_match_insights(memory, len(memory) + 1, step)
+    truncated_memory = truncate_memory_to_match_insights(
+        memory, len(memory) + 1, step, False, False
+    )
     assert len(truncated_memory) == len(memory)  # Should return full memory
     assert truncated_memory[-1].content == "Final message"
 
     # Test case 7: Memory index is -1
-    truncated_memory = truncate_memory_to_match_insights(memory, -1, step)
+    truncated_memory = truncate_memory_to_match_insights(memory, -1, step, False, False)
     assert len(truncated_memory) == len(memory)  # Should return full memory
     assert truncated_memory[-1].content == "Final message"
+
+    # Test case 8: Edit insight with tool call but no rethink instruction
+    step.insights = [
+        InsightSharingOutput(
+            insight="Edit Insight",
+            justification="TEST",
+            codebase_context=[],
+            stacktrace_context=[],
+            breadcrumb_context=[],
+            generated_at_memory_index=3,
+            type=InsightSharingType.FILE_CHANGE,
+        )
+    ]
+    truncated_memory = truncate_memory_to_match_insights(memory, 3, step, True, False)
+    assert len(truncated_memory) == 3  # Should exclude the tool call message for edit insight
+    assert truncated_memory[-1].content == "User message 2"
+
+    # Test case 9: Edit insight with tool call and rethink instruction``
+    truncated_memory = truncate_memory_to_match_insights(memory, 3, step, True, True)
+    assert len(truncated_memory) == 6
+    assert (
+        truncated_memory[4].content
+        == "Notice: This tool call did not apply, the user provided instructions."
+    )
+    assert (
+        truncated_memory[5].content
+        == "Notice: This tool call did not apply, the user provided instructions."
+    )
+
+
+def test_truncate_file_changes_to_match_memory():
+    memory = [
+        Message(content="Initial message", role="user"),
+        Message(
+            content="Assistant response with tools",
+            role="assistant",
+            tool_calls=[
+                ToolCall(function="edit_file", args="{}", id="tool_1"),
+                ToolCall(function="rename_file", args="{}", id="tool_2"),
+            ],
+        ),
+        Message(content="Tool response 1", role="tool", tool_call_id="tool_1"),
+        Message(content="Tool response 2", role="tool", tool_call_id="tool_2"),
+        Message(
+            content="Second assistant response",
+            role="assistant",
+            tool_calls=[
+                ToolCall(function="create_file", args="{}", id="tool_3"),
+            ],
+        ),
+        Message(content="Tool response 3", role="tool", tool_call_id="tool_3"),
+    ]
+
+    # Create file changes
+    file_changes = [
+        FileChange(
+            path="file1.py",
+            tool_call_id="tool_1",
+            change_type="edit",
+            reference_snippet="content1",
+            new_snippet="content1_new",
+        ),
+        FileChange(
+            path="file2.py", tool_call_id="tool_2", change_type="create", new_snippet="content2"
+        ),
+        FileChange(
+            path="file3.py",
+            tool_call_id="tool_3",
+            change_type="delete",
+            reference_snippet="content3",
+        ),
+        FileChange(
+            path="file4.py",
+            tool_call_id="tool_4",
+            change_type="edit",
+            reference_snippet="content4",
+            new_snippet="content4_new",
+        ),
+    ]
+
+    # Test case 1: All memory present
+    truncated_changes = truncate_file_changes_to_match_memory(file_changes, memory)
+    assert len(truncated_changes) == 3
+    assert set(fc.path for fc in truncated_changes) == {"file1.py", "file2.py", "file3.py"}
+
+    # Test case 2: Truncated memory
+    truncated_memory = memory[:4]  # Only includes tool_1 and tool_2
+    truncated_changes = truncate_file_changes_to_match_memory(file_changes, truncated_memory)
+    assert len(truncated_changes) == 2
+    assert set(fc.path for fc in truncated_changes) == {"file1.py", "file2.py"}
+
+    # Test case 3: Empty memory
+    truncated_changes = truncate_file_changes_to_match_memory(file_changes, [])
+    assert len(truncated_changes) == 0
+
+    # Test case 4: Memory with no tool calls
+    memory_no_tools = [
+        Message(content="Initial message", role="user"),
+        Message(content="Assistant response", role="assistant"),
+    ]
+    truncated_changes = truncate_file_changes_to_match_memory(file_changes, memory_no_tools)
+    assert len(truncated_changes) == 0
 
 
 def test_update_code_change_happy_path():

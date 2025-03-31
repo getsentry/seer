@@ -71,7 +71,6 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                     raise ValueError(
                         f"Could not find repo definition for external id {codebase_state.repo_external_id}"
                     )
-
                 diff, diff_str = self.context.make_file_patches(
                     codebase_state.file_changes, repo_definition.full_name
                 )

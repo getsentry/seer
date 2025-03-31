@@ -316,9 +316,8 @@ class AutofixAgent(LlmAgent):
             generated_at_memory_index=generated_at_memory_index,
         )
 
+        if insight_card:
+            self.context.event_manager.send_insight(insight_card)
+
         with state.update() as cur:
-            if insight_card:
-                cur_step = cur.steps[cur_step_idx]
-                assert isinstance(cur_step, DefaultStep)
-                cur_step.insights.append(insight_card)
             cur.usage += usage

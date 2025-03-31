@@ -59,7 +59,9 @@ class AutofixCodingStep(AutofixPipelineStep):
     @ai_track(description="Autofix - Coding Step")
     @inject
     def _invoke(self, app_config: AppConfig = injected):
-        self.context.event_manager.clear_file_changes()
+        if not self.request.initial_memory:
+            # Only clear when not a rethink/continue
+            self.context.event_manager.clear_file_changes()
 
         self.logger.info("Executing Autofix - Coding Step")
 
