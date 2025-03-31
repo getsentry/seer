@@ -848,7 +848,7 @@ class TestClaudeTools:
         autofix_tools.context.get_file_contents.return_value = "test content"
 
         # This function overrides to directly return the view result
-        def handle_view_command(kwargs, repo_name, path):
+        def handle_view_command(kwargs, repo_name, path, tool_call_id, current_memory_index):
             return "test content"
 
         # Mock the _handle_view_command to avoid calling the real implementation
@@ -868,7 +868,7 @@ class TestClaudeTools:
         autofix_tools.context.get_file_contents.return_value = "test content"
 
         # Mock the view command handler
-        def handle_view_command(kwargs, repo_name, path):
+        def handle_view_command(kwargs, repo_name, path, tool_call_id, current_memory_index):
             return "test content"
 
         autofix_tools._handle_view_command = MagicMock(side_effect=handle_view_command)

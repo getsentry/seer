@@ -74,7 +74,7 @@ def test_process_message_with_tool_calls(agent: LlmAgent):
 
     agent.process_message(message)
     fn1.assert_not_called()
-    fn2.assert_called_once_with(arg="value")
+    fn2.assert_called_once_with(arg="value", tool_call_id="1", current_memory_index=0)
     assert len(agent.memory) == 2
     assert agent.iterations == 1
     assert agent.memory[1].content == "Fn2 result"
