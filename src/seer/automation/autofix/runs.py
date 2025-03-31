@@ -41,8 +41,6 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     with state.update() as cur:
         if preference:
             cur.request.repos = preference.repositories
-        else:
-            cur.request.repos = []
         try:
             for trace_connected_preference in trace_connected_preferences:
                 if trace_connected_preference:
@@ -107,4 +105,5 @@ def set_accessible_repos(cur: AutofixContinuation) -> None:
 
 def update_repo_access(state: ContinuationState) -> None:
     with state.update() as cur:
+        create_missing_codebase_states(cur)
         set_accessible_repos(cur)
