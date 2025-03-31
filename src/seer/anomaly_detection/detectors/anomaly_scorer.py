@@ -197,16 +197,17 @@ class CombinedAnomalyScorer(AnomalyScorer):
         mp_flag: AnomalyFlags,
         prev_mp_flag: AnomalyFlags,
         prophet_flag: AnomalyFlags,
+        prev_flag: AnomalyFlags,
         y: np.float64,
         yhat: np.float64,
         yhat_lower: np.float64,
         yhat_upper: np.float64,
         direction: Directions,
     ) -> AnomalyFlags:
+        # If the prev flag is anomaly_higher_confidence, we don't need to adjust the flag so we can continue the same alert
         if (
             direction == "both"
-            or mp_flag == "none"
-            or mp_flag == prev_mp_flag
+            or prev_flag == "anomaly_higher_confidence"
             or prophet_flag == "none"
         ):
             return prophet_flag
@@ -232,6 +233,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             missing = 0
             found = 0
             previous_mp_flag: AnomalyFlags = "none"
+            previous_flag: AnomalyFlags = mp_flags_and_scores.flags[-1]
             missing_timestamps = []
             for timestamp, mp_flag, mp_confidence_level in zip(
                 timestamps, mp_flags, mp_confidence_levels
@@ -246,6 +248,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         mp_flag=mp_flag,
                         prev_mp_flag=previous_mp_flag,
                         prophet_flag=prophet_flag,
+                        prev_flag=previous_flag,
                         y=prophet_map["y"][pd_dt],
                         yhat=prophet_map["yhat"][pd_dt],
                         yhat_lower=prophet_map["yhat_lower"][pd_dt],
@@ -259,7 +262,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
                         algo_type = AlertAlgorithmType.BOTH
                         flags.append("anomaly_higher_confidence")
 
-                    elif prophet_score >= 2.0:
+                    elif prophet_flag == "anomaly_higher_confidence" and prophet_score >= 2.0:
                         algo_type = AlertAlgorithmType.PROPHET
                         flags.append(prophet_flag)
                     # elif mp_confidence_level == ConfidenceLevel.HIGH:
@@ -270,8 +273,11 @@ class CombinedAnomalyScorer(AnomalyScorer):
                 else:
                     missing += 1
                     missing_timestamps.append(timestamp)
+                    if mp_flag == "anomaly_higher_confidence":
+                        algo_type = AlertAlgorithmType.MP
                     flags.append(mp_flag)
                 previous_mp_flag = mp_flag
+                previous_flag = flags[-1]
                 algo_types.append(algo_type)
             if missing > 0:
                 logger.warning(
