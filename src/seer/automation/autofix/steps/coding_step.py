@@ -90,7 +90,7 @@ class AutofixCodingStep(AutofixPipelineStep):
         if not summary:
             summary = self.context.get_issue_summary()
 
-        coding_output = CodingComponent(self.context).invoke(
+        CodingComponent(self.context).invoke(
             CodingRequest(
                 event_details=event_details,
                 root_cause=root_cause,
@@ -110,7 +110,7 @@ class AutofixCodingStep(AutofixPipelineStep):
         if make_kill_signal() in state.signals:
             return
 
-        self.context.event_manager.send_coding_result(coding_output)
+        self.context.event_manager.send_coding_result()
 
         # confidence evaluation
         if not self.context.state.get().request.options.disable_interactivity:

@@ -174,7 +174,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
     @observe(name="Code")
     @ai_track(description="Code")
-    def invoke(self, request: CodingRequest) -> CodingOutput | None:
+    def invoke(self, request: CodingRequest) -> None:
         with BaseTools(self.context) as tools:
             memory = request.initial_memory
             custom_solution = request.solution if isinstance(request.solution, str) else None
@@ -231,5 +231,3 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
             if not response:
                 raise ValueError("No response from coding agent")
-
-            return CodingOutput(tasks=[])
