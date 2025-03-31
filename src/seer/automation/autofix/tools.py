@@ -94,7 +94,7 @@ class BaseTools:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
-            valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
+            valid_file_paths = repo_client.get_valid_file_paths()
 
             # Convert the list of file paths to a tree structure
             files_with_status = [{"path": path, "status": ""} for path in valid_file_paths]

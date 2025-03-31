@@ -7,7 +7,7 @@ import tempfile
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-from typing import Literal
+from typing import Any, Dict, List, Literal
 
 import requests
 import sentry_sdk
@@ -21,6 +21,8 @@ from github import (
     UnknownObjectException,
 )
 from github.GitRef import GitRef
+from github.GitTree import GitTree
+from github.GitTreeElement import GitTreeElement
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 
@@ -129,6 +131,31 @@ class RepoClientType(str, Enum):
     CODECOV_UNIT_TEST = "codecov_unit_test"
     CODECOV_PR_REVIEW = "codecov_pr_review"
     CODECOV_PR_CLOSED = "codecov_pr_closed"
+
+
+class CompleteGitTree:
+    """
+    A custom class that mimics the interface of github.GitTree
+    but allows combining multiple trees into one complete representation.
+    """
+
+    def __init__(self, github_tree: GitTree | None = None) -> None:
+        self.tree: List[GitTreeElement] = []
+        self.raw_data: Dict[str, Any] = {"truncated": False}
+
+        if github_tree:
+            self.add_items(github_tree.tree)
+            for key, value in github_tree.raw_data.items():
+                if key != "truncated":  # We always set truncated to False for our complete tree
+                    self.raw_data[key] = value
+
+    def add_item(self, item: GitTreeElement) -> None:
+        """Add a tree item to this collection"""
+        self.tree.append(item)
+
+    def add_items(self, items: List[GitTreeElement]) -> None:
+        """Add multiple tree items to this collection"""
+        self.tree.extend(items)
 
 
 class RepoClient:
@@ -382,17 +409,11 @@ class RepoClient:
             return None, "utf-8"
 
     @functools.lru_cache(maxsize=8)
-    def get_valid_file_paths(self, sha: str | None = None, files_only=False) -> set[str]:
+    def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
         if sha is None:
             sha = self.base_commit_sha
 
-        tree = self.repo.get_git_tree(sha, recursive=True)
-
-        if tree.raw_data["truncated"]:
-            sentry_sdk.capture_message(
-                f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
-            )
-
+        tree = self.get_git_tree(sha)
         valid_file_paths: set[str] = set()
         valid_file_extensions = get_all_supported_extensions()
 
@@ -557,6 +578,82 @@ class RepoClient:
             ),
         )
         return ref
+
+    @functools.lru_cache(maxsize=8)
+    def get_git_tree(self, sha: str) -> CompleteGitTree:
+        """
+        Get the git tree for a specific sha, handling truncation with divide and conquer.
+        Always returns a CompleteGitTree instance for consistent interface.
+
+        First tries to get the complete tree recursively. If truncated, it uses a
+        divide and conquer approach to fetch all subtrees individually and combine them.
+
+        Args:
+            sha: The commit SHA to get the tree for
+
+        Returns:
+            A CompleteGitTree with all items from all subtrees
+        """
+        tree = self.repo.get_git_tree(sha=sha, recursive=True)
+
+        if not tree.raw_data.get("truncated", False):
+            return CompleteGitTree(tree)
+
+        complete_tree = CompleteGitTree()
+        root_tree = self.repo.get_git_tree(sha=sha, recursive=False)
+
+        for key, value in root_tree.raw_data.items():
+            if key != "tree" and key != "truncated":
+                complete_tree.raw_data[key] = value
+
+        for item in root_tree.tree:
+            complete_tree.add_item(item)
+
+        tree_items = [item for item in root_tree.tree if item.type == "tree"]
+        with ThreadPoolExecutor() as executor:
+            subtree_results = []
+            for item in tree_items:
+                subtree_results.append(executor.submit(self._get_git_subtree, item.sha))
+
+            for future in subtree_results:
+                subtree_items = future.result()
+                complete_tree.add_items(subtree_items)
+
+        return complete_tree
+
+    def _get_git_subtree(self, sha: str) -> list:
+        """
+        Process a subtree and return all its items for parallel execution.
+
+        Args:
+            sha: The SHA of the subtree
+
+        Returns:
+            A list of all tree items from this subtree and its nested subtrees
+        """
+        items = []
+        subtree = self.repo.get_git_tree(sha=sha, recursive=True)
+
+        if not subtree.raw_data.get("truncated", False):
+            return subtree.tree
+
+        non_recursive_subtree = self.repo.get_git_tree(sha=sha, recursive=False)
+
+        nested_tree_items = [item for item in non_recursive_subtree.tree if item.type == "tree"]
+        non_tree_items = [item for item in non_recursive_subtree.tree if item.type != "tree"]
+
+        items.extend(non_tree_items)
+
+        if nested_tree_items:
+            with ThreadPoolExecutor() as executor:
+                subtree_futures = [
+                    executor.submit(self._get_git_subtree, item.sha) for item in nested_tree_items
+                ]
+
+                for future in subtree_futures:
+                    items.extend(future.result())
+
+        return items
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
@@ -739,16 +836,7 @@ class RepoClient:
         if sha is None:
             sha = self.base_commit_sha
 
-        tree = self.repo.get_git_tree(sha=sha, recursive=True)
-
-        # Recursive tree requests are truncated at 100,000 entries or 7MB as noted @ https://docs.github.com/en/rest/git/trees?apiVersion=2022-11-28#get-a-tree
-        # This should be sufficient for most repositories, but if it's not, we should consider paginating the tree.
-        # We log to see how often this happens and if it's a problem.
-        if tree.raw_data["truncated"]:
-            sentry_sdk.capture_message(
-                f"Truncated tree for {self.repo.full_name}. This may cause issues with autofix."
-            )
-
+        tree = self.get_git_tree(sha)
         file_set = set()
         for file in tree.tree:
             if (
