@@ -41,8 +41,6 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     with state.update() as cur:
         if preference:
             cur.request.repos = preference.repositories
-        else:
-            cur.request.repos = []
         try:
             for trace_connected_preference in trace_connected_preferences:
                 if trace_connected_preference:
