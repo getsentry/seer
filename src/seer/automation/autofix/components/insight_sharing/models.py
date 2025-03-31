@@ -1,4 +1,5 @@
 from enum import Enum
+
 from seer.automation.component import BaseComponentOutput
 from seer.automation.models import FilePatch
 
