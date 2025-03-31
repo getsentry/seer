@@ -22,7 +22,7 @@ from pydantic.alias_generators import to_camel, to_snake
 from pydantic_xml import BaseXmlModel
 from typing_extensions import TypedDict
 
-from seer.automation.utils import process_repo_provider, unescape_xml_chars
+from seer.automation.utils import format_dict, process_repo_provider, unescape_xml_chars
 from seer.db import DbSeerProjectPreference
 
 
@@ -187,7 +187,7 @@ class Stacktrace(BaseModel):
             if frame.vars:
                 if include_var_values:
                     vars_title = "Variable values at the time of the exception:"
-                    vars_str = json.dumps(frame.vars, indent=2)
+                    vars_str = format_dict(frame.vars)
                 else:
                     vars_title = "Variables at the time of the exception:"
                     vars_str = ", ".join(frame.vars.keys())
