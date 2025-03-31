@@ -151,6 +151,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             timestamps=timeseries.timestamps,
             mp_dist=mp_dist,
             prophet_df=prophet_df,
+            history_flags=None,
             ad_config=ad_config,
             window_size=window_size,
         )
@@ -284,6 +285,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     history_values=self.history_values,
                     history_timestamps=self.history_timestamps,
                     history_mp_dist=mp_dist_baseline,
+                    history_flags=self.original_combined_flags,  # type: ignore
                     prophet_df=prophet_df,
                     ad_config=ad_config,
                     window_size=self.window_size,

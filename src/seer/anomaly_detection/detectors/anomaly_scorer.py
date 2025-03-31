@@ -33,6 +33,7 @@ class AnomalyScorer(BaseModel, abc.ABC):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
+        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
@@ -50,6 +51,7 @@ class AnomalyScorer(BaseModel, abc.ABC):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
+        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
@@ -82,6 +84,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
+        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
@@ -130,6 +133,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
+            history_flags=history_flags,
             ad_config=ad_config,
         )
         return combined
@@ -143,6 +147,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
+        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
@@ -188,6 +193,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             timestamps=np.array([np.float64(streamed_timestamp)]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
+            history_flags=history_flags,
             ad_config=ad_config,
         )
         return combined
@@ -222,6 +228,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         timestamps: np.ndarray,
         mp_flags_and_scores: FlagsAndScores,
         prophet_predictions: pd.DataFrame,
+        history_flags: list[AnomalyFlags] | None,
         ad_config: AnomalyDetectionConfig,
     ) -> FlagsAndScores:
         # todo: return prophet thresholds
@@ -233,7 +240,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             missing = 0
             found = 0
             previous_mp_flag: AnomalyFlags = "none"
-            previous_flag: AnomalyFlags = mp_flags_and_scores.flags[-1]
+            previous_flag: AnomalyFlags = history_flags[-1] if history_flags else "none"
             missing_timestamps = []
             for timestamp, mp_flag, mp_confidence_level in zip(
                 timestamps, mp_flags, mp_confidence_levels
