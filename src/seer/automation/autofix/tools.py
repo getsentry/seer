@@ -1,23 +1,31 @@
 import logging
+import os
 import shlex
 import subprocess
 import textwrap
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import Lock
-from typing import Literal, TypeAlias, cast
+from typing import Any, Literal, TypeAlias, cast
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.component import create_insight_output
+from seer.automation.autofix.components.insight_sharing.models import (
+    InsightSharingOutput,
+    InsightSharingType,
+)
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.codebase.file_patches import make_file_patches
+from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
-from seer.automation.models import EventDetails, Profile, SentryEventData
+from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
 from seer.rpc import RpcClient
@@ -141,7 +149,7 @@ class BaseTools:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
-            valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
+            valid_file_paths = repo_client.get_valid_file_paths()
 
             # Convert the list of file paths to a tree structure
             files_with_status = [{"path": path, "status": ""} for path in valid_file_paths]
@@ -273,6 +281,23 @@ class BaseTools:
 
         joined = "\n".join(unique_parents)
         return f"<did you mean>\n{joined}\n</did you mean>"
+
+    def _attempt_fix_path(self, path: str, repo_name: str) -> str | None:
+        """
+        Attempts to fix a path by checking if it exists in the repository as a path or directory.
+        """
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
+        all_files = repo_client.get_index_file_set()
+
+        for p in all_files:
+            if p.endswith(path):
+                # is a valid file path
+                return p
+            if p.startswith(path):
+                # is a valid directory path
+                return path
+
+        return None
 
     def _normalize_path(self, path: str) -> str:
         """
@@ -611,9 +636,339 @@ class BaseTools:
 
         return "\n\n".join(all_results)
 
-    def get_tools(self, can_access_repos: bool = True):
+    def _append_file_change(self, repo_name: str, file_change: FileChange):
+        with self.context.state.update() as cur:
+            for repo in cur.request.repos:
+                if repo.full_name == repo_name:
+                    cur.codebases[repo.external_id].file_changes.append(file_change)
 
-        tools = [
+                    return True
+
+        return False
+
+    def _get_repo_name_and_path(
+        self, kwargs: dict[str, Any]
+    ) -> tuple[str | None, str | None, str | None]:
+        repos = self._get_repo_names()
+
+        path_args = kwargs.get("path", None)
+        repo_name = None
+
+        if not repos:
+            return "Error: No repositories found.", None, None
+
+        if len(repos) > 1:
+            if ":" not in path_args:
+                return (
+                    "Error: Multiple repositories found. Please provide a repository name in the format `repo_name:path`, such as `repo_owner/repo:src/foo/bar.py`. The repositories available to you are: "
+                    + ", ".join(repos),
+                    None,
+                    None,
+                )
+            segments = path_args.split(":")
+            repo_name = segments[0]
+            path = segments[1]
+        else:
+            repo_name = repos[0]
+            path = path_args
+
+        fixed_path = self._attempt_fix_path(path, repo_name)
+        if not fixed_path:
+            return (
+                f"Error: The path you provided '{path}' does not exist in the repository '{repo_name}'.",
+                None,
+                None,
+            )
+
+        return None, repo_name, path
+
+    @observe(name="Claude Tools")
+    def handle_claude_tools(self, **kwargs: Any) -> str:
+        """
+        Handles various file editing commands from Claude tools.
+
+        Args:
+            **kwargs: Dictionary containing:
+                - command: The type of command to execute ("view", "str_replace", "create", "insert", "undo_edit")
+                - path: The file path to operate on
+                - repo_name: The repository name (optional if only one repo)
+                - Additional command-specific parameters
+
+        Returns:
+            str: Success message or error description
+        """
+        command = kwargs.get("command", "")
+        error, repo_name, path = self._get_repo_name_and_path(kwargs)
+
+        if error:
+            return error
+
+        tool_call_id = kwargs.get("tool_call_id", None)
+        current_memory_index = kwargs.get("current_memory_index", -1)
+
+        command_handlers = {
+            "view": self._handle_view_command,
+            "str_replace": self._handle_str_replace_command,
+            "create": self._handle_create_command,
+            "insert": self._handle_insert_command,
+            "undo_edit": self._handle_undo_edit_command,
+        }
+
+        handler = command_handlers.get(command)
+        if handler:
+            return handler(
+                kwargs,
+                repo_name,
+                path,
+                tool_call_id=tool_call_id,
+                current_memory_index=current_memory_index,
+            )
+
+        return f"Error: Unknown command '{command}'"
+
+    def _get_file_contents(self, path: str, repo_name: str) -> str:
+        """Helper method to get file contents with proper error handling."""
+        contents = self.context.get_file_contents(path, repo_name=repo_name)
+        if not contents:
+            raise ValueError("File not found")
+        return contents
+
+    def _create_file_change(
+        self,
+        change_type: str,
+        reference_snippet: str,
+        new_snippet: str,
+        path: str,
+        repo_name: str,
+        commit_message: str = "COMMIT",
+        tool_call_id: str | None = None,
+    ) -> FileChange:
+        """Helper method to create a FileChange instance."""
+        return FileChange(
+            change_type=change_type,
+            commit_message=commit_message,
+            reference_snippet=reference_snippet,
+            new_snippet=new_snippet,
+            path=path,
+            repo_name=repo_name,
+            tool_call_id=tool_call_id,
+        )
+
+    def _apply_file_change(self, repo_name: str, file_change: FileChange) -> str:
+        """Helper method to apply a file change with proper error handling."""
+        try:
+            if self._append_file_change(repo_name, file_change):
+                return "Change applied successfully."
+            return "Error: Failed to apply file change."
+        except Exception as e:
+            return f"Error: Failed to apply changes to file: {str(e)}"
+
+    @observe(name="View")
+    def _handle_view_command(
+        self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
+    ) -> str:
+        """Handles the view command to display file contents with optional line range."""
+        try:
+            view_range = kwargs.get("view_range", [])
+
+            # handle directories
+            if os.path.isdir(path):
+                if view_range:
+                    return "Error: Cannot view a directory with a line range."
+
+                return self.tree(path, repo_name)
+
+            file_contents = self._get_file_contents(path, repo_name)
+            lines = file_contents.split("\n")
+
+            if view_range:
+                try:
+                    start_line = max(0, int(view_range[0]) - 1)
+                    end_line = min(len(lines), int(view_range[1]))
+                    if start_line >= end_line:
+                        return "Error: Invalid line range - start must be less than end"
+                    lines = lines[start_line:end_line]
+                    self.context.event_manager.add_log(
+                        f"Looking at lines `{start_line+1}` to `{end_line}` of `{path}`..."
+                    )
+                except (ValueError, IndexError):
+                    return "Error: Invalid line range format"
+            else:
+                self.context.event_manager.add_log(f"Looking at `{path}`...")
+
+            return "\n".join(f"{i+1}: {line}" for i, line in enumerate(lines))
+        except ValueError as e:
+            return str(e)
+
+    @observe(name="String Replace")
+    def _handle_str_replace_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
+        """Handles the string replace command to replace text in a file."""
+        old_str = kwargs.get("old_str")
+        new_str = kwargs.get("new_str")
+        if not old_str or not new_str:
+            return "Error: old_str and new_str are required for str_replace command"
+
+        try:
+            file_change = self._create_file_change(
+                "edit", old_str, new_str, path, repo_name, tool_call_id=tool_call_id
+            )
+
+            self.context.event_manager.add_log(f"Making an edit to `{path}` in `{repo_name}`...")
+
+            document = BaseDocument(
+                path=path,
+                repo_name=repo_name,
+                text=self.context.get_file_contents(path, repo_name),
+            )
+
+            file_diff, _ = make_file_patches([file_change], [path], [document])
+
+            if not file_diff:
+                return "Error: No changes were made to the file."
+
+            self.context.event_manager.send_insight(
+                InsightSharingOutput(
+                    insight=f"Edited `{path}` in `{repo_name}`.",
+                    change_diff=file_diff,
+                    generated_at_memory_index=current_memory_index,
+                    type=InsightSharingType.FILE_CHANGE,
+                )
+            )
+
+            return self._apply_file_change(repo_name, file_change)
+        except ValueError as e:
+            return str(e)
+
+    @observe(name="Create File")
+    def _handle_create_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
+        """Handles the create command to create a new file."""
+        file_text = kwargs.get("file_text", "")
+        if not file_text:
+            return "Error: file_text is required for create command"
+
+        file_change = self._create_file_change(
+            "create", file_text, file_text, path, repo_name, tool_call_id=tool_call_id
+        )
+
+        document = BaseDocument(
+            path=path,
+            repo_name=repo_name,
+            text="",
+        )
+
+        file_diff, _ = make_file_patches([file_change], [path], [document])
+
+        if not file_diff:
+            return "Error: No changes were made to the file."
+
+        self.context.event_manager.add_log(f"Creating a new file `{path}` in `{repo_name}`...")
+        self.context.event_manager.send_insight(
+            InsightSharingOutput(
+                insight=f"Created file `{path}` in `{repo_name}`.",
+                change_diff=file_diff,
+                generated_at_memory_index=current_memory_index,
+                type=InsightSharingType.FILE_CHANGE,
+            )
+        )
+
+        return self._apply_file_change(repo_name, file_change)
+
+    @observe(name="Insert Text")
+    def _handle_insert_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
+        """Handles the insert command to insert text at a specific line."""
+        try:
+            insert_line = kwargs.get("insert_line")
+            if insert_line is None:
+                return "Error: insert_line is required for insert command"
+
+            insert_line = int(insert_line)
+            new_str = kwargs.get("insert_text", "")
+            if not new_str:
+                return "Error: insert_text is required for insert command"
+
+            file_contents = self._get_file_contents(path, repo_name)
+            lines = file_contents.split("\n")
+            if not 0 <= insert_line <= len(lines):
+                return f"Error: Invalid line number. Must be between 0 and {len(lines)}"
+
+            lines.insert(insert_line, new_str)
+            new_file_contents = "\n".join(lines)
+            file_change = self._create_file_change(
+                "edit", file_contents, new_file_contents, path, repo_name, tool_call_id=tool_call_id
+            )
+
+            document = BaseDocument(
+                path=path,
+                repo_name=repo_name,
+                text=self.context.get_file_contents(path, repo_name),
+            )
+
+            file_diff, _ = make_file_patches([file_change], [path], [document])
+
+            if not file_diff:
+                return "Error: No changes were made to the file."
+
+            self.context.event_manager.add_log(f"Making a change to `{path}` in `{repo_name}`...")
+            self.context.event_manager.send_insight(
+                InsightSharingOutput(
+                    insight=f"Edited `{path}` in `{repo_name}`.",
+                    change_diff=file_diff,
+                    generated_at_memory_index=current_memory_index,
+                    type=InsightSharingType.FILE_CHANGE,
+                )
+            )
+
+            return self._apply_file_change(repo_name, file_change)
+        except ValueError as e:
+            return str(e)
+
+    @observe(name="Undo Edit")
+    def _handle_undo_edit_command(
+        self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
+    ) -> str:
+        """Handles the undo edit command to remove file changes."""
+        with self.context.state.update() as cur:
+            for repo in cur.request.repos:
+                if repo.full_name == repo_name:
+                    codebase = cur.codebases[repo.external_id]
+                    if not codebase:
+                        return "Error: No codebases found"
+
+                    # Remove all file changes for this path
+                    codebase.file_changes = [fc for fc in codebase.file_changes if fc.path != path]
+
+                    self.context.event_manager.add_log(
+                        f"Undoing edits to `{path}` in `{repo_name}`..."
+                    )
+
+                    return "File changes undone successfully."
+            return "Error: No file changes found to undo."
+
+    def get_tools(
+        self, can_access_repos: bool = True, include_claude_tools: bool = False
+    ) -> list[ClaudeTool | FunctionTool]:
+        tools: list[ClaudeTool | FunctionTool] = [
             FunctionTool(
                 name="google_search",
                 fn=self.google_search,
@@ -628,6 +983,17 @@ class BaseTools:
                 required=["question"],
             )
         ]
+
+        if include_claude_tools:
+            tools.extend(
+                [
+                    ClaudeTool(
+                        type="text_editor_20250124",
+                        name="str_replace_editor",
+                        fn=self.handle_claude_tools,
+                    )
+                ]
+            )
 
         if can_access_repos:
             tools.extend(

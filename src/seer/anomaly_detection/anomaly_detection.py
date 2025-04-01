@@ -521,28 +521,32 @@ class AnomalyDetection(BaseModel):
         )
         agg_streamed_anomalies = agg_streamed_anomalies.extend(streamed_anomalies)
 
+        # Ensure safe slicing by using minimum length for arrays
+        safe_orig_curr_len = min(
+            orig_curr_len, len(agg_streamed_anomalies.flags), len(agg_streamed_anomalies.scores)
+        )
+
         final_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
-            flags=agg_streamed_anomalies.flags[-orig_curr_len:],
-            scores=agg_streamed_anomalies.scores[-orig_curr_len:],
+            flags=agg_streamed_anomalies.flags[-safe_orig_curr_len:],
+            scores=agg_streamed_anomalies.scores[-safe_orig_curr_len:],
             thresholds=(
-                agg_streamed_anomalies.thresholds[-orig_curr_len:]
+                agg_streamed_anomalies.thresholds[-safe_orig_curr_len:]
                 if agg_streamed_anomalies.thresholds
                 else None
             ),
-            matrix_profile=agg_streamed_anomalies.matrix_profile[-orig_curr_len:],
+            matrix_profile=agg_streamed_anomalies.matrix_profile[-safe_orig_curr_len:],
             window_size=agg_streamed_anomalies.window_size,
-            original_flags=agg_streamed_anomalies.original_flags[-orig_curr_len:],
-            confidence_levels=agg_streamed_anomalies.confidence_levels[-orig_curr_len:],
-            algorithm_types=agg_streamed_anomalies.algorithm_types[-orig_curr_len:],
+            original_flags=agg_streamed_anomalies.original_flags[-safe_orig_curr_len:],
+            confidence_levels=agg_streamed_anomalies.confidence_levels[-safe_orig_curr_len:],
+            algorithm_types=agg_streamed_anomalies.algorithm_types[-safe_orig_curr_len:],
         )
 
         converted_anomalies = DbAlertDataAccessor().combine_anomalies(
-            final_streamed_anomalies,
-            None,
-            [True] * len(current.timestamps),
+            final_streamed_anomalies, None, [True] * safe_orig_curr_len
         )
 
-        return ts_with_history.current, converted_anomalies
+        # Make sure we're not returning more points than we have anomaly data for
+        return ts_with_history.current[:safe_orig_curr_len], converted_anomalies
 
     def _update_anomalies(
         self,

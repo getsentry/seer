@@ -1,6 +1,7 @@
 import dataclasses
 from datetime import datetime
 
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.codegen.models import CodegenStatus, RelevantWarningResult
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import FileChange
@@ -39,3 +40,7 @@ class CodegenEventManager:
     ):
         with self.state.update() as cur:
             cur.status = CodegenStatus.ERRORED
+
+    def send_insight(self, insight: InsightSharingOutput):
+        # Do nothing for now, this is only used for autofix
+        pass
