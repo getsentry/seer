@@ -2,7 +2,7 @@ import logging
 import shlex
 import subprocess
 import textwrap
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import Lock
 from typing import Literal, TypeAlias, cast
 
@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
-    tmp_dir: dict[str, tuple[str, str]] | None = None  # Maps repo_name to (tmp_dir, tmp_repo_dir)
+    tmp_dir: dict[str, tuple[str, str]] = {}  # Maps repo_name to (tmp_dir, tmp_repo_dir)
     tmp_repo_dir: str | None = None
     repo_client_type: RepoClientType = RepoClientType.READ
-    _download_future = None
+    _download_future: Future | None = None
 
     def __init__(
         self,
@@ -82,9 +82,6 @@ class BaseTools:
             return True  # Signal completion
 
         self._download_future = self._executor.submit(download_all_repos)
-
-        # Log that we started downloading
-        append_langfuse_observation_metadata({"parallel_repo_download_started": True})
 
     def __enter__(self):
         return self
@@ -297,7 +294,8 @@ class BaseTools:
         if self.tmp_dir:
             for tmp_dir, _ in self.tmp_dir.values():
                 cleanup_dir(tmp_dir)
-            self.tmp_dir = None
+        # Always set tmp_dir to None after cleanup attempt
+        self.tmp_dir = None
 
     @observe(name="Search Google")
     @ai_track(description="Search Google")
@@ -431,7 +429,7 @@ class BaseTools:
             return f"Error parsing grep command: {str(e)}"
 
         for repo_name in repo_names:
-            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+            if repo_name not in self.tmp_dir:
                 continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
@@ -477,7 +475,7 @@ class BaseTools:
                       If None, ensures all repos are downloaded.
         """
         # Check if parallel download has completed
-        if self._download_future and self._download_future.done():
+        if self._download_future is not None and self._download_future.done():
             try:
                 self._download_future.result()
             except Exception as e:
@@ -535,7 +533,8 @@ class BaseTools:
                     if result:
                         repo_name, repo_dirs = result
                         with self._tmp_dir_lock:
-                            self.tmp_dir[repo_name] = repo_dirs
+                            if repo_name is not None:
+                                self.tmp_dir[repo_name] = repo_dirs
 
     @observe(name="Find Files")
     @ai_track(description="Find Files")
@@ -564,7 +563,7 @@ class BaseTools:
             return f"Error parsing find command: {str(e)}"
 
         for repo_name in repo_names:
-            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+            if repo_name not in self.tmp_dir:
                 continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
