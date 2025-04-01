@@ -3,7 +3,8 @@ import os
 import shlex
 import subprocess
 import textwrap
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from threading import Lock
 from typing import Any, Literal, TypeAlias, cast
 
 from langfuse.decorators import observe
@@ -35,9 +36,10 @@ logger = logging.getLogger(__name__)
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
-    tmp_dir: dict[str, tuple[str, str]] | None = None  # Maps repo_name to (tmp_dir, tmp_repo_dir)
+    tmp_dir: dict[str, tuple[str, str]] = {}  # Maps repo_name to (tmp_dir, tmp_repo_dir)
     tmp_repo_dir: str | None = None
     repo_client_type: RepoClientType = RepoClientType.READ
+    _download_future: Future | None = None
 
     def __init__(
         self,
@@ -48,12 +50,57 @@ class BaseTools:
         self.context = context
         self.retrieval_top_k = retrieval_top_k
         self.repo_client_type = repo_client_type
+        self.tmp_dir = {}
+
+        # Start downloading repos in parallel immediately
+        self._executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
+        self._start_parallel_repo_download()
+
+    def _start_parallel_repo_download(self):
+        """Start downloading all repositories in parallel in the background."""
+        repo_names = self._get_repo_names()
+        if not repo_names:
+            return
+
+        def download_all_repos():
+            """Download all repositories and update self.tmp_dir directly."""
+            # Create a lock for thread-safe updates to self.tmp_dir
+            if not hasattr(self, "_tmp_dir_lock"):
+                self._tmp_dir_lock = Lock()
+
+            for repo_name in repo_names:
+                # Skip if already downloaded or in progress
+                with self._tmp_dir_lock:
+                    if repo_name in self.tmp_dir:
+                        continue
+
+                try:
+                    repo_client = self.context.get_repo_client(
+                        repo_name=repo_name, type=self.repo_client_type
+                    )
+                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+
+                    # Update self.tmp_dir in a thread-safe way
+                    with self._tmp_dir_lock:
+                        self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+
+                except Exception as e:
+                    logger.exception(f"Error pre-downloading repo {repo_name}: {e}")
+
+            return True  # Signal completion
+
+        self._download_future = self._executor.submit(download_all_repos)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.cleanup()
+        if hasattr(self, "_executor") and self._executor:
+            try:
+                self._executor.shutdown(wait=True, cancel_futures=True)
+            except Exception as e:
+                logger.exception(f"Error shutting down executor: {e}")
 
     def _get_repo_names(self) -> list[str]:
         if isinstance(self.context, AutofixContext):
@@ -260,11 +307,20 @@ class BaseTools:
         return normalized_path
 
     def cleanup(self):
+        # Clean up any in-progress downloads
+        if self._download_future and not self._download_future.done():
+            try:
+                self._download_future.cancel()
+            except Exception as e:
+                logger.exception(f"Error cancelling downloads during cleanup: {e}")
+            self._download_future = None
+
+        # Clean up any tmp dirs that were created
         if self.tmp_dir:
-            # Clean up all tmp dirs
             for tmp_dir, _ in self.tmp_dir.values():
                 cleanup_dir(tmp_dir)
-            self.tmp_dir = None
+        # Always set tmp_dir to None after cleanup attempt
+        self.tmp_dir = None
 
     @observe(name="Search Google")
     @ai_track(description="Search Google")
@@ -398,7 +454,7 @@ class BaseTools:
             return f"Error parsing grep command: {str(e)}"
 
         for repo_name in repo_names:
-            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+            if repo_name not in self.tmp_dir:
                 continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
@@ -436,53 +492,89 @@ class BaseTools:
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
         Helper method to ensure repositories are downloaded to temporary directories.
-        Sets self.tmp_dir to a dict mapping repo_names to (tmp_dir, tmp_repo_dir) tuples.
+        Checks if downloads are in progress and waits for them if necessary,
+        or triggers downloads for missing repositories.
 
         Args:
             repo_name: If provided, only ensures this specific repo is downloaded.
                       If None, ensures all repos are downloaded.
         """
-        if self.tmp_dir is None:
-            self.tmp_dir = {}
-
-        downloaded_something = False
+        # Check if parallel download is in progress
+        if self._download_future is not None:
+            if self._download_future.done():
+                # Download completed - process results
+                try:
+                    self._download_future.result()
+                except Exception as e:
+                    logger.exception(f"Error in parallel repo download: {e}")
+                finally:
+                    self._download_future = None
+            else:
+                # Download in progress - wait for it to complete with a timeout
+                try:
+                    self._download_future.result(timeout=60)
+                    self._download_future = None
+                except TimeoutError:
+                    logger.warning(
+                        "Parallel repo download taking too long, proceeding with individual downloads"
+                    )
+                    self._download_future = None
+                except Exception as e:
+                    logger.exception(f"Error waiting for parallel repo download: {e}")
+                    self._download_future = None
 
         if repo_name:
-            # Only download the specified repo if it's not already downloaded
-            if repo_name not in self.tmp_dir:
+            repo_names_to_download = [repo_name] if repo_name not in self.tmp_dir else []
+        else:
+            repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
+
+        if not repo_names_to_download:
+            return
+
+        append_langfuse_observation_metadata({"repo_download": True})
+
+        if not hasattr(self, "_tmp_dir_lock"):
+            self._tmp_dir_lock = Lock()
+
+        if len(repo_names_to_download) == 1:
+            # Single repo - download synchronously
+            try:
+                repo_name = repo_names_to_download[0]
                 repo_client = self.context.get_repo_client(
                     repo_name=repo_name, type=self.repo_client_type
                 )
                 tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-                self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
-                downloaded_something = True
+
+                with self._tmp_dir_lock:
+                    self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+            except Exception as e:
+                logger.exception(f"Error downloading repo {repo_name}: {e}")
         else:
-            # Download all repos that aren't already downloaded
-            repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
-
-            if repo_names_to_download:
-
-                def download_repo(repo_name):
+            # Multiple repos - download in parallel
+            def download_repo(repo_name):
+                try:
                     repo_client = self.context.get_repo_client(
                         repo_name=repo_name, type=self.repo_client_type
                     )
                     tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
                     return repo_name, (tmp_dir, tmp_repo_dir)
+                except Exception as e:
+                    logger.exception(f"Error downloading repo {repo_name}: {e}")
+                    return None
 
-                with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
-                    future_to_repo = {
-                        executor.submit(download_repo, repo_name): repo_name
-                        for repo_name in repo_names_to_download
-                    }
-                    for future in as_completed(future_to_repo):
-                        repo_name, repo_dirs = future.result()
-                        if repo_name and repo_dirs:
-                            self.tmp_dir[repo_name] = repo_dirs
+            with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+                futures = {
+                    executor.submit(download_repo, repo_name): repo_name
+                    for repo_name in repo_names_to_download
+                }
 
-                downloaded_something = True
-
-        # Log whether we downloaded anything new
-        append_langfuse_observation_metadata({"repo_download": downloaded_something})
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        repo_name, repo_dirs = result
+                        with self._tmp_dir_lock:
+                            if repo_name is not None:
+                                self.tmp_dir[repo_name] = repo_dirs
 
     @observe(name="Find Files")
     @ai_track(description="Find Files")
@@ -511,7 +603,7 @@ class BaseTools:
             return f"Error parsing find command: {str(e)}"
 
         for repo_name in repo_names:
-            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+            if repo_name not in self.tmp_dir:
                 continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
