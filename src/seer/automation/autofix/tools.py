@@ -95,7 +95,7 @@ class BaseTools:
     @observe(name="Semantic File Search")
     @ai_track(description="Semantic File Search")
     @inject
-    def semantic_file_search(self, query: str, llm_client: LlmClient = injected, **kwargs: Any):
+    def semantic_file_search(self, query: str, llm_client: LlmClient = injected):
         repo_names = self._get_repo_names()
         files_per_repo = {}
         for repo_name in repo_names:
@@ -134,7 +134,7 @@ class BaseTools:
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
-    def expand_document(self, file_path: str, repo_name: str, **kwargs: Any):
+    def expand_document(self, file_path: str, repo_name: str):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
@@ -148,7 +148,7 @@ class BaseTools:
 
     @observe(name="View Diff")
     @ai_track(description="View Diff")
-    def view_diff(self, file_path: str, repo_name: str, commit_sha: str, **kwargs: Any):
+    def view_diff(self, file_path: str, repo_name: str, commit_sha: str):
         """
         Given a file path, repository name, and commit SHA, returns the diff for the file in the given commit.
         """
@@ -166,7 +166,7 @@ class BaseTools:
 
     @observe(name="Explain File")
     @ai_track(description="Explain File")
-    def explain_file(self, file_path: str, repo_name: str, **kwargs: Any):
+    def explain_file(self, file_path: str, repo_name: str):
         """
         Given a file path and repository name, returns recent commits and related files.
         """
@@ -182,7 +182,7 @@ class BaseTools:
 
     @observe(name="Tree")
     @ai_track(description="Tree")
-    def tree(self, path: str, repo_name: str | None = None, **kwargs: Any) -> str:
+    def tree(self, path: str, repo_name: str | None = None) -> str:
         """
         Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.
         """
@@ -269,7 +269,7 @@ class BaseTools:
     @observe(name="Search Google")
     @ai_track(description="Search Google")
     @inject
-    def google_search(self, question: str, llm_client: LlmClient = injected, **kwargs: Any):
+    def google_search(self, question: str, llm_client: LlmClient = injected):
         """
         Searches Google to answer a question.
         """
@@ -281,7 +281,7 @@ class BaseTools:
     @observe(name="Get Profile")
     @ai_track(description="Get Profile")
     @inject
-    def get_profile(self, event_id: str, rpc_client: RpcClient = injected, **kwargs: Any):
+    def get_profile(self, event_id: str, rpc_client: RpcClient = injected):
         """
         Fetches a profile for a specific transaction event.
         """
@@ -322,9 +322,7 @@ class BaseTools:
     @observe(name="Get Trace Event Details")
     @ai_track(description="Get Trace Event Details")
     @inject
-    def get_trace_event_details(
-        self, event_id: str, rpc_client: RpcClient = injected, **kwargs: Any
-    ):
+    def get_trace_event_details(self, event_id: str, rpc_client: RpcClient = injected):
         """
         Fetches the spans under a selected transaction event or the stacktrace under an error event.
         """
@@ -375,7 +373,7 @@ class BaseTools:
 
     @observe(name="Grep Search")
     @ai_track(description="Grep Search")
-    def grep_search(self, command: str, repo_name: str | None = None, **kwargs: Any):
+    def grep_search(self, command: str, repo_name: str | None = None):
         """
         Runs a grep command over the downloaded repositories.
         """
@@ -488,7 +486,7 @@ class BaseTools:
 
     @observe(name="Find Files")
     @ai_track(description="Find Files")
-    def find_files(self, command: str, repo_name: str | None = None, **kwargs: Any):
+    def find_files(self, command: str, repo_name: str | None = None):
         """
         Runs a `find` command over the downloaded repositories to search for files.
         """
