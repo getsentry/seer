@@ -9,8 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
-from github.GithubException import UnknownObjectException
-
 import requests
 import sentry_sdk
 from github import (
@@ -22,6 +20,7 @@ from github import (
     InputGitTreeElement,
     UnknownObjectException,
 )
+from github.GithubException import UnknownObjectException
 from github.GitRef import GitRef
 from github.GitTree import GitTree
 from github.GitTreeElement import GitTreeElement

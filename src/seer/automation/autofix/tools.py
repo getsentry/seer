@@ -405,7 +405,9 @@ class BaseTools:
 
         # Add information about inaccessible repositories
         if inaccessible_repos:
-            inaccessible_message = f"Could not access the following repositories: {', '.join(inaccessible_repos)}"
+            inaccessible_message = (
+                f"Could not access the following repositories: {', '.join(inaccessible_repos)}"
+            )
             all_results.append(inaccessible_message)
             logger.warning(f"Could not access repositories during grep: {inaccessible_repos}")
 
@@ -422,7 +424,7 @@ class BaseTools:
         Args:
             repo_name: If provided, only ensures this specific repo is downloaded.
                       If None, ensures all repos are downloaded.
-                      
+
         Returns:
             list[str]: List of repository names that couldn't be accessed
         """
@@ -470,10 +472,12 @@ class BaseTools:
                                 inaccessible_repos.append(repo_name)
 
                 downloaded_something = True
-        
+
         # Add metadata for tracking
-        append_langfuse_observation_metadata({"repo_download": downloaded_something, "inaccessible_repos": inaccessible_repos})
-        
+        append_langfuse_observation_metadata(
+            {"repo_download": downloaded_something, "inaccessible_repos": inaccessible_repos}
+        )
+
         # Return the list of inaccessible repositories
         return inaccessible_repos
 
