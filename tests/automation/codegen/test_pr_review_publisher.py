@@ -109,7 +109,9 @@ class TestPrReviewPublisher(unittest.TestCase):
 
         # Mock PrReviewUtils.is_positive_comment to return True for comment1, False for comment2
         with patch.object(PrReviewUtils, "is_positive_comment") as mock_is_positive:
-            mock_is_positive.side_effect = lambda comment, o: comment == "Good comment" and o == owner
+            mock_is_positive.side_effect = (
+                lambda comment, o: comment == "Good comment" and o == owner
+            )
 
             # Call _format_comments method
             result = PrReviewPublisher._format_comments(
@@ -121,10 +123,9 @@ class TestPrReviewPublisher(unittest.TestCase):
             self.assertEqual(result[0]["path"], "file1.py")
             self.assertEqual(result[0]["body"], "Good comment")
             self.assertEqual(result[0]["commit_id"], commit_id)
-            
+
             # Verify is_positive_comment was called with correct parameters for review_comment1 and review_comment2
             # (not called for review_comment3 since it's filtered by line <= start_line)
             mock_is_positive.assert_any_call("Good comment", owner)
             mock_is_positive.assert_any_call("Bad comment", owner)
             self.assertEqual(mock_is_positive.call_count, 2)
-
