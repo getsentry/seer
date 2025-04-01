@@ -7,7 +7,7 @@ from seer.automation.agent.client import LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.models import FileChange, RepoDefinition
+from seer.automation.models import FileChange
 
 
 class TestRepo:
@@ -55,24 +55,25 @@ def test_state(test_repos):
 
 
 @pytest.fixture
-def autofix_tools():
+def autofix_tools(test_state):
     """Create a BaseTools instance with a properly configured context."""
     context = MagicMock(spec=AutofixContext)
     context.event_manager = MagicMock()
     context.state = MagicMock()
-    
+
     # Use the real test state
     context.state.get.return_value = test_state
-    
-     # Set up context methods
+
+    # Set up context methods
     context._get_repo_names = MagicMock(return_value=[repo.full_name for repo in test_state.repos])
     context._attempt_fix_path = MagicMock(return_value="test.py")
-    
+
     with patch(
         "seer.automation.autofix.tools.BaseTools._start_parallel_repo_download", MagicMock()
     ):
         tools = BaseTools(context)
     return tools
+
 
 class TestFileSystem:
     @patch("seer.automation.autofix.tools.cleanup_dir")
@@ -847,7 +848,7 @@ class TestParallelRepoDownload:
         assert "owner/repo1" in tools.tmp_dir
         assert "owner/repo2" in tools.tmp_dir
 
- 
+
 class TestClaudeTools:
     def test_handle_view_command(self, autofix_tools: BaseTools):
         # Setup
@@ -888,15 +889,6 @@ class TestClaudeTools:
         # Setup
         autofix_tools.context.get_file_contents.return_value = "old text"
         kwargs = {"old_str": "old text", "new_str": "new text"}
-
-        # Create a file change to add
-        file_change = FileChange(
-            change_type="edit",
-            path="test.py",
-            reference_snippet="old text",
-            new_snippet="new text",
-            repo_name="test/repo",
-        )
 
         # Set up the actual method under test to use our mocked state
         autofix_tools.context.state.update.return_value.__enter__.return_value = test_state
