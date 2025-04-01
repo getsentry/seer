@@ -33,10 +33,10 @@ class AnomalyScorer(BaseModel, abc.ABC):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         return NotImplemented
@@ -51,10 +51,10 @@ class AnomalyScorer(BaseModel, abc.ABC):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
-        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         return NotImplemented
@@ -84,10 +84,10 @@ class CombinedAnomalyScorer(AnomalyScorer):
         values: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         mp_dist: npt.NDArray[np.float64],
-        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         """
@@ -147,10 +147,10 @@ class CombinedAnomalyScorer(AnomalyScorer):
         history_values: npt.NDArray[np.float64],
         history_timestamps: npt.NDArray[np.float64],
         history_mp_dist: npt.NDArray[np.float64],
-        history_flags: list[AnomalyFlags] | None,
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         # If we are going to apply prophet scoring, use a higher sensitivity for MP scoring

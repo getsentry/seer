@@ -437,6 +437,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
@@ -502,6 +503,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
@@ -567,6 +569,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
@@ -633,6 +636,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
