@@ -474,14 +474,29 @@ class BaseTools:
             repo_name: If provided, only ensures this specific repo is downloaded.
                       If None, ensures all repos are downloaded.
         """
-        # Check if parallel download has completed
-        if self._download_future is not None and self._download_future.done():
-            try:
-                self._download_future.result()
-            except Exception as e:
-                logger.exception(f"Error in parallel repo download: {e}")
-            finally:
-                self._download_future = None
+        # Check if parallel download is in progress
+        if self._download_future is not None:
+            if self._download_future.done():
+                # Download completed - process results
+                try:
+                    self._download_future.result()
+                except Exception as e:
+                    logger.exception(f"Error in parallel repo download: {e}")
+                finally:
+                    self._download_future = None
+            else:
+                # Download in progress - wait for it to complete with a timeout
+                try:
+                    self._download_future.result(timeout=60)
+                    self._download_future = None
+                except TimeoutError:
+                    logger.warning(
+                        "Parallel repo download taking too long, proceeding with individual downloads"
+                    )
+                    self._download_future = None
+                except Exception as e:
+                    logger.exception(f"Error waiting for parallel repo download: {e}")
+                    self._download_future = None
 
         if repo_name:
             repo_names_to_download = [repo_name] if repo_name not in self.tmp_dir else []
