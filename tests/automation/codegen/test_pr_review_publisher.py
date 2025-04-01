@@ -13,6 +13,7 @@ from seer.automation.codegen.pr_review_utils import PrReviewUtils
 class TestPrReviewPublisher(unittest.TestCase):
     def setUp(self):
         self.mock_repo_client = MagicMock(spec=RepoClient)
+        self.mock_repo_client.repo = MagicMock()
         self.mock_repo_client.repo.owner = MagicMock()
         self.mock_repo_client.repo.owner.login = "owner-name"
         self.mock_pr = MagicMock(spec=PullRequest)
