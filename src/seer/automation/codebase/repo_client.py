@@ -9,6 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
+from github.GithubException import UnknownObjectException
+
 import requests
 import sentry_sdk
 from github import (
@@ -293,23 +295,25 @@ class RepoClient:
             for name in dirs:
                 os.rmdir(os.path.join(root, name))
 
-        tarball_url = self.repo.get_archive_link("tarball", ref=sha)
-        tarfile_path = os.path.join(tmp_dir, f"{sha}.tar.gz")
+        try:
+            tarball_url = self.repo.get_archive_link("tarball", ref=sha)
+            tarfile_path = os.path.join(tmp_dir, f"{sha}.tar.gz")
 
-        response = requests.get(tarball_url, stream=True)
-        if response.status_code == 200:
-            with open(tarfile_path, "wb") as f:
-                f.write(response.content)
-        else:
-            logger.error(
-                f"Failed to get tarball url for {tarball_url}. Please check if the repository exists and the provided token is valid."
-            )
-            logger.error(
-                f"Response status code: {response.status_code}, response text: {response.text}"
-            )
-            raise Exception(
-                f"Failed to get tarball url for {tarball_url}. Please check if the repository exists and the provided token is valid."
-            )
+            response = requests.get(tarball_url, stream=True)
+            if response.status_code == 200:
+                with open(tarfile_path, "wb") as f:
+                    f.write(response.content)
+            else:
+                logger.error(
+                    f"Failed to get tarball url for {tarball_url}. Please check if the repository exists and the provided token is valid."
+                )
+                logger.error(
+                    f"Response status code: {response.status_code}, response text: {response.text}"
+                )
+                return tmp_dir, ""  # Return empty repo_dir to indicate failure
+        except UnknownObjectException as e:
+            logger.warning("Repository not found", extra={"error": str(e)})
+            return tmp_dir, ""  # Return empty repo_dir to indicate failure
 
         # Extract tarball into the output directory
         with tarfile.open(tarfile_path, "r:gz") as tar:

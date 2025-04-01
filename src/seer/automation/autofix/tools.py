@@ -361,7 +361,7 @@ class BaseTools:
 
         self.context.event_manager.add_log(f"Grepping codebase with `{command}`...")
 
-        self._ensure_repos_downloaded(repo_name)
+        inaccessible_repos = self._ensure_repos_downloaded(repo_name)
 
         repo_names = [repo_name] if repo_name else self._get_repo_names()
         all_results = []
@@ -403,6 +403,12 @@ class BaseTools:
             except Exception as e:
                 all_results.append(f"Error in repo {repo_name}: {str(e)}")
 
+        # Add information about inaccessible repositories
+        if inaccessible_repos:
+            inaccessible_message = f"Could not access the following repositories: {', '.join(inaccessible_repos)}"
+            all_results.append(inaccessible_message)
+            logger.warning(f"Could not access repositories during grep: {inaccessible_repos}")
+
         if not all_results:
             return "No results found."
 
@@ -416,11 +422,15 @@ class BaseTools:
         Args:
             repo_name: If provided, only ensures this specific repo is downloaded.
                       If None, ensures all repos are downloaded.
+                      
+        Returns:
+            list[str]: List of repository names that couldn't be accessed
         """
         if self.tmp_dir is None:
             self.tmp_dir = {}
 
         downloaded_something = False
+        inaccessible_repos = []
 
         if repo_name:
             # Only download the specified repo if it's not already downloaded
@@ -430,7 +440,10 @@ class BaseTools:
                 )
                 tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
                 self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
-                downloaded_something = True
+                if tmp_repo_dir:
+                    downloaded_something = True
+                else:
+                    inaccessible_repos.append(repo_name)
         else:
             # Download all repos that aren't already downloaded
             repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
@@ -451,10 +464,18 @@ class BaseTools:
                     }
                     for future in as_completed(future_to_repo):
                         repo_name, repo_dirs = future.result()
-                        if repo_name and repo_dirs:
+                        if repo_name:
                             self.tmp_dir[repo_name] = repo_dirs
+                            if not repo_dirs[1]:  # If tmp_repo_dir is empty
+                                inaccessible_repos.append(repo_name)
 
                 downloaded_something = True
+        
+        # Add metadata for tracking
+        append_langfuse_observation_metadata({"repo_download": downloaded_something, "inaccessible_repos": inaccessible_repos})
+        
+        # Return the list of inaccessible repositories
+        return inaccessible_repos
 
         # Log whether we downloaded anything new
         append_langfuse_observation_metadata({"repo_download": downloaded_something})
