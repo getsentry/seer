@@ -1,7 +1,9 @@
 import logging
-from seer.db import DbReviewCommentEmbedding, Session
+
 from sqlalchemy import select
+
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
+from seer.db import DbReviewCommentEmbedding, Session
 
 SIMILARITY_THRESHOLD = 0.7
 COMMENT_COMPARISON_LIMIT = 5
