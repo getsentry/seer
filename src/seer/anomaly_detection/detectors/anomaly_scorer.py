@@ -36,6 +36,7 @@ class AnomalyScorer(BaseModel, abc.ABC):
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         return NotImplemented
@@ -53,6 +54,7 @@ class AnomalyScorer(BaseModel, abc.ABC):
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         return NotImplemented
@@ -85,6 +87,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         """
@@ -130,6 +133,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
+            history_flags=history_flags,
             ad_config=ad_config,
         )
         return combined
@@ -146,6 +150,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         prophet_df: pd.DataFrame | None,
         ad_config: AnomalyDetectionConfig,
         window_size: int,
+        history_flags: list[AnomalyFlags] | None = None,
         algo_config: AlgoConfig = injected,
     ) -> FlagsAndScores:
         # If we are going to apply prophet scoring, use a higher sensitivity for MP scoring
@@ -188,25 +193,24 @@ class CombinedAnomalyScorer(AnomalyScorer):
             timestamps=np.array([np.float64(streamed_timestamp)]),
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=df_prophet_scores,
+            history_flags=history_flags,
             ad_config=ad_config,
         )
         return combined
 
     def _adjust_prophet_flag_for_location(
         self,
-        mp_flag: AnomalyFlags,
-        prev_mp_flag: AnomalyFlags,
         prophet_flag: AnomalyFlags,
+        prev_flag: AnomalyFlags,
         y: np.float64,
-        yhat: np.float64,
         yhat_lower: np.float64,
         yhat_upper: np.float64,
         direction: Directions,
     ) -> AnomalyFlags:
+        # If the prev flag is anomaly_higher_confidence, we don't need to adjust the flag so we can continue the same alert
         if (
             direction == "both"
-            or mp_flag == "none"
-            or mp_flag == prev_mp_flag
+            or prev_flag == "anomaly_higher_confidence"
             or prophet_flag == "none"
         ):
             return prophet_flag
@@ -221,6 +225,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
         timestamps: np.ndarray,
         mp_flags_and_scores: FlagsAndScores,
         prophet_predictions: pd.DataFrame,
+        history_flags: list[AnomalyFlags] | None,
         ad_config: AnomalyDetectionConfig,
     ) -> FlagsAndScores:
         # todo: return prophet thresholds
@@ -231,7 +236,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
             algo_types = []
             missing = 0
             found = 0
-            previous_mp_flag: AnomalyFlags = "none"
+            previous_flag: AnomalyFlags = history_flags[-1] if history_flags else "none"
             missing_timestamps = []
             for timestamp, mp_flag, mp_confidence_level in zip(
                 timestamps, mp_flags, mp_confidence_levels
@@ -243,11 +248,9 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     prophet_flag = prophet_map["flag"][pd_dt]
                     prophet_score = prophet_map["score"][pd_dt]
                     prophet_flag = self._adjust_prophet_flag_for_location(
-                        mp_flag=mp_flag,
-                        prev_mp_flag=previous_mp_flag,
                         prophet_flag=prophet_flag,
+                        prev_flag=previous_flag,
                         y=prophet_map["y"][pd_dt],
-                        yhat=prophet_map["yhat"][pd_dt],
                         yhat_lower=prophet_map["yhat_lower"][pd_dt],
                         yhat_upper=prophet_map["yhat_upper"][pd_dt],
                         direction=ad_config.direction,
@@ -258,8 +261,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     ):
                         algo_type = AlertAlgorithmType.BOTH
                         flags.append("anomaly_higher_confidence")
-
-                    elif prophet_score >= 2.0:
+                    elif prophet_flag == "anomaly_higher_confidence" and prophet_score >= 2.0:
                         algo_type = AlertAlgorithmType.PROPHET
                         flags.append(prophet_flag)
                     # elif mp_confidence_level == ConfidenceLevel.HIGH:
@@ -270,8 +272,10 @@ class CombinedAnomalyScorer(AnomalyScorer):
                 else:
                     missing += 1
                     missing_timestamps.append(timestamp)
+                    if mp_flag == "anomaly_higher_confidence":
+                        algo_type = AlertAlgorithmType.MP
                     flags.append(mp_flag)
-                previous_mp_flag = mp_flag
+                previous_flag = flags[-1]
                 algo_types.append(algo_type)
             if missing > 0:
                 logger.warning(

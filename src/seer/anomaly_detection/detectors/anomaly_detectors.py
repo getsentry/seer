@@ -151,6 +151,7 @@ class MPBatchAnomalyDetector(AnomalyDetector):
             timestamps=timeseries.timestamps,
             mp_dist=mp_dist,
             prophet_df=prophet_df,
+            history_flags=None,
             ad_config=ad_config,
             window_size=window_size,
         )
@@ -193,10 +194,10 @@ class MPStreamAnomalyDetector(AnomalyDetector):
         ..., description="Matrix profile of the baseline timeseries."
     )
     window_size: int = Field(..., description="Window size to use for stream computation")
-    original_flags: list[AnomalyFlags | None] = Field(
+    original_flags: list[AnomalyFlags] = Field(
         ..., description="Original MP flags of the baseline timeseries."
     )
-    original_combined_flags: list[AnomalyFlags | None] = Field(
+    original_combined_flags: list[AnomalyFlags] = Field(
         ..., description="Original combined flags of the baseline timeseries."
     )
 
@@ -284,6 +285,7 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     history_values=self.history_values,
                     history_timestamps=self.history_timestamps,
                     history_mp_dist=mp_dist_baseline,
+                    history_flags=self.original_combined_flags,
                     prophet_df=prophet_df,
                     ad_config=ad_config,
                     window_size=self.window_size,
