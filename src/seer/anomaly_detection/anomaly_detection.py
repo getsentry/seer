@@ -523,11 +523,9 @@ class AnomalyDetection(BaseModel):
 
         # Ensure safe slicing by using minimum length for arrays
         safe_orig_curr_len = min(
-            orig_curr_len,
-            len(agg_streamed_anomalies.flags),
-            len(agg_streamed_anomalies.scores)
+            orig_curr_len, len(agg_streamed_anomalies.flags), len(agg_streamed_anomalies.scores)
         )
-        
+
         final_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=agg_streamed_anomalies.flags[-safe_orig_curr_len:],
             scores=agg_streamed_anomalies.scores[-safe_orig_curr_len:],
@@ -544,9 +542,7 @@ class AnomalyDetection(BaseModel):
         )
 
         converted_anomalies = DbAlertDataAccessor().combine_anomalies(
-            final_streamed_anomalies,
-            None,
-            [True] * len(final_streamed_anomalies.flags),  # Use the safe length here
+            final_streamed_anomalies, None, [True] * safe_orig_curr_len
         )
 
         # Make sure we're not returning more points than we have anomaly data for
@@ -557,10 +553,6 @@ class AnomalyDetection(BaseModel):
         ts_external: List[TimeSeriesPoint],
         anomalies: MPTimeSeriesAnomalies,
     ):
-        # Truncate ts_external if array lengths are mismatched
-        if len(ts_external) > min(len(anomalies.scores), len(anomalies.flags)):
-            ts_external = ts_external[:min(len(anomalies.scores), len(anomalies.flags))]
-            
         for i, point in enumerate(ts_external):
             point.anomaly = Anomaly(
                 anomaly_score=anomalies.scores[i],
