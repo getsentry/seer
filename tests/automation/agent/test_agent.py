@@ -11,7 +11,7 @@ from seer.automation.agent.agent import (
 )
 from seer.automation.agent.client import OpenAiProvider
 from seer.automation.agent.models import LlmGenerateTextResponse, Message, ToolCall, Usage
-from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.tools import ClaudeTool, FunctionTool
 
 
 @pytest.fixture
@@ -69,6 +69,38 @@ def test_process_message_with_tool_calls(agent: LlmAgent):
             fn=fn2,
             parameters=[{"name": "arg"}],
             required=[],
+        )
+    )
+
+    agent.process_message(message)
+    fn1.assert_not_called()
+    fn2.assert_called_once_with(arg="value")
+    assert len(agent.memory) == 2
+    assert agent.iterations == 1
+    assert agent.memory[1].content == "Fn2 result"
+
+
+def test_process_message_with_claude_tool_calls(agent: LlmAgent):
+    tool_call = ToolCall(id="1", function="test_tool", args='{"arg": "value"}')
+    message = Message(role="assistant", content="Using a tool", tool_calls=[tool_call])
+
+    fn1 = Mock()
+    fn2 = Mock(return_value="Fn2 result")
+    agent.tools.append(
+        FunctionTool(
+            name="unrelated_tool",
+            description="",
+            fn=fn1,
+            parameters=[],
+            required=[],
+        )
+    )
+
+    agent.tools.append(
+        ClaudeTool(
+            name="test_tool",
+            type="function",
+            fn=fn2,
         )
     )
 
