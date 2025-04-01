@@ -7,11 +7,14 @@ from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodePrReviewOutput
 from seer.automation.codegen.pr_review_publisher import PrReviewPublisher
+from seer.automation.codegen.pr_review_utils import PrReviewUtils
 
 
 class TestPrReviewPublisher(unittest.TestCase):
     def setUp(self):
         self.mock_repo_client = MagicMock(spec=RepoClient)
+        self.mock_repo_client.repo.owner = MagicMock()
+        self.mock_repo_client.repo.owner.login = "owner-name"
         self.mock_pr = MagicMock(spec=PullRequest)
         self.mock_pr.url = "https://api.github.com/repos/owner-name/repo-name/pulls/1"
         self.mock_pr.head.sha = "abcdef1234567890"
