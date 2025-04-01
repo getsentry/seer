@@ -746,12 +746,9 @@ class TestCombinedAnomalyScorer:
                 for direction in directions:
                     for y, yhat_lower, yhat_upper in y_ll_ul:
                         result = scorer._adjust_prophet_flag_for_location(
-                            mp_flag="none",
-                            prev_mp_flag="none",
                             prophet_flag=prophet_flag,
                             prev_flag=prev_flag,
                             y=y,
-                            yhat=y,
                             yhat_lower=yhat_lower,
                             yhat_upper=yhat_upper,
                             direction=direction,
