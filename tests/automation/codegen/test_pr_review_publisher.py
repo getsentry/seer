@@ -16,6 +16,7 @@ class TestPrReviewPublisher(unittest.TestCase):
         self.mock_repo_client.repo = MagicMock()
         self.mock_repo_client.repo.owner = MagicMock()
         self.mock_repo_client.repo.owner.login = "owner-name"
+        self.mock_repo_client.repo_owner = "owner-name"
         self.mock_pr = MagicMock(spec=PullRequest)
         self.mock_pr.url = "https://api.github.com/repos/owner-name/repo-name/pulls/1"
         self.mock_pr.head.sha = "abcdef1234567890"
