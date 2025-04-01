@@ -689,8 +689,8 @@ class TestCombinedAnomalyScorer:
         # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
         # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
         # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
-
         ###
+
         scorer = CombinedAnomalyScorer()
         prophet_flags = ["none", "anomaly_higher_confidence"]
         prev_flags = ["none", "anomaly_higher_confidence"]
