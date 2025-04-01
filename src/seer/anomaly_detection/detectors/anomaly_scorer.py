@@ -170,7 +170,13 @@ class CombinedAnomalyScorer(AnomalyScorer):
 
         if prophet_df is None or prophet_df.empty:
             # logger.warning("The prophet_df is None or empty, skipping prophet scoring")
-            return mp_flags_and_scores
+            return FlagsAndScores(
+                flags=mp_flags_and_scores.flags,
+                scores=mp_flags_and_scores.scores,
+                thresholds=mp_flags_and_scores.thresholds,
+                confidence_levels=mp_flags_and_scores.confidence_levels,
+                algo_types=[AlertAlgorithmType.NONE for _ in mp_flags_and_scores.flags]
+            )
 
         # Lookup row in prophet_df for streamed_timestamp and update y and actual with the new streamed value
         row_exists = (prophet_df["ds"] == streamed_timestamp).any()
@@ -179,7 +185,13 @@ class CombinedAnomalyScorer(AnomalyScorer):
                 "Timestamp not found in prophet_df, skipping prophet scoring",
                 extra={"streamed_timestamp": streamed_timestamp},
             )
-            return mp_flags_and_scores
+            return FlagsAndScores(
+                flags=mp_flags_and_scores.flags,
+                scores=mp_flags_and_scores.scores,
+                thresholds=mp_flags_and_scores.thresholds,
+                confidence_levels=mp_flags_and_scores.confidence_levels,
+                algo_types=[AlertAlgorithmType.NONE for _ in mp_flags_and_scores.flags]
+            )
         prophet_df.loc[prophet_df.ds == streamed_timestamp, "y"] = float(streamed_value)
         prophet_df.loc[prophet_df.ds == streamed_timestamp, "actual"] = float(streamed_value)
         df_prophet_scores = self.prophet_scorer.batch_score(prophet_df)
