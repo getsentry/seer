@@ -2,12 +2,18 @@ import logging
 from typing import List
 
 from github.PullRequest import PullRequest
+from sqlalchemy import select
 
+from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodePrReviewOutput
+from seer.automation.codegen.pr_review_utils import PrReviewUtils
+from seer.db import DbReviewCommentEmbedding, Session
 
 logger = logging.getLogger(__name__)
+
+SIMILARITY_THRESHOLD = 0.7
 
 
 class PrReviewPublisher:
@@ -29,7 +35,9 @@ class PrReviewPublisher:
             return
 
         # handle send review comments one by one
-        comments = self._format_comments(self.pr.head.sha, pr_review)
+        comments = self._format_comments(
+            commit_id=self.pr.head.sha, pr_review=pr_review, owner=self.repo_client.repo_owner
+        )
         for comment in comments:
             try:
                 repo_client.post_pr_review_comment(pr_url, comment)
@@ -53,22 +61,23 @@ class PrReviewPublisher:
 
     @staticmethod
     def _format_comments(
-        commit_id: str, pr_review: CodePrReviewOutput
+        commit_id: str, pr_review: CodePrReviewOutput, owner: str
     ) -> List[GithubPrReviewComment]:
         comments = []
         for comment in pr_review.comments:
             # TODO: rare case where start_line is greater than end line. Fix with a better prompt.
             if comment.line <= comment.start_line:
                 continue
-            comments.append(
-                GithubPrReviewComment(
-                    commit_id=commit_id,
-                    side="RIGHT",
-                    path=comment.path,
-                    line=comment.line,
-                    body=comment.body,
-                    start_line=comment.start_line,
+            if PrReviewUtils.is_positive_comment(comment.body, owner):
+                comments.append(
+                    GithubPrReviewComment(
+                        commit_id=commit_id,
+                        side="RIGHT",
+                        path=comment.path,
+                        line=comment.line,
+                        body=comment.body,
+                        start_line=comment.start_line,
+                    )
                 )
-            )
 
         return comments
