@@ -647,12 +647,11 @@ class TestCombinedAnomalyScorer:
         # For the second point, both MP and Prophet have high confidence anomalies
         assert result.flags[1] == "anomaly_higher_confidence"
 
-    def test_adjust_prophet_flag_for_location_fixed(self):
+    def test_adjust_prophet_flag_for_location(self):
         ###
-        # Tries all combinations of mp_flag, prev_mp_flag, prophet_flag, direction, y, yhat_lower, yhat_upper
+        # Tries all combinations of prophet_flag, prev_flag, direction, y, yhat_lower, yhat_upper
         # and checks if the result is as expected
         # Overall its a brute force test. Below are the expected results for each combination
-        #
 
         # prophet_flag: none, prev_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
         # prophet_flag: none, prev_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
