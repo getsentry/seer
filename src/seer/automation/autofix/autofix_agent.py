@@ -15,7 +15,7 @@ from seer.automation.agent.models import (
     ToolCall,
     Usage,
 )
-from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.insight_sharing.component import create_insight_output
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
@@ -35,7 +35,7 @@ class AutofixAgent(LlmAgent):
         self,
         config: AgentConfig,
         context: AutofixContext,
-        tools: Optional[list[FunctionTool]] = None,
+        tools: Optional[list[FunctionTool | ClaudeTool]] = None,
         memory: Optional[list[Message]] = None,
         name: str = "Agent",
     ):
@@ -316,9 +316,8 @@ class AutofixAgent(LlmAgent):
             generated_at_memory_index=generated_at_memory_index,
         )
 
+        if insight_card:
+            self.context.event_manager.send_insight(insight_card)
+
         with state.update() as cur:
-            if insight_card:
-                cur_step = cur.steps[cur_step_idx]
-                assert isinstance(cur_step, DefaultStep)
-                cur_step.insights.append(insight_card)
             cur.usage += usage

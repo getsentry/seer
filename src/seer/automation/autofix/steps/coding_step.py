@@ -59,7 +59,9 @@ class AutofixCodingStep(AutofixPipelineStep):
     @ai_track(description="Autofix - Coding Step")
     @inject
     def _invoke(self, app_config: AppConfig = injected):
-        self.context.event_manager.clear_file_changes()
+        if not self.request.initial_memory:
+            # Only clear when not a rethink/continue
+            self.context.event_manager.clear_file_changes()
 
         self.logger.info("Executing Autofix - Coding Step")
 
@@ -88,7 +90,7 @@ class AutofixCodingStep(AutofixPipelineStep):
         if not summary:
             summary = self.context.get_issue_summary()
 
-        coding_output = CodingComponent(self.context).invoke(
+        CodingComponent(self.context).invoke(
             CodingRequest(
                 event_details=event_details,
                 root_cause=root_cause,
@@ -103,12 +105,14 @@ class AutofixCodingStep(AutofixPipelineStep):
         )
 
         state = self.context.state.get()
+        if all(not codebase.file_changes for codebase in state.codebases.values()):
+            raise ValueError("No file changes from coding agent")
         if state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return
         if make_kill_signal() in state.signals:
             return
 
-        self.context.event_manager.send_coding_result(coding_output)
+        self.context.event_manager.send_coding_result()
 
         # confidence evaluation
         if not self.context.state.get().request.options.disable_interactivity:

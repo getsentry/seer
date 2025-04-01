@@ -16,7 +16,10 @@ from seer.automation.autofix.components.comment_thread import (
     CommentThreadComponent,
     CommentThreadRequest,
 )
-from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
+from seer.automation.autofix.components.insight_sharing.models import (
+    InsightSharingOutput,
+    InsightSharingType,
+)
 from seer.automation.autofix.evaluations import (
     make_score_name,
     score_coding,
@@ -56,7 +59,7 @@ from seer.automation.autofix.steps.solution_step import (
     AutofixSolutionStep,
     AutofixSolutionStepRequest,
 )
-from seer.automation.models import InitializationError
+from seer.automation.models import FileChange, InitializationError
 from seer.automation.utils import process_repo_provider, raise_if_no_genai_consent
 from seer.configuration import AppConfig
 from seer.db import DbPrIdToAutofixRunIdMapping, DbRunState, Session
@@ -502,27 +505,57 @@ def receive_user_message(request: AutofixUpdateRequest):
                     )
 
 
-def truncate_memory_to_match_insights(memory: list[Message], memory_index: int, step: DefaultStep):
+def truncate_memory_to_match_insights(
+    memory: list[Message],
+    memory_index: int,
+    step: DefaultStep,
+    is_edit_insight: bool,
+    has_rethink_instruction: bool,
+):
     if memory_index >= len(memory) or memory_index == -1:
         return memory
     truncated_memory = []
     if step.insights:
         new_memory = memory[: memory_index + 1]
-        # include extra memory items to satisfy tool calls, or cut out the tool calls if no responses available
+
         if new_memory and new_memory[-1].tool_calls:
             num_tool_calls = len(new_memory[-1].tool_calls)
-            if memory_index + num_tool_calls < len(memory):
+
+            if has_rethink_instruction and memory_index + num_tool_calls < len(memory):
                 new_memory.extend(memory[memory_index + 1 : memory_index + num_tool_calls + 1])
+
+                if is_edit_insight:
+                    for i in range(memory_index + 1, memory_index + num_tool_calls + 1):
+                        if new_memory[i].role == "tool":
+                            new_memory[i].content = (
+                                "Notice: This tool call did not apply, the user provided instructions."
+                            )
             else:
                 new_memory = new_memory[:-1]
+
         truncated_memory = (
             new_memory
             if len(new_memory) >= step.initial_memory_length
             else memory[: step.initial_memory_length]
         )
+
     if not step.insights:
         truncated_memory = memory[: step.initial_memory_length]
     return truncated_memory if truncated_memory else memory
+
+
+def truncate_file_changes_to_match_memory(file_changes: list[FileChange], memory: list[Message]):
+    if not memory:
+        return []
+    truncated_file_changes = []
+
+    memory_tool_call_ids = set([message.tool_call_id for message in memory if message.tool_call_id])
+
+    for file_change in file_changes:
+        if file_change.tool_call_id in memory_tool_call_ids:
+            truncated_file_changes.append(file_change)
+
+    return truncated_file_changes
 
 
 @inject
@@ -556,11 +589,15 @@ def restart_from_point_with_feedback(
     memory_index_of_insight_to_rethink = (
         step.initial_memory_length
     )  # by default, reset to beginning of memory
+    is_edit_insight = False
     if insight_card_index is not None:
         if insight_card_index >= 0 and insight_card_index < len(step.insights):
             memory_index_of_insight_to_rethink = step.insights[
                 insight_card_index
             ].generated_at_memory_index  # reset to the memory at the time of the insight
+            is_edit_insight = (
+                step.insights[insight_card_index].type == InsightSharingType.FILE_CHANGE
+            )
         else:
             memory_index_of_insight_to_rethink = -1  # retain all memory
 
@@ -591,8 +628,18 @@ def restart_from_point_with_feedback(
         )
     )
     memory = truncate_memory_to_match_insights(
-        memory, memory_index_of_insight_to_rethink, step_to_restart
+        memory,
+        memory_index_of_insight_to_rethink,
+        step_to_restart,
+        is_edit_insight,
+        bool(request.payload.message),
     )
+
+    with state.update() as cur:
+        for codebase in cur.codebases.values():
+            codebase.file_changes = truncate_file_changes_to_match_memory(
+                codebase.file_changes, memory
+            )
 
     # add feedback to memory and to insights
     if request.payload.message:
