@@ -63,7 +63,9 @@ class TestPrReviewPublisher(unittest.TestCase):
             )
 
             mock_format_comments.assert_called_once_with(
-                self.mock_pr.head.sha, mock_pr_review_output
+                commit_id=self.mock_pr.head.sha,
+                pr_review=mock_pr_review_output,
+                owner=self.mock_repo_client.repo_owner,
             )
 
     def test_publish_generated_pr_review_handles_exception(self):

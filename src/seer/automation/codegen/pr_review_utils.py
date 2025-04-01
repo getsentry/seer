@@ -31,12 +31,11 @@ class PrReviewUtils:
             model = GoogleProviderEmbeddings.model(
                 "text-embedding-005", task_type="SEMANTIC_SIMILARITY"
             )
-            comment_embedding = model.encode([comment_body])[0]
-
+            comment_embedding = model.encode([comment_body])
             with Session() as session:
                 # Find 3 most similar comments using cosine similarity
-                similar_comments = session.scalars(
-                    select(DbReviewCommentEmbedding)
+                similar_comments = (
+                    session.query(DbReviewCommentEmbedding)
                     .where(
                         DbReviewCommentEmbedding.embedding.cosine_distance(comment_embedding)
                         <= (1 - SIMILARITY_THRESHOLD),
@@ -46,9 +45,9 @@ class PrReviewUtils:
                     .limit(COMMENT_COMPARISON_LIMIT)
                 ).all()
 
-                if len(similar_comments) < COMMENT_COMPARISON_LIMIT:
+                # return True
+                if not similar_comments or len(similar_comments) < COMMENT_COMPARISON_LIMIT:
                     return True  # Default to True if not enough similar comments found
-
                 positive_patterns = sum(
                     1 for comment in similar_comments if comment.is_good_pattern
                 )
@@ -58,4 +57,4 @@ class PrReviewUtils:
 
         except Exception as e:
             logger.warning(f"Error checking comment positivity: {e}")
-            return False
+            return True  # Default to True on error to be conservative
