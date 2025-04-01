@@ -80,3 +80,51 @@ class TestPrReviewPublisher(unittest.TestCase):
             )
 
             self.mock_repo_client.post_issue_comment.assert_not_called()
+
+    def test_format_comments_filtering(self):
+        # Create a CodePrReviewOutput with comments
+        review_comment1 = MagicMock()
+        review_comment1.path = "file1.py"
+        review_comment1.line = 10
+        review_comment1.start_line = 5
+        review_comment1.body = "Good comment"
+
+        review_comment2 = MagicMock()
+        review_comment2.path = "file2.py"
+        review_comment2.line = 20
+        review_comment2.start_line = 15
+        review_comment2.body = "Bad comment"
+
+        review_comment3 = MagicMock()
+        review_comment3.path = "file3.py"
+        review_comment3.line = 5  # Line <= start_line, should be skipped
+        review_comment3.start_line = 5
+        review_comment3.body = "Another comment"
+
+        pr_review = MagicMock(spec=CodePrReviewOutput)
+        pr_review.comments = [review_comment1, review_comment2, review_comment3]
+
+        commit_id = "test-commit-id"
+        owner = "owner-name"
+
+        # Mock PrReviewUtils.is_positive_comment to return True for comment1, False for comment2
+        with patch.object(PrReviewUtils, "is_positive_comment") as mock_is_positive:
+            mock_is_positive.side_effect = lambda comment, o: comment == "Good comment" and o == owner
+
+            # Call _format_comments method
+            result = PrReviewPublisher._format_comments(
+                commit_id=commit_id, pr_review=pr_review, owner=owner
+            )
+
+            # Verify that only the positive comment was included
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]["path"], "file1.py")
+            self.assertEqual(result[0]["body"], "Good comment")
+            self.assertEqual(result[0]["commit_id"], commit_id)
+            
+            # Verify is_positive_comment was called with correct parameters for review_comment1 and review_comment2
+            # (not called for review_comment3 since it's filtered by line <= start_line)
+            mock_is_positive.assert_any_call("Good comment", owner)
+            mock_is_positive.assert_any_call("Bad comment", owner)
+            self.assertEqual(mock_is_positive.call_count, 2)
+
