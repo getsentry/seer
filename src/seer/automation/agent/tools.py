@@ -29,3 +29,16 @@ class FunctionTool(BaseModel):
         except Exception as e:
             logger.exception(e)
             return f"Error: {get_full_exception_string(e)}"
+
+
+class ClaudeTool(BaseModel):
+    type: str
+    name: str
+    fn: Callable
+
+    def call(self, **kwargs):
+        try:
+            return self.fn(**kwargs)
+        except Exception as e:
+            logger.exception(e)
+            return f"Error: {get_full_exception_string(e)}"

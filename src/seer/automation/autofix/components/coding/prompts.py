@@ -18,7 +18,8 @@ class CodingPrompts:
             """\
             You are an exceptional principal engineer that is amazing at finding and fixing issues in codebases.
 
-            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets."""
+            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
+            When passing paths into tools, the codebase of each repo is at the root of the repo, there is no "/repo/src", it's just "/src". """
         )
 
     @staticmethod
@@ -73,27 +74,29 @@ class CodingPrompts:
 
     @staticmethod
     def format_fix_msg(
+        *,
         custom_solution: str | None = None,
         auto_solution: list[SolutionTimelineEvent] | None = None,
         mode: Literal["all", "fix", "test"] = "fix",
         has_test: bool = False,
         event_details: EventDetails | None = None,
         root_cause: RootCauseAnalysisItem | str | None = None,
+        repos_str: str,
     ):
         return textwrap.dedent(
             """\
-            <goal>Break down the task of {mode_str} into a list of code changes to make. {filter_str}</goal>
-
-            <output_format>
-            Enclose this plan between <code_changes> and </code_changes> tags. Your output must follow the format properly according to the following guidelines:
-
-            {steps_example_str}
-            </output_format>
+            <goal>
+            Follow the task of {mode_str} and make the necessary changes to the codebase. {filter_str}
+            </goal>
 
             <guidelines>
             {has_fix_guidelines}
             {has_test_guidelines}
             </guidelines>
+
+            <repositories>
+            {repos_str}
+            </repositories>
 
             <final_solution_plan>
             {solution_str}
@@ -105,8 +108,7 @@ class CodingPrompts:
 
             <raw_issue_details>
             {event_details_str}
-            </raw_issue_details>
-            """
+            </raw_issue_details>"""
         ).format(
             mode_str=(
                 "fixing the issue"
@@ -120,7 +122,7 @@ class CodingPrompts:
             filter_str=(
                 "Use the planned solution to inform the test, but do NOT implement the solution. Only write the test."
                 if mode == "test"
-                else "You should exactly follow the final_solution_plan, do not add any additional steps or changes. Your list of steps should be detailed enough so that following it exactly will lead to a fully complete solution."
+                else "You should exactly follow the final_solution_plan, do not add any additional steps or changes."
             ),
             has_fix_guidelines=(
                 "- Follow the planned solution EXACTLY, but you can add on to it or modify it if necessary to make the solution work as a complete implementation. Do not add any unnecessary changes."
@@ -140,6 +142,7 @@ class CodingPrompts:
             ),
             root_cause_str=CodingPrompts.format_root_cause(root_cause),
             event_details_str=(event_details.format_event() if event_details else ""),
+            repos_str=repos_str,
         )
 
     @staticmethod
