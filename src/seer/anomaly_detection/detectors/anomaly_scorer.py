@@ -268,7 +268,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     ):
                         algo_type = AlertAlgorithmType.BOTH
                         flags.append("anomaly_higher_confidence")
-
                     elif prophet_flag == "anomaly_higher_confidence" and prophet_score >= 2.0:
                         algo_type = AlertAlgorithmType.PROPHET
                         flags.append(prophet_flag)
