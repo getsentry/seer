@@ -200,12 +200,9 @@ class CombinedAnomalyScorer(AnomalyScorer):
 
     def _adjust_prophet_flag_for_location(
         self,
-        mp_flag: AnomalyFlags,
-        prev_mp_flag: AnomalyFlags,
         prophet_flag: AnomalyFlags,
         prev_flag: AnomalyFlags,
         y: np.float64,
-        yhat: np.float64,
         yhat_lower: np.float64,
         yhat_upper: np.float64,
         direction: Directions,
@@ -239,7 +236,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
             algo_types = []
             missing = 0
             found = 0
-            previous_mp_flag: AnomalyFlags = "none"
             previous_flag: AnomalyFlags = history_flags[-1] if history_flags else "none"
             missing_timestamps = []
             for timestamp, mp_flag, mp_confidence_level in zip(
@@ -252,12 +248,9 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     prophet_flag = prophet_map["flag"][pd_dt]
                     prophet_score = prophet_map["score"][pd_dt]
                     prophet_flag = self._adjust_prophet_flag_for_location(
-                        mp_flag=mp_flag,
-                        prev_mp_flag=previous_mp_flag,
                         prophet_flag=prophet_flag,
                         prev_flag=previous_flag,
                         y=prophet_map["y"][pd_dt],
-                        yhat=prophet_map["yhat"][pd_dt],
                         yhat_lower=prophet_map["yhat_lower"][pd_dt],
                         yhat_upper=prophet_map["yhat_upper"][pd_dt],
                         direction=ad_config.direction,
@@ -282,7 +275,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     if mp_flag == "anomaly_higher_confidence":
                         algo_type = AlertAlgorithmType.MP
                     flags.append(mp_flag)
-                previous_mp_flag = mp_flag
                 previous_flag = flags[-1]
                 algo_types.append(algo_type)
             if missing > 0:
