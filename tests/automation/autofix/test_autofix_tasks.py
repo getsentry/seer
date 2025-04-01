@@ -783,13 +783,17 @@ def test_truncate_memory_to_match_insights():
         Message(content="Final message", role="assistant"),
     ]
 
-    # Test case 1: Normal truncation with tool calls
-    truncated_memory = truncate_memory_to_match_insights(memory, 3, step, False, False)
+    # Normal truncation with instructions and tool calls
+    truncated_memory = truncate_memory_to_match_insights(memory, 3, step, False, True)
     assert len(truncated_memory) == 6  # Up to and including tool responses
     assert truncated_memory[-2].content == "Tool response 1"
     assert truncated_memory[-1].content == "Tool response 2"
 
-    # Test case 2: No insights
+    # Normal truncation without instructions and tool calls
+    truncated_memory = truncate_memory_to_match_insights(memory, 3, step, False, False)
+    assert len(truncated_memory) == 3  # Up to and including tool responses
+
+    # No insights
     step.insights = []
     truncated_memory = truncate_memory_to_match_insights(memory, 0, step, False, False)
     assert (
@@ -797,7 +801,7 @@ def test_truncate_memory_to_match_insights():
     )  # Should use initial_memory_length when no insights
     assert truncated_memory[-1].content == "Initial message"
 
-    # Test case 3: Truncation without tool calls
+    # Truncation without tool calls
     step.insights = [
         InsightSharingOutput(
             insight="Insight 1",
@@ -812,7 +816,7 @@ def test_truncate_memory_to_match_insights():
     assert len(truncated_memory) == 3
     assert truncated_memory[-1].content == "User message 2"
 
-    # Test case 4: Truncation with incomplete tool responses
+    # Truncation with incomplete tool responses
     step.insights = [
         InsightSharingOutput(
             insight="Insight 1",
@@ -828,26 +832,26 @@ def test_truncate_memory_to_match_insights():
     assert len(truncated_memory) == 4  # Should exclude incomplete tool calls
     assert truncated_memory[-1].content == "Assistant response 2"
 
-    # Test case 5: Memory index less than initial_memory_length
+    # Memory index less than initial_memory_length
     step.initial_memory_length = 3
     step.insights = []
     truncated_memory = truncate_memory_to_match_insights(memory, 1, step, False, False)
     assert len(truncated_memory) == 3
     assert truncated_memory[-1].content == "User message 2"
 
-    # Test case 6: Memory index beyond memory length
+    # Memory index beyond memory length
     truncated_memory = truncate_memory_to_match_insights(
         memory, len(memory) + 1, step, False, False
     )
     assert len(truncated_memory) == len(memory)  # Should return full memory
     assert truncated_memory[-1].content == "Final message"
 
-    # Test case 7: Memory index is -1
+    # Memory index is -1
     truncated_memory = truncate_memory_to_match_insights(memory, -1, step, False, False)
     assert len(truncated_memory) == len(memory)  # Should return full memory
     assert truncated_memory[-1].content == "Final message"
 
-    # Test case 8: Edit insight with tool call but no rethink instruction
+    # Edit insight with tool call but no rethink instruction
     step.insights = [
         InsightSharingOutput(
             insight="Edit Insight",
@@ -863,7 +867,7 @@ def test_truncate_memory_to_match_insights():
     assert len(truncated_memory) == 3  # Should exclude the tool call message for edit insight
     assert truncated_memory[-1].content == "User message 2"
 
-    # Test case 9: Edit insight with tool call and rethink instruction``
+    # Edit insight with tool call and rethink instruction``
     truncated_memory = truncate_memory_to_match_insights(memory, 3, step, True, True)
     assert len(truncated_memory) == 6
     assert (

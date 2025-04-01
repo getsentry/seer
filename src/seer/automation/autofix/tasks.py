@@ -520,18 +520,16 @@ def truncate_memory_to_match_insights(
 
         if new_memory and new_memory[-1].tool_calls:
             num_tool_calls = len(new_memory[-1].tool_calls)
-            if is_edit_insight:
-                if has_rethink_instruction and memory_index + num_tool_calls < len(memory):
-                    new_memory.extend(memory[memory_index + 1 : memory_index + num_tool_calls + 1])
+
+            if has_rethink_instruction and memory_index + num_tool_calls < len(memory):
+                new_memory.extend(memory[memory_index + 1 : memory_index + num_tool_calls + 1])
+
+                if is_edit_insight:
                     for i in range(memory_index + 1, memory_index + num_tool_calls + 1):
                         if new_memory[i].role == "tool":
                             new_memory[i].content = (
                                 "Notice: This tool call did not apply, the user provided instructions."
                             )
-                else:
-                    new_memory = new_memory[:-1]
-            elif memory_index + num_tool_calls < len(memory):
-                new_memory.extend(memory[memory_index + 1 : memory_index + num_tool_calls + 1])
             else:
                 new_memory = new_memory[:-1]
 

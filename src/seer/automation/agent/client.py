@@ -1241,6 +1241,10 @@ class LlmClient:
 
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
+
+                if any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for OpenAI")
+
                 return model.generate_text(
                     max_tokens=max_tokens,
                     messages=messages,
@@ -1266,13 +1270,17 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
+
+                if any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for Gemini")
+
                 return model.generate_text(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -1289,7 +1297,7 @@ class LlmClient:
         model: LlmProvider,
         system_prompt: str | None = None,
         response_format: Type[StructuredOutputType],
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
@@ -1306,6 +1314,10 @@ class LlmClient:
 
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
+
+                if any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for OpenAI")
+
                 messages = LlmClient.clean_tool_call_assistant_messages(messages)
                 return model.generate_structured(
                     max_tokens=max_tokens,
@@ -1314,7 +1326,7 @@ class LlmClient:
                     response_format=response_format,
                     system_prompt=system_prompt,
                     temperature=temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
                 )
@@ -1322,6 +1334,9 @@ class LlmClient:
                 raise NotImplementedError("Anthropic structured outputs are not yet supported")
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
+
+                if any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for Gemini")
                 return model.generate_structured(
                     max_tokens=max_tokens,
                     messages=messages,
@@ -1329,7 +1344,7 @@ class LlmClient:
                     response_format=response_format,
                     system_prompt=system_prompt,
                     temperature=temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -1345,7 +1360,7 @@ class LlmClient:
         messages: list[Message] | None = None,
         model: LlmProvider,
         system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
@@ -1370,13 +1385,17 @@ class LlmClient:
             # Get the appropriate stream generator based on provider
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
+
+                if any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for OpenAI")
+
                 stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool | ClaudeTool], tools),
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
                 )
@@ -1394,13 +1413,17 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
+
+                if any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for Gemini")
+
                 stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool | ClaudeTool], tools),
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
