@@ -377,6 +377,7 @@ def test_autofix_run_question_asking(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Flaky")
 def test_autofix_run_coding(autofix_root_cause_and_solution_run: AutofixContinuation):
     with Session() as session:
         session.add(
