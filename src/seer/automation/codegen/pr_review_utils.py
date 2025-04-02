@@ -33,7 +33,8 @@ class PrReviewUtils:
             model = GoogleProviderEmbeddings.model(
                 "text-embedding-005", task_type="SEMANTIC_SIMILARITY"
             )
-            comment_embedding = model.encode([comment_body])
+            # encode() returns a 2D array when given a list, so we need to extract the first embedding
+            comment_embedding = model.encode([comment_body])[0]
             with Session() as session:
                 # Find 5 most similar comments using cosine similarity
                 similar_comments = (
@@ -46,7 +47,6 @@ class PrReviewUtils:
                     .order_by(DbReviewCommentEmbedding.embedding.cosine_distance(comment_embedding))
                     .limit(COMMENT_COMPARISON_LIMIT)
                 ).all()
-
                 if not similar_comments or len(similar_comments) < COMMENT_COMPARISON_LIMIT:
                     return True  # Default to True if not enough similar comments found
 
