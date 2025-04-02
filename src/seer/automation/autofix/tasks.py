@@ -827,7 +827,7 @@ def comment_on_thread(request: AutofixUpdateRequest):
     is_coding_step = step.key == "plan"
     is_root_cause_step = step.key == "root_cause_analysis_processing"
     memory = (
-        context.get_memory("plan_and_code")
+        context.get_memory("code")
         if is_coding_step
         else (
             context.get_memory("root_cause_analysis")
