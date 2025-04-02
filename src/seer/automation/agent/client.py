@@ -47,7 +47,7 @@ from seer.automation.agent.models import (
     ToolCall,
     Usage,
 )
-from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -474,7 +474,7 @@ class AnthropicProvider:
         messages: list[Message] | None = None,
         prompt: str | None = None,
         system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
@@ -607,7 +607,13 @@ class AnthropicProvider:
             )
 
     @staticmethod
-    def to_tool_dict(tool: FunctionTool) -> ToolParam:
+    def to_tool_dict(tool: FunctionTool | ClaudeTool) -> ToolParam:
+        if isinstance(tool, ClaudeTool):
+            return ToolParam(  # type: ignore
+                name=tool.name,
+                type=tool.type,
+            )
+
         return ToolParam(
             name=tool.name,
             description=tool.description,
@@ -636,7 +642,7 @@ class AnthropicProvider:
         messages: list[Message] | None = None,
         prompt: str | None = None,
         system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
     ) -> tuple[list[MessageParam], list[ToolParam] | None, list[TextBlockParam] | None]:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
         if prompt:
@@ -663,7 +669,7 @@ class AnthropicProvider:
         prompt: str | None = None,
         messages: list[Message] | None = None,
         system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
@@ -1214,7 +1220,7 @@ class LlmClient:
         messages: list[Message] | None = None,
         model: LlmProvider,
         system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
@@ -1235,13 +1241,17 @@ class LlmClient:
 
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
+
+                if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for OpenAI")
+
                 return model.generate_text(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     predicted_output=predicted_output,
                     reasoning_effort=reasoning_effort,
@@ -1260,13 +1270,17 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
+
+                if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for Gemini")
+
                 return model.generate_text(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -1283,7 +1297,7 @@ class LlmClient:
         model: LlmProvider,
         system_prompt: str | None = None,
         response_format: Type[StructuredOutputType],
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
@@ -1300,6 +1314,10 @@ class LlmClient:
 
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
+
+                if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for OpenAI")
+
                 messages = LlmClient.clean_tool_call_assistant_messages(messages)
                 return model.generate_structured(
                     max_tokens=max_tokens,
@@ -1308,7 +1326,7 @@ class LlmClient:
                     response_format=response_format,
                     system_prompt=system_prompt,
                     temperature=temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
                 )
@@ -1316,6 +1334,9 @@ class LlmClient:
                 raise NotImplementedError("Anthropic structured outputs are not yet supported")
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
+
+                if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for Gemini")
                 return model.generate_structured(
                     max_tokens=max_tokens,
                     messages=messages,
@@ -1323,7 +1344,7 @@ class LlmClient:
                     response_format=response_format,
                     system_prompt=system_prompt,
                     temperature=temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -1339,7 +1360,7 @@ class LlmClient:
         messages: list[Message] | None = None,
         model: LlmProvider,
         system_prompt: str | None = None,
-        tools: list[FunctionTool] | None = None,
+        tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
@@ -1364,13 +1385,17 @@ class LlmClient:
             # Get the appropriate stream generator based on provider
             if model.provider_name == LlmProviderType.OPENAI:
                 model = cast(OpenAiProvider, model)
+
+                if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for OpenAI")
+
                 stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
                 )
@@ -1388,13 +1413,17 @@ class LlmClient:
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
+
+                if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
+                    raise ValueError("Claude tools are not supported for Gemini")
+
                 stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
-                    tools=tools,
+                    tools=cast(list[FunctionTool], tools),
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")

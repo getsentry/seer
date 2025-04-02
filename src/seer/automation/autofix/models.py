@@ -348,7 +348,7 @@ class AutofixRequest(BaseModel):
                     if entry.get("type") == "exception":
                         for exception in entry.get("data", {}).get("values", []):
                             if "stacktrace" in exception:
-                                for frame in exception["stacktrace"].get("frames", []):
+                                for frame in exception.get("stacktrace", {}).get("frames", []):
                                     if frame.get("function") and frame.get("in_app", False):
                                         relevant_functions.add(frame["function"])
 

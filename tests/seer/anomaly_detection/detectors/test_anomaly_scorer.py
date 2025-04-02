@@ -437,6 +437,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
@@ -502,6 +503,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
@@ -567,6 +569,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
@@ -633,6 +636,7 @@ class TestCombinedAnomalyScorer:
             timestamps=timestamps,
             mp_flags_and_scores=mp_flags_and_scores,
             prophet_predictions=prophet_predictions,
+            history_flags=None,
             ad_config=ad_config,
         )
 
@@ -645,87 +649,51 @@ class TestCombinedAnomalyScorer:
 
     def test_adjust_prophet_flag_for_location(self):
         ###
-        # Tries all combinations of mp_flag, prev_mp_flag, prophet_flag, direction, y, yhat_lower, yhat_upper
+        # Tries all combinations of prophet_flag, prev_flag, direction, y, yhat_lower, yhat_upper
         # and checks if the result is as expected
         # Overall its a brute force test. Below are the expected results for each combination
-        #
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: none, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: none, prophet_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: none
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence
-        #   mp_flag: anomaly_higher_confidence, prev_mp_flag: anomaly_higher_confidence, prophet_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0: result: anomaly_higher_confidence        #
+
+        # prophet_flag: none, prev_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: anomaly_higher_confidence, prev_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: none, prev_flag: anomaly_higher_confidence, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: none, prev_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> none
+        # prophet_flag: anomaly_higher_confidence, prev_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
+        # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0 -> anomaly_higher_confidence
         ###
+
         scorer = CombinedAnomalyScorer()
-        mp_flags = ["none", "anomaly_higher_confidence"]
         prophet_flags = ["none", "anomaly_higher_confidence"]
-        prev_mp_flags = ["none", "anomaly_higher_confidence"]
+        prev_flags = ["none", "anomaly_higher_confidence"]
         y_ll_ul = [
             (15.0, 12.0, 16.0),
             (20.0, 12.0, 16.0),
@@ -733,96 +701,61 @@ class TestCombinedAnomalyScorer:
         ]
         directions = ["both", "up", "down"]
         expected_results = [
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "none",
-            "anomaly_higher_confidence",
-            "none",
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "none",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
-            "anomaly_higher_confidence",
+            "none",  # prophet_flag: none, prev_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: anomaly_higher_confidence, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "none",  # prophet_flag: none, prev_flag: none, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: none, direction: both, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: both, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: up, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 15.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 20.0, yhat_lower: 12.0, yhat_upper: 16.0
+            "anomaly_higher_confidence",  # prophet_flag: anomaly_higher_confidence, prev_flag: anomaly_higher_confidence, direction: down, y: 10.0, yhat_lower: 12.0, yhat_upper: 16.0
         ]
         i = 0
-        for mp_flag in mp_flags:
-            for prev_mp_flag in prev_mp_flags:
-                for prophet_flag in prophet_flags:
-                    for direction in directions:
-                        for y, yhat_lower, yhat_upper in y_ll_ul:
-                            result = scorer._adjust_prophet_flag_for_location(
-                                mp_flag=mp_flag,
-                                prev_mp_flag=prev_mp_flag,
-                                prophet_flag=prophet_flag,
-                                y=y,
-                                yhat=y,
-                                yhat_lower=yhat_lower,
-                                yhat_upper=yhat_upper,
-                                direction=direction,
-                            )
-                            assert (
-                                result == expected_results[i]
-                            ), f"Expected {expected_results[i]} for mp_flag: {mp_flag}, prev_mp_flag: {prev_mp_flag}, prophet_flag: {prophet_flag}, direction: {direction}, y: {y}, yhat_lower: {yhat_lower}, yhat_upper: {yhat_upper}, got {result}"
-                            i += 1
+        all_results = []
+        for prev_flag in prev_flags:
+            for prophet_flag in prophet_flags:
+                for direction in directions:
+                    for y, yhat_lower, yhat_upper in y_ll_ul:
+                        result = scorer._adjust_prophet_flag_for_location(
+                            prophet_flag=prophet_flag,
+                            prev_flag=prev_flag,
+                            y=y,
+                            yhat_lower=yhat_lower,
+                            yhat_upper=yhat_upper,
+                            direction=direction,
+                        )
+                        all_results.append(result)
+                        assert (
+                            result == expected_results[i]
+                        ), f"Expected {expected_results[i]} for prophet_flag: {prophet_flag}, direction: {direction}, y: {y}, yhat_lower: {yhat_lower}, yhat_upper: {yhat_upper}, got {result} at index {i}"
+                        i += 1
+                        prev_flag = result
+        assert all_results == expected_results

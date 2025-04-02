@@ -1,22 +1,31 @@
 import logging
+import os
 import shlex
 import subprocess
 import textwrap
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Literal, TypeAlias, cast
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from threading import Lock
+from typing import Any, Literal, TypeAlias, cast
 
 from langfuse.decorators import observe
 from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.agent.tools import FunctionTool
+from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.component import create_insight_output
+from seer.automation.autofix.components.insight_sharing.models import (
+    InsightSharingOutput,
+    InsightSharingType,
+)
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.codebase.file_patches import make_file_patches
+from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
-from seer.automation.models import EventDetails, Profile, SentryEventData
+from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
 from seer.rpc import RpcClient
@@ -27,9 +36,10 @@ logger = logging.getLogger(__name__)
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
-    tmp_dir: dict[str, tuple[str, str]] | None = None  # Maps repo_name to (tmp_dir, tmp_repo_dir)
+    tmp_dir: dict[str, tuple[str, str]] = {}  # Maps repo_name to (tmp_dir, tmp_repo_dir)
     tmp_repo_dir: str | None = None
     repo_client_type: RepoClientType = RepoClientType.READ
+    _download_future: Future | None = None
 
     def __init__(
         self,
@@ -40,12 +50,57 @@ class BaseTools:
         self.context = context
         self.retrieval_top_k = retrieval_top_k
         self.repo_client_type = repo_client_type
+        self.tmp_dir = {}
+
+        # Start downloading repos in parallel immediately
+        self._executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
+        self._start_parallel_repo_download()
+
+    def _start_parallel_repo_download(self):
+        """Start downloading all repositories in parallel in the background."""
+        repo_names = self._get_repo_names()
+        if not repo_names:
+            return
+
+        def download_all_repos():
+            """Download all repositories and update self.tmp_dir directly."""
+            # Create a lock for thread-safe updates to self.tmp_dir
+            if not hasattr(self, "_tmp_dir_lock"):
+                self._tmp_dir_lock = Lock()
+
+            for repo_name in repo_names:
+                # Skip if already downloaded or in progress
+                with self._tmp_dir_lock:
+                    if repo_name in self.tmp_dir:
+                        continue
+
+                try:
+                    repo_client = self.context.get_repo_client(
+                        repo_name=repo_name, type=self.repo_client_type
+                    )
+                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+
+                    # Update self.tmp_dir in a thread-safe way
+                    with self._tmp_dir_lock:
+                        self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+
+                except Exception as e:
+                    logger.exception(f"Error pre-downloading repo {repo_name}: {e}")
+
+            return True  # Signal completion
+
+        self._download_future = self._executor.submit(download_all_repos)
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.cleanup()
+        if hasattr(self, "_executor") and self._executor:
+            try:
+                self._executor.shutdown(wait=True, cancel_futures=True)
+            except Exception as e:
+                logger.exception(f"Error shutting down executor: {e}")
 
     def _get_repo_names(self) -> list[str]:
         if isinstance(self.context, AutofixContext):
@@ -94,7 +149,7 @@ class BaseTools:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
-            valid_file_paths = repo_client.get_valid_file_paths(files_only=True)
+            valid_file_paths = repo_client.get_valid_file_paths()
 
             # Convert the list of file paths to a tree structure
             files_with_status = [{"path": path, "status": ""} for path in valid_file_paths]
@@ -227,6 +282,23 @@ class BaseTools:
         joined = "\n".join(unique_parents)
         return f"<did you mean>\n{joined}\n</did you mean>"
 
+    def _attempt_fix_path(self, path: str, repo_name: str) -> str | None:
+        """
+        Attempts to fix a path by checking if it exists in the repository as a path or directory.
+        """
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
+        all_files = repo_client.get_index_file_set()
+
+        for p in all_files:
+            if p.endswith(path):
+                # is a valid file path
+                return p
+            if p.startswith(path):
+                # is a valid directory path
+                return path
+
+        return None
+
     def _normalize_path(self, path: str) -> str:
         """
         Ensures paths don't start with a slash, but do end in one, such as example/path/
@@ -235,11 +307,20 @@ class BaseTools:
         return normalized_path
 
     def cleanup(self):
+        # Clean up any in-progress downloads
+        if self._download_future and not self._download_future.done():
+            try:
+                self._download_future.cancel()
+            except Exception as e:
+                logger.exception(f"Error cancelling downloads during cleanup: {e}")
+            self._download_future = None
+
+        # Clean up any tmp dirs that were created
         if self.tmp_dir:
-            # Clean up all tmp dirs
             for tmp_dir, _ in self.tmp_dir.values():
                 cleanup_dir(tmp_dir)
-            self.tmp_dir = None
+        # Always set tmp_dir to None after cleanup attempt
+        self.tmp_dir = None
 
     @observe(name="Search Google")
     @ai_track(description="Search Google")
@@ -373,7 +454,7 @@ class BaseTools:
             return f"Error parsing grep command: {str(e)}"
 
         for repo_name in repo_names:
-            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+            if repo_name not in self.tmp_dir:
                 continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
@@ -411,53 +492,89 @@ class BaseTools:
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
         Helper method to ensure repositories are downloaded to temporary directories.
-        Sets self.tmp_dir to a dict mapping repo_names to (tmp_dir, tmp_repo_dir) tuples.
+        Checks if downloads are in progress and waits for them if necessary,
+        or triggers downloads for missing repositories.
 
         Args:
             repo_name: If provided, only ensures this specific repo is downloaded.
                       If None, ensures all repos are downloaded.
         """
-        if self.tmp_dir is None:
-            self.tmp_dir = {}
-
-        downloaded_something = False
+        # Check if parallel download is in progress
+        if self._download_future is not None:
+            if self._download_future.done():
+                # Download completed - process results
+                try:
+                    self._download_future.result()
+                except Exception as e:
+                    logger.exception(f"Error in parallel repo download: {e}")
+                finally:
+                    self._download_future = None
+            else:
+                # Download in progress - wait for it to complete with a timeout
+                try:
+                    self._download_future.result(timeout=60)
+                    self._download_future = None
+                except TimeoutError:
+                    logger.warning(
+                        "Parallel repo download taking too long, proceeding with individual downloads"
+                    )
+                    self._download_future = None
+                except Exception as e:
+                    logger.exception(f"Error waiting for parallel repo download: {e}")
+                    self._download_future = None
 
         if repo_name:
-            # Only download the specified repo if it's not already downloaded
-            if repo_name not in self.tmp_dir:
+            repo_names_to_download = [repo_name] if repo_name not in self.tmp_dir else []
+        else:
+            repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
+
+        if not repo_names_to_download:
+            return
+
+        append_langfuse_observation_metadata({"repo_download": True})
+
+        if not hasattr(self, "_tmp_dir_lock"):
+            self._tmp_dir_lock = Lock()
+
+        if len(repo_names_to_download) == 1:
+            # Single repo - download synchronously
+            try:
+                repo_name = repo_names_to_download[0]
                 repo_client = self.context.get_repo_client(
                     repo_name=repo_name, type=self.repo_client_type
                 )
                 tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-                self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
-                downloaded_something = True
+
+                with self._tmp_dir_lock:
+                    self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+            except Exception as e:
+                logger.exception(f"Error downloading repo {repo_name}: {e}")
         else:
-            # Download all repos that aren't already downloaded
-            repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
-
-            if repo_names_to_download:
-
-                def download_repo(repo_name):
+            # Multiple repos - download in parallel
+            def download_repo(repo_name):
+                try:
                     repo_client = self.context.get_repo_client(
                         repo_name=repo_name, type=self.repo_client_type
                     )
                     tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
                     return repo_name, (tmp_dir, tmp_repo_dir)
+                except Exception as e:
+                    logger.exception(f"Error downloading repo {repo_name}: {e}")
+                    return None
 
-                with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
-                    future_to_repo = {
-                        executor.submit(download_repo, repo_name): repo_name
-                        for repo_name in repo_names_to_download
-                    }
-                    for future in as_completed(future_to_repo):
-                        repo_name, repo_dirs = future.result()
-                        if repo_name and repo_dirs:
-                            self.tmp_dir[repo_name] = repo_dirs
+            with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+                futures = {
+                    executor.submit(download_repo, repo_name): repo_name
+                    for repo_name in repo_names_to_download
+                }
 
-                downloaded_something = True
-
-        # Log whether we downloaded anything new
-        append_langfuse_observation_metadata({"repo_download": downloaded_something})
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        repo_name, repo_dirs = result
+                        with self._tmp_dir_lock:
+                            if repo_name is not None:
+                                self.tmp_dir[repo_name] = repo_dirs
 
     @observe(name="Find Files")
     @ai_track(description="Find Files")
@@ -486,7 +603,7 @@ class BaseTools:
             return f"Error parsing find command: {str(e)}"
 
         for repo_name in repo_names:
-            if self.tmp_dir is None or repo_name not in self.tmp_dir:
+            if repo_name not in self.tmp_dir:
                 continue
             tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
             if not tmp_repo_dir:
@@ -519,9 +636,339 @@ class BaseTools:
 
         return "\n\n".join(all_results)
 
-    def get_tools(self, can_access_repos: bool = True):
+    def _append_file_change(self, repo_name: str, file_change: FileChange):
+        with self.context.state.update() as cur:
+            for repo in cur.request.repos:
+                if repo.full_name == repo_name:
+                    cur.codebases[repo.external_id].file_changes.append(file_change)
 
-        tools = [
+                    return True
+
+        return False
+
+    def _get_repo_name_and_path(
+        self, kwargs: dict[str, Any]
+    ) -> tuple[str | None, str | None, str | None]:
+        repos = self._get_repo_names()
+
+        path_args = kwargs.get("path", None)
+        repo_name = None
+
+        if not repos:
+            return "Error: No repositories found.", None, None
+
+        if len(repos) > 1:
+            if ":" not in path_args:
+                return (
+                    "Error: Multiple repositories found. Please provide a repository name in the format `repo_name:path`, such as `repo_owner/repo:src/foo/bar.py`. The repositories available to you are: "
+                    + ", ".join(repos),
+                    None,
+                    None,
+                )
+            segments = path_args.split(":")
+            repo_name = segments[0]
+            path = segments[1]
+        else:
+            repo_name = repos[0]
+            path = path_args
+
+        fixed_path = self._attempt_fix_path(path, repo_name)
+        if not fixed_path:
+            return (
+                f"Error: The path you provided '{path}' does not exist in the repository '{repo_name}'.",
+                None,
+                None,
+            )
+
+        return None, repo_name, path
+
+    @observe(name="Claude Tools")
+    def handle_claude_tools(self, **kwargs: Any) -> str:
+        """
+        Handles various file editing commands from Claude tools.
+
+        Args:
+            **kwargs: Dictionary containing:
+                - command: The type of command to execute ("view", "str_replace", "create", "insert", "undo_edit")
+                - path: The file path to operate on
+                - repo_name: The repository name (optional if only one repo)
+                - Additional command-specific parameters
+
+        Returns:
+            str: Success message or error description
+        """
+        command = kwargs.get("command", "")
+        error, repo_name, path = self._get_repo_name_and_path(kwargs)
+
+        if error:
+            return error
+
+        tool_call_id = kwargs.get("tool_call_id", None)
+        current_memory_index = kwargs.get("current_memory_index", -1)
+
+        command_handlers = {
+            "view": self._handle_view_command,
+            "str_replace": self._handle_str_replace_command,
+            "create": self._handle_create_command,
+            "insert": self._handle_insert_command,
+            "undo_edit": self._handle_undo_edit_command,
+        }
+
+        handler = command_handlers.get(command)
+        if handler:
+            return handler(
+                kwargs,
+                repo_name,
+                path,
+                tool_call_id=tool_call_id,
+                current_memory_index=current_memory_index,
+            )
+
+        return f"Error: Unknown command '{command}'"
+
+    def _get_file_contents(self, path: str, repo_name: str) -> str:
+        """Helper method to get file contents with proper error handling."""
+        contents = self.context.get_file_contents(path, repo_name=repo_name)
+        if not contents:
+            raise ValueError("File not found")
+        return contents
+
+    def _create_file_change(
+        self,
+        change_type: str,
+        reference_snippet: str,
+        new_snippet: str,
+        path: str,
+        repo_name: str,
+        commit_message: str = "COMMIT",
+        tool_call_id: str | None = None,
+    ) -> FileChange:
+        """Helper method to create a FileChange instance."""
+        return FileChange(
+            change_type=change_type,
+            commit_message=commit_message,
+            reference_snippet=reference_snippet,
+            new_snippet=new_snippet,
+            path=path,
+            repo_name=repo_name,
+            tool_call_id=tool_call_id,
+        )
+
+    def _apply_file_change(self, repo_name: str, file_change: FileChange) -> str:
+        """Helper method to apply a file change with proper error handling."""
+        try:
+            if self._append_file_change(repo_name, file_change):
+                return "Change applied successfully."
+            return "Error: Failed to apply file change."
+        except Exception as e:
+            return f"Error: Failed to apply changes to file: {str(e)}"
+
+    @observe(name="View")
+    def _handle_view_command(
+        self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
+    ) -> str:
+        """Handles the view command to display file contents with optional line range."""
+        try:
+            view_range = kwargs.get("view_range", [])
+
+            # handle directories
+            if os.path.isdir(path):
+                if view_range:
+                    return "Error: Cannot view a directory with a line range."
+
+                return self.tree(path, repo_name)
+
+            file_contents = self._get_file_contents(path, repo_name)
+            lines = file_contents.split("\n")
+
+            if view_range:
+                try:
+                    start_line = max(0, int(view_range[0]) - 1)
+                    end_line = min(len(lines), int(view_range[1]))
+                    if start_line >= end_line:
+                        return "Error: Invalid line range - start must be less than end"
+                    lines = lines[start_line:end_line]
+                    self.context.event_manager.add_log(
+                        f"Looking at lines `{start_line+1}` to `{end_line}` of `{path}`..."
+                    )
+                except (ValueError, IndexError):
+                    return "Error: Invalid line range format"
+            else:
+                self.context.event_manager.add_log(f"Looking at `{path}`...")
+
+            return "\n".join(f"{i+1}: {line}" for i, line in enumerate(lines))
+        except ValueError as e:
+            return str(e)
+
+    @observe(name="String Replace")
+    def _handle_str_replace_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
+        """Handles the string replace command to replace text in a file."""
+        old_str = kwargs.get("old_str")
+        new_str = kwargs.get("new_str")
+        if not old_str or not new_str:
+            return "Error: old_str and new_str are required for str_replace command"
+
+        try:
+            file_change = self._create_file_change(
+                "edit", old_str, new_str, path, repo_name, tool_call_id=tool_call_id
+            )
+
+            self.context.event_manager.add_log(f"Making an edit to `{path}` in `{repo_name}`...")
+
+            document = BaseDocument(
+                path=path,
+                repo_name=repo_name,
+                text=self.context.get_file_contents(path, repo_name),
+            )
+
+            file_diff, _ = make_file_patches([file_change], [path], [document])
+
+            if not file_diff:
+                return "Error: No changes were made to the file."
+
+            self.context.event_manager.send_insight(
+                InsightSharingOutput(
+                    insight=f"Edited `{path}` in `{repo_name}`.",
+                    change_diff=file_diff,
+                    generated_at_memory_index=current_memory_index,
+                    type=InsightSharingType.FILE_CHANGE,
+                )
+            )
+
+            return self._apply_file_change(repo_name, file_change)
+        except ValueError as e:
+            return str(e)
+
+    @observe(name="Create File")
+    def _handle_create_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
+        """Handles the create command to create a new file."""
+        file_text = kwargs.get("file_text", "")
+        if not file_text:
+            return "Error: file_text is required for create command"
+
+        file_change = self._create_file_change(
+            "create", file_text, file_text, path, repo_name, tool_call_id=tool_call_id
+        )
+
+        document = BaseDocument(
+            path=path,
+            repo_name=repo_name,
+            text="",
+        )
+
+        file_diff, _ = make_file_patches([file_change], [path], [document])
+
+        if not file_diff:
+            return "Error: No changes were made to the file."
+
+        self.context.event_manager.add_log(f"Creating a new file `{path}` in `{repo_name}`...")
+        self.context.event_manager.send_insight(
+            InsightSharingOutput(
+                insight=f"Created file `{path}` in `{repo_name}`.",
+                change_diff=file_diff,
+                generated_at_memory_index=current_memory_index,
+                type=InsightSharingType.FILE_CHANGE,
+            )
+        )
+
+        return self._apply_file_change(repo_name, file_change)
+
+    @observe(name="Insert Text")
+    def _handle_insert_command(
+        self,
+        kwargs: dict[str, Any],
+        repo_name: str,
+        path: str,
+        tool_call_id: str | None = None,
+        current_memory_index: int = -1,
+    ) -> str:
+        """Handles the insert command to insert text at a specific line."""
+        try:
+            insert_line = kwargs.get("insert_line")
+            if insert_line is None:
+                return "Error: insert_line is required for insert command"
+
+            insert_line = int(insert_line)
+            new_str = kwargs.get("insert_text", "")
+            if not new_str:
+                return "Error: insert_text is required for insert command"
+
+            file_contents = self._get_file_contents(path, repo_name)
+            lines = file_contents.split("\n")
+            if not 0 <= insert_line <= len(lines):
+                return f"Error: Invalid line number. Must be between 0 and {len(lines)}"
+
+            lines.insert(insert_line, new_str)
+            new_file_contents = "\n".join(lines)
+            file_change = self._create_file_change(
+                "edit", file_contents, new_file_contents, path, repo_name, tool_call_id=tool_call_id
+            )
+
+            document = BaseDocument(
+                path=path,
+                repo_name=repo_name,
+                text=self.context.get_file_contents(path, repo_name),
+            )
+
+            file_diff, _ = make_file_patches([file_change], [path], [document])
+
+            if not file_diff:
+                return "Error: No changes were made to the file."
+
+            self.context.event_manager.add_log(f"Making a change to `{path}` in `{repo_name}`...")
+            self.context.event_manager.send_insight(
+                InsightSharingOutput(
+                    insight=f"Edited `{path}` in `{repo_name}`.",
+                    change_diff=file_diff,
+                    generated_at_memory_index=current_memory_index,
+                    type=InsightSharingType.FILE_CHANGE,
+                )
+            )
+
+            return self._apply_file_change(repo_name, file_change)
+        except ValueError as e:
+            return str(e)
+
+    @observe(name="Undo Edit")
+    def _handle_undo_edit_command(
+        self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
+    ) -> str:
+        """Handles the undo edit command to remove file changes."""
+        with self.context.state.update() as cur:
+            for repo in cur.request.repos:
+                if repo.full_name == repo_name:
+                    codebase = cur.codebases[repo.external_id]
+                    if not codebase:
+                        return "Error: No codebases found"
+
+                    # Remove all file changes for this path
+                    codebase.file_changes = [fc for fc in codebase.file_changes if fc.path != path]
+
+                    self.context.event_manager.add_log(
+                        f"Undoing edits to `{path}` in `{repo_name}`..."
+                    )
+
+                    return "File changes undone successfully."
+            return "Error: No file changes found to undo."
+
+    def get_tools(
+        self, can_access_repos: bool = True, include_claude_tools: bool = False
+    ) -> list[ClaudeTool | FunctionTool]:
+        tools: list[ClaudeTool | FunctionTool] = [
             FunctionTool(
                 name="google_search",
                 fn=self.google_search,
@@ -536,6 +983,17 @@ class BaseTools:
                 required=["question"],
             )
         ]
+
+        if include_claude_tools:
+            tools.extend(
+                [
+                    ClaudeTool(
+                        type="text_editor_20250124",
+                        name="str_replace_editor",
+                        fn=self.handle_claude_tools,
+                    )
+                ]
+            )
 
         if can_access_repos:
             tools.extend(

@@ -3,6 +3,7 @@ import logging
 import time
 
 from seer.automation.autofix.components.coding.models import CodingOutput
+from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionTimelineEvent
 from seer.automation.autofix.models import (
@@ -245,7 +246,6 @@ class AutofixEventManager:
 
     def send_coding_start(self):
         with self.state.update() as cur:
-            cur.clear_file_changes()
             plan_step = cur.find_step(key=self.plan_step.key)
             if not plan_step or plan_step.status != AutofixStatus.PROCESSING:
                 plan_step = cur.add_step(self.plan_step)
@@ -254,12 +254,11 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_coding_result(self, result: CodingOutput | None):
+    def send_coding_result(self):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
-            plan_step.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
-
-            cur.status = AutofixStatus.PROCESSING if result else AutofixStatus.ERROR
+            plan_step.status = AutofixStatus.PROCESSING
+            cur.status = AutofixStatus.PROCESSING
 
             log_seer_event(
                 SeerEventNames.AUTOFIX_CODING_COMPLETED,
@@ -399,8 +398,8 @@ class AutofixEventManager:
                 )
                 cur.steps[-1] = step
 
-            # Clear file changes if the changes step is not present.
-            if not next((step for step in cur.steps if step.key == self.changes_step.key), None):
+            # Clear file changes if the coding step is not present.
+            if not next((step for step in cur.steps if step.key == self.plan_step.key), None):
                 cur.clear_file_changes()
 
         count = 0
@@ -439,3 +438,10 @@ class AutofixEventManager:
                 ),
             },
         )
+
+    def send_insight(self, insight_card: InsightSharingOutput):
+        with self.state.update() as cur:
+            if insight_card:
+                cur_step = cur.steps[-1]
+                assert isinstance(cur_step, DefaultStep)
+                cur_step.insights.append(insight_card)
