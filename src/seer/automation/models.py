@@ -309,12 +309,22 @@ class BreadcrumbsDetails(BaseModel):
     level: Optional[str] = None
 
 
+class RequestDetails(BaseModel):
+    url: str | None = None
+    method: str | None = None
+    data: dict[str, Any] | str | None = None
+    # not including cookies, headers, env, query, etc. for now
+
+
 class EventDetails(BaseModel):
     title: str
+    message: str | None = None
     transaction_name: str | None = None
     exceptions: list[ExceptionDetails] = Field(default_factory=list, exclude=False)
     threads: list[ThreadDetails] = Field(default_factory=list, exclude=False)
     breadcrumbs: list[BreadcrumbsDetails] = Field(default_factory=list, exclude=False)
+    stacktraces: list[Stacktrace] = Field(default_factory=list, exclude=False)
+    request: RequestDetails | None = None
 
     @classmethod
     def from_event(cls, error_event: SentryEventData):
@@ -323,7 +333,10 @@ class EventDetails(BaseModel):
         exceptions: list[ExceptionDetails] = []
         threads: list[ThreadDetails] = []
         breadcrumbs: list[BreadcrumbsDetails] = []
+        stacktraces: list[Stacktrace] = []
         transaction_name: str | None = None
+        message: str | None = None
+        request: RequestDetails | None = None
 
         for tag in error_event.get("tags", []):
             if tag.get("key") == "transaction":
@@ -352,6 +365,12 @@ class EventDetails(BaseModel):
                         continue
                     crumb_details = BreadcrumbsDetails.model_validate(breadcrumb)
                     breadcrumbs.append(crumb_details)
+            elif entry.get("type") == "stacktrace":
+                stacktraces.append(Stacktrace.model_validate(entry.get("data", {})))
+            elif entry.get("type") == "message":
+                message = entry.get("data", {}).get("formatted", None)
+            elif entry.get("type") == "request":
+                request = RequestDetails.model_validate(entry.get("data", {}))
 
         return cls(
             title=error_event.get("title"),
@@ -359,36 +378,68 @@ class EventDetails(BaseModel):
             exceptions=exceptions,
             threads=threads,
             breadcrumbs=breadcrumbs,
+            message=message,
+            stacktraces=stacktraces,
+            request=request,
         )
 
     def format_event(self):
+        exceptions = self.format_exceptions()
+        breadcrumbs = self.format_breadcrumbs()
+        message = self.message if self.message and self.message not in self.title else ""
+        stacktraces = self.format_stacktraces()
+        request = self.format_request()
+
         return textwrap.dedent(
             """\
             {title} {transaction}
-            <exceptions>
+            {message}
             {exceptions}
-            </exceptions>
-            <breadcrumb_logs>
+            {stacktraces}
             {breadcrumbs}
-            </breadcrumb_logs>
+            {request}
             """
         ).format(
             title=self.title,
             transaction=f"(occurred in: {self.transaction_name})" if self.transaction_name else "",
-            exceptions=self.format_exceptions(),
-            breadcrumbs=self.format_breadcrumbs(),
+            message=f"\n<message>\n{message}\n</message>" if message.strip() else "",
+            exceptions=f"<exceptions>\n{exceptions}\n</exceptions>" if exceptions.strip() else "",
+            stacktraces=(
+                f"\n<stacktraces>\n{stacktraces}\n</stacktraces>" if stacktraces.strip() else ""
+            ),
+            breadcrumbs=(
+                f"\n<breadcrumb_logs>\n{breadcrumbs}\n</breadcrumb_logs>"
+                if breadcrumbs.strip()
+                else ""
+            ),
+            request=f"\n<http_request>\n{request}\n</http_request>" if request.strip() else "",
         )
 
     def format_event_without_breadcrumbs(
         self, include_context: bool = True, include_var_values: bool = True
     ):
+        exceptions = self.format_exceptions(
+            include_context=include_context, include_var_values=include_var_values
+        )
+        stacktraces = self.format_stacktraces(
+            include_context=include_context, include_var_values=include_var_values
+        )
+        message = self.message if self.message and self.message not in self.title else ""
+
         return textwrap.dedent(
             f"""\
             {self.title}
-            <exceptions>
-            {self.format_exceptions(include_context=include_context, include_var_values=include_var_values)}
-            </exceptions>
+            {message}
+            {exceptions}
+            {stacktraces}
             """
+        ).format(
+            title=self.title,
+            exceptions=f"<exceptions>\n{exceptions}\n</exceptions>" if exceptions.strip() else "",
+            stacktraces=(
+                f"<stacktraces>\n{stacktraces}\n</stacktraces>" if stacktraces.strip() else ""
+            ),
+            message=f"<message>\n{message}\n</message>" if message.strip() else "",
         )
 
     def format_exceptions(self, include_context: bool = True, include_var_values: bool = True):
@@ -469,6 +520,41 @@ class EventDetails(BaseModel):
                 level=f' level="{breadcrumb.level}"' if breadcrumb.level else "",
             )
             for i, breadcrumb in enumerate(self.breadcrumbs)
+        )
+
+    def format_stacktraces(self, include_context: bool = True, include_var_values: bool = True):
+        return "\n".join(
+            textwrap.dedent(
+                """\
+                <stacktrace_{i}>
+                {stacktrace}
+                </stacktrace_{i}>"""
+            ).format(
+                i=i,
+                stacktrace=stacktrace.to_str(
+                    include_context=include_context, include_var_values=include_var_values
+                ),
+            )
+            for i, stacktrace in enumerate(self.stacktraces)
+        )
+
+    def format_request(self):
+        if not self.request:
+            return ""
+
+        return textwrap.dedent(
+            """\
+            {method} {url}
+            {data}
+            """
+        ).format(
+            method=self.request.method if self.request.method else "",
+            url=self.request.url if self.request.url else "",
+            data=(
+                f"Body:\n{format_dict(self.request.data)}"
+                if self.request.data and isinstance(self.request.data, dict)
+                else (self.request.data if self.request.data else "")
+            ),
         )
 
 
