@@ -319,8 +319,8 @@ class BaseTools:
         if self.tmp_dir:
             for tmp_dir, _ in self.tmp_dir.values():
                 cleanup_dir(tmp_dir)
-        # Always set tmp_dir to None after cleanup attempt
-        self.tmp_dir = None
+        # Reset tmp_dir
+        self.tmp_dir = {}
 
     @observe(name="Search Google")
     @ai_track(description="Search Google")
