@@ -21,9 +21,11 @@ class PrReviewUtils:
 
         Args:
             comment_body: The body text of the comment to evaluate
+            owner: The repository owner to filter relevant comment patterns
 
         Returns:
             bool: True if there are more similar positive patterns than negative ones
+                 or if insufficient patterns are found for comparison
         """
 
         try:
@@ -33,7 +35,7 @@ class PrReviewUtils:
             )
             comment_embedding = model.encode([comment_body])
             with Session() as session:
-                # Find 3 most similar comments using cosine similarity
+                # Find 5 most similar comments using cosine similarity
                 similar_comments = (
                     session.query(DbReviewCommentEmbedding)
                     .where(
@@ -45,9 +47,9 @@ class PrReviewUtils:
                     .limit(COMMENT_COMPARISON_LIMIT)
                 ).all()
 
-                # return True
                 if not similar_comments or len(similar_comments) < COMMENT_COMPARISON_LIMIT:
                     return True  # Default to True if not enough similar comments found
+
                 positive_patterns = sum(
                     1 for comment in similar_comments if comment.is_good_pattern
                 )
