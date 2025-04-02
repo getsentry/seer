@@ -390,8 +390,9 @@ class EventDetails(BaseModel):
         stacktraces = self.format_stacktraces()
         request = self.format_request()
 
-        return textwrap.dedent(
-            """\
+        return (
+            textwrap.dedent(
+                """\
             {title} {transaction}
             {message}
             {exceptions}
@@ -399,21 +400,28 @@ class EventDetails(BaseModel):
             {breadcrumbs}
             {request}
             """
-        ).format(
-            title=self.title,
-            transaction=f"(occurred in: {self.transaction_name})" if self.transaction_name else "",
-            message=f"\n<message>\n{message}\n</message>" if message.strip() else "",
-            exceptions=f"<exceptions>\n{exceptions}\n</exceptions>" if exceptions.strip() else "",
-            stacktraces=(
-                f"\n<stacktraces>\n{stacktraces}\n</stacktraces>" if stacktraces.strip() else ""
-            ),
-            breadcrumbs=(
-                f"\n<breadcrumb_logs>\n{breadcrumbs}\n</breadcrumb_logs>"
-                if breadcrumbs.strip()
-                else ""
-            ),
-            request=f"\n<http_request>\n{request}\n</http_request>" if request.strip() else "",
-        ).strip()
+            )
+            .format(
+                title=self.title,
+                transaction=(
+                    f"(occurred in: {self.transaction_name})" if self.transaction_name else ""
+                ),
+                message=f"\n<message>\n{message}\n</message>" if message.strip() else "",
+                exceptions=(
+                    f"<exceptions>\n{exceptions}\n</exceptions>" if exceptions.strip() else ""
+                ),
+                stacktraces=(
+                    f"\n<stacktraces>\n{stacktraces}\n</stacktraces>" if stacktraces.strip() else ""
+                ),
+                breadcrumbs=(
+                    f"\n<breadcrumb_logs>\n{breadcrumbs}\n</breadcrumb_logs>"
+                    if breadcrumbs.strip()
+                    else ""
+                ),
+                request=f"\n<http_request>\n{request}\n</http_request>" if request.strip() else "",
+            )
+            .strip()
+        )
 
     def format_event_without_breadcrumbs(
         self, include_context: bool = True, include_var_values: bool = True
