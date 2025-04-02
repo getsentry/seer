@@ -413,7 +413,7 @@ class EventDetails(BaseModel):
                 else ""
             ),
             request=f"\n<http_request>\n{request}\n</http_request>" if request.strip() else "",
-        )
+        ).strip()
 
     def format_event_without_breadcrumbs(
         self, include_context: bool = True, include_var_values: bool = True
