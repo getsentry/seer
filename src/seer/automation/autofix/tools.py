@@ -14,7 +14,6 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.insight_sharing.component import create_insight_output
 from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingOutput,
     InsightSharingType,
