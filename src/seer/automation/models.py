@@ -22,7 +22,12 @@ from pydantic.alias_generators import to_camel, to_snake
 from pydantic_xml import BaseXmlModel
 from typing_extensions import TypedDict
 
-from seer.automation.utils import format_dict, process_repo_provider, unescape_xml_chars
+from seer.automation.utils import (
+    format_dict,
+    format_list,
+    process_repo_provider,
+    unescape_xml_chars,
+)
 from seer.db import DbSeerProjectPreference
 
 
