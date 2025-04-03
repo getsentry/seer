@@ -22,7 +22,12 @@ from pydantic.alias_generators import to_camel, to_snake
 from pydantic_xml import BaseXmlModel
 from typing_extensions import TypedDict
 
-from seer.automation.utils import format_dict, process_repo_provider, unescape_xml_chars
+from seer.automation.utils import (
+    format_dict,
+    format_list,
+    process_repo_provider,
+    unescape_xml_chars,
+)
 from seer.db import DbSeerProjectPreference
 
 
@@ -312,7 +317,7 @@ class BreadcrumbsDetails(BaseModel):
 class RequestDetails(BaseModel):
     url: str | None = None
     method: str | None = None
-    data: dict[str, Any] | str | None = None
+    data: dict[str, Any] | str | list[dict[str, Any]] | None = None
     # not including cookies, headers, env, query, etc. for now
 
 
@@ -561,7 +566,11 @@ class EventDetails(BaseModel):
             data=(
                 f"Body:\n{format_dict(self.request.data)}"
                 if self.request.data and isinstance(self.request.data, dict)
-                else (self.request.data if self.request.data else "")
+                else (
+                    f"Body:\n{format_list(self.request.data)}"
+                    if self.request.data and isinstance(self.request.data, list)
+                    else (f"Body:\n{self.request.data}" if self.request.data else "")
+                )
             ),
         )
 
