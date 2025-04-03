@@ -13,6 +13,8 @@ from seer.automation.models import FileChange
 class TestRepo:
     """A real object to replace complex mocking chains for repositories in tests."""
 
+    __test__ = False
+
     def __init__(self, name="test/repo", repo_id="123"):
         self.full_name = name
         self.external_id = repo_id
@@ -27,6 +29,8 @@ class TestRepo:
 
 class TestState:
     """A real object to replace complex mocking chains for state in tests."""
+
+    __test__ = False
 
     def __init__(self, repos=None):
         self.repos = repos or [TestRepo()]

@@ -52,6 +52,8 @@ def find_free_port():
 
 @dataclasses.dataclass
 class TestRpcHttpServer:
+    __test__ = False
+
     server_addr: tuple[str, int] = dataclasses.field(default_factory=lambda: ("", find_free_port()))
 
     @contextlib.contextmanager
