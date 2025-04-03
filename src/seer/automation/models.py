@@ -440,8 +440,8 @@ class EventDetails(BaseModel):
         message = self.message if self.message and self.message not in self.title else ""
 
         return textwrap.dedent(
-            f"""\
-            {self.title}
+            """\
+            {title}
             {message}
             {exceptions}
             {stacktraces}
