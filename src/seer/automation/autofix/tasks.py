@@ -2,6 +2,7 @@ import datetime
 import logging
 import random
 import textwrap
+import time
 from typing import Type, cast
 
 import sentry_sdk
@@ -297,9 +298,8 @@ def run_autofix_push_changes(
             queue=app_config.CELERY_WORKER_QUEUE,
         )
 
-        # Wait for the task to complete with a 60-second timeout
-        # Celery will kill the task if it doesn't complete in 60 seconds
-        result.get(timeout=60)
+        # Wait for the task to complete with a timeout
+        get_celery_result_with_retry(result, total_timeout=COMMIT_CHANGE_TASK_TIMEOUT)
 
         return AutofixUpdateEndpointResponse(
             run_id=request.run_id,
@@ -325,7 +325,13 @@ def run_autofix_push_changes(
         )
 
 
-@celery_app.task(time_limit=60, soft_time_limit=55)
+COMMIT_CHANGE_TASK_TIMEOUT = 60
+COMMIT_CHANGE_TASK_SOFT_TIMEOUT = 55
+
+
+@celery_app.task(
+    time_limit=COMMIT_CHANGE_TASK_TIMEOUT, soft_time_limit=COMMIT_CHANGE_TASK_SOFT_TIMEOUT
+)
 def commit_changes_task(run_id, repo_external_id, make_pr):
     try:
         state = ContinuationState(run_id)
@@ -942,6 +948,55 @@ def resolve_comment_thread(request: AutofixUpdateRequest):
             cur.steps[step_index].active_comment_thread = None
         else:
             raise ValueError("No matching comment thread found; unable to resolve thread")
+
+
+def get_celery_result_with_retry(result, total_timeout=60, initial_backoff=0.1, max_backoff=2.0):
+    """
+    Get the result of an async task with retry logic for connection errors.
+
+    Args:
+        result: The AsyncResult object
+        total_timeout: Maximum seconds to wait for result
+        initial_backoff: Initial backoff time in seconds
+        max_backoff: Maximum backoff time in seconds
+
+    Returns:
+        The task result or raises TimeoutError if total_timeout is exceeded
+        or CeleryTimeoutError if the task itself times out.
+    """
+    start_time = time.time()
+    backoff = initial_backoff
+    last_error = None
+
+    while time.time() - start_time < total_timeout:
+        try:
+            remaining = total_timeout - (time.time() - start_time)
+            if remaining <= 0:
+                break
+
+            return result.get(timeout=remaining)
+
+        except (ConnectionError, OSError) as e:
+            last_error = e
+            sleep_time = min(backoff, remaining - 0.01)
+            if sleep_time <= 0:
+                break
+            time.sleep(sleep_time)
+
+            backoff = min(backoff * 2, max_backoff)
+
+        except TimeoutError:
+            raise
+
+    # If the loop finishes, we've exceeded the total_timeout
+    error_message = (
+        f"Failed to get task {result.id} result after {total_timeout}s "
+        f"due to persistent connection issues. Last error: {last_error}"
+        if last_error
+        else f"Timed out waiting for task {result.id} result after {total_timeout}s."
+    )
+    logger.exception(error_message)
+    raise TimeoutError(error_message)
 
 
 @inject

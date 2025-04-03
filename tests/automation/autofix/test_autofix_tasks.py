@@ -1,7 +1,9 @@
 import datetime
 from typing import cast
+from unittest.mock import MagicMock, patch
 
 import pytest
+from celery.exceptions import TimeoutError
 from johen import generate
 
 from seer.automation.agent.models import Message, ToolCall
@@ -49,7 +51,6 @@ from seer.automation.autofix.tasks import (
     run_autofix_coding,
     run_autofix_push_changes,
     run_autofix_root_cause,
-    run_autofix_solution,
     truncate_file_changes_to_match_memory,
     truncate_memory_to_match_insights,
     update_code_change,
@@ -868,7 +869,7 @@ def test_truncate_memory_to_match_insights():
     assert len(truncated_memory) == 3  # Should exclude the tool call message for edit insight
     assert truncated_memory[-1].content == "User message 2"
 
-    # Edit insight with tool call and rethink instruction``
+    # Edit insight with tool call and rethink instruction
     truncated_memory = truncate_memory_to_match_insights(memory, 3, step, True, True)
     assert len(truncated_memory) == 6
     assert (
@@ -1788,3 +1789,80 @@ def test_receive_feedback_invalid_run_id():
 
     with pytest.raises(ValueError, match="Autofix state not found"):
         receive_feedback(request)
+
+
+@pytest.mark.parametrize(
+    "scenario, mock_get_side_effect, expected_status, expected_message",
+    [
+        (
+            "success",
+            [MagicMock()],  # Successful result
+            "success",
+            None,
+        ),
+        (
+            "retry_success",
+            [ConnectionError("Temporary hiccup"), MagicMock()],  # Connection error then success
+            "success",
+            None,
+        ),
+        (
+            "wait_timeout",
+            TimeoutError("Wait timed out"),  # task times out
+            "error",
+            "GitHub didn't respond - maybe try again?",
+        ),
+    ],
+)
+@patch("seer.automation.autofix.tasks.commit_changes_task.apply_async")
+@patch(
+    "seer.automation.autofix.tasks.COMMIT_CHANGE_TASK_TIMEOUT", 0.1
+)  # Patch timeout for faster test
+def test_run_autofix_push_changes_with_retry(
+    mock_apply_async,
+    scenario,
+    mock_get_side_effect,
+    expected_status,
+    expected_message,
+    autofix_full_finished_run: AutofixContinuation,
+):
+    # Setup DB state
+    with Session() as session:
+        session.add(
+            DbRunState(
+                id=autofix_full_finished_run.run_id,
+                group_id=1,
+                value=autofix_full_finished_run.model_dump(mode="json"),
+            )
+        )
+        session.commit()
+
+    # Configure mock AsyncResult
+    mock_async_result = MagicMock()
+    mock_async_result.get.side_effect = mock_get_side_effect
+    mock_apply_async.return_value = mock_async_result
+
+    repo_external_id = next(iter(autofix_full_finished_run.codebases.keys()))
+
+    # Call the function
+    response = run_autofix_push_changes(
+        AutofixUpdateRequest(
+            run_id=autofix_full_finished_run.run_id,
+            payload=AutofixCreatePrUpdatePayload(repo_external_id=repo_external_id, make_pr=True),
+        ),
+    )
+
+    # Assertions
+    assert response.run_id == autofix_full_finished_run.run_id
+    assert response.status == expected_status
+    if expected_message:
+        assert response.message == expected_message
+    else:
+        assert response.message is None
+
+    # Check if get was called appropriately
+    if scenario == "retry_success":
+        assert mock_async_result.get.call_count == 2
+    elif scenario == "success":
+        assert mock_async_result.get.call_count == 1
+    # In timeout scenarios, the number of calls depends on timing/backoff, so we just check the final result
