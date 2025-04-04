@@ -113,11 +113,21 @@ def _load_model(model_path: str) -> SentenceTransformer:
 
     model_device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     logger.info(f"Loading transformer model to device {model_device}")
-    return SentenceTransformer(
-        model_path,
-        trust_remote_code=True,
-        device=model_device,
-    )
+    try:
+        return SentenceTransformer(
+            model_path,
+            trust_remote_code=True,
+            device=model_device,
+        )
+    except RuntimeError as e:
+        if "device ID" in str(e):
+            logger.warning("Invalid device ID error, falling back to CPU")
+            return SentenceTransformer(
+                model_path,
+                trust_remote_code=True,
+                device=torch.device("cpu"),
+            )
+        raise
 
 
 def handle_out_of_memory(func):
@@ -126,8 +136,8 @@ def handle_out_of_memory(func):
         try:
             return func(*args, **kwargs)
         except (OutOfMemoryError, RuntimeError) as e:
-            # Only handle CUDA-related RuntimeErrors
-            if isinstance(e, RuntimeError) and "CUDA" not in str(e):
+            # Only handle CUDA-related RuntimeErrors and device ID errors
+            if isinstance(e, RuntimeError) and "CUDA" not in str(e) and "device ID" not in str(e):
                 raise
             logger.warning("Ran out of memory, clearing cache and retrying once")
             gc.collect()
