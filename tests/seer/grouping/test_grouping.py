@@ -1,7 +1,9 @@
 import unittest
 import uuid
+from unittest import mock
 
 import numpy as np
+import torch
 from johen import change_watcher
 from johen.pytest import parametrize
 
@@ -16,6 +18,7 @@ from seer.grouping.grouping import (
     GroupingRequest,
     GroupingResponse,
     SimilarityResponse,
+    _load_model,
 )
 from seer.inference_models import grouping_lookup
 
@@ -434,6 +437,45 @@ class TestGrouping(unittest.TestCase):
         # Verify that the initial order was incorrect
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
+        
+    def test_handle_device_id_error(self):
+        """
+        Test that the handle_out_of_memory decorator catches device ID errors.
+        """
+        from seer.grouping.grouping import handle_out_of_memory
+        
+        # Create a function that raises a RuntimeError with 'device ID' in the message
+        @handle_out_of_memory
+        def function_with_device_id_error():
+            raise RuntimeError("invalid device ID 999")
+            
+        # The function should not raise an exception because the decorator should catch it
+        function_with_device_id_error()  # Should not raise
+        
+    @mock.patch("torch.device")
+    @mock.patch("seer.grouping.grouping.SentenceTransformer")
+    def test_model_loading_fallback_to_cpu(self, mock_sentence_transformer, mock_device):
+        """
+        Test that _load_model falls back to CPU when encountering a device ID error
+        """
+        # Set up mocks
+        mock_device.return_value = "cuda:0"
+        
+        # First call raises RuntimeError with device ID message, second call succeeds
+        mock_sentence_transformer.side_effect = [
+            RuntimeError("invalid device ID"), 
+            mock.MagicMock()
+        ]
+        
+        # Call _load_model, which should catch the error and retry with CPU
+        _load_model("model_path")
+        
+        # Verify it was called twice, first with GPU then with CPU
+        self.assertEqual(mock_sentence_transformer.call_count, 2)
+        
+        # Check that the second call used CPU device
+        _, kwargs = mock_sentence_transformer.call_args_list[1]
+        self.assertEqual(kwargs["device"].type, "cpu")
 
 
 @parametrize(count=1)
