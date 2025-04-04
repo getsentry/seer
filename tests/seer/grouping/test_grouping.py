@@ -437,47 +437,46 @@ class TestGrouping(unittest.TestCase):
         # Verify that the initial order was incorrect
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
-        
+
     def test_handle_device_id_error(self):
         """
         Test that the handle_out_of_memory decorator catches device ID errors.
         """
         from seer.grouping.grouping import handle_out_of_memory
-        
+
         # Create a function that raises a RuntimeError with 'device ID' in the message
         @handle_out_of_memory
         def function_with_device_id_error():
             raise RuntimeError("invalid device ID 999")
-            
+
         # The function should not raise an exception because the decorator should catch it
         function_with_device_id_error()  # Should not raise
-        
-    @mock.patch('torch.device')
-    @mock.patch('sentry_sdk.logging.logger.warning')
-    @mock.patch('sentence_transformers.SentenceTransformer')
+
+    @mock.patch("torch.device")
+    @mock.patch("sentry_sdk.logging.logger.warning")
+    @mock.patch("sentence_transformers.SentenceTransformer")
     def test_load_model_fallback_to_cpu(self, mock_transformer, mock_warning, mock_device):
         """
         Test that _load_model falls back to CPU when a device ID error is raised.
         """
         # Setup the mock to raise a RuntimeError with 'device ID' when first called
         # and return a valid model on the second call
-        mock_transformer.side_effect = [
-            RuntimeError("invalid device ID 999"),
-            mock.MagicMock()
-        ]
-        
+        mock_transformer.side_effect = [RuntimeError("invalid device ID 999"), mock.MagicMock()]
+
         # Setup device mock to return "cuda" for the first call
-        mock_device.side_effect = lambda device: mock.MagicMock(spec=torch.device, __str__=lambda _: device)
-        
+        mock_device.side_effect = lambda device: mock.MagicMock(
+            spec=torch.device, __str__=lambda _: device
+        )
+
         # Call _load_model, which should handle the error and retry with CPU
         model = _load_model("test_model_path")
-        
+
         # Verify the model was loaded correctly
         self.assertIsNotNone(model)
-        
+
         # Verify _load_model was called twice, first with cuda then with cpu
         self.assertEqual(mock_transformer.call_count, 2)
-        
+
         # Verify the warning was logged
         mock_warning.assert_called_once()
 
