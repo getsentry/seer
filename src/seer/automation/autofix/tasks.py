@@ -153,6 +153,11 @@ def run_autofix_root_cause(
     request: AutofixRequest,
     app_config: AppConfig = injected,
 ):
+    if request.options.auto_run_source:  # don't let auto-runs overwrite existing runs
+        existing_run = get_autofix_state(group_id=request.issue.id)
+        if existing_run:
+            return existing_run.run_id
+
     state = create_initial_autofix_run(request)
 
     cur_state = state.get()
