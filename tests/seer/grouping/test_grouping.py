@@ -437,51 +437,54 @@ class TestGrouping(unittest.TestCase):
         # Verify that the initial order was incorrect
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
-        
+
     def test_handle_device_id_error(self):
         """
         Test that the handle_out_of_memory decorator catches device ID errors.
         """
         from seer.grouping.grouping import handle_out_of_memory
-        
+
         # Mock gc.collect and torch.cuda.empty_cache to verify they're called
-        with mock.patch('gc.collect') as mock_gc, mock.patch('torch.cuda.empty_cache') as mock_cuda_empty:
+        with (
+            mock.patch("gc.collect") as mock_gc,
+            mock.patch("torch.cuda.empty_cache") as mock_cuda_empty,
+        ):
             # Create a function that raises a RuntimeError with 'device ID' in the message
             @handle_out_of_memory
             def function_with_device_id_error():
                 raise RuntimeError("invalid device ID 999")
-                
+
             # The function should not raise an exception because the decorator should catch it
             function_with_device_id_error()  # Should not raise
-            
+
             # Verify that gc.collect and torch.cuda.empty_cache were called
             mock_gc.assert_called_once()
             mock_cuda_empty.assert_called_once()
-            
+
     def test_load_model_fallback_to_cpu(self):
         """
         Test that _load_model falls back to CPU when a device ID error occurs.
         """
         # Create a mock SentenceTransformer that raises a device ID error on first call
-        with mock.patch('seer.grouping.grouping.SentenceTransformer') as mock_transformer:
+        with mock.patch("seer.grouping.grouping.SentenceTransformer") as mock_transformer:
             # First call raises device ID error, second call succeeds
             mock_transformer.side_effect = [
-                RuntimeError("CUDA error: invalid device ID"), 
-                mock.MagicMock()
+                RuntimeError("CUDA error: invalid device ID"),
+                mock.MagicMock(),
             ]
-            
+
             # Mock torch.device to return predictable values
-            with mock.patch('torch.device', side_effect=lambda x: x):
+            with mock.patch("torch.device", side_effect=lambda x: x):
                 _load_model("test_model_path")
-                
+
                 # Check that SentenceTransformer was called twice
                 self.assertEqual(mock_transformer.call_count, 2)
-                
+
                 # First call should be with cuda
-                self.assertEqual(mock_transformer.call_args_list[0][1]['device'], 'cuda')
-                
+                self.assertEqual(mock_transformer.call_args_list[0][1]["device"], "cuda")
+
                 # Second call should be with cpu
-                self.assertEqual(mock_transformer.call_args_list[1][1]['device'], 'cpu')
+                self.assertEqual(mock_transformer.call_args_list[1][1]["device"], "cpu")
 
 
 @parametrize(count=1)
