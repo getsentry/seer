@@ -2,7 +2,6 @@ import dataclasses
 import logging
 import time
 
-from seer.automation.autofix.components.coding.models import CodingOutput
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionTimelineEvent
