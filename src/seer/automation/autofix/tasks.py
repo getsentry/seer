@@ -156,8 +156,8 @@ def run_autofix_root_cause(
     if request.options.auto_run_source:  # don't let auto-runs overwrite existing runs
         existing_run = get_autofix_state(group_id=request.issue.id)
         if existing_run:
-            state = existing_run.get()
-            return state.run_id
+            existing_state = existing_run.get()
+            return existing_state.run_id
 
     state = create_initial_autofix_run(request)
 
