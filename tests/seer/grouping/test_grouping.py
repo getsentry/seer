@@ -1,9 +1,12 @@
 import unittest
 import uuid
+from unittest.mock import patch, MagicMock
 
 import numpy as np
+import torch
 from johen import change_watcher
 from johen.pytest import parametrize
+from torch.cuda import OutOfMemoryError
 
 from seer.db import DbGroupingRecord, Session
 from seer.grouping.grouping import (
@@ -16,6 +19,7 @@ from seer.grouping.grouping import (
     GroupingRequest,
     GroupingResponse,
     SimilarityResponse,
+    _load_model,
 )
 from seer.inference_models import grouping_lookup
 
