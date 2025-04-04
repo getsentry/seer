@@ -1,9 +1,12 @@
 import unittest
 import uuid
+from unittest.mock import patch, MagicMock
 
 import numpy as np
+import torch
 from johen import change_watcher
 from johen.pytest import parametrize
+from torch.cuda import OutOfMemoryError
 
 from seer.db import DbGroupingRecord, Session
 from seer.grouping.grouping import (
@@ -16,6 +19,7 @@ from seer.grouping.grouping import (
     GroupingRequest,
     GroupingResponse,
     SimilarityResponse,
+    _load_model,
 )
 from seer.inference_models import grouping_lookup
 
@@ -492,3 +496,46 @@ def test_GroupingLookup_insert_batch_grouping_records_duplicates(
         grouping_lookup().insert_batch_grouping_records(grouping_request)
 
     assert not changed
+
+class TestModelLoading(unittest.TestCase):
+    @patch("seer.grouping.grouping.SentenceTransformer")
+    @patch("seer.grouping.grouping.can_use_model_stubs")
+    @patch("torch.cuda.is_available")
+    def test_load_model_invalid_device_id_fallback(self, mock_cuda_available, mock_stubs, mock_transformer):
+        """Test that model loading falls back to CPU when there's an invalid device ID error."""
+        mock_stubs.return_value = False
+        mock_cuda_available.return_value = True
+        
+        # First call raises RuntimeError with device ID error
+        mock_transformer.side_effect = [
+            RuntimeError("invalid device ID: 1"),
+            MagicMock()  # Second call should succeed
+        ]
+        
+        model = _load_model("some/model/path")
+        
+        # Check that SentenceTransformer was called twice
+        assert mock_transformer.call_count == 2
+        
+        # First call should try to use CUDA
+        assert mock_transformer.call_args_list[0][1]["device"] == torch.device("cuda")
+        
+        # Second call should fall back to CPU
+        assert mock_transformer.call_args_list[1][1]["device"] == torch.device("cpu")
+
+    @patch("torch.cuda")
+    @patch("gc.collect")
+    def test_handle_out_of_memory_catches_device_id_error(self, mock_gc, mock_cuda):
+        """Test that handle_out_of_memory decorator catches 'device ID' errors."""
+        from seer.grouping.grouping import handle_out_of_memory
+        
+        @handle_out_of_memory
+        def func_with_device_id_error():
+            raise RuntimeError("invalid device ID: 1")
+        
+        # This should not raise an exception due to the decorator
+        func_with_device_id_error()
+        
+        # Verify cleanup was called
+        assert mock_gc.called
+        assert mock_cuda.empty_cache.called
