@@ -1,7 +1,9 @@
 import unittest
 import uuid
+from unittest import mock
 
 import numpy as np
+import torch
 from johen import change_watcher
 from johen.pytest import parametrize
 
@@ -16,6 +18,7 @@ from seer.grouping.grouping import (
     GroupingRequest,
     GroupingResponse,
     SimilarityResponse,
+    _load_model,
 )
 from seer.inference_models import grouping_lookup
 
@@ -434,6 +437,46 @@ class TestGrouping(unittest.TestCase):
         # Verify that the initial order was incorrect
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
+        
+    def test_handle_device_id_error(self):
+        """
+        Test that the handle_out_of_memory decorator catches device ID errors.
+        """
+        from seer.grouping.grouping import handle_out_of_memory
+        
+        # Create a function that raises a RuntimeError with 'device ID' in the message
+        @handle_out_of_memory
+        def function_with_device_id_error():
+            raise RuntimeError("invalid device ID 999")
+            
+        # The function should not raise an exception because the decorator should catch it
+        function_with_device_id_error()  # Should not raise
+        
+    @mock.patch("seer.grouping.grouping.SentenceTransformer")
+    def test_load_model_fallback_to_cpu_on_device_id_error(self, mock_sentence_transformer):
+        """
+        Test that _load_model falls back to CPU when there's a device ID error.
+        """
+        # Mock SentenceTransformer to raise a device ID error on first call and succeed on second call
+        mock_sentence_transformer.side_effect = [
+            RuntimeError("invalid device ID 999"),
+            mock.MagicMock()
+        ]
+        
+        # Call _load_model with a mock path
+        model = _load_model("mock_model_path")
+        
+        # Verify SentenceTransformer was called twice
+        self.assertEqual(mock_sentence_transformer.call_count, 2)
+        
+        # First call should be with CUDA device if available
+        if torch.cuda.is_available():
+            device_arg = mock_sentence_transformer.call_args_list[0][1]["device"]
+            self.assertEqual(device_arg.type, "cuda")
+        
+        # Second call should be with CPU device
+        device_arg = mock_sentence_transformer.call_args_list[1][1]["device"]
+        self.assertEqual(device_arg.type, "cpu")
 
 
 @parametrize(count=1)
