@@ -1,7 +1,9 @@
 import unittest
 import uuid
+from unittest import mock
 
 import numpy as np
+import torch
 from johen import change_watcher
 from johen.pytest import parametrize
 
@@ -16,6 +18,7 @@ from seer.grouping.grouping import (
     GroupingRequest,
     GroupingResponse,
     SimilarityResponse,
+    _load_model,
 )
 from seer.inference_models import grouping_lookup
 
@@ -434,6 +437,48 @@ class TestGrouping(unittest.TestCase):
         # Verify that the initial order was incorrect
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
+        
+    def test_handle_device_id_error(self):
+        """
+        Test that the handle_out_of_memory decorator catches device ID errors.
+        """
+        from seer.grouping.grouping import handle_out_of_memory
+        
+        # Create a function that raises a RuntimeError with 'device ID' in the message
+        @handle_out_of_memory
+        def function_with_device_id_error():
+            raise RuntimeError("invalid device ID 999")
+            
+        # The function should not raise an exception because the decorator should catch it
+        function_with_device_id_error()  # Should not raise
+        
+    @mock.patch('torch.device')
+    @mock.patch('sentry_sdk.tracing.trace')
+    @mock.patch('sentence_transformers.SentenceTransformer')
+    def test_load_model_fallback_to_cpu(self, mock_sentence_transformer, mock_trace, mock_device):
+        """
+        Test that _load_model falls back to CPU when a device ID error occurs.
+        """
+        # Configure the mock to raise a RuntimeError with 'device ID' in the message on first call
+        mock_sentence_transformer.side_effect = [
+            RuntimeError("invalid device ID 999"),  # First call raises error
+            mock.MagicMock()                        # Second call succeeds
+        ]
+        
+        # Set up the mock to return a device object
+        mock_device.side_effect = lambda x: mock.MagicMock(name=x)
+        
+        # Call the function
+        model = _load_model("model_path")
+        
+        # Verify that SentenceTransformer was called twice, first with CUDA device, then with CPU
+        assert mock_sentence_transformer.call_count == 2
+        mock_sentence_transformer.assert_any_call(
+            "model_path", trust_remote_code=True, device=mock_device("cuda")
+        )
+        mock_sentence_transformer.assert_any_call(
+            "model_path", trust_remote_code=True, device=mock_device("cpu")
+        )
 
 
 @parametrize(count=1)
