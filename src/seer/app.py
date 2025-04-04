@@ -233,9 +233,9 @@ def autofix_update_endpoint(
     elif data.payload.type == AutofixUpdateType.SELECT_SOLUTION:
         run_autofix_coding(data)
     elif data.payload.type == AutofixUpdateType.CREATE_PR:
-        return run_autofix_push_changes(data)
+        run_autofix_push_changes(data)
     elif data.payload.type == AutofixUpdateType.CREATE_BRANCH:
-        return run_autofix_push_changes(data)
+        run_autofix_push_changes(data)
     elif data.payload.type == AutofixUpdateType.USER_MESSAGE:
         receive_user_message(data)
     elif data.payload.type == AutofixUpdateType.RESTART_FROM_POINT_WITH_FEEDBACK:
