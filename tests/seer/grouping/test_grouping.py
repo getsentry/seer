@@ -1,7 +1,9 @@
 import unittest
 import uuid
+from unittest import mock
 
 import numpy as np
+import torch
 from johen import change_watcher
 from johen.pytest import parametrize
 
@@ -16,6 +18,7 @@ from seer.grouping.grouping import (
     GroupingRequest,
     GroupingResponse,
     SimilarityResponse,
+    _load_model,
 )
 from seer.inference_models import grouping_lookup
 
@@ -434,6 +437,50 @@ class TestGrouping(unittest.TestCase):
         # Verify that the initial order was incorrect
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
+        
+    def test_handle_device_id_error(self):
+        """
+        Test that the handle_out_of_memory decorator catches device ID errors.
+        """
+        from seer.grouping.grouping import handle_out_of_memory
+        
+        # Create a function that raises a RuntimeError with 'device ID' in the message
+        @handle_out_of_memory
+        def function_with_device_id_error():
+            raise RuntimeError("invalid device ID 999")
+            
+        # The function should not raise an exception because the decorator should catch it
+        function_with_device_id_error()  # Should not raise
+        
+    @mock.patch("torch.device")
+    @mock.patch("sentry_sdk.logging")
+    @mock.patch("torch.cuda.is_available", return_value=True)
+    def test_load_model_fallback_to_cpu(self, mock_cuda_available, mock_logging, mock_device):
+        """
+        Test that _load_model falls back to CPU when there's a device ID error.
+        """
+        from sentence_transformers import SentenceTransformer
+        
+        # Mock SentenceTransformer to raise a RuntimeError with device ID message on first call
+        # and succeed on second call
+        with mock.patch.object(SentenceTransformer, "__init__", side_effect=[
+            RuntimeError("invalid device ID 999"),
+            None  # Success on second call
+        ]) as mock_init:
+            
+            # Call _load_model
+            _load_model("dummy_model_path")
+            
+            # Check that SentenceTransformer was first called with CUDA device
+            self.assertEqual(mock_init.call_count, 2)
+            
+            # First call should have attempted to use CUDA
+            _, kwargs1 = mock_init.call_args_list[0]
+            self.assertEqual(kwargs1["model_name_or_path"], "dummy_model_path")
+            
+            # Second call should have fallen back to CPU
+            _, kwargs2 = mock_init.call_args_list[1]
+            self.assertEqual(kwargs2["model_name_or_path"], "dummy_model_path")
 
 
 @parametrize(count=1)
