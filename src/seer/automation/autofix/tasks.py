@@ -42,7 +42,6 @@ from seer.automation.autofix.models import (
     AutofixSolutionUpdatePayload,
     AutofixStatus,
     AutofixUpdateCodeChangePayload,
-    AutofixUpdateEndpointResponse,
     AutofixUpdateRequest,
     AutofixUpdateType,
     AutofixUserMessagePayload,
@@ -274,7 +273,7 @@ def run_autofix_coding(
 def run_autofix_push_changes(
     request: AutofixUpdateRequest,
     app_config: AppConfig = injected,
-) -> AutofixUpdateEndpointResponse:
+):
     if not isinstance(request.payload, AutofixCreatePrUpdatePayload) and not isinstance(
         request.payload, AutofixCreateBranchUpdatePayload
     ):
