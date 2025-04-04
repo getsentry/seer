@@ -434,6 +434,20 @@ class TestGrouping(unittest.TestCase):
         # Verify that the initial order was incorrect
         self.assertNotEqual(candidates[0], reranked[0][0])
         self.assertNotEqual(candidates[2], reranked[2][0])
+        
+    def test_handle_device_id_error(self):
+        """
+        Test that the handle_out_of_memory decorator catches device ID errors.
+        """
+        from seer.grouping.grouping import handle_out_of_memory
+        
+        # Create a function that raises a RuntimeError with 'device ID' in the message
+        @handle_out_of_memory
+        def function_with_device_id_error():
+            raise RuntimeError("invalid device ID 999")
+            
+        # The function should not raise an exception because the decorator should catch it
+        function_with_device_id_error()  # Should not raise
 
 
 @parametrize(count=1)
