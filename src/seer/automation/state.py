@@ -3,6 +3,7 @@ import contextlib
 import dataclasses
 import functools
 import threading
+import time  # Add time import
 from enum import Enum
 from typing import Any, ContextManager, Generic, Iterator, Type, TypeVar
 
@@ -22,6 +23,43 @@ class DbStateRunTypes(str, Enum):
     RELEVANT_WARNINGS = "relevant-warnings"
     PR_CLOSED = "pr-closed"
     UNIT_TESTS_RETRY = "unit-test-retry"
+
+
+# Create an in-memory cache for state objects
+_state_cache = {}
+_state_cache_lock = threading.RLock()
+
+
+def memoize_state_get(ttl_seconds=2):
+ """Decorator to cache state.get() calls for a short time to reduce DB queries"""
+
+ def decorator(func):
+ @functools.wraps(func)
+ def wrapper(self, *args, **kwargs):
+ cache_key = (self.__class__.__name__, self.id)
+
+ with _state_cache_lock:
+ now = time.time()
+ if cache_key in _state_cache:
+ cached_result, timestamp = _state_cache[cache_key]
+ if now - timestamp < ttl_seconds:
+ return cached_result
+
+ result = func(self, *args, **kwargs)
+
+ with _state_cache_lock:
+ _state_cache[cache_key] = (result, time.time())
+
+ # Clean old cache entries occasionally
+ if len(_state_cache) > 1000: # Arbitrary limit
+ now = time.time()
+ for k in list(_state_cache.keys()):
+ if now - _state_cache[k][1] > ttl_seconds * 2:
+ del _state_cache[k]
+
+ return result
+ return wrapper
+ return decorator
 
 
 class State(abc.ABC, Generic[_State]):
@@ -89,6 +127,7 @@ class DbState(State[_State]):
             session.commit()
             return cls(id=db_state.id, model=type(value), type=t)
 
+ @memoize_state_get(ttl_seconds=2)
     def get(self) -> _State:
         with Session() as session:
             db_state = session.get(DbRunState, self.id)
@@ -122,6 +161,12 @@ class DbState(State[_State]):
         of inter related locks), the database may reach a deadlock state which last until the lock timeout configured
         on the postgres database.
         """
+ # Clear cache for this state before update
+ cache_key = (self.__class__.__name__, self.id)
+ with _state_cache_lock:
+ if cache_key in _state_cache:
+ del _state_cache[cache_key]
+
         with Session() as session:
             r = session.execute(
                 select(DbRunState).where(DbRunState.id == self.id).with_for_update()
@@ -135,6 +180,10 @@ class DbState(State[_State]):
             self.apply_to_run_state(value, db_state)
             session.merge(db_state)
             session.commit()
+
+ # Update cache with new value after successful commit
+ with _state_cache_lock:
+ _state_cache[cache_key] = (value, time.time())
 
 
 @functools.total_ordering
