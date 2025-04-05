@@ -192,11 +192,23 @@ class AutofixContext(PipelineContext):
 
     def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """
+ best_match = None
+ best_score = 0.0
+
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
-        """
-        for repo in self.repos:
-            if repo.provider not in RepoClient.supported_providers:
-                continue
+ matches, score = potential_frame_match(valid_path, frame)
+ if matches and score > best_score:
+ best_match = valid_path
+ best_score = score
+
+ # Use match if confidence score is above threshold
+ if best_match and best_score >= 0.4:
+ frame.repo_name = repo.full_name
+ frame.filename = best_match
+ # Add logging for debugging purposes
+ logger.debug(
+ f"Matched frame path {frame.filename or frame.package} to {best_match} with score {best_score:.2f}"
+ )
 
             try:
                 repo_client = self.get_repo_client(
