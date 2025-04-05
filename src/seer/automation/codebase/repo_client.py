@@ -399,8 +399,21 @@ class RepoClient:
             if isinstance(contents, list):
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
-            detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-            content = contents.decoded_content.decode(detected_encoding)
+            # Handle different file encodings from GitHub
+            if hasattr(contents, "encoding") and contents.encoding == "none":
+                # For files with encoding=none, we need to download the raw content
+                response = requests.get(contents.download_url)
+                response.raise_for_status()
+                raw_content = response.content
+                detected_encoding = detect_encoding(raw_content)
+                content = raw_content.decode(detected_encoding)
+            else:
+                # For base64 encoded files (the standard case)
+                detected_encoding = (
+                    detect_encoding(contents.decoded_content) if contents else "utf-8"
+                )
+                content = contents.decoded_content.decode(detected_encoding)
+
             if autocorrected_path:
                 content = f"Showing results instead for {path}\n=====\n{content}"
             return content, detected_encoding
