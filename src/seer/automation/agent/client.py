@@ -710,11 +710,15 @@ class AnthropicProvider:
         try:
             current_tool_call: dict[str, Any] | None = None
             current_input_json = []
+            total_input_write_tokens = 0
+            total_input_read_tokens = 0
             total_input_tokens = 0
             total_output_tokens = 0
 
             for chunk in stream:
                 if chunk.type == "message_start" and chunk.message.usage:
+                    total_input_write_tokens += chunk.message.usage.cache_creation_input_tokens
+                    total_input_read_tokens += chunk.message.usage.cache_read_input_tokens
                     total_input_tokens += chunk.message.usage.input_tokens
                     total_output_tokens += chunk.message.usage.output_tokens
                 elif chunk.type == "message_delta" and chunk.usage:
@@ -750,9 +754,13 @@ class AnthropicProvider:
                 completion_tokens=total_output_tokens,
                 prompt_tokens=total_input_tokens,
                 total_tokens=total_input_tokens + total_output_tokens,
+                prompt_cache_write_tokens=total_input_write_tokens,
+                prompt_cache_read_tokens=total_input_read_tokens,
             )
             yield usage
-            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+            langfuse_context.update_current_observation(
+                model=self.model_name, usage=usage.to_langfuse_usage()
+            )
             stream.response.close()
 
     def construct_message_from_stream(
