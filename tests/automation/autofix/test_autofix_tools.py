@@ -912,6 +912,7 @@ class TestClaudeTools:
     def test_handle_create_command(self, autofix_tools: BaseTools):
         # Setup
         kwargs = {"file_text": "new file content"}
+        autofix_tools.context.get_file_contents.return_value = None
 
         # Setup proper request.repos structure
         mock_repo = MagicMock(full_name="test/repo", external_id="123")

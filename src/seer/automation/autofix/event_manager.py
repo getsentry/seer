@@ -2,7 +2,6 @@ import dataclasses
 import logging
 import time
 
-from seer.automation.autofix.components.coding.models import CodingOutput
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionTimelineEvent
@@ -283,6 +282,21 @@ class AutofixEventManager:
                     "run_id": cur.run_id,
                 },
             )
+
+    def send_push_changes_start(self):
+        with self.state.update() as cur:
+            cur.mark_triggered()
+            cur.status = AutofixStatus.PROCESSING
+            changes_step = cur.changes_step
+            if changes_step:
+                changes_step.status = AutofixStatus.PROCESSING
+
+    def send_push_changes_result(self):
+        with self.state.update() as cur:
+            cur.status = AutofixStatus.COMPLETED
+            changes_step = cur.changes_step
+            if changes_step:
+                changes_step.status = AutofixStatus.COMPLETED
 
     def on_confidence_question(self, question: str):
         log_seer_event(
