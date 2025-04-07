@@ -891,6 +891,61 @@ class TestRepoClient:
             expected_calls, any_order=True
         )
 
+    def test_build_file_tree_string_with_immediate_children(self, repo_client):
+        """Test building file tree string with only immediate children of a path"""
+        files = [
+            {"path": "src/main.py", "status": "M"},
+            {"path": "src/utils/helper.py", "status": "A"},
+            {"path": "src/utils/__init__.py", "status": "A"},
+            {"path": "tests/test_main.py", "status": "M"},
+        ]
+
+        # Test with no path restriction
+        result = repo_client._build_file_tree_string(files)
+        assert "src/" in result
+        assert "tests/" in result
+        assert "utils/" in result
+        assert "main.py" in result
+        assert "helper.py" in result
+        assert "test_main.py" in result
+
+        # Test with path restriction to src/
+        result = repo_client._build_file_tree_string(files, only_immediate_children_of_path="src")
+        assert "src/" in result
+        assert "main.py" in result
+        assert "utils/" in result
+        assert "helper.py" not in result
+        assert "__init__.py" not in result
+        assert "test_main.py" not in result
+
+        # Test with path restriction to src/utils/
+        result = repo_client._build_file_tree_string(
+            files, only_immediate_children_of_path="src/utils"
+        )
+        assert "src/" in result
+        assert "utils/" in result
+        assert "helper.py" in result
+        assert "__init__.py" in result
+        assert "main.py" not in result
+        assert "test_main.py" not in result
+
+        # Test with non-existent path
+        result = repo_client._build_file_tree_string(
+            files, only_immediate_children_of_path="nonexistent"
+        )
+        assert result == ""
+
+    def test_build_file_tree_string_empty(self, repo_client):
+        """Test building file tree string with empty file list"""
+        result = repo_client._build_file_tree_string([])
+        assert result == "No files changed"
+
+    def test_build_file_tree_string_single_file(self, repo_client):
+        """Test building file tree string with a single file"""
+        files = [{"path": "main.py", "status": "M"}]
+        result = repo_client._build_file_tree_string(files)
+        assert result == "main.py (M)"
+
 
 class TestRepoClientIndexFileSet:
     @patch("seer.automation.codebase.repo_client.Github")

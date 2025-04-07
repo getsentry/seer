@@ -481,19 +481,25 @@ class RepoClient:
 
         return commit_strs
 
-    def _build_file_tree_string(self, files: list[dict]) -> str:
+    def _build_file_tree_string(
+        self, files: list[dict], only_immediate_children_of_path: str | None = None
+    ) -> str:
         """
         Builds a tree representation of files to save tokens when many files share the same directories.
         The output is similar to the 'tree' command in terminal.
 
         Args:
             files: List of dictionaries with 'path' and 'status' keys
+            only_immediate_children_of_path: If provided, only include files and directories that are immediate children of this path
 
         Returns:
             A string representation of the file tree
         """
         if not files:
             return "No files changed"
+
+        if only_immediate_children_of_path is not None:
+            only_immediate_children_of_path = only_immediate_children_of_path.rstrip("/")
 
         # First, build a nested dictionary structure representing the file tree
         tree: dict = {}
@@ -518,7 +524,7 @@ class RepoClient:
         # Now build the tree string recursively
         lines = []
 
-        def _build_tree(node, prefix="", is_last=True, is_root=True):
+        def _build_tree(node, previous_parts=[], prefix="", is_last=True, is_root=True):
             items = list(node.items())
 
             # Process each item
@@ -539,13 +545,31 @@ class RepoClient:
 
                 # If this is a file (has a status)
                 if "__status__" in value:
+                    if (
+                        only_immediate_children_of_path is not None
+                        and not only_immediate_children_of_path == ("/".join(previous_parts))
+                    ):
+                        continue
+
                     status = value["__status__"]
                     status_str = f" ({status})" if status else ""
                     lines.append(f"{current_prefix}{key}{status_str}")
                 # If this is a directory
                 else:
-                    lines.append(f"{current_prefix}{key}/")
-                    _build_tree(value, next_prefix, is_last_item, False)
+                    # If this is within the specified path
+                    if (
+                        only_immediate_children_of_path is None
+                        or only_immediate_children_of_path.startswith(
+                            "/".join(previous_parts + [key])
+                        )
+                    ):
+                        lines.append(f"{current_prefix}{key}/")
+                        _build_tree(value, previous_parts + [key], next_prefix, is_last_item, False)
+                    elif (
+                        only_immediate_children_of_path is not None
+                        and only_immediate_children_of_path == "/".join(previous_parts)
+                    ):
+                        lines.append(f"{current_prefix}{key}/")
 
         # Start building the tree from the root
         _build_tree(tree)
