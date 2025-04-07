@@ -4,8 +4,6 @@ from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
-from seer.automation.agent.utils import parse_json_with_keys
-
 
 class ToolCall(BaseModel):
     id: Optional[str] = None
