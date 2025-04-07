@@ -304,12 +304,7 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
         event_manager = AutofixEventManager(state)
         context = AutofixContext(state=state, event_manager=event_manager)
 
-        with state.update() as cur:
-            cur.mark_triggered()
-            cur.status = AutofixStatus.PROCESSING
-            changes_step = cur.changes_step
-            if changes_step:
-                changes_step.status = AutofixStatus.PROCESSING
+        event_manager.send_push_changes_start()
 
         return context.commit_changes(
             repo_external_id=repo_external_id,
@@ -322,11 +317,7 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
         logger.error(f"Error committing changes for run {run_id}: {e}")
         raise
     finally:
-        with state.update() as cur:
-            cur.status = AutofixStatus.COMPLETED
-            changes_step = cur.changes_step
-            if changes_step:
-                changes_step.status = AutofixStatus.COMPLETED
+        event_manager.send_push_changes_result()
 
 
 def receive_feedback(request: AutofixUpdateRequest):
