@@ -2,18 +2,13 @@ import logging
 from typing import List
 
 from github.PullRequest import PullRequest
-from sqlalchemy import select
 
-from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.models import CodePrReviewOutput
 from seer.automation.codegen.pr_review_utils import PrReviewUtils
-from seer.db import DbReviewCommentEmbedding, Session
 
 logger = logging.getLogger(__name__)
-
-SIMILARITY_THRESHOLD = 0.7
 
 
 class PrReviewPublisher:
