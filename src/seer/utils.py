@@ -149,7 +149,11 @@ def prefix_logger(prefix: str, logger: logging.Logger) -> logging.LoggerAdapter:
 _Batch = TypeVar("_Batch")
 
 
-def tqdm_sized(iterable: Iterable[_Batch], length: Callable[[_Batch], int] = len, **kwargs):
+def tqdm_sized(
+    iterable: Iterable[_Batch],
+    length: Callable[[_Batch], int] = len,  # type: ignore[assignment]
+    **kwargs,
+):
     with tqdm(**kwargs) as pbar:
         for batch in iterable:
             pbar.update(length(batch))
