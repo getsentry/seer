@@ -120,7 +120,7 @@ class TestAutofixContext(unittest.TestCase):
                     possible_cause_novelty=0.8,
                     is_fixable=True,
                     fixability_score=0.9,
-                    fixability_score_version=1,
+                    fixability_score_version=3,
                 ),
             )
             session.add(original.to_db_state(0))
@@ -141,7 +141,7 @@ class TestAutofixContext(unittest.TestCase):
             self.assertEqual(result.scores.possible_cause_novelty, 0.8)
             self.assertEqual(result.scores.is_fixable, True)
             self.assertEqual(result.scores.fixability_score, 0.9)
-            self.assertEqual(result.scores.fixability_score_version, 1)
+            self.assertEqual(result.scores.fixability_score_version, 3)
 
         with Session() as session:
             invalid_summary_data = {"bad data": "uh oh"}
