@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from google.api_core.exceptions import ClientError
 
 from seer.automation.models import EAPTrace
 from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
@@ -55,3 +56,13 @@ class TestSummarizeTrace:
         ), "suggested_investigations mismatch"
 
         assert res.model_dump() == expected_result.model_dump()
+
+    def test_summarize_trace_client_error(self, sample_request, mock_llm_client):
+        mock_llm_client.generate_structured.side_effect = ClientError(
+            "The trace is too large to summarize. Please try a smaller trace."
+        )
+
+        with pytest.raises(
+            ClientError, match="The trace is too large to summarize. Please try a smaller trace."
+        ):
+            summarize_trace(sample_request, mock_llm_client)
