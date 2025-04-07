@@ -533,7 +533,7 @@ class TestSeer(unittest.TestCase):
                 possible_cause_confidence=0.8,
                 possible_cause_novelty=0.6,
                 fixability_score=0.75,
-                fixability_score_version=2,
+                fixability_score_version=3,
                 is_fixable=True,
             ),
         )
@@ -554,7 +554,7 @@ class TestSeer(unittest.TestCase):
         response_data = json.loads(response.data)
         assert response_data["group_id"] == 123
         assert response_data["scores"]["fixability_score"] == 0.75
-        assert response_data["scores"]["fixability_score_version"] == 2
+        assert response_data["scores"]["fixability_score_version"] == 3
         assert response_data["scores"]["is_fixable"] is True
 
         expected_test_data, autofixability_model = mock_run_fixability_score.call_args[0]
