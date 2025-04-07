@@ -15,6 +15,8 @@ class Usage(BaseModel):
     completion_tokens: int = 0
     prompt_tokens: int = 0
     total_tokens: int = 0
+    prompt_cache_write_tokens: int = 0
+    prompt_cache_read_tokens: int = 0
 
     def __add__(self, other: "Usage"):
         return Usage(
@@ -29,6 +31,15 @@ class Usage(BaseModel):
             prompt_tokens=self.prompt_tokens - other.prompt_tokens,
             total_tokens=self.total_tokens - other.total_tokens,
         )
+
+    def to_langfuse_usage(self):
+        return {
+            "prompt_tokens": self.prompt_tokens
+            + self.prompt_cache_write_tokens
+            + self.prompt_cache_read_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+        }
 
 
 class LlmProviderType(str, Enum):

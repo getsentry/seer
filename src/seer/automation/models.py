@@ -316,7 +316,7 @@ class BreadcrumbsDetails(BaseModel):
 class RequestDetails(BaseModel):
     url: str | None = None
     method: str | None = None
-    data: dict[str, Any] | str | list[dict[str, Any]] | None = None
+    data: dict[str, Any] | str | list[Any] | None = None
     # not including cookies, headers, env, query, etc. for now
 
 
