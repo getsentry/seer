@@ -858,7 +858,7 @@ class BaseTools:
         file_text = kwargs.get("file_text", "")
         if not file_text:
             return "Error: file_text is required for create command"
-            
+
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         valid_file_paths = repo_client.get_valid_file_paths()
         if path in valid_file_paths:
