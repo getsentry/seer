@@ -129,8 +129,8 @@ class AutofixEventManager:
                 root_cause_step.causes = root_cause_output.causes
                 cur.status = AutofixStatus.COMPLETED
             else:
-                root_cause_step.status = AutofixStatus.ERROR
-                cur.status = AutofixStatus.ERROR
+                root_cause_step.status = AutofixStatus.COMPLETED
+                cur.status = AutofixStatus.COMPLETED
                 root_cause_step.termination_reason = root_cause_output.termination_reason
 
             log_seer_event(
