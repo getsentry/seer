@@ -40,6 +40,7 @@ def summarize_trace(
     trace_summary = completion.parsed
 
     return SummarizeTraceResponse(
+        trace_id=request.trace_id,
         summary=trace_summary.summary,
         key_observations=trace_summary.key_observations,
         performance_characteristics=trace_summary.performance_characteristics,

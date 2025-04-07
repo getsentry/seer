@@ -1,4 +1,3 @@
-import datetime
 import json
 import textwrap
 from typing import Annotated, Any, List, Literal, NotRequired, Optional
@@ -1167,7 +1166,6 @@ class SeerProjectPreference(BaseModel):
 class EAPTrace(BaseModel):
     trace_id: str = Field(..., description="ID of the trace")
     trace: list[dict] = Field(..., description="List of spans in the trace")
-    timestamp: datetime.datetime = Field(..., description="Known timestamp of a span in the trace")
 
     def _get_transaction_spans(self, trace: list[dict] | dict) -> list[dict]:
         """

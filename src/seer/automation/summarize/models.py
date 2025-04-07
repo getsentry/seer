@@ -42,6 +42,7 @@ class SummarizeTraceRequest(BaseModel):
 
 
 class SummarizeTraceResponse(BaseModel):
+    trace_id: str
     summary: str
     key_observations: str
     performance_characteristics: str
