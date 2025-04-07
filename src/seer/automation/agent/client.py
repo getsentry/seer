@@ -717,8 +717,10 @@ class AnthropicProvider:
 
             for chunk in stream:
                 if chunk.type == "message_start" and chunk.message.usage:
-                    total_input_write_tokens += chunk.message.usage.cache_creation_input_tokens
-                    total_input_read_tokens += chunk.message.usage.cache_read_input_tokens
+                    if chunk.message.usage.cache_creation_input_tokens:
+                        total_input_write_tokens += chunk.message.usage.cache_creation_input_tokens
+                    if chunk.message.usage.cache_read_input_tokens:
+                        total_input_read_tokens += chunk.message.usage.cache_read_input_tokens
                     total_input_tokens += chunk.message.usage.input_tokens
                     total_output_tokens += chunk.message.usage.output_tokens
                 elif chunk.type == "message_delta" and chunk.usage:
