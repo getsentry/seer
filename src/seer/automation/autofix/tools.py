@@ -250,7 +250,7 @@ class BaseTools:
             other_paths = self._get_potential_abs_paths(path, repo_name)
             return f"<no entries found in directory '{path or '/'}'/>\n{other_paths}".strip()
 
-        # If more than 100 files under a directory, show only the top level paths
+        # If more than MAX_FILES_IN_TREE files under a directory, show only the top level paths
         is_truncated = len(files_under_path) > MAX_FILES_IN_TREE
 
         self.context.event_manager.add_log(
@@ -258,7 +258,7 @@ class BaseTools:
         )
 
         max_files_in_tree_note = (
-            f"Notice: There are a total of {len(files_under_path)} files in the tree under the path you provided. Only showing immediate children, provide a more specific path to view a full tree.\n"
+            f"Notice: There are a total of {len(files_under_path)} files in the tree under the {normalized_path} path. Only showing immediate children, provide a more specific path to view a full tree.\n"
             if is_truncated
             else ""
         )
