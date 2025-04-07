@@ -1,4 +1,5 @@
 import textwrap
+from math import ceil
 from venv import logger
 
 from langfuse.decorators import observe
@@ -20,11 +21,25 @@ class TraceSummaryForLlmToGenerate(BaseModel):
 @inject
 def summarize_trace(
     request: SummarizeTraceRequest,
+    avg_num_chars_per_token: float = 4.0,
     llm_client: LlmClient = injected,
 ) -> SummarizeTraceResponse:
+    """
+    Summarizes a single trace in the EAP Trace Waterfall format.
+
+    params:
+        request: SummarizeTraceRequest
+
+    returns:
+        SummarizeTraceResponse
+    """
     logger.info(f"Summarizing trace: {request.trace_id}")
     trace, only_transactions = request.trace, request.only_transactions
     trace_str = trace.get_and_format_trace(only_transactions)
+
+    # We limit the trace length to 1 million tokens to fit into Gemini Context Window (imperfect proxy for the actual context window)
+    if ceil(len(trace_str) / avg_num_chars_per_token) > 1_000_000:
+        raise ValueError("Trace is too long to summarize")
 
     prompt = _get_prompt(trace_str, only_transactions)
 
