@@ -82,7 +82,7 @@ class TestFileSystem:
             tools.tmp_dir = {"dummy": ("/tmp/test_dir", "/tmp/test_dir/repo")}
 
         mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
-        assert autofix_tools.tmp_dir is None
+        assert autofix_tools.tmp_dir == {}
 
     @patch("seer.automation.autofix.tools.cleanup_dir")
     def test_cleanup_method(self, mock_cleanup_dir, autofix_tools: BaseTools):
@@ -91,7 +91,7 @@ class TestFileSystem:
         autofix_tools.cleanup()
 
         mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
-        assert autofix_tools.tmp_dir is None
+        assert autofix_tools.tmp_dir == {}
 
     @patch("seer.automation.autofix.tools.cleanup_dir")
     def test_cleanup_not_called_when_tmp_dir_is_none(
@@ -102,7 +102,7 @@ class TestFileSystem:
         autofix_tools.cleanup()
 
         mock_cleanup_dir.assert_not_called()
-        assert autofix_tools.tmp_dir is None
+        assert autofix_tools.tmp_dir == {}
 
 
 class TestSemanticFileSearch:

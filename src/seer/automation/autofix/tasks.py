@@ -153,6 +153,12 @@ def run_autofix_root_cause(
     request: AutofixRequest,
     app_config: AppConfig = injected,
 ):
+    if request.options.auto_run_source:  # don't let auto-runs overwrite existing runs
+        existing_run = get_autofix_state(group_id=request.issue.id)
+        if existing_run:
+            existing_state = existing_run.get()
+            return existing_state.run_id
+
     state = create_initial_autofix_run(request)
 
     cur_state = state.get()
@@ -827,7 +833,7 @@ def comment_on_thread(request: AutofixUpdateRequest):
     is_coding_step = step.key == "plan"
     is_root_cause_step = step.key == "root_cause_analysis_processing"
     memory = (
-        context.get_memory("plan_and_code")
+        context.get_memory("code")
         if is_coding_step
         else (
             context.get_memory("root_cause_analysis")

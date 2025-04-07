@@ -14,7 +14,6 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.components.insight_sharing.component import create_insight_output
 from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingOutput,
     InsightSharingType,
@@ -319,8 +318,8 @@ class BaseTools:
         if self.tmp_dir:
             for tmp_dir, _ in self.tmp_dir.values():
                 cleanup_dir(tmp_dir)
-        # Always set tmp_dir to None after cleanup attempt
-        self.tmp_dir = None
+        # Reset tmp_dir
+        self.tmp_dir = {}
 
     @observe(name="Search Google")
     @ai_track(description="Search Google")
