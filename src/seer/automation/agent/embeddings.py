@@ -11,7 +11,7 @@ from vertexai.language_models import (  # type: ignore[import-untyped]
 
 from seer.automation.agent.client import GeminiProvider
 from seer.automation.utils import batch_texts_by_token_count
-from seer.utils import backoff_on_exception
+from seer.utils import backoff_on_exception, tqdm_sized
 
 
 @dataclass
@@ -58,7 +58,9 @@ class GoogleProviderEmbeddings:
             ):
                 yield subbatch
 
-    def encode(self, texts: str | list[str], auto_truncate: bool = True) -> npt.NDArray[np.float64]:
+    def encode(
+        self, texts: str | list[str], auto_truncate: bool = True, show_progress_bar: bool = False
+    ) -> npt.NDArray[np.float64]:
         """
         Returns embeddings with shape `(output_dimensionality,)` if `texts` is a string, or
         `(len(texts), output_dimensionality)` if it's a list of strings.
@@ -83,7 +85,12 @@ class GoogleProviderEmbeddings:
         # - For each request, you're limited to 250 input texts in us-central1, and in other
         #   regions, the max input text is 5.
         # - The API has a maximum input token limit of 20,000
-        for batch in self._prepare_batches(texts_unique, max_batch_size=5, max_tokens=20_000):
+        for batch in tqdm_sized(
+            self._prepare_batches(texts_unique, max_batch_size=5, max_tokens=20_000),
+            total=len(texts_unique),
+            desc="Embedding texts",
+            disable=not show_progress_bar,
+        ):
             text_embedding_inputs = self._prepare_inputs(batch)
             embeddings_batch = model.get_embeddings(
                 text_embedding_inputs,
