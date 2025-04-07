@@ -1,13 +1,13 @@
 import textwrap
 from venv import logger
 
+from google.genai.errors import ClientError
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
 from seer.dependency_injection import inject, injected
-from seer.exceptions import ClientError
 
 
 class TraceSummaryForLlmToGenerate(BaseModel):
@@ -49,8 +49,7 @@ def summarize_trace(
             max_tokens=1024,
         )
     except ClientError as e:
-        logger.error(f"Prompt too long for LLM: {e}")
-        raise ClientError("The trace is too large to summarize. Please try a smaller trace.")
+        raise ClientError("The trace is too large to summarize. Please try a smaller trace.") from e
 
     trace_summary = completion.parsed
 
