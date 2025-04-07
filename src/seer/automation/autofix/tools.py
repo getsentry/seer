@@ -858,6 +858,11 @@ class BaseTools:
         file_text = kwargs.get("file_text", "")
         if not file_text:
             return "Error: file_text is required for create command"
+            
+        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
+        valid_file_paths = repo_client.get_valid_file_paths()
+        if path in valid_file_paths:
+            return f"Error: Cannot create file '{path}' because it already exists. Use str_replace command instead to modify existing files."
 
         file_change = self._create_file_change(
             "create", file_text, file_text, path, repo_name, tool_call_id=tool_call_id
