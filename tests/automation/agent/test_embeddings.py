@@ -83,7 +83,8 @@ class TestGoogleProviderEmbeddings:
         flat = [text for batch in batches for text in batch]
         assert flat == texts
 
-    def test_encode(self, model: GoogleProviderEmbeddings):
+    @pytest.mark.parametrize("show_progress_bar", (True, False))
+    def test_encode(self, model: GoogleProviderEmbeddings, show_progress_bar: bool):
         texts = [
             "text 1",
             "text 2",
@@ -93,7 +94,7 @@ class TestGoogleProviderEmbeddings:
             "text 4",
             "text 1",
         ]
-        embeddings = model.encode(texts)
+        embeddings = model.encode(texts, show_progress_bar=show_progress_bar)
         assert isinstance(embeddings, np.ndarray)
         assert embeddings.ndim == 2
         for text, embedding in zip(texts, embeddings, strict=True):
