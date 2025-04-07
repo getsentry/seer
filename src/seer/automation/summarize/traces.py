@@ -1,5 +1,4 @@
 import textwrap
-from math import ceil
 from venv import logger
 
 from langfuse.decorators import observe
@@ -8,6 +7,7 @@ from pydantic import BaseModel
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
 from seer.dependency_injection import inject, injected
+from seer.exceptions import ClientError
 
 
 class TraceSummaryForLlmToGenerate(BaseModel):
@@ -21,7 +21,6 @@ class TraceSummaryForLlmToGenerate(BaseModel):
 @inject
 def summarize_trace(
     request: SummarizeTraceRequest,
-    avg_num_chars_per_token: float = 4.0,
     llm_client: LlmClient = injected,
 ) -> SummarizeTraceResponse:
     """
@@ -37,21 +36,22 @@ def summarize_trace(
     trace, only_transactions = request.trace, request.only_transactions
     trace_str = trace.get_and_format_trace(only_transactions)
 
-    # We limit the trace length to 1 million tokens to fit into Gemini Context Window (imperfect proxy for the actual context window)
-    if ceil(len(trace_str) / avg_num_chars_per_token) > 1_000_000:
-        raise ValueError("Trace is too long to summarize")
-
     prompt = _get_prompt(trace_str, only_transactions)
 
-    completion = llm_client.generate_structured(
-        model=GeminiProvider.model(
-            "gemini-2.0-flash-001",
-        ),
-        prompt=prompt,
-        response_format=TraceSummaryForLlmToGenerate,
-        temperature=0.0,
-        max_tokens=1024,
-    )
+    try:
+        completion = llm_client.generate_structured(
+            model=GeminiProvider.model(
+                "gemini-2.0-flash-001",
+            ),
+            prompt=prompt,
+            response_format=TraceSummaryForLlmToGenerate,
+            temperature=0.0,
+            max_tokens=1024,
+        )
+    except ClientError as e:
+        logger.error(f"Prompt too long for LLM: {e}")
+        raise ClientError("The trace is too large to summarize. Please try a smaller trace.")
+
     trace_summary = completion.parsed
 
     return SummarizeTraceResponse(
