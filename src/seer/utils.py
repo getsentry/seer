@@ -7,9 +7,10 @@ import time
 import weakref
 from enum import Enum
 from queue import Empty, Full, Queue
-from typing import Callable, Sequence
+from typing import Callable, Iterable, Sequence, TypeVar
 
 from sqlalchemy.orm import DeclarativeBase, Session
+from tqdm.auto import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -143,3 +144,13 @@ def prefix_logger(prefix: str, logger: logging.Logger) -> logging.LoggerAdapter:
             return f"{prefix}{msg}", kwargs
 
     return PrefixedLoggingAdapter(logger)
+
+
+_Batch = TypeVar("_Batch")
+
+
+def tqdm_sized(iterable: Iterable[_Batch], length: Callable[[_Batch], int] = len, **kwargs):
+    with tqdm(**kwargs) as pbar:
+        for batch in iterable:
+            pbar.update(length(batch))
+            yield batch

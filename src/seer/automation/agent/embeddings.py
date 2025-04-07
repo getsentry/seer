@@ -4,7 +4,6 @@ from typing import Iterable
 import numpy as np
 import numpy.typing as npt
 from more_itertools import chunked
-from tqdm.auto import tqdm
 from vertexai.language_models import (  # type: ignore[import-untyped]
     TextEmbeddingInput,
     TextEmbeddingModel,
@@ -12,7 +11,7 @@ from vertexai.language_models import (  # type: ignore[import-untyped]
 
 from seer.automation.agent.client import GeminiProvider
 from seer.automation.utils import batch_texts_by_token_count
-from seer.utils import backoff_on_exception
+from seer.utils import backoff_on_exception, tqdm_sized
 
 
 @dataclass
@@ -82,27 +81,28 @@ class GoogleProviderEmbeddings:
         text_to_embedding: dict[str, list[float]] = {}
         texts_unique = list({text: None for text in texts})
 
-        with tqdm(
-            total=len(texts_unique), desc="Embedding texts", disable=not show_progress_bar
-        ) as progress_bar:
-            # https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings#generative-ai-get-text-embedding-python_vertex_ai_sdk
-            # - For each request, you're limited to 250 input texts in us-central1, and in other
-            #   regions, the max input text is 5.
-            # - The API has a maximum input token limit of 20,000
-            for batch in self._prepare_batches(texts_unique, max_batch_size=5, max_tokens=20_000):
-                text_embedding_inputs = self._prepare_inputs(batch)
-                embeddings_batch = model.get_embeddings(
-                    text_embedding_inputs,
-                    auto_truncate=auto_truncate,
-                    output_dimensionality=self.output_dimensionality,
-                )
-                text_to_embedding.update(
-                    {
-                        text: embedding.values
-                        for text, embedding in zip(batch, embeddings_batch, strict=True)
-                    }
-                )
-                progress_bar.update(len(batch))
+        # https://cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings#generative-ai-get-text-embedding-python_vertex_ai_sdk
+        # - For each request, you're limited to 250 input texts in us-central1, and in other
+        #   regions, the max input text is 5.
+        # - The API has a maximum input token limit of 20,000
+        for batch in tqdm_sized(
+            self._prepare_batches(texts_unique, max_batch_size=5, max_tokens=20_000),
+            total=len(texts_unique),
+            desc="Embedding texts",
+            disable=not show_progress_bar,
+        ):
+            text_embedding_inputs = self._prepare_inputs(batch)
+            embeddings_batch = model.get_embeddings(
+                text_embedding_inputs,
+                auto_truncate=auto_truncate,
+                output_dimensionality=self.output_dimensionality,
+            )
+            text_to_embedding.update(
+                {
+                    text: embedding.values
+                    for text, embedding in zip(batch, embeddings_batch, strict=True)
+                }
+            )
 
         embeddings = np.array([text_to_embedding[text] for text in texts])
         if is_texts_str:
