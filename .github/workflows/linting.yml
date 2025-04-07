@@ -61,3 +61,9 @@ jobs:
         with:
           github-token: ${{ steps.token.outputs.token }}
           message: ":hammer_and_wrench: apply pre-commit fixes"
+
+      - name: Fail job if pre-commit failed
+        if: ${{ steps.pre-commit_results.outcome == 'failure' }}
+        run: |
+          echo "Pre-commit checks failed. Please fix the issues and try again."
+          exit 1
