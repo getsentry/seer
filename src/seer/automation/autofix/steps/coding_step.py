@@ -106,7 +106,13 @@ class AutofixCodingStep(AutofixPipelineStep):
 
         state = self.context.state.get()
         if all(not codebase.file_changes for codebase in state.codebases.values()):
-            raise ValueError("No file changes from coding agent")
+            memory = self.context.get_memory("code")
+            termination_reason = memory[-1].content if memory else None
+            if termination_reason:
+                self.context.event_manager.send_coding_result(termination_reason=termination_reason)
+                return
+            else:
+                raise ValueError("No file changes from coding agent")
         if state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return
         if make_kill_signal() in state.signals:

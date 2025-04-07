@@ -233,6 +233,7 @@ class ChangesStep(BaseStep):
     type: Literal[StepType.CHANGES] = StepType.CHANGES
 
     changes: list[CodebaseChange]
+    termination_reason: str | None = None
 
 
 Step = Union[DefaultStep, RootCauseStep, ChangesStep, SolutionStep]

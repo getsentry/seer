@@ -253,11 +253,18 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_coding_result(self):
+    def send_coding_result(self, termination_reason: str | None = None):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING
             cur.status = AutofixStatus.PROCESSING
+
+            if termination_reason:
+                changes_step = cur.find_or_add(self.changes_step)
+                changes_step.termination_reason = termination_reason
+                plan_step.status = AutofixStatus.COMPLETED
+                changes_step.status = AutofixStatus.COMPLETED
+                cur.status = AutofixStatus.COMPLETED
 
             log_seer_event(
                 SeerEventNames.AUTOFIX_CODING_COMPLETED,
