@@ -254,7 +254,7 @@ class TestFixabilityScore:
 
     @pytest.fixture
     def autofixability_model(self):
-        return AutofixabilityModel("models/autofixability_v0/embeddings")
+        return AutofixabilityModel("models/autofixability_v3/embeddings")
 
     @patch("seer.automation.summarize.issue.evaluate_autofixability")
     @patch("seer.automation.summarize.issue.Session")
@@ -304,7 +304,7 @@ class TestFixabilityScore:
         assert result.group_id == 123
         assert result.scores is not None
         assert result.scores.fixability_score == 0.75
-        assert result.scores.fixability_score_version == 2
+        assert result.scores.fixability_score_version == 3
         assert result.scores.is_fixable is True
         for score_name, score_value in scores_current.items():
             assert getattr(result.scores, score_name) == score_value
@@ -340,7 +340,7 @@ class TestFixabilityScore:
         assert isinstance(is_fixable, bool)
         if not can_use_model_stubs():
             assert is_fixable
-            assert score == pytest.approx(0.68511546, abs=1e-5)
+            assert score == pytest.approx(0.7751516, abs=1e-5)
 
     def test_issue_summary_db_conversions(self, sample_issue_summary):
         # Test to_db_state
@@ -355,12 +355,12 @@ class TestFixabilityScore:
         # Update with fixability scores
         sample_issue_summary.scores.fixability_score = 0.85
         sample_issue_summary.scores.is_fixable = True
-        sample_issue_summary.scores.fixability_score_version = 2
+        sample_issue_summary.scores.fixability_score_version = 3
 
         db_state = sample_issue_summary.to_db_state(456)
         assert db_state.fixability_score == 0.85
         assert db_state.is_fixable is True
-        assert db_state.fixability_score_version == 2
+        assert db_state.fixability_score_version == 3
 
         # Test from_db_state
         db_summary = DbIssueSummary(
@@ -368,7 +368,7 @@ class TestFixabilityScore:
             summary=sample_issue_summary.model_dump(mode="json"),
             fixability_score=0.65,
             is_fixable=False,
-            fixability_score_version=2,
+            fixability_score_version=3,
         )
 
         loaded_summary = IssueSummaryWithScores.from_db_state(db_summary)
@@ -376,4 +376,4 @@ class TestFixabilityScore:
         assert loaded_summary.whats_wrong == sample_issue_summary.whats_wrong
         assert loaded_summary.scores.fixability_score == 0.65
         assert loaded_summary.scores.is_fixable is False
-        assert loaded_summary.scores.fixability_score_version == 2
+        assert loaded_summary.scores.fixability_score_version == 3

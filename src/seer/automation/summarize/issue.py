@@ -224,7 +224,7 @@ def run_fixability_score(
 
     with Session() as session:
         issue_summary.scores.fixability_score = fixability_score
-        issue_summary.scores.fixability_score_version = 2
+        issue_summary.scores.fixability_score_version = 3
         issue_summary.scores.is_fixable = is_fixable
         session.merge(issue_summary.to_db_state(request.group_id))
         session.commit()
@@ -243,5 +243,5 @@ def evaluate_autofixability(
         f"Possible cause: {issue_summary.possible_cause}"
     )
     score = autofixability_model.score(issue_summary_input)
-    is_fixable = score > 0.64727825  # 80th percentile
+    is_fixable = score > 0.724  # 80th percentile
     return score, is_fixable

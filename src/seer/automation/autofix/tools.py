@@ -31,6 +31,8 @@ from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
 
+MAX_FILES_IN_TREE = 100
+
 
 class BaseTools:
     context: AutofixContext | CodegenContext
@@ -248,13 +250,25 @@ class BaseTools:
             other_paths = self._get_potential_abs_paths(path, repo_name)
             return f"<no entries found in directory '{path or '/'}'/>\n{other_paths}".strip()
 
+        # If more than MAX_FILES_IN_TREE files under a directory, show only the top level paths
+        is_truncated = len(files_under_path) > MAX_FILES_IN_TREE
+
         self.context.event_manager.add_log(
             f"Viewing directory tree for `{path}` in `{repo_name}`..."
         )
 
+        max_files_in_tree_note = (
+            f"Notice: There are a total of {len(files_under_path)} files in the tree under the {normalized_path} path. Only showing immediate children, provide a more specific path to view a full tree.\n"
+            if is_truncated
+            else ""
+        )
+
         # Use the _build_file_tree_string method from the repo client
-        tree_representation = repo_client._build_file_tree_string(files_under_path)
-        return f"<directory_tree>\n{tree_representation}\n</directory_tree>"
+        tree_representation = repo_client._build_file_tree_string(
+            files_under_path,
+            only_immediate_children_of_path=normalized_path if is_truncated else None,
+        )
+        return f"<directory_tree>\n{max_files_in_tree_note}{tree_representation}\n</directory_tree>"
 
     def _get_potential_abs_paths(self, path: str, repo_name: str | None = None) -> str:
         """
@@ -858,6 +872,10 @@ class BaseTools:
         file_text = kwargs.get("file_text", "")
         if not file_text:
             return "Error: file_text is required for create command"
+
+        existing_content = self.context.get_file_contents(path, repo_name=repo_name)
+        if existing_content is not None:
+            return f"Error: Cannot create file '{path}' because it already exists."
 
         file_change = self._create_file_change(
             "create", file_text, file_text, path, repo_name, tool_call_id=tool_call_id
