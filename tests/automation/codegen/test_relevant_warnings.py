@@ -489,13 +489,7 @@ class TestFetchIssuesComponent:
         assert output.filename_to_issues == filename_to_issues_expected
         assert mock_rpc_client_call.call_count == 1
 
-        # Test the cache
-        component.context.run_id += 1
-        output: CodeFetchIssuesOutput = component.invoke(request)
-        assert output.filename_to_issues == filename_to_issues_expected
-        assert mock_rpc_client_call.call_count == 1
-        component.context.run_id -= 1
-
+        # Test empty responses
         mock_rpc_client_call.return_value = None
         request.organization_id = 2
         output: CodeFetchIssuesOutput = component.invoke(request)

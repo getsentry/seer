@@ -12,6 +12,8 @@ from sentry_sdk.ai.monitoring import ai_track
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
+from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.utils import code_snippet
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -32,6 +34,9 @@ from seer.automation.component import BaseComponent
 from seer.automation.models import EventDetails, IssueDetails
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
+
+MAX_FILES_ANALYZED = 7
+MAX_LINES_ANALYZED = 500
 
 
 class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarningsOutput]):
@@ -190,13 +195,6 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         return FilterWarningsOutput(warning_and_pr_files=warning_and_pr_files)
 
 
-def _fetch_issues_for_pr_file_cache_key(
-    organization_id: int, provider: str, external_id: str, pr_file: PrFile, *args
-) -> tuple[str]:
-    return hashkey(organization_id, provider, external_id, pr_file.filename, pr_file.sha)
-
-
-@cached(cache=LRUCache(maxsize=128), key=_fetch_issues_for_pr_file_cache_key)
 @inject
 def _fetch_issues_for_pr_file(
     organization_id: int,
@@ -240,8 +238,8 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
         provider: str,
         external_id: str,
         pr_files: list[PrFile],
-        max_files_analyzed: int = 7,
-        max_lines_analyzed: int = 500,
+        max_files_analyzed: int = MAX_FILES_ANALYZED,
+        max_lines_analyzed: int = MAX_LINES_ANALYZED,
     ) -> dict[str, list[IssueDetails]]:
         """
         Returns a dict mapping a subset of file names in the PR to issues related to the file.
@@ -429,6 +427,14 @@ class AreIssuesFixableComponent(
         )
 
 
+@cached(cache=LRUCache(maxsize=MAX_FILES_ANALYZED))
+def _cached_file_contents(repo_client: RepoClient, path: str, commit_sha: str) -> str:
+    file_contents, _ = repo_client.get_file_content(path, sha=commit_sha)
+    if file_contents is None:
+        raise ValueError("Failed to get file contents")  # raise => don't cache
+    return file_contents
+
+
 class PredictRelevantWarningsComponent(
     BaseComponent[CodePredictRelevantWarningsRequest, CodePredictRelevantWarningsOutput]
 ):
@@ -440,40 +446,65 @@ class PredictRelevantWarningsComponent(
 
     context: CodegenContext
 
-    @cached(cache=LRUCache(maxsize=5))  # TODO(kddubey): test this
-    def _file_contents(self, path: str, commit_sha: str) -> str | None:
+    def _code_snippet_around_warning(
+        self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, padding_size: int = 10
+    ) -> list[str] | None:
         try:
-            return self.context.get_repo_client().get_file_content(path, sha=commit_sha)
+            file_contents = _cached_file_contents(
+                self.context.get_repo_client(), warning_and_pr_file.pr_file.filename, commit_sha
+            )
         except Exception:
             self.logger.exception(
                 "Error getting file contents",
-                extra={"path": path, "repo": self.context.repo.full_name},
+                extra={
+                    "path": warning_and_pr_file.pr_file.filename,
+                    "repo": self.context.repo.full_name,
+                },
             )
             return None
 
-    def _right_justified(self, min_num: int, max_num: int) -> list[str]:
-        max_digits = len(str(max_num))
-        return [f"{number:>{max_digits}}" for number in range(min_num, max_num + 1)]
+        warning_location = Location.from_encoded(warning_and_pr_file.warning.encoded_location)
+        warning_start_line = int(warning_location.start_line)
+        warning_end_line = int(warning_location.end_line)
 
-    def _code_snippet_around_warning(
-        self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, window_size: int = 5
-    ) -> str | None:
-        file_contents = self._file_contents(warning_and_pr_file.pr_file.filename, commit_sha)
-        if file_contents is None:
+        lines = file_contents.split("\n")
+        if warning_end_line > len(lines) - 1:
+            self.logger.warning(
+                msg=(
+                    "The warning's end line is greater than the number of lines in the file. "
+                    "Warning-file matching in FilterWarningsComponent was wrong or outdated.",
+                ),
+                extra={
+                    "warning_encoded_location": warning_and_pr_file.warning.encoded_location,
+                    "pr_filename": warning_and_pr_file.pr_file.filename,
+                    "num_lines": len(lines),
+                    "commit_sha": commit_sha,
+                },
+            )
             return None
 
-        warning_location = Location.from_encoded(warning_and_pr_file.warning.encoded_location)
-        # -1 b/c the line numbers are 1-indexed.
-        warning_start_line = int(warning_location.start_line) - 1
-        warning_end_line = int(warning_location.end_line) - 1
-        start_window = max(0, warning_start_line - window_size)
-        lines = file_contents.split("\n")
-        end_window = min(warning_end_line + window_size, len(lines))
-        lines_snippet = lines[start_window:end_window]
-        line_idxs = self._right_justified(start_window + 1, end_window)
-        lines_snippet = [f"{line_idx}| {line}" for line_idx, line in zip(line_idxs, lines_snippet)]
-        snippet = "\n".join(lines_snippet)
-        return snippet
+        return code_snippet(lines, warning_start_line, warning_end_line, padding_size=padding_size)
+
+    def _format_code_snippet_around_warning(
+        self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, padding_size: int = 10
+    ) -> str:
+        code_snippet = self._code_snippet_around_warning(
+            warning_and_pr_file, commit_sha, padding_size
+        )
+        if code_snippet is None:
+            return "< Could not extract the code snippet containing the warning >"
+        return "\n".join(code_snippet)
+
+    def _format_overlapping_hunks(self, warning_and_pr_file: WarningAndPrFile) -> str:
+        return textwrap.dedent(
+            """\
+            The following code in {filename} was modified in the PR:
+            {formatted_overlapping_hunks}
+            """
+        ).format(
+            filename=warning_and_pr_file.pr_file.filename,
+            formatted_overlapping_hunks=warning_and_pr_file.format_overlapping_hunks(),
+        )
 
     @observe(name="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
@@ -496,6 +527,11 @@ class PredictRelevantWarningsComponent(
                     formatted_error=EventDetails.from_event(
                         issue.events[0]
                     ).format_event_without_breadcrumbs(),
+                    formatted_overlapping_hunks=self._format_overlapping_hunks(warning_and_pr_file),
+                    formatted_code_snippet=self._format_code_snippet_around_warning(
+                        warning_and_pr_file, request.commit_sha, padding_size=10
+                    ),
+                    filename=warning_and_pr_file.pr_file.filename,
                 ),
                 response_format=ReleventWarningsPrompts.DoesFixingWarningFixIssue,
                 temperature=0.0,

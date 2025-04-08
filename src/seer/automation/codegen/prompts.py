@@ -162,6 +162,29 @@ class CodingUnitTestPrompts:
         )
 
 
+class RetryUnitTestPrompts:
+    @staticmethod
+    def format_continue_unit_tests_prompt(code_coverage_info: str, test_result_info: str):
+        return textwrap.dedent(
+            """\
+            The tests you have generated so far are not sufficient to cover all the changes in the codebase. You need to continue generating unit tests to address the gaps in coverage and fix any failing tests.
+
+            To help you with this, you have access to code coverage information at a file level attached as a JSON in addtion to test result information also in a JSON format.
+
+            Using the information and instructions provided, update the unit tests to ensure robust code coverage as well as fix any failing tests. Use the exact same format you used previously to regenerate tests. Your changes will be appended as a new commit to the branch of the existing PR.
+
+            Here is the code coverage information:
+            {code_coverage_info}
+
+            Here is the test result information:
+            {test_result_info}
+            """
+        ).format(
+            code_coverage_info=code_coverage_info,
+            test_result_info=test_result_info,
+        )
+
+
 class CodingCodeReviewPrompts:
     @staticmethod
     def format_system_msg():
@@ -287,7 +310,13 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
         short_justification: str | None = None
 
     @staticmethod
-    def format_prompt(formatted_warning: str, formatted_error: str):
+    def format_prompt(
+        formatted_warning: str,
+        formatted_error: str,
+        formatted_overlapping_hunks: str,
+        formatted_code_snippet: str,
+        filename: str,
+    ):
         # Defining relevance as "does fixing the warning fix the issue" is taken from BPR:
         # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L137
         #
@@ -299,6 +328,12 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             Here is a warning that surfaced somewhere in our codebase:
 
             {formatted_warning}
+
+            The following code in {filename} was modified in the PR:
+            {formatted_overlapping_hunks}
+
+            Here is the code snippet containing the warning:
+            {formatted_code_snippet}
 
             We have no idea if the warning is relevant to the issue. It could be completely irrelevant, for all we know!
             We need to know if this warning is *directly* relevant to the issue. By "directly relevant", we mean that fixing the warning would very likely prevent the issue.
@@ -316,38 +351,18 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             You are more than free to point out that the warning is completely irrelevant and should be ignored in the context of the issue.
 
             Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `analysis`.
-            This score, the `relevance_probability`, must be very granular, e.g., 0.32.
+            This score, the `relevance_probability`, must be very granular, e.g., 0.231.
             Then give your final answer in `does_fixing_warning_fix_issue`. It should be true if and only if you're quite confident.
 
             Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
               - `short_description`: a short, fluff-free, information-dense description of the problem caused by not addressing the warning.
                 This description must focus on the problem and not the warning itself. It should be at most 20 words.
-              - `short_justification`: a short, fluff-free, information-dense summary of your analysis for why the warning is relevant to the issue. This justification should be at most 15 words.
+              - `short_justification`: a short, fluff-free, information-dense summary of your analysis for why the warning is relevant to the issue. This justification should be at most 20 words.
             """
         ).format(
             error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
             formatted_warning=formatted_warning,
-        )
-
-
-class RetryUnitTestPrompts:
-    @staticmethod
-    def format_continue_unit_tests_prompt(code_coverage_info: str, test_result_info: str):
-        return textwrap.dedent(
-            """\
-            The tests you have generated so far are not sufficient to cover all the changes in the codebase. You need to continue generating unit tests to address the gaps in coverage and fix any failing tests.
-
-            To help you with this, you have access to code coverage information at a file level attached as a JSON in addtion to test result information also in a JSON format.
-
-            Using the information and instructions provided, update the unit tests to ensure robust code coverage as well as fix any failing tests. Use the exact same format you used previously to regenerate tests. Your changes will be appended as a new commit to the branch of the existing PR.
-
-            Here is the code coverage information:
-            {code_coverage_info}
-
-            Here is the test result information:
-            {test_result_info}
-            """
-        ).format(
-            code_coverage_info=code_coverage_info,
-            test_result_info=test_result_info,
+            filename=filename,
+            formatted_overlapping_hunks=formatted_overlapping_hunks,
+            formatted_code_snippet=formatted_code_snippet,
         )

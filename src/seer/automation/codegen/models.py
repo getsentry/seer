@@ -171,6 +171,13 @@ class WarningAndPrFile(BaseModel):
     pr_file: PrFile
     overlapping_hunk_idxs: list[int] = Field(default_factory=list)
 
+    def format_overlapping_hunks(self) -> str:
+        """
+        Sub-patch of hunks overlapping with the warning.
+        """
+        hunks_overlapping = (self.pr_file.hunks[idx] for idx in self.overlapping_hunk_idxs)
+        return "\n".join(hunk.raw_hunk() for hunk in hunks_overlapping)
+
 
 class FilterWarningsOutput(BaseComponentOutput):
     warning_and_pr_files: list[WarningAndPrFile]

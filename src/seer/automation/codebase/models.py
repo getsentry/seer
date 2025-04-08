@@ -3,7 +3,7 @@ import textwrap
 from functools import cached_property
 from typing import Any, Literal, NotRequired, TypedDict
 
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, ConfigDict, model_serializer
 from pydantic_xml import attr
 
 from seer.automation.models import FilePatch, Hunk, PromptXmlModel, RepoDefinition
@@ -101,6 +101,8 @@ class Location(BaseModel):
 
 
 class PrFile(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     filename: str
     patch: str
     status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
