@@ -472,7 +472,7 @@ class PredictRelevantWarningsComponent(
             )
             return None
 
-    def _right_justified(min_num: int, max_num: int) -> list[str]:
+    def _right_justified(self, min_num: int, max_num: int) -> list[str]:
         max_digits = len(str(max_num))
         return [f"{number:>{max_digits}}" for number in range(min_num, max_num)]
 
@@ -491,10 +491,8 @@ class PredictRelevantWarningsComponent(
         end_window = warning_end_line + window_size
         lines = file_contents.split("\n")
         lines_snippet = lines[start_window:end_window]
-        line_idxs = self._right_justified(start_window, end_window)
-        lines_snippet = [
-            f"{line_idx + 1}| {line}" for line_idx, line in zip(line_idxs, lines_snippet)
-        ]
+        line_idxs = self._right_justified(start_window + 1, end_window + 1)
+        lines_snippet = [f"{line_idx}| {line}" for line_idx, line in zip(line_idxs, lines_snippet)]
         snippet = "\n".join(lines_snippet)
         return snippet
 
