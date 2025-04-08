@@ -1,6 +1,5 @@
 import bisect
 import logging
-import re
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -13,7 +12,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
-from seer.automation.codebase.models import Location, StaticAnalysisWarning
+from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -26,8 +25,8 @@ from seer.automation.codegen.models import (
     CodePredictRelevantWarningsRequest,
     FilterWarningsOutput,
     FilterWarningsRequest,
-    PrFile,
     RelevantWarningResult,
+    WarningAndPrFile,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
 from seer.automation.component import BaseComponent
@@ -47,8 +46,6 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
     def _left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
         """
         Example::
-
-            from pathlib import Path
 
             path = Path("src/seer/automation/agent/client.py")
             paths = FilterWarningsComponent._left_truncated_paths(path, 2)
@@ -77,22 +74,23 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
                 filepath_to_pr_file[truncated] = pr_file
         return filepath_to_pr_file
 
-    def _is_warning_in_diff(
+    def _find_matching_pr_file(
         self,
         warning: StaticAnalysisWarning,
         filepath_to_pr_file: dict[str, PrFile],
-    ) -> bool:
+    ) -> tuple[PrFile, list[int]] | None:
         matching_pr_files = self._get_matching_pr_files(warning, filepath_to_pr_file)
         warning_location = Location.from_encoded(warning.encoded_location)
         for pr_file in matching_pr_files:
             hunk_ranges = self._get_sorted_hunk_ranges(pr_file)
-            if self._do_ranges_overlap(
+            overlapping_hunk_idxs = self._overlapping_hunk_idxs(
                 (int(warning_location.start_line), int(warning_location.end_line)),
                 hunk_ranges,
-            ):
-                return True
+            )
+            if overlapping_hunk_idxs:
+                return pr_file, overlapping_hunk_idxs
 
-        return False
+        return None
 
     def _get_sorted_hunk_ranges(self, pr_file: PrFile) -> list[tuple[int, int]]:
         """Returns sorted tuples of 1-indexed line numbers (start_inclusive, end_exclusive) in the updated pr file.
@@ -124,26 +122,15 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         Returns:
             List of sorted tuples containing 1-indexed line numbers (start_inclusive, end_exclusive) in the updated file
         """
-        patch_lines = pr_file.patch.split("\n")
-        hunk_ranges: list[tuple[int, int]] = []
-
-        for line in patch_lines:
-            if line.startswith("@@"):
-                try:
-                    match = re.match(r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@", line)
-                    if match:
-                        _, _, new_start, num_lines = map(int, match.groups())
-                        hunk_ranges.append((new_start, new_start + num_lines))
-                except Exception:
-                    self.logger.warning(f"Could not parse hunk header: {line}")
-                    continue
-
-        return hunk_ranges
+        return [
+            (hunk.target_start, hunk.target_start + hunk.target_length) for hunk in pr_file.hunks
+        ]
 
     def _get_matching_pr_files(
         self, warning: StaticAnalysisWarning, filepath_to_pr_file: dict[str, PrFile]
     ) -> list[PrFile]:
-        """Find PR files that may match a warning's location.
+        """
+        Find PR files that may match a warning's location.
         This handles cases where the warning location and PR file paths may be specified differently:
         - With different numbers of parent directories
         - With or without a repo prefix
@@ -151,7 +138,6 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         """
         filename = warning.encoded_location.split(":")[0]
         path = Path(filename)
-
         # If the path is relative, it shouldn't contain intermediate `..`s.
         first_idx_non_dots = next((idx for idx, part in enumerate(path.parts) if part != ".."))
         path = Path(*path.parts[first_idx_non_dots:])
@@ -159,49 +145,70 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             raise ValueError(
                 f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
             )
-
         warning_filepath_variations = {
             path.as_posix(),
             *self._left_truncated_paths(path, max_num_paths=2),
         }
-
         return [
             filepath_to_pr_file[filepath]
             for filepath in warning_filepath_variations & set(filepath_to_pr_file)
         ]
 
-    def _do_ranges_overlap(
+    def _overlapping_hunk_idxs(
         self, warning_range: tuple[int, int], sorted_hunk_ranges: list[tuple[int, int]]
-    ) -> bool:
+    ) -> list[int]:
+        # TODO(kddubey): to be correct (grab all hunks overlapping w/ the warning), need to bisect
+        # and then add until no overlap.
         if not sorted_hunk_ranges or not warning_range:
-            return False
-        target_start, target_end = warning_range
+            return []
+
+        warning_start, warning_end = warning_range
         # Handle special case of single line warning by making end inclusive
-        if target_start == target_end:
-            target_end += 1
-        index = bisect.bisect_left(sorted_hunk_ranges, (target_start,))
-        return (index > 0 and sorted_hunk_ranges[index - 1][1] > target_start) or (
-            index < len(sorted_hunk_ranges) and sorted_hunk_ranges[index][0] < target_end
+        if warning_start == warning_end:
+            warning_end += 1
+        index = bisect.bisect_left(sorted_hunk_ranges, (warning_start,))
+
+        overlapping_hunk_idxs = []
+
+        does_overlap_with_previous_hunk = (
+            index > 0 and warning_start < sorted_hunk_ranges[index - 1][1]
         )
+        if does_overlap_with_previous_hunk:
+            overlapping_hunk_idxs.append(index - 1)
+
+        does_overlap_with_next_hunk = (
+            index < len(sorted_hunk_ranges) and sorted_hunk_ranges[index][0] < warning_end
+        )
+        if does_overlap_with_next_hunk:
+            overlapping_hunk_idxs.append(index)
+
+        return overlapping_hunk_idxs
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
     def invoke(self, request: FilterWarningsRequest) -> FilterWarningsOutput:
         filepath_to_pr_file = self._build_filepath_mapping(request.pr_files)
-
-        filtered_warnings: list[StaticAnalysisWarning] = []
+        warning_and_pr_files: list[WarningAndPrFile] = []
         for warning in request.warnings:
             try:
-                if self._is_warning_in_diff(warning, filepath_to_pr_file):
-                    filtered_warnings.append(warning)
+                match = self._find_matching_pr_file(warning, filepath_to_pr_file)
             except Exception as e:
                 self.logger.warning(
-                    f"Failed to evaluate warning, skipping: {warning.id} ({warning.encoded_location})",
+                    f"Failed to match warning. Skipping: {warning.id} ({warning.encoded_location})",
                     exc_info=e,
                 )
-                continue
+            else:
+                if match is not None:
+                    pr_file, overlapping_hunk_idxs = match
+                    warning_and_pr_files.append(
+                        WarningAndPrFile(
+                            warning=warning,
+                            pr_file=pr_file,
+                            overlapping_hunk_idxs=overlapping_hunk_idxs,
+                        )
+                    )
 
-        return FilterWarningsOutput(warnings=filtered_warnings)
+        return FilterWarningsOutput(warning_and_pr_files=warning_and_pr_files)
 
 
 def _fetch_issues_for_pr_file_cache_key(
@@ -340,7 +347,10 @@ class AssociateWarningsWithIssuesComponent(
         self, request: AssociateWarningsWithIssuesRequest
     ) -> AssociateWarningsWithIssuesOutput:
 
-        warnings_formatted = [warning.format_warning() for warning in request.warnings]
+        warnings_formatted = [
+            warning_and_pr_file.warning.format_warning()
+            for warning_and_pr_file in request.warning_and_pr_files
+        ]
         issue_id_to_issue_with_pr_filename = {
             issue.id: (issue, filename)
             for filename, issues in request.filename_to_issues.items()
@@ -351,14 +361,11 @@ class AssociateWarningsWithIssuesComponent(
         # This should be ok b/c the issue should contain enough information that the downstream LLM
         # calls can match any relevant warnings to it. The filename is not the strongest signal.
 
-        if not request.warnings:
+        if not request.warning_and_pr_files:
             self.logger.info("No warnings to associate with issues.")
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
         if not issue_id_to_issue_with_pr_filename:
-            self.logger.info(
-                "No issues to associate with warnings. "
-                'GCP query: SEARCH("fetch_issues_given_file_patches")'
-            )
+            self.logger.info("No issues to associate with warnings.")
             return AssociateWarningsWithIssuesOutput(candidate_associations=[])
 
         issues_with_pr_filename = list(issue_id_to_issue_with_pr_filename.values())
@@ -378,7 +385,7 @@ class AssociateWarningsWithIssuesComponent(
             warning_issue_cosine_distances, request.max_num_associations
         )
         candidate_associations = [
-            (request.warnings[warning_idx], issues_with_pr_filename[issue_idx][0])
+            (request.warning_and_pr_files[warning_idx], issues_with_pr_filename[issue_idx][0])
             for warning_idx, issue_idx in warning_issue_indices
         ]
         return AssociateWarningsWithIssuesOutput(candidate_associations=candidate_associations)
@@ -454,6 +461,43 @@ class PredictRelevantWarningsComponent(
 
     context: CodegenContext
 
+    @cached(cache=LRUCache(maxsize=5))  # TODO(kddubey): test this
+    def _file_contents(self, path: str, commit_sha: str) -> str | None:
+        try:
+            return self.context.get_repo_client().get_file_content(path, sha=commit_sha)
+        except Exception:
+            self.logger.exception(
+                "Error getting file contents",
+                extra={"path": path, "repo": self.context.repo.full_name},
+            )
+            return None
+
+    def _right_justified(min_num: int, max_num: int) -> list[str]:
+        max_digits = len(str(max_num))
+        return [f"{number:>{max_digits}}" for number in range(min_num, max_num)]
+
+    def _code_snippet_around_warning(
+        self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, window_size: int = 5
+    ) -> str | None:
+        file_contents = self._file_contents(warning_and_pr_file.pr_file.filename, commit_sha)
+        if file_contents is None:
+            return None
+
+        warning_location = Location.from_encoded(warning_and_pr_file.warning.encoded_location)
+        # -1 b/c the line numbers are 1-indexed.
+        warning_start_line = int(warning_location.start_line) - 1
+        warning_end_line = int(warning_location.end_line) - 1
+        start_window = max(0, warning_start_line - window_size)
+        end_window = warning_end_line + window_size
+        lines = file_contents.split("\n")
+        lines_snippet = lines[start_window:end_window]
+        line_idxs = self._right_justified(start_window, end_window)
+        lines_snippet = [
+            f"{line_idx + 1}| {line}" for line_idx, line in zip(line_idxs, lines_snippet)
+        ]
+        snippet = "\n".join(lines_snippet)
+        return snippet
+
     @observe(name="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
     @inject
@@ -463,13 +507,15 @@ class PredictRelevantWarningsComponent(
         # TODO(kddubey): instead of looking at every association, probably faster and cheaper to input one
         # warning and prompt for which of its associated issues are relevant. May not work as well.
         relevant_warning_results: list[RelevantWarningResult] = []
-        for warning, issue in request.candidate_associations:
-            self.logger.info(f"Predicting relevance of warning {warning.id} and issue {issue.id}")
+        for warning_and_pr_file, issue in request.candidate_associations:
+            self.logger.info(
+                f"Predicting relevance of warning {warning_and_pr_file.warning.id} and issue {issue.id}"
+            )
             completion = llm_client.generate_structured(
                 model=GeminiProvider.model("gemini-2.0-flash-001"),
                 system_prompt=ReleventWarningsPrompts.format_system_msg(),
                 prompt=ReleventWarningsPrompts.format_prompt(
-                    formatted_warning=warning.format_warning(),
+                    formatted_warning=warning_and_pr_file.warning.format_warning(),
                     formatted_error=EventDetails.from_event(
                         issue.events[0]
                     ).format_event_without_breadcrumbs(),
@@ -481,19 +527,19 @@ class PredictRelevantWarningsComponent(
             )
             if completion.parsed is None:  # Gemini quirk
                 self.logger.warning(
-                    f"No response from LLM for warning {warning.id} and issue {issue.id}"
+                    f"No response from LLM for warning {warning_and_pr_file.warning.id} and issue {issue.id}"
                 )
                 continue
             relevant_warning_results.append(
                 RelevantWarningResult(
-                    warning_id=warning.id,
+                    warning_id=warning_and_pr_file.warning.id,
                     issue_id=issue.id,
                     does_fixing_warning_fix_issue=completion.parsed.does_fixing_warning_fix_issue,
                     relevance_probability=completion.parsed.relevance_probability,
                     reasoning=completion.parsed.analysis,
                     short_description=completion.parsed.short_description or "",
                     short_justification=completion.parsed.short_justification or "",
-                    encoded_location=warning.encoded_location,
+                    encoded_location=warning_and_pr_file.warning.encoded_location,
                 )
             )
         num_relevant_warnings = sum(

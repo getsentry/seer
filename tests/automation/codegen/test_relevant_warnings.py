@@ -1,6 +1,6 @@
 import textwrap
 from collections import defaultdict
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 from unittest.mock import MagicMock, Mock, patch
 
 import numpy as np
@@ -25,6 +25,7 @@ from seer.automation.codegen.models import (
     FilterWarningsRequest,
     PrFile,
     RelevantWarningResult,
+    WarningAndPrFile,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
 from seer.automation.codegen.relevant_warnings_component import (
@@ -39,6 +40,55 @@ from seer.automation.codegen.relevant_warnings_step import (
     RelevantWarningsStepRequest,
 )
 from seer.automation.models import IssueDetails, RepoDefinition, SentryEventData
+
+_T = TypeVar("_T")
+
+
+class _MockId(Generic[_T]):
+    def __init__(self, cls_with_id_attr: type[_T], id_attr: str = "id"):
+        self.cls_with_id_attr = cls_with_id_attr
+        self._id = 1
+        self._id_attr = id_attr
+
+    def __call__(self):
+        """
+        Creates a mock object of type `cls_with_id` with a unique `id` attribute.
+        """
+        obj = next(generate(self.cls_with_id_attr))
+        setattr(obj, self._id_attr, self._id)
+        self._id += 1
+        return obj
+
+
+_MockStaticAnalysisWarning = _MockId(StaticAnalysisWarning)
+_MockIssueDetails = _MockId(IssueDetails)
+
+
+def _mock_static_analysis_warning(encoded_location: str | None = None):
+    """
+    Creates a static analysis warning with a dummy `encoded_location` (if not provided) that
+    matches the regex.
+
+    The `id` is unique.
+    """
+    static_analysis_warning = _MockStaticAnalysisWarning()
+    if encoded_location is None:
+        static_analysis_warning.encoded_location = (
+            f"{static_analysis_warning.encoded_location}.py:1"
+        )
+    else:
+        static_analysis_warning.encoded_location = encoded_location
+    return static_analysis_warning
+
+
+def _mock_issue_details():
+    """
+    Creates an issue which is guaranteed to have an event.
+    The `id` is unique.
+    """
+    issue_details = _MockIssueDetails()
+    issue_details.events = [next(generate(SentryEventData))]
+    return issue_details
 
 
 @pytest.mark.parametrize(
@@ -131,14 +181,22 @@ def test_format_code_snippet(warning: StaticAnalysisWarning, expected: str):
     assert warning.format_warning() == expected
 
 
+class _PrFileMatch(BaseModel):
+    pr_file_idx: int
+    overlapping_hunk_idxs: list[int]
+
+
+# pytest tests/automation/codegen/test_relevant_warnings.py::TestFilterWarningsComponent -x
 class TestFilterWarningsComponent:
+
     @pytest.fixture
     def component(self):
         return FilterWarningsComponent(context=MagicMock())
 
     def test_bad_encoded_locations_cause_errors(self, component: FilterWarningsComponent):
-        warning = next(generate(StaticAnalysisWarning))
-        warning.encoded_location = "../../getsentry/seer/../not/anymore.py:1:1"
+        warning = _mock_static_analysis_warning(
+            encoded_location="../../getsentry/seer/../not/anymore.py:1~2"
+        )
         with pytest.raises(
             ValueError,
             match=f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}",
@@ -151,147 +209,237 @@ class TestFilterWarningsComponent:
     def test_get_hunk_ranges(self, component: FilterWarningsComponent):
         pr_file = PrFile(
             filename="test.py",
-            patch="""@@ -1,3 +1,4 @@
-def hello():
-    print("hello")
-+    print("world")  # Line 3 is added
-print("goodbye")
-
-@@ -20,3 +21,4 @@
-    print("end")
-+    print("new end")  # Line 22 is added
-    return""",
+            patch=textwrap.dedent(
+                """\
+                @@ -1,3 +1,4 @@
+                 def hello():
+                     print("hello")
+                +    print("world")  # Line 3 is added
+                 print("goodbye")
+                __WHITESPACE__
+                @@ -20,3 +21,4 @@ def __init__(self):
+                     print("end")
+                +    print("new end")  # Line 22 is added
+                     return"""
+            ).replace("__WHITESPACE__", " "),
             status="modified",
             changes=15,
             sha="sha2",
         )
         assert component._get_sorted_hunk_ranges(pr_file) == [(1, 5), (21, 25)]
 
-    def test_do_ranges_overlap(self, component: FilterWarningsComponent):
+    def test_overlapping_hunk_idxs(self, component: FilterWarningsComponent):
         # Test overlapping ranges
-        assert component._do_ranges_overlap((1, 5), [(1, 5)])  # Exact match
-        assert component._do_ranges_overlap((2, 4), [(1, 5)])  # Warning contained within hunk
-        assert component._do_ranges_overlap((1, 3), [(2, 5)])  # Partial overlap at start
-        assert component._do_ranges_overlap((4, 6), [(2, 5)])  # Partial overlap at end
-        assert component._do_ranges_overlap((1, 6), [(2, 4)])  # Hunk contained within warning
-        assert component._do_ranges_overlap((3, 6), [(1, 4), (5, 7)])  # Overlaps multiple hunks
-        assert component._do_ranges_overlap((1, 1), [(1, 4), (5, 7)])  # Warning only has 1 line
+        assert component._overlapping_hunk_idxs((1, 5), [(1, 5)]) == [0]  # Exact match
+        assert component._overlapping_hunk_idxs((2, 4), [(1, 5)]) == [
+            0
+        ]  # Warning contained within hunk
+        assert component._overlapping_hunk_idxs((1, 3), [(2, 5)]) == [0]  # Partial overlap at start
+        assert component._overlapping_hunk_idxs((4, 6), [(2, 5)]) == [0]  # Partial overlap at end
+        assert component._overlapping_hunk_idxs((1, 6), [(2, 4)]) == [
+            0
+        ]  # Hunk contained within warning
+        assert component._overlapping_hunk_idxs((3, 6), [(1, 4), (5, 7)]) == [
+            0,
+            1,
+        ]  # Overlaps multiple hunks
+        assert component._overlapping_hunk_idxs((1, 1), [(1, 4), (5, 7)]) == [
+            0
+        ]  # Warning only has 1 line
 
         # Test non-overlapping ranges
-        assert not component._do_ranges_overlap((1, 2), [(3, 4)])  # Warning before hunk
-        assert not component._do_ranges_overlap((5, 6), [(2, 4)])  # Warning after hunk
-        assert not component._do_ranges_overlap((1, 2), [])  # Empty hunks
-        assert not component._do_ranges_overlap(
-            (1, 2), [(10, 12), (20, 25)]
-        )  # No overlap with any hunks
+        assert component._overlapping_hunk_idxs((1, 2), [(3, 4)]) == []  # Warning before hunk
+        assert component._overlapping_hunk_idxs((5, 6), [(2, 4)]) == []  # Warning after hunk
+        assert component._overlapping_hunk_idxs((1, 2), []) == []  # Empty hunks
+        assert component._overlapping_hunk_idxs((1, 2), [(10, 12), (20, 25)]) == []  # Outside range
+        assert component._overlapping_hunk_idxs((13, 19), [(10, 12), (20, 25)]) == []  # No overlap
 
     class _TestInvokeTestCase(BaseModel):
-        id: str
+        """
+        Split warnings into those which match a PR file and those which don't, according to their
+        encoded location (filename and line numbers).
+
+        A warning should only match at most 1 PR file.
+        """
+
+        repo_full_name: str
 
         pr_files: list[PrFile]
-        "These files are relative to the repo root b/c they're from the GitHub API."
+        """
+        These files are relative to the repo root b/c they're from the GitHub API.
+        """
 
-        encoded_locations_with_matches: list[str]
-        "These locations come from overwatch. Currently, they may not contain the repo's full name."
+        encoded_location_to_pr_file_match: dict[str, _PrFileMatch | None]
+        """
+        These locations come from overwatch. They're usually relative to the repo root.
 
-        encoded_locations_without_matches: list[str]
+        Each tuple contains:
+        - a warning's encoded location
+        - the index of the matching PR file, and the specific hunks which overlap with the warning.
+        """
 
     @pytest.mark.parametrize(
         "test_case",
         [
             _TestInvokeTestCase(
-                id="getsentry/seer",
+                repo_full_name="getsentry/seer",
                 pr_files=[
                     PrFile(
                         filename="src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py",
-                        patch="""@@ -233,1 +233,2 @@
-                        def test_func():
-                        +    print("hello")""",
+                        patch=textwrap.dedent(
+                            """\
+                            @@ -233,1 +233,2 @@
+                             def test_func1():
+                            +    print("hello1")
+                            __WHITESPACE__
+                            @@ -238,1 +238,3 @@
+                             def test_func2():
+                            +    print("hello2")
+                            +    print("bye2")"""
+                        ).replace("__WHITESPACE__", " "),
                         status="modified",
                         changes=1,
                         sha="sha1",
-                    )
+                    ),
                 ],
-                encoded_locations_with_matches=[
-                    "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
-                    "seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
-                    "getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233:234",
-                    "../../../getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233",
-                ],
-                encoded_locations_without_matches=[
-                    "../app/getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233",  # too far up
-                    "getsentry/seer/src/seer/anomaly_detection/mp_boxcox_scorer.py:1",  # missing detectors
-                    "getsentry/seer/src/seer/detectors/mp_boxcox_scorer.py:1",  # missing anomaly_detection
-                ],
+                encoded_location_to_pr_file_match={
+                    "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233~234": _PrFileMatch(
+                        pr_file_idx=0, overlapping_hunk_idxs=[0]
+                    ),
+                    "seer/anomaly_detection/detectors/mp_boxcox_scorer.py:239": _PrFileMatch(
+                        pr_file_idx=0, overlapping_hunk_idxs=[1]
+                    ),
+                    "getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:234~240": _PrFileMatch(
+                        pr_file_idx=0, overlapping_hunk_idxs=[0, 1]
+                    ),
+                    "../../../getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233": _PrFileMatch(
+                        pr_file_idx=0, overlapping_hunk_idxs=[0]
+                    ),
+                    # No matches:
+                    "src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:23~24": None,  # oustide hunks
+                    "../app/getsentry/seer/src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py:233": None,  # path too far up
+                    "getsentry/seer/src/seer/anomaly_detection/mp_boxcox_scorer.py:1": None,  # path missing detectors
+                    "getsentry/seer/src/seer/detectors/mp_boxcox_scorer.py:1": None,  # path missing anomaly_detection
+                },
             ),
             _TestInvokeTestCase(
-                id="codecov/overwatch",
+                repo_full_name="codecov/overwatch",
                 pr_files=[
                     PrFile(
                         filename="app/tools/seer_signature/generate_signature.py",
-                        patch="""@@ -20,3 +20,4 @@
-                        def generate():
-                            print("generating")
-                            return True
-                        +    print("done")""",
+                        patch=textwrap.dedent(
+                            """\
+                            @@ -2,3 +2,4 @@
+                             def generate():
+                                 print("generating1")
+                                 return True
+                            +    print("done1")
+                            __WHITESPACE__
+                            @@ -20,3 +20,4 @@
+                             def generate():
+                                 print("generating2")
+                                 return True
+                            +    print("done2")"""
+                        ).replace("__WHITESPACE__", " "),
                         status="modified",
                         changes=1,
                         sha="sha1",
                     ),
                     PrFile(
                         filename="processor/tests/services/test_envelope.py",
-                        patch="""@@ -4,2 +4,3 @@
-                        def test_envelope():
-                        +    assert True
-                            pass""",
+                        patch=textwrap.dedent(
+                            """\
+                            @@ -4,2 +4,3 @@
+                             def test_envelope1():
+                            +    assert True
+                                 pass
+                            __WHITESPACE__
+                            @@ -9,2 +10,4 @@
+                             def test_envelope2():
+                            -    assert True
+                            +    assert False
+                            +    print("hello")
+                                 pass"""
+                        ).replace("__WHITESPACE__", " "),
                         status="modified",
                         changes=1,
                         sha="sha1",
                     ),
                     PrFile(
                         filename="app/app/Livewire/Actions/Logout.php",
-                        patch="""@@ -15,2 +15,3 @@
-                        public function logout() {
-                        +    return redirect('/');
-                        }""",
+                        patch=textwrap.dedent(
+                            """\
+                            @@ -15,2 +15,3 @@
+                             public function logout() {
+                            +    return redirect('/');
+                             }"""
+                        ),
                         status="modified",
                         changes=1,
                         sha="sha1",
                     ),
                 ],
-                encoded_locations_with_matches=[
-                    "app/tools/seer_signature/generate_signature.py:20",
-                    "tests/services/test_envelope.py:4",
-                    "app/Livewire/Actions/Logout.php:15",
-                ],
-                encoded_locations_without_matches=[
-                    "generate_signature.py:1",  # unknown location
-                    "app/tools/generate_signature.py:1",  # missing seer_signature
-                    "tests/services/test_package.py:1",  # wrong file
-                    "app/app/Livewire/Actions/Logout.py:1",  # wrong extension
-                ],
+                encoded_location_to_pr_file_match={
+                    "app/tools/seer_signature/generate_signature.py:20": _PrFileMatch(
+                        pr_file_idx=0, overlapping_hunk_idxs=[1]
+                    ),
+                    "tests/services/test_envelope.py:5~12": _PrFileMatch(
+                        pr_file_idx=1, overlapping_hunk_idxs=[0, 1]
+                    ),
+                    "app/Livewire/Actions/Logout.php:15": _PrFileMatch(
+                        pr_file_idx=2, overlapping_hunk_idxs=[0]
+                    ),
+                    "app/tools/seer_signature/generate_signature.py:7~10": None,  # outside hunks
+                    "generate_signature.py:1": None,  # unknown location
+                    "app/tools/generate_signature.py:1": None,  # missing seer_signature
+                    "tests/services/test_package.py:1": None,  # wrong file
+                    "app/app/Livewire/Actions/Logout.py:1": None,  # wrong extension
+                },
             ),
         ],
-        ids=lambda test_case: test_case.id,
+        ids=lambda test_case: cast(
+            TestFilterWarningsComponent._TestInvokeTestCase, test_case
+        ).repo_full_name,
     )
     def test_invoke(self, test_case: _TestInvokeTestCase, component: FilterWarningsComponent):
-        warnings = []
-        for encoded_location in (
-            test_case.encoded_locations_with_matches + test_case.encoded_locations_without_matches
-        ):
-            warning = next(generate(StaticAnalysisWarning))
-            warning.encoded_location = encoded_location
-            warnings.append(warning)
-
+        warnings = [
+            _mock_static_analysis_warning(encoded_location)
+            for encoded_location in test_case.encoded_location_to_pr_file_match
+        ]
         request = FilterWarningsRequest(
             warnings=warnings,
             pr_files=test_case.pr_files,
-            repo_full_name="getsentry/seer",
+            repo_full_name=test_case.repo_full_name,
         )
         output: FilterWarningsOutput = component.invoke(request)
-        output_encoded_locations = [warning.encoded_location for warning in output.warnings]
-        assert output_encoded_locations == test_case.encoded_locations_with_matches
-        assert output.warnings == warnings[: len(test_case.encoded_locations_with_matches)]
+
+        output_encoded_locations = [
+            warning_and_pr_file.warning.encoded_location
+            for warning_and_pr_file in output.warning_and_pr_files
+        ]
+        are_warnings_unique = len(set(output_encoded_locations)) == len(output_encoded_locations)
+        assert are_warnings_unique, "A warning should match at most 1 PR file"
+
+        assert set(output_encoded_locations) == {
+            encoded_location
+            for encoded_location, pr_file_match in test_case.encoded_location_to_pr_file_match.items()
+            if pr_file_match is not None
+        }
+
+        for warning_and_pr_file in output.warning_and_pr_files:
+            warning = warning_and_pr_file.warning
+            expected_pr_file_match = test_case.encoded_location_to_pr_file_match[
+                warning.encoded_location
+            ]
+            assert expected_pr_file_match is not None, warning.encoded_location
+            assert (
+                warning_and_pr_file.pr_file
+                == test_case.pr_files[expected_pr_file_match.pr_file_idx]
+            ), warning.encoded_location
+            assert (
+                warning_and_pr_file.overlapping_hunk_idxs
+                == expected_pr_file_match.overlapping_hunk_idxs
+            ), warning.encoded_location
 
 
 @patch("seer.rpc.DummyRpcClient.call")
@@ -361,54 +509,11 @@ class TestFetchIssuesComponent:
         assert output.filename_to_issues == {filename: [] for filename in pr_filename_to_issues}
 
 
-_T = TypeVar("_T")
-
-
-class _MockId(Generic[_T]):
-    def __init__(self, cls_with_id_attr: type[_T], id_attr: str = "id"):
-        self.cls_with_id_attr = cls_with_id_attr
-        self._id = 1
-        self._id_attr = id_attr
-
-    def __call__(self):
-        """
-        Creates a mock object of type `cls_with_id` with a unique `id` attribute.
-        """
-        obj = next(generate(self.cls_with_id_attr))
-        setattr(obj, self._id_attr, self._id)
-        self._id += 1
-        return obj
-
-
-_MockStaticAnalysisWarning = _MockId(StaticAnalysisWarning)
-_MockIssueDetails = _MockId(IssueDetails)
-
-
-def _mock_static_analysis_warning():
-    """
-    Creates a static analysis warning with a dummy `encoded_location` that matches the regex.
-    """
-    static_analysis_warning = _MockStaticAnalysisWarning()
-    static_analysis_warning.encoded_location = f"{static_analysis_warning.encoded_location}.py:1"
-    return static_analysis_warning
-
-
-def _mock_issue_details():
-    """
-    Creates an issue which is guaranteed to have an event.
-    """
-    issue_details = _MockIssueDetails()
-    issue_details.events = [next(generate(SentryEventData))]
-    return issue_details
-
-
 class TestAssociateWarningsWithIssuesComponent:
     @pytest.fixture
     def component(self):
         return AssociateWarningsWithIssuesComponent(context=MagicMock())
 
-    # Patch instead of VCR so that embeddings don't depend on the texts inputted, which are
-    # derived from johen-generated objects.
     @pytest.fixture(autouse=True)
     def patch_encode(self, monkeypatch: pytest.MonkeyPatch):
         rng = np.random.default_rng(seed=42)
@@ -436,7 +541,12 @@ class TestAssociateWarningsWithIssuesComponent:
             "fine.py": issues[:3],
             "fine2.py": issues[1:],  # duplicate issues w/ idxs 1 and 2 on purpose
         }
-        warnings = [_mock_static_analysis_warning() for _ in range(num_warnings)]
+        warning_and_pr_files = [
+            WarningAndPrFile(
+                warning=_mock_static_analysis_warning(), pr_file=next(generate(PrFile))
+            )
+            for _ in range(num_warnings)
+        ]
 
         # We'll pick the top 5 associations among 3 warnings * 4 issues = 12 total associations.
         warning_issue_indices_expected = [(1, 5), (0, 1), (2, 5), (2, 0), (2, 1)]
@@ -444,12 +554,12 @@ class TestAssociateWarningsWithIssuesComponent:
 
         issues = [issue for issues in filename_to_issues.values() for issue in issues]
         candidate_associations_expected = [
-            (warnings[warning_idx], issues[issue_idx])
+            (warning_and_pr_files[warning_idx], issues[issue_idx])
             for warning_idx, issue_idx in warning_issue_indices_expected
         ]
 
         request = AssociateWarningsWithIssuesRequest(
-            warnings=warnings,
+            warning_and_pr_files=warning_and_pr_files,
             filename_to_issues=filename_to_issues,
             max_num_associations=max_num_associations,
         )
@@ -458,8 +568,8 @@ class TestAssociateWarningsWithIssuesComponent:
 
         # Test no duplicate associations
         warning_issue_idxs = [
-            (warnings.index(warning), issues.index(issue))
-            for warning, issue in output.candidate_associations
+            (warning_and_pr_files.index(warning_and_pr_file), issues.index(issue))
+            for warning_and_pr_file, issue in output.candidate_associations
         ]
         assert len(set(warning_issue_idxs)) == len(warning_issue_idxs)
 
@@ -467,7 +577,11 @@ class TestAssociateWarningsWithIssuesComponent:
 
     def test_invoke_no_issues(self, component: AssociateWarningsWithIssuesComponent):
         request = AssociateWarningsWithIssuesRequest(
-            warnings=[_mock_static_analysis_warning()],
+            warning_and_pr_files=[
+                WarningAndPrFile(
+                    warning=_mock_static_analysis_warning(), pr_file=next(generate(PrFile))
+                )
+            ],
             filename_to_issues={},
             max_num_associations=5,
         )
@@ -476,7 +590,7 @@ class TestAssociateWarningsWithIssuesComponent:
 
     def test_invoke_no_warnings(self, component: AssociateWarningsWithIssuesComponent):
         request = AssociateWarningsWithIssuesRequest(
-            warnings=[],
+            warning_and_pr_files=[],
             filename_to_issues={"fine.py": [_mock_issue_details()]},
             max_num_associations=5,
         )
@@ -602,15 +716,24 @@ class TestPredictRelevantWarningsComponent:
 
     def test_invoke(self, component: PredictRelevantWarningsComponent):
         candidate_associations = [
-            (_mock_static_analysis_warning(), _mock_issue_details()) for _ in range(4)
+            (
+                WarningAndPrFile(
+                    warning=_mock_static_analysis_warning(), pr_file=next(generate(PrFile))
+                ),
+                _mock_issue_details(),
+            )
+            for _ in range(4)
         ]
-        request = CodePredictRelevantWarningsRequest(candidate_associations=candidate_associations)
+        request = CodePredictRelevantWarningsRequest(
+            candidate_associations=candidate_associations,
+            commit_sha="sha123",
+        )
         output: CodePredictRelevantWarningsOutput = component.invoke(request)
 
-        for (warning, issue), result in zip(
+        for (warning_and_pr_file, issue), result in zip(
             candidate_associations, output.relevant_warning_results, strict=True
         ):
-            assert warning.id == result.warning_id
+            assert warning_and_pr_file.warning.id == result.warning_id
             assert issue.id == result.issue_id
 
 
@@ -644,15 +767,16 @@ def test_relevant_warnings_step_invoke(
 
     num_associations = 5
 
+    mock_warning_and_pr_files = [next(generate(WarningAndPrFile)) for _ in range(num_associations)]
     mock_invoke_filter_warnings_component.return_value = FilterWarningsOutput(
-        warnings=next(generate(list[StaticAnalysisWarning]))
+        warning_and_pr_files=mock_warning_and_pr_files
     )
     mock_invoke_fetch_issues_component.return_value = next(generate(CodeFetchIssuesOutput))
     mock_invoke_associate_warnings_with_issues_component.return_value = (
         AssociateWarningsWithIssuesOutput(
             candidate_associations=[
-                (next(generate(StaticAnalysisWarning)), next(generate(IssueDetails)))
-                for _ in range(num_associations)
+                (warning_and_pr_file, next(generate(IssueDetails)))
+                for warning_and_pr_file in mock_warning_and_pr_files
             ]
         )
     )
@@ -681,37 +805,62 @@ def test_relevant_warnings_step_invoke(
     step.context = mock_context
     step.invoke()
 
+    # 1. Read the PR.
     mock_context.get_repo_client.assert_called_once()
     mock_repo_client.repo.get_pull.assert_called_once_with(request.pr_id)
 
+    # 2. Only consider warnings from lines changed in the PR.
     mock_invoke_filter_warnings_component.assert_called_once()
-    mock_invoke_filter_warnings_component.call_args[0][0].warnings = request.warnings
-    mock_invoke_filter_warnings_component.call_args[0][0].pr_files = mock_pr_files
+    assert mock_invoke_filter_warnings_component.call_args[0][0].warnings == request.warnings
+    assert (
+        mock_invoke_filter_warnings_component.call_args[0][0].pr_files
+        == mock_pr.get_files.return_value
+    )
 
+    # 3. Fetch issues related to the PR.
     mock_invoke_fetch_issues_component.assert_called_once()
-    mock_invoke_fetch_issues_component.call_args[0][0].organization_id = request.organization_id
-    mock_invoke_fetch_issues_component.call_args[0][0].pr_files = mock_pr_files
+    assert (
+        mock_invoke_fetch_issues_component.call_args[0][0].organization_id
+        == request.organization_id
+    )
+    assert (
+        mock_invoke_fetch_issues_component.call_args[0][0].pr_files
+        == mock_pr.get_files.return_value
+    )
 
+    # 4. Limit the number of warning-issue associations we analyze to the top
+    #    max_num_associations.
     mock_invoke_associate_warnings_with_issues_component.assert_called_once()
-    mock_invoke_associate_warnings_with_issues_component.call_args[0][0].warnings = request.warnings
-    mock_invoke_associate_warnings_with_issues_component.call_args[0][
-        0
-    ].filename_to_issues = mock_invoke_fetch_issues_component.return_value.filename_to_issues
-    mock_invoke_associate_warnings_with_issues_component.call_args[0][
-        0
-    ].max_num_associations = request.max_num_associations
+    assert (
+        mock_invoke_associate_warnings_with_issues_component.call_args[0][0].warning_and_pr_files
+        == mock_invoke_filter_warnings_component.return_value.warning_and_pr_files
+    )
+    assert (
+        mock_invoke_associate_warnings_with_issues_component.call_args[0][0].filename_to_issues
+        == mock_invoke_fetch_issues_component.return_value.filename_to_issues
+    )
+    assert (
+        mock_invoke_associate_warnings_with_issues_component.call_args[0][0].max_num_associations
+        == request.max_num_associations
+    )
 
+    # 5. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
+    #    will fix the issue.
     mock_invoke_are_issues_fixable_component.assert_called_once()
-    mock_invoke_are_issues_fixable_component.call_args[0][0].candidate_issues = [
+    assert mock_invoke_are_issues_fixable_component.call_args[0][0].candidate_issues == [
         issue
         for _, issue in mock_invoke_associate_warnings_with_issues_component.return_value.candidate_associations
     ]
-    mock_invoke_are_issues_fixable_component.call_args[0][
-        0
-    ].max_num_issues_analyzed = request.max_num_issues_analyzed
+    assert (
+        mock_invoke_are_issues_fixable_component.call_args[0][0].max_num_issues_analyzed
+        == request.max_num_issues_analyzed
+    )
 
+    # 6. Predict which warnings are relevant to which issues.
     mock_invoke_predict_relevant_warnings_component.assert_called_once()
-    mock_invoke_predict_relevant_warnings_component.call_args[0][0].candidate_associations = [
+    assert mock_invoke_predict_relevant_warnings_component.call_args[0][
+        0
+    ].candidate_associations == [
         association
         for association, is_fixable in zip(
             mock_invoke_associate_warnings_with_issues_component.return_value.candidate_associations,

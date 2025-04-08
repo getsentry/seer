@@ -12,6 +12,7 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
+from seer.automation.codebase.models import PrFile
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -25,7 +26,6 @@ from seer.automation.codegen.models import (
     CodePredictRelevantWarningsRequest,
     FilterWarningsOutput,
     FilterWarningsRequest,
-    PrFile,
 )
 from seer.automation.codegen.relevant_warnings_component import (
     AreIssuesFixableComponent,
@@ -138,9 +138,9 @@ class RelevantWarningsStep(CodegenStep):
         filter_warnings_output: FilterWarningsOutput = filter_warnings_component.invoke(
             filter_warnings_request
         )
-        warnings = filter_warnings_output.warnings
+        warning_and_pr_files = filter_warnings_output.warning_and_pr_files
 
-        if not warnings:  # exit early to avoid unnecessary issue-fetching.
+        if not warning_and_pr_files:  # exit early to avoid unnecessary issue-fetching.
             self.logger.info("No warnings to predict relevancy for.")
             self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
             return
@@ -158,7 +158,7 @@ class RelevantWarningsStep(CodegenStep):
         #    max_num_associations.
         association_component = AssociateWarningsWithIssuesComponent(self.context)
         associations_request = AssociateWarningsWithIssuesRequest(
-            warnings=warnings,
+            warning_and_pr_files=warning_and_pr_files,
             filename_to_issues=fetch_issues_output.filename_to_issues,
             max_num_associations=self.request.max_num_associations,
         )
@@ -187,7 +187,8 @@ class RelevantWarningsStep(CodegenStep):
         # 6. Predict which warnings are relevant to which issues.
         prediction_component = PredictRelevantWarningsComponent(self.context)
         request = CodePredictRelevantWarningsRequest(
-            candidate_associations=associations_with_fixable_issues
+            candidate_associations=associations_with_fixable_issues,
+            commit_sha=self.request.commit_sha,
         )
         relevant_warnings_output: CodePredictRelevantWarningsOutput = prediction_component.invoke(
             request

@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from seer.automation.agent.models import Message
-from seer.automation.codebase.models import StaticAnalysisWarning
+from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition
 from seer.db import DbRunMemory
@@ -161,21 +161,19 @@ class CodegenRelevantWarningsStateResponse(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
-class PrFile(BaseModel):
-    filename: str
-    patch: str
-    status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
-    changes: int
-    sha: str
-
-
 class FilterWarningsRequest(BaseComponentRequest):
     warnings: list[StaticAnalysisWarning]
     pr_files: list[PrFile]
 
 
+class WarningAndPrFile(BaseModel):
+    warning: StaticAnalysisWarning
+    pr_file: PrFile
+    overlapping_hunk_idxs: list[int] = Field(default_factory=list)
+
+
 class FilterWarningsOutput(BaseComponentOutput):
-    warnings: list[StaticAnalysisWarning]
+    warning_and_pr_files: list[WarningAndPrFile]
 
 
 class CodeFetchIssuesRequest(BaseComponentRequest):
@@ -188,13 +186,13 @@ class CodeFetchIssuesOutput(BaseComponentOutput):
 
 
 class AssociateWarningsWithIssuesRequest(BaseComponentRequest):
-    warnings: list[StaticAnalysisWarning]
+    warning_and_pr_files: list[WarningAndPrFile]
     filename_to_issues: dict[str, list[IssueDetails]]
     max_num_associations: int
 
 
 class AssociateWarningsWithIssuesOutput(BaseComponentOutput):
-    candidate_associations: list[tuple[StaticAnalysisWarning, IssueDetails]]
+    candidate_associations: list[tuple[WarningAndPrFile, IssueDetails]]
 
 
 class CodeAreIssuesFixableRequest(BaseComponentRequest):
@@ -202,17 +200,17 @@ class CodeAreIssuesFixableRequest(BaseComponentRequest):
     max_num_issues_analyzed: int
 
 
-class CodePredictRelevantWarningsRequest(BaseComponentRequest):
-    candidate_associations: list[tuple[StaticAnalysisWarning, IssueDetails]]
-
-
 class CodeAreIssuesFixableOutput(BaseComponentOutput):
     are_fixable: list[bool | None]  # None means the issue was not analyzed
 
 
+class CodePredictRelevantWarningsRequest(BaseComponentRequest):
+    candidate_associations: list[tuple[WarningAndPrFile, IssueDetails]]
+    commit_sha: str
+
+
 class CodePredictRelevantWarningsOutput(BaseComponentOutput):
     """
-    A list of results for all pairs of warnings and issues.
     Includes both relevant and irrelevant warnings.
     """
 

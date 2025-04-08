@@ -1,11 +1,12 @@
 import re
 import textwrap
+from functools import cached_property
 from typing import Any, Literal, NotRequired, TypedDict
 
 from pydantic import BaseModel, model_serializer
 from pydantic_xml import attr
 
-from seer.automation.models import PromptXmlModel, RepoDefinition
+from seer.automation.models import FilePatch, Hunk, PromptXmlModel, RepoDefinition
 
 
 class DocumentPromptXml(PromptXmlModel, tag="document", skip_empty=True):
@@ -99,6 +100,18 @@ class Location(BaseModel):
         return base
 
 
+class PrFile(BaseModel):
+    filename: str
+    patch: str
+    status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
+    changes: int
+    sha: str
+
+    @cached_property
+    def hunks(self) -> list[Hunk]:
+        return FilePatch.to_hunks(self.patch)
+
+
 # Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py
 class StaticAnalysisRule(BaseModel):
     id: int
@@ -129,7 +142,6 @@ class StaticAnalysisWarning(BaseModel):
     rule_id: int | None = None
     rule: StaticAnalysisRule | None = None
     encoded_code_snippet: str | None = None
-    # TODO: project info necessary for seer?
 
     def _try_get_language(self) -> str | None:
         if ".py" in self.encoded_location:

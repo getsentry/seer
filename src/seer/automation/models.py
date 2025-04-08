@@ -1,7 +1,8 @@
 import datetime
 import json
+import re
 import textwrap
-from typing import Annotated, Any, List, Literal, NotRequired, Optional
+from typing import Annotated, Any, Literal, NotRequired, Optional
 from xml.etree import ElementTree as ET
 
 import sentry_sdk
@@ -1044,7 +1045,10 @@ class Hunk(BaseModel):
     target_start: int
     target_length: int
     section_header: str
-    lines: List[Line]
+    lines: list[Line]
+
+    def raw_hunk(self) -> str:
+        return "\n".join((self.section_header, *(line.value for line in self.lines)))
 
 
 class FilePatch(BaseModel):
@@ -1054,7 +1058,7 @@ class FilePatch(BaseModel):
     removed: int
     source_file: str
     target_file: str
-    hunks: List[Hunk]
+    hunks: list[Hunk]
 
     def apply(self, file_contents: str | None) -> str | None:
         if self.type == "A":
@@ -1081,7 +1085,7 @@ class FilePatch(BaseModel):
 
         return new_contents
 
-    def _apply_hunks(self, lines: List[str]) -> str:
+    def _apply_hunks(self, lines: list[str]) -> str:
         result = []
         current_line = 0
 
@@ -1103,6 +1107,53 @@ class FilePatch(BaseModel):
         result.extend(lines[current_line:])
 
         return "".join(result).rstrip("\n")
+
+    @staticmethod
+    def to_hunks(patch: str) -> list[Hunk]:
+
+        def _process_lines(lines: list[str]) -> list[Line]:
+            lines_after_header = lines[1:]
+            return [Line(value=line, line_type=line[0]) for line in lines_after_header]
+
+        hunk_header_pattern = r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@"
+
+        hunks: list[Hunk] = []
+        lines = patch.splitlines()
+        current_hunk = Hunk(
+            source_start=0,
+            source_length=0,
+            target_start=0,
+            target_length=0,
+            section_header="",
+            lines=[],
+        )
+        current_lines: list[str] = []
+
+        for line in lines:
+            match = re.match(hunk_header_pattern, line)
+            if match:
+                if current_lines:
+                    current_hunk.lines = _process_lines(current_lines)
+                    hunks.append(current_hunk)
+                    current_lines = []
+                source_start, source_length, target_start, target_length = map(int, match.groups())
+                current_hunk = Hunk(
+                    source_start=source_start,
+                    source_length=source_length,
+                    target_start=target_start,
+                    target_length=target_length,
+                    section_header=line,
+                    lines=[],
+                )
+                current_lines = [line]  # starts with section header
+            elif current_lines:
+                current_lines.append(line)
+
+        if current_lines:
+            current_hunk.lines = _process_lines(current_lines)
+            hunks.append(current_hunk)
+
+        return hunks
 
 
 class FileChangeError(Exception):
