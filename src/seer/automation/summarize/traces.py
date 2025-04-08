@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
 from seer.dependency_injection import inject, injected
+from seer.exceptions import ClientError as SeerClientError
 
 
 class TraceSummaryForLlmToGenerate(BaseModel):
@@ -49,7 +50,17 @@ def summarize_trace(
             max_tokens=1024,
         )
     except ClientError as e:
-        raise ClientError("The trace is too large to summarize. Please try a smaller trace.") from e
+        if "token count" in str(e) and "exceeds the maximum number of tokens allowed" in str(e):
+            logger.warning(f"Trace too large to summarize: {e}")
+            raise SeerClientError(
+                "TRACE_TOO_LARGE_ERROR: The trace is too large to summarize."
+            ) from e
+        else:
+            logger.error(f"ClientError when summarizing trace: {e}")
+            raise
+    except Exception as e:
+        logger.error(f"Error summarizing trace: {e}")
+        raise
 
     trace_summary = completion.parsed
 
@@ -70,7 +81,7 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
             f"""
             You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please summarize the trace below so our engineers can immediately understand what's going on.
 
-            This trace is made up only spans (<span>) that are transactions (<txn>). Each transaction represents a single instance of a service being called, and the trace is made up of all the transactions in a tree like structure.
+            This trace tree is made up only spans (<span>) that are transactions (<txn>). Each transaction represents a single instance of a service being called, and the trace is made up of all the transactions in a tree like structure.
             Here is the trace:
 
             <trace>
