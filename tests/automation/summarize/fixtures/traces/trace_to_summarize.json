@@ -1,0 +1,55 @@
+{
+    "trace_id": "123",
+    "trace": [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [],
+                  "errors": [],
+                  "event_id": "89239f27c64d1ac7",
+                  "project_id": 1,
+                  "project_slug": "sentry",
+                  "parent_span_id": "9c39a42585c71c3d",
+                  "start_timestamp": 1742489309.943757,
+                  "end_timestamp": 1742489309.944994,
+                  "duration": 1.236,
+                  "transaction": "/api/0/organizations/{organization_id_or_slug}/repos/",
+                  "is_transaction": false,
+                  "description": "SELECT \"sentry_sentryappinstallation\".\"id\", \"sentry_sentryappinstallation\".\"date_deleted\", \"sentry_sentryappinstallation\".\"sentry_app_id\", \"sentry_sentryappinstallation\".\"organization_id\", \"sentry_sentryappinstallation\".\"api_grant_id\", \"sentry_sentryappinstallation\".\"api_token_id\", \"sentry_sentryappinstallation\".\"uuid\", \"sentry_sentryappinstallation\".\"status\", \"sentry_sentryappinstallation\".\"date_added\", \"sentry_sentryappinstallation\".\"date_updated\" FROM \"sentry_sentryappinstallation\" WHERE (\"sentry_sentryappinstallation\".\"date_deleted\" IS NULL AND \"sentry_sentryappinstallation\".\"api_token_id\" = %s AND \"sentry_sentryappinstallation\".\"status\" = %s) LIMIT 21",
+                  "op": "db",
+                  "event_type": "span"
+                }
+              ],
+              "errors": [],
+              "event_id": "89239f27c64d1ac7",
+              "project_id": 1,
+              "project_slug": "sentry",
+              "parent_span_id": "9c39a42585c71c3d",
+              "start_timestamp": 1742489309.943757,
+              "end_timestamp": 1742489309.944994,
+              "duration": 1.236,
+              "transaction": "/api/0/organizations/{organization_id_or_slug}/repos/",
+              "is_transaction": true,
+              "description": "SELECT \"sentry_sentryappinstallation\".\"id\", \"sentry_sentryappinstallation\".\"date_deleted\", \"sentry_sentryappinstallation\".\"sentry_app_id\", \"sentry_sentryappinstallation\".\"organization_id\", \"sentry_sentryappinstallation\".\"api_grant_id\", \"sentry_sentryappinstallation\".\"api_token_id\", \"sentry_sentryappinstallation\".\"uuid\", \"sentry_sentryappinstallation\".\"status\", \"sentry_sentryappinstallation\".\"date_added\", \"sentry_sentryappinstallation\".\"date_updated\" FROM \"sentry_sentryappinstallation\" WHERE (\"sentry_sentryappinstallation\".\"date_deleted\" IS NULL AND \"sentry_sentryappinstallation\".\"api_token_id\" = %s AND \"sentry_sentryappinstallation\".\"status\" = %s) LIMIT 21",
+              "op": "db",
+              "event_type": "span"
+            }
+          ],
+          "errors": [],
+          "event_id": "89239f27c64d1ac7",
+          "project_id": 1,
+          "project_slug": "sentry",
+          "parent_span_id": "9c39a42585c71c3d",
+          "start_timestamp": 1742489309.943757,
+          "end_timestamp": 1742489309.944994,
+          "duration": 1.236,
+          "transaction": "/api/0/organizations/{organization_id_or_slug}/repos/",
+          "is_transaction": true,
+          "description": "SELECT \"sentry_sentryappinstallation\".\"id\", \"sentry_sentryappinstallation\".\"date_deleted\", \"sentry_sentryappinstallation\".\"sentry_app_id\", \"sentry_sentryappinstallation\".\"organization_id\", \"sentry_sentryappinstallation\".\"api_grant_id\", \"sentry_sentryappinstallation\".\"api_token_id\", \"sentry_sentryappinstallation\".\"uuid\", \"sentry_sentryappinstallation\".\"status\", \"sentry_sentryappinstallation\".\"date_added\", \"sentry_sentryappinstallation\".\"date_updated\" FROM \"sentry_sentryappinstallation\" WHERE (\"sentry_sentryappinstallation\".\"date_deleted\" IS NULL AND \"sentry_sentryappinstallation\".\"api_token_id\" = %s AND \"sentry_sentryappinstallation\".\"status\" = %s) LIMIT 21",
+          "op": "db",
+          "event_type": "span"
+        }
+      ]
+}

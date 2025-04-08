@@ -1,6 +1,7 @@
 import textwrap
 from venv import logger
 
+from google.genai.errors import ClientError
 from langfuse.decorators import observe
 from pydantic import BaseModel
 
@@ -22,24 +23,46 @@ def summarize_trace(
     request: SummarizeTraceRequest,
     llm_client: LlmClient = injected,
 ) -> SummarizeTraceResponse:
+    """
+    Summarizes a single trace in the EAP Trace Waterfall format.
+
+    params:
+        request: SummarizeTraceRequest
+
+    returns:
+        SummarizeTraceResponse
+    """
     logger.info(f"Summarizing trace: {request.trace_id}")
     trace, only_transactions = request.trace, request.only_transactions
     trace_str = trace.get_and_format_trace(only_transactions)
 
     prompt = _get_prompt(trace_str, only_transactions)
 
-    completion = llm_client.generate_structured(
-        model=GeminiProvider.model(
-            "gemini-2.0-flash-001",
-        ),
-        prompt=prompt,
-        response_format=TraceSummaryForLlmToGenerate,
-        temperature=0.0,
-        max_tokens=1024,
-    )
+    try:
+        completion = llm_client.generate_structured(
+            model=GeminiProvider.model(
+                "gemini-2.0-flash-001",
+            ),
+            prompt=prompt,
+            response_format=TraceSummaryForLlmToGenerate,
+            temperature=0.0,
+            max_tokens=1024,
+        )
+    except ClientError as e:
+        if "token count" in str(e) and "exceeds the maximum number of tokens allowed" in str(e):
+            logger.warning(f"Trace too large to summarize: {e}")
+            raise
+        else:
+            logger.error(f"ClientError when summarizing trace: {e}")
+            raise
+    except Exception as e:
+        logger.error(f"Error summarizing trace: {e}")
+        raise
+
     trace_summary = completion.parsed
 
     return SummarizeTraceResponse(
+        trace_id=request.trace_id,
         summary=trace_summary.summary,
         key_observations=trace_summary.key_observations,
         performance_characteristics=trace_summary.performance_characteristics,
@@ -55,7 +78,7 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
             f"""
             You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please summarize the trace below so our engineers can immediately understand what's going on.
 
-            This trace is made up only spans (<span>) that are transactions (<txn>). Each transaction represents a single instance of a service being called, and the trace is made up of all the transactions in a tree like structure.
+            This trace tree is made up only spans (<span>) that are transactions (<txn>). Each transaction represents a single instance of a service being called, and the trace is made up of all the transactions in a tree like structure.
             Here is the trace:
 
             <trace>
