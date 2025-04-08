@@ -124,13 +124,13 @@ class AutofixEventManager:
             root_cause_processing_step = cur.find_or_add(self.root_cause_analysis_processing_step)
             root_cause_processing_step.status = AutofixStatus.COMPLETED
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
+
+            root_cause_step.status = AutofixStatus.COMPLETED
+            cur.status = AutofixStatus.COMPLETED
+
             if root_cause_output.causes:
-                root_cause_step.status = AutofixStatus.COMPLETED
                 root_cause_step.causes = root_cause_output.causes
-                cur.status = AutofixStatus.COMPLETED
             else:
-                root_cause_step.status = AutofixStatus.ERROR
-                cur.status = AutofixStatus.ERROR
                 root_cause_step.termination_reason = root_cause_output.termination_reason
 
             log_seer_event(
@@ -253,11 +253,18 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-    def send_coding_result(self):
+    def send_coding_result(self, termination_reason: str | None = None):
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING
             cur.status = AutofixStatus.PROCESSING
+
+            if termination_reason:
+                changes_step = cur.find_or_add(self.changes_step)
+                changes_step.termination_reason = termination_reason
+                plan_step.status = AutofixStatus.COMPLETED
+                changes_step.status = AutofixStatus.COMPLETED
+                cur.status = AutofixStatus.COMPLETED
 
             log_seer_event(
                 SeerEventNames.AUTOFIX_CODING_COMPLETED,

@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 from seer.automation.agent.models import Message
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
@@ -16,11 +16,17 @@ class RelevantCodeFile(BaseModel):
 class TimelineEvent(BaseModel):
     title: str
     code_snippet_and_analysis: str
-    timeline_item_type: (
-        Literal["internal_code", "external_system", "human_action"] | str
-    )  # TODO put back to literal only when not breaking anything
+    timeline_item_type: Literal["internal_code", "external_system", "human_action"]
     relevant_code_file: RelevantCodeFile | None
     is_most_important_event: bool
+
+    @validator("timeline_item_type", pre=True, allow_reuse=True)
+    @classmethod
+    def validate_timeline_item_type(cls, v):
+        if v not in ("internal_code", "external_system", "human_action"):
+            # Default to internal_code if the value is not one of the allowed literals
+            return "internal_code"
+        return v
 
 
 class RootCauseAnalysisItem(BaseModel):
