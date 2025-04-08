@@ -147,7 +147,7 @@ class AutofixContext(PipelineContext):
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
-    ) -> str | None:
+    ) -> tuple[str | None, str | None]:
         repo_name = self.autocorrect_repo_name(repo_name) if repo_name else None
         if not repo_name:
             raise AgentError() from ValueError(
@@ -155,7 +155,7 @@ class AutofixContext(PipelineContext):
             )
         repo_client = self.get_repo_client(repo_name)
 
-        file_contents, _ = repo_client.get_file_content(path, autocorrect=True)
+        file_contents, _, autocorrected_path = repo_client.get_file_content(path, autocorrect=True)
 
         if not ignore_local_changes:
             cur_state = self.state.get()
@@ -164,7 +164,7 @@ class AutofixContext(PipelineContext):
             for file_change in current_file_changes:
                 file_contents = file_change.apply(file_contents)
 
-        return file_contents
+        return file_contents, autocorrected_path
 
     def get_commit_history_for_file(
         self, path: str, repo_name: str | None = None, max_commits: int = 10
@@ -481,7 +481,7 @@ class AutofixContext(PipelineContext):
         original_documents = [
             BaseDocument(
                 path=path,
-                text=self.get_file_contents(path, repo_name=repo_name, ignore_local_changes=True)
+                text=self.get_file_contents(path, repo_name=repo_name, ignore_local_changes=True)[0]
                 or "",
             )
             for path in document_paths

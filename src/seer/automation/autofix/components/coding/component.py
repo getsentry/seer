@@ -66,7 +66,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         for i, file in enumerate(relevant_files):
             file_content = None
             try:
-                file_content = (
+                file_content, corrected_path = (
                     self.context.get_file_contents(
                         path=file["file_path"], repo_name=file["repo_name"]
                     )

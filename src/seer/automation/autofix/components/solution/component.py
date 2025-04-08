@@ -48,7 +48,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
         for i, file in enumerate(relevant_files):
             file_content = None
             try:
-                file_content = (
+                file_content, _ = (
                     self.context.get_file_contents(
                         path=file["file_path"], repo_name=file["repo_name"]
                     )
@@ -111,7 +111,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
             agent = AutofixAgent(
-                tools=tools.get_tools() if has_tools else None,
+                tools=tools.get_tools(include_claude_tools=True),
                 config=AgentConfig(interactive=True),
                 memory=memory,
                 context=self.context,

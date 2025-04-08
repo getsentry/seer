@@ -382,7 +382,7 @@ class RepoClient:
 
     def get_file_content(
         self, path: str, sha: str | None = None, autocorrect: bool = False
-    ) -> tuple[str | None, str]:
+    ) -> tuple[str | None, str, str | None]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
@@ -391,7 +391,7 @@ class RepoClient:
         if autocorrect:
             path, autocorrected_path = self._autocorrect_path(path, sha)
             if not autocorrected_path and path not in self.get_valid_file_paths(sha):
-                return None, "utf-8"
+                return None, "utf-8", None
 
         try:
             contents = self.repo.get_contents(path, ref=sha)
@@ -401,9 +401,8 @@ class RepoClient:
 
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
             content = contents.decoded_content.decode(detected_encoding)
-            if autocorrected_path:
-                content = f"Showing results instead for {path}\n=====\n{content}"
-            return content, detected_encoding
+
+            return content, detected_encoding, path if autocorrected_path else None
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
             return None, "utf-8"

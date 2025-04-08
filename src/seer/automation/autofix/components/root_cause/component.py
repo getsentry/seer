@@ -37,7 +37,11 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             unreadable_repos = state.unreadable_repos
 
             agent = AutofixAgent(
-                tools=(tools.get_tools(can_access_repos=bool(readable_repos))),
+                tools=(
+                    tools.get_tools(
+                        can_access_repos=bool(readable_repos), include_claude_tools=True
+                    )
+                ),
                 config=AgentConfig(
                     interactive=True,
                 ),

@@ -173,22 +173,62 @@ class BaseTools:
         if file_path is None or repo_name is None:
             return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
 
-        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
+        file_contents, autocorrected_path = self.context.get_file_contents(
+            file_path, repo_name=repo_name
+        )
 
         if file_contents is None:
             return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
 
-        return f"This file might be what you're looking for: `{file_path}`. Contents:\n\n{file_contents}"
+        return f"This file might be what you're looking for: `{autocorrected_path or file_path}`. Contents:\n\n{file_contents}"
 
-    @observe(name="Expand Document")
-    @ai_track(description="Expand Document")
-    def expand_document(self, file_path: str, repo_name: str):
-        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
+    @observe(name="View Document")
+    @ai_track(description="View Document")
+    def view_document(
+        self,
+        file_path: str,
+        repo_name: str,
+        view_range_start: int | None = None,
+        view_range_end: int | None = None,
+    ):
+        file_contents, autocorrected_path = self.context.get_file_contents(
+            file_path, repo_name=repo_name
+        )
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
 
         if file_contents:
-            return file_contents
+            lines = file_contents.split("\n")
+
+            if view_range_start is not None and view_range_end is not None:
+                try:
+                    start_line = max(0, view_range_start - 1)
+                    end_line = min(len(lines), view_range_end)
+                    if start_line >= end_line:
+                        return "Error: Invalid line range - start must be less than end"
+                    lines = lines[start_line:end_line]
+                    self.context.event_manager.add_log(
+                        f"Looking at lines `{start_line+1}` to `{end_line}` of `{file_path}`..."
+                    )
+                except (ValueError, IndexError):
+                    return "Error: Invalid line range format"
+            else:
+                self.context.event_manager.add_log(f"Looking at `{file_path}`...")
+
+            prefixes = ""
+            if len(lines) > 200 and (view_range_start is None or view_range_end is None):
+                prefixes = f"Notice: This file has {len(lines)} lines. Only the first 200 are shown. Pass a view_range to see more.\n=====\n"
+                lines = lines[:200]
+
+            lined_content = "\n".join(
+                f"{i+1+(view_range_start - 1 if view_range_start else 0)}: {line}"
+                for i, line in enumerate(lines)
+            )
+
+            if autocorrected_path:
+                prefixes += f"Showing results instead for {file_path}\n=====\n"
+            else:
+                return f"{prefixes}{lined_content}"
 
         # show potential corrected paths if nothing was found here
         other_paths = self._get_potential_abs_paths(file_path, repo_name)
@@ -741,7 +781,7 @@ class BaseTools:
 
     def _get_file_contents(self, path: str, repo_name: str) -> str:
         """Helper method to get file contents with proper error handling."""
-        contents = self.context.get_file_contents(path, repo_name=repo_name)
+        contents, _ = self.context.get_file_contents(path, repo_name=repo_name)
         if not contents:
             raise ValueError("File not found")
         return contents
@@ -794,10 +834,11 @@ class BaseTools:
             file_contents = self._get_file_contents(path, repo_name)
             lines = file_contents.split("\n")
 
+            start_line = None
             if view_range:
+                start_line = max(0, int(view_range[0]) - 1)
+                end_line = min(len(lines), int(view_range[1]))
                 try:
-                    start_line = max(0, int(view_range[0]) - 1)
-                    end_line = min(len(lines), int(view_range[1]))
                     if start_line >= end_line:
                         return "Error: Invalid line range - start must be less than end"
                     lines = lines[start_line:end_line]
@@ -809,7 +850,10 @@ class BaseTools:
             else:
                 self.context.event_manager.add_log(f"Looking at `{path}`...")
 
-            return "\n".join(f"{i+1}: {line}" for i, line in enumerate(lines))
+            return "\n".join(
+                f"{i+1+(start_line - 1 if start_line else 0)}: {line}"
+                for i, line in enumerate(lines)
+            )
         except ValueError as e:
             return str(e)
 
@@ -835,10 +879,12 @@ class BaseTools:
 
             self.context.event_manager.add_log(f"Making an edit to `{path}` in `{repo_name}`...")
 
+            contents, autocorrected_path = self.context.get_file_contents(path, repo_name)
+
             document = BaseDocument(
-                path=path,
+                path=autocorrected_path or path,
                 repo_name=repo_name,
-                text=self.context.get_file_contents(path, repo_name),
+                text=contents,
             )
 
             file_diff, _ = make_file_patches([file_change], [path], [document])
@@ -873,7 +919,7 @@ class BaseTools:
         if not file_text:
             return "Error: file_text is required for create command"
 
-        existing_content = self.context.get_file_contents(path, repo_name=repo_name)
+        existing_content, _ = self.context.get_file_contents(path, repo_name=repo_name)
         if existing_content is not None:
             return f"Error: Cannot create file '{path}' because it already exists."
 
@@ -935,10 +981,12 @@ class BaseTools:
                 "edit", file_contents, new_file_contents, path, repo_name, tool_call_id=tool_call_id
             )
 
+            contents, autocorrected_path = self.context.get_file_contents(path, repo_name)
+
             document = BaseDocument(
-                path=path,
+                path=autocorrected_path or path,
                 repo_name=repo_name,
-                text=self.context.get_file_contents(path, repo_name),
+                text=contents,
             )
 
             file_diff, _ = make_file_patches([file_change], [path], [document])
@@ -1034,11 +1082,11 @@ class BaseTools:
                         required=["path"],
                     ),
                     FunctionTool(
-                        name="expand_document",
-                        fn=self.expand_document,
+                        name="view_document",
+                        fn=self.view_document,
                         description=textwrap.dedent(
                             """\
-                    Given a document path, returns the entire document text.
+                    Given a document path, returns the document's text content. Can provide optional line range to view a specific portion of the document.
                     - Note: To save time and money, if you're looking to expand multiple documents, call this tool multiple times in the same message.
                     - If a document has already been expanded earlier in the conversation, don't use this tool again for the same file path."""
                         ),
@@ -1046,12 +1094,22 @@ class BaseTools:
                             {
                                 "name": "file_path",
                                 "type": "string",
-                                "description": "The document path to expand.",
+                                "description": "The document path to view.",
                             },
                             {
                                 "name": "repo_name",
                                 "type": "string",
                                 "description": "Name of the repository containing the file.",
+                            },
+                            {
+                                "name": "view_range_start",
+                                "type": "number",
+                                "description": "Optional start line to view a specific portion of the document. For example, '1' to view line 1.",
+                            },
+                            {
+                                "name": "view_range_end",
+                                "type": "number",
+                                "description": "Optional end line to view a specific portion of the document. For example, '10' to view line 10.",
                             },
                         ],
                         required=["file_path", "repo_name"],
