@@ -547,3 +547,38 @@ class TestAutofixEventManager:
                 "has_added_steps": True,
             },
         )
+
+    def test_send_coding_result_no_termination(self, event_manager, state):
+        event_manager.send_coding_result()
+
+        state_obj = state.get()
+        plan_step = next(
+            (step for step in state_obj.steps if step.key == event_manager.plan_step.key), None
+        )
+        changes_step = next(
+            (step for step in state_obj.steps if step.key == event_manager.changes_step.key), None
+        )
+
+        assert plan_step is not None
+        assert plan_step.status == AutofixStatus.PROCESSING
+        assert changes_step is None  # Changes step should not be completed
+        assert state_obj.status == AutofixStatus.PROCESSING
+
+    def test_send_coding_result_with_termination(self, event_manager, state):
+        termination_reason = "The code is perfect as is. I wouldn't dare to change it."
+        event_manager.send_coding_result(termination_reason=termination_reason)
+
+        state_obj = state.get()
+        plan_step = next(
+            (step for step in state_obj.steps if step.key == event_manager.plan_step.key), None
+        )
+        changes_step = next(
+            (step for step in state_obj.steps if step.key == event_manager.changes_step.key), None
+        )
+
+        assert plan_step is not None
+        assert plan_step.status == AutofixStatus.COMPLETED
+        assert changes_step is not None
+        assert changes_step.status == AutofixStatus.COMPLETED
+        assert changes_step.termination_reason == termination_reason
+        assert state_obj.status == AutofixStatus.COMPLETED
