@@ -721,6 +721,7 @@ class TestSeer(unittest.TestCase):
     def test_summarize_trace_endpoint_success(self, mock_summarize_trace):
         """Test a successful run of summarize_trace end point"""
         mock_summarize_trace.return_value = SummarizeTraceResponse(
+            trace_id="test_trace_id",
             summary="Test summary",
             key_observations="Test key observations",
             performance_characteristics="Test performance characteristics",
@@ -735,6 +736,7 @@ class TestSeer(unittest.TestCase):
         )
 
         assert response.status_code == 200
+        assert response.json["trace_id"] == "test_trace_id"
         assert response.json["summary"] == "Test summary"
         assert response.json["key_observations"] == "Test key observations"
         assert response.json["performance_characteristics"] == "Test performance characteristics"
