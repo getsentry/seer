@@ -1,6 +1,5 @@
 import logging
 
-
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.db import DbReviewCommentEmbedding, Session
 
