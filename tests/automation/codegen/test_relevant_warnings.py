@@ -186,7 +186,6 @@ class _PrFileMatch(BaseModel):
     overlapping_hunk_idxs: list[int]
 
 
-# pytest tests/automation/codegen/test_relevant_warnings.py::TestFilterWarningsComponent -x
 class TestFilterWarningsComponent:
 
     @pytest.fixture
@@ -228,31 +227,31 @@ class TestFilterWarningsComponent:
         )
         assert component._get_sorted_hunk_ranges(pr_file) == [(1, 5), (21, 25)]
 
-    def test_overlapping_hunk_idxs(self, component: FilterWarningsComponent):
-        # Test overlapping ranges
-        assert component._overlapping_hunk_idxs((1, 5), [(1, 5)]) == [0]  # Exact match
-        assert component._overlapping_hunk_idxs((2, 4), [(1, 5)]) == [
-            0
-        ]  # Warning contained within hunk
-        assert component._overlapping_hunk_idxs((1, 3), [(2, 5)]) == [0]  # Partial overlap at start
-        assert component._overlapping_hunk_idxs((4, 6), [(2, 5)]) == [0]  # Partial overlap at end
-        assert component._overlapping_hunk_idxs((1, 6), [(2, 4)]) == [
-            0
-        ]  # Hunk contained within warning
-        assert component._overlapping_hunk_idxs((3, 6), [(1, 4), (5, 7)]) == [
-            0,
-            1,
-        ]  # Overlaps multiple hunks
-        assert component._overlapping_hunk_idxs((1, 1), [(1, 4), (5, 7)]) == [
-            0
-        ]  # Warning only has 1 line
-
-        # Test non-overlapping ranges
-        assert component._overlapping_hunk_idxs((1, 2), [(3, 4)]) == []  # Warning before hunk
-        assert component._overlapping_hunk_idxs((5, 6), [(2, 4)]) == []  # Warning after hunk
-        assert component._overlapping_hunk_idxs((1, 2), []) == []  # Empty hunks
-        assert component._overlapping_hunk_idxs((1, 2), [(10, 12), (20, 25)]) == []  # Outside range
-        assert component._overlapping_hunk_idxs((13, 19), [(10, 12), (20, 25)]) == []  # No overlap
+    @pytest.mark.parametrize(
+        "warning_range, sorted_hunk_ranges, expected",
+        [
+            ((1, 5), [(1, 5)], [0]),  # Exact match
+            ((2, 4), [(1, 5)], [0]),  # Warning contained within hunk
+            ((1, 3), [(2, 5)], [0]),  # Partial overlap at start
+            ((4, 6), [(2, 5)], [0]),  # Partial overlap at end
+            ((1, 6), [(2, 4)], [0]),  # Hunk contained within warning
+            ((3, 6), [(1, 4), (5, 7)], [0, 1]),  # Overlaps 2 hunks
+            ((3, 9), [(1, 4), (5, 7), (8, 10)], [0, 1, 2]),  # Overlaps 3 hunks
+            ((1, 2), [(3, 4)], []),  # No overlap
+            ((5, 6), [(2, 4)], []),  # Warning after hunk
+            ((1, 2), [], []),  # Empty hunks
+            ((1, 2), [(10, 12), (20, 25)], []),  # Outside range
+            ((13, 19), [(10, 12), (20, 25)], []),  # No overlap
+        ],
+    )
+    def test_overlapping_hunk_idxs(
+        self,
+        component: FilterWarningsComponent,
+        warning_range: tuple[int, int],
+        sorted_hunk_ranges: list[tuple[int, int]],
+        expected: list[int],
+    ):
+        assert component._overlapping_hunk_idxs(warning_range, sorted_hunk_ranges) == expected
 
     class _TestInvokeTestCase(BaseModel):
         """
@@ -383,7 +382,7 @@ class TestFilterWarningsComponent:
                     "app/tools/seer_signature/generate_signature.py:20": _PrFileMatch(
                         pr_file_idx=0, overlapping_hunk_idxs=[1]
                     ),
-                    "tests/services/test_envelope.py:5~12": _PrFileMatch(
+                    "tests/services/test_envelope.py:4~12": _PrFileMatch(
                         pr_file_idx=1, overlapping_hunk_idxs=[0, 1]
                     ),
                     "app/Livewire/Actions/Logout.php:15": _PrFileMatch(
@@ -794,7 +793,7 @@ def test_relevant_warnings_step_invoke(
         pr_id=123,
         callback_url="not-used-url",
         organization_id=1,
-        warnings=next(generate(list[StaticAnalysisWarning])),
+        warnings=[warning_and_pr_file.warning for warning_and_pr_file in mock_warning_and_pr_files],
         commit_sha="sha123",
         run_id=1,
         max_num_associations=10,

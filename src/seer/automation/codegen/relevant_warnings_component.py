@@ -1,4 +1,3 @@
-import bisect
 import logging
 import textwrap
 from pathlib import Path
@@ -73,6 +72,17 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             for truncated in self._left_truncated_paths(pr_path, max_num_paths=1):
                 filepath_to_pr_file[truncated] = pr_file
         return filepath_to_pr_file
+
+    @staticmethod
+    def _overlapping_hunk_idxs(
+        warning_range: tuple[int, int], sorted_hunk_ranges: list[tuple[int, int]]
+    ) -> list[int]:
+        warning_start, warning_end = warning_range
+        return [
+            idx
+            for idx, (hunk_start, hunk_end) in enumerate(sorted_hunk_ranges)
+            if warning_start <= hunk_end and hunk_start <= warning_end
+        ]
 
     def _find_matching_pr_file(
         self,
@@ -153,36 +163,6 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
             filepath_to_pr_file[filepath]
             for filepath in warning_filepath_variations & set(filepath_to_pr_file)
         ]
-
-    def _overlapping_hunk_idxs(
-        self, warning_range: tuple[int, int], sorted_hunk_ranges: list[tuple[int, int]]
-    ) -> list[int]:
-        # TODO(kddubey): to be correct (grab all hunks overlapping w/ the warning), need to bisect
-        # and then add until no overlap.
-        if not sorted_hunk_ranges or not warning_range:
-            return []
-
-        warning_start, warning_end = warning_range
-        # Handle special case of single line warning by making end inclusive
-        if warning_start == warning_end:
-            warning_end += 1
-        index = bisect.bisect_left(sorted_hunk_ranges, (warning_start,))
-
-        overlapping_hunk_idxs = []
-
-        does_overlap_with_previous_hunk = (
-            index > 0 and warning_start < sorted_hunk_ranges[index - 1][1]
-        )
-        if does_overlap_with_previous_hunk:
-            overlapping_hunk_idxs.append(index - 1)
-
-        does_overlap_with_next_hunk = (
-            index < len(sorted_hunk_ranges) and sorted_hunk_ranges[index][0] < warning_end
-        )
-        if does_overlap_with_next_hunk:
-            overlapping_hunk_idxs.append(index)
-
-        return overlapping_hunk_idxs
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
@@ -474,7 +454,7 @@ class PredictRelevantWarningsComponent(
 
     def _right_justified(self, min_num: int, max_num: int) -> list[str]:
         max_digits = len(str(max_num))
-        return [f"{number:>{max_digits}}" for number in range(min_num, max_num)]
+        return [f"{number:>{max_digits}}" for number in range(min_num, max_num + 1)]
 
     def _code_snippet_around_warning(
         self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, window_size: int = 5
@@ -488,10 +468,10 @@ class PredictRelevantWarningsComponent(
         warning_start_line = int(warning_location.start_line) - 1
         warning_end_line = int(warning_location.end_line) - 1
         start_window = max(0, warning_start_line - window_size)
-        end_window = warning_end_line + window_size
         lines = file_contents.split("\n")
+        end_window = min(warning_end_line + window_size, len(lines))
         lines_snippet = lines[start_window:end_window]
-        line_idxs = self._right_justified(start_window + 1, end_window + 1)
+        line_idxs = self._right_justified(start_window + 1, end_window)
         lines_snippet = [f"{line_idx}| {line}" for line_idx, line in zip(line_idxs, lines_snippet)]
         snippet = "\n".join(lines_snippet)
         return snippet
