@@ -2,7 +2,12 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
-from google.api_core.exceptions import ClientError
+
+# from google.api_core.exceptions import ClientError
+from google.genai.errors import ClientError
+
+# from google.genai.types import Respons
+from requests import Response
 
 from seer.automation.models import EAPTrace
 from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
@@ -58,11 +63,22 @@ class TestSummarizeTrace:
         assert res.model_dump() == expected_result.model_dump()
 
     def test_summarize_trace_client_error(self, sample_request, mock_llm_client):
+
+        res = Response()
+        res.status_code = 400
+        res._content = b'{"error": {"code": 400, "message": "The input token count (2000000) exceeds the maximum number of tokens allowed (1000000).", "status": "INVALID_ARGUMENT"}}'
+
         mock_llm_client.generate_structured.side_effect = ClientError(
-            "The trace is too large to summarize. Please try a smaller trace."
+            code=400,
+            response=res,
         )
 
         with pytest.raises(
-            ClientError, match="The trace is too large to summarize. Please try a smaller trace."
+            ClientError,
         ):
+            summarize_trace(sample_request, mock_llm_client)
+
+        mock_llm_client.generate_structured.side_effect = Exception("Some other test issue")
+
+        with pytest.raises(Exception, match="Some other test issue"):
             summarize_trace(sample_request, mock_llm_client)

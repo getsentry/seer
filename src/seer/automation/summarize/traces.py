@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
 from seer.dependency_injection import inject, injected
-from seer.exceptions import ClientError as SeerClientError
 
 
 class TraceSummaryForLlmToGenerate(BaseModel):
@@ -52,9 +51,7 @@ def summarize_trace(
     except ClientError as e:
         if "token count" in str(e) and "exceeds the maximum number of tokens allowed" in str(e):
             logger.warning(f"Trace too large to summarize: {e}")
-            raise SeerClientError(
-                "TRACE_TOO_LARGE_ERROR: The trace is too large to summarize."
-            ) from e
+            raise
         else:
             logger.error(f"ClientError when summarizing trace: {e}")
             raise
