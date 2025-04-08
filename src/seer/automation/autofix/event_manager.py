@@ -124,13 +124,13 @@ class AutofixEventManager:
             root_cause_processing_step = cur.find_or_add(self.root_cause_analysis_processing_step)
             root_cause_processing_step.status = AutofixStatus.COMPLETED
             root_cause_step = cur.find_or_add(self.root_cause_analysis_step)
+
+            root_cause_step.status = AutofixStatus.COMPLETED
+            cur.status = AutofixStatus.COMPLETED
+
             if root_cause_output.causes:
-                root_cause_step.status = AutofixStatus.COMPLETED
                 root_cause_step.causes = root_cause_output.causes
-                cur.status = AutofixStatus.COMPLETED
             else:
-                root_cause_step.status = AutofixStatus.COMPLETED
-                cur.status = AutofixStatus.COMPLETED
                 root_cause_step.termination_reason = root_cause_output.termination_reason
 
             log_seer_event(
