@@ -75,12 +75,11 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
 
     @staticmethod
     def _overlapping_hunk_idxs(
-        warning_range: tuple[int, int], sorted_hunk_ranges: list[tuple[int, int]]
+        warning_start: int, warning_end: int, hunk_ranges: list[tuple[int, int]]
     ) -> list[int]:
-        warning_start, warning_end = warning_range
         return [
             idx
-            for idx, (hunk_start, hunk_end) in enumerate(sorted_hunk_ranges)
+            for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
             if warning_start <= hunk_end and hunk_start <= warning_end
         ]
 
@@ -91,15 +90,15 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
     ) -> tuple[PrFile, list[int]] | None:
         matching_pr_files = self._get_matching_pr_files(warning, filepath_to_pr_file)
         warning_location = Location.from_encoded(warning.encoded_location)
+        warning_start = int(warning_location.start_line)
+        warning_end = int(warning_location.end_line)
         for pr_file in matching_pr_files:
             hunk_ranges = self._get_sorted_hunk_ranges(pr_file)
             overlapping_hunk_idxs = self._overlapping_hunk_idxs(
-                (int(warning_location.start_line), int(warning_location.end_line)),
-                hunk_ranges,
+                warning_start, warning_end, hunk_ranges
             )
             if overlapping_hunk_idxs:
                 return pr_file, overlapping_hunk_idxs
-
         return None
 
     def _get_sorted_hunk_ranges(self, pr_file: PrFile) -> list[tuple[int, int]]:

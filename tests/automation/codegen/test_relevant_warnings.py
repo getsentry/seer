@@ -228,30 +228,31 @@ class TestFilterWarningsComponent:
         assert component._get_sorted_hunk_ranges(pr_file) == [(1, 5), (21, 25)]
 
     @pytest.mark.parametrize(
-        "warning_range, sorted_hunk_ranges, expected",
+        "warning_start, warning_end, hunk_ranges, expected",
         [
-            ((1, 5), [(1, 5)], [0]),  # Exact match
-            ((2, 4), [(1, 5)], [0]),  # Warning contained within hunk
-            ((1, 3), [(2, 5)], [0]),  # Partial overlap at start
-            ((4, 6), [(2, 5)], [0]),  # Partial overlap at end
-            ((1, 6), [(2, 4)], [0]),  # Hunk contained within warning
-            ((3, 6), [(1, 4), (5, 7)], [0, 1]),  # Overlaps 2 hunks
-            ((3, 9), [(1, 4), (5, 7), (8, 10)], [0, 1, 2]),  # Overlaps 3 hunks
-            ((1, 2), [(3, 4)], []),  # No overlap
-            ((5, 6), [(2, 4)], []),  # Warning after hunk
-            ((1, 2), [], []),  # Empty hunks
-            ((1, 2), [(10, 12), (20, 25)], []),  # Outside range
-            ((13, 19), [(10, 12), (20, 25)], []),  # No overlap
+            (1, 5, [(1, 5)], [0]),  # Exact match
+            (2, 4, [(1, 5)], [0]),  # Warning contained within hunk
+            (1, 3, [(2, 5)], [0]),  # Partial overlap at start
+            (4, 6, [(2, 5)], [0]),  # Partial overlap at end
+            (1, 6, [(2, 4)], [0]),  # Hunk contained within warning
+            (3, 6, [(1, 4), (5, 7)], [0, 1]),  # Overlaps 2 hunks
+            (3, 9, [(1, 4), (5, 7), (8, 10)], [0, 1, 2]),  # Overlaps 3 hunks
+            (1, 2, [(3, 4)], []),  # No overlap
+            (5, 6, [(2, 4)], []),  # Warning after hunk
+            (1, 2, [], []),  # Empty hunks
+            (1, 2, [(10, 12), (20, 25)], []),  # Outside range
+            (13, 19, [(10, 12), (20, 25)], []),  # No overlap
         ],
     )
     def test_overlapping_hunk_idxs(
         self,
         component: FilterWarningsComponent,
-        warning_range: tuple[int, int],
-        sorted_hunk_ranges: list[tuple[int, int]],
+        warning_start: int,
+        warning_end: int,
+        hunk_ranges: list[tuple[int, int]],
         expected: list[int],
     ):
-        assert component._overlapping_hunk_idxs(warning_range, sorted_hunk_ranges) == expected
+        assert component._overlapping_hunk_idxs(warning_start, warning_end, hunk_ranges) == expected
 
     class _TestInvokeTestCase(BaseModel):
         """
