@@ -111,7 +111,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
             agent = AutofixAgent(
-                tools=tools.get_tools(include_claude_tools=True),
+                tools=tools.get_tools(),
                 config=AgentConfig(interactive=True),
                 memory=memory,
                 context=self.context,
