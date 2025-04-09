@@ -277,6 +277,58 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
         ).format(error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error))
 
 
+class StaticAnalysisSuggestionsPrompts(_RelevantWarningsPromptPrefix):
+
+    @staticmethod
+    def format_prompt(diff: str, formatted_warnings: str, formatted_issues: str):
+        return textwrap.dedent(
+            """\
+            You are given a diff block:
+            {diff}
+
+            You are also given a list of static analysis warnings that exist in the codebase close to the diff:
+            {formatted_warnings}
+
+            You are also given a list of existing Sentry issues that exist in the codebase close to the diff:
+            {formatted_issues}
+
+            # Your Goal:
+            Carefully review the code changes in the diff, understand the context and surface any potential bugs that might be introduced by the changes. In your review focus on actual bugs. You should IGNORE code style, nit suggestions, and anything else that is not likely to cause a Sentry issue.
+            You SHOULD make suggestions based on the warnings and issues provided, as well as your own analysis of the code.
+            Follow ALL the guidelines!!!
+
+            # Guidelines:
+            - Return AT MOST 5 suggestions, and AT MOST 1 suggestion per line of code.
+            - Focus on bugs, performance and security issues.
+            - Do NOT propose issues if the are outside the diff.
+            - ALWAYS include the exact file path and line of the suggestion.
+            - Assign a severity score and confidence score to each suggestion, from 0 to 1.
+                - Severity score: 1 being "guaranteed an _unchaught_ exception will happen and not be caught by the code"; 0.5 being "an exception will happen but it's being caught" OR "an exception may happen depending on inputs"; 0 being "no exception will happen";
+                - Confidence score: 1 being "I am 100%% confident that this is a bug";
+            - Only surface issues that _don't_ have a warning if BOTH severity AND confidence are high.
+            - DO NOT surface issues with low severity. DO NOT surface issues that are not bugs.
+            - Before giving your final answer, think step-by-step to ensure your review is thorough. We prefer fewer suggestions with high quality over more suggestions with low quality.
+
+            # Format:
+            - Return your response as a list of JSON objects, where each object is a suggestion. Your response should be ONLY the list of objects.
+            - Each suggestion must have the following fields:
+                - `path`: The path to the file that contains the suggestion.
+                - `line`: The line number of the suggestion.
+                - `short_description`: a short, fluff-free, information-dense description of the problem. Max 30 words.
+                - `justification`: a short, fluff-free, information-dense summary of your analysis for why this is a problem. This justification should be at most 15 words.
+                - `related_warning`: If this suggestion is based on a warning, include the warning id here. Else use null.
+                - `related_issue`: If this suggestion is based on an issue, include the issue id here. Else use null.
+                - `severity_score`: From 0 to 1 how serious is this potential bug? 1 being "guaranteed exception will happen and not be caught by the code".
+                - `confidence_score`: From 0 to 1 how confident are you that this is a bug? 1 being "I am 100%% confident that this is a bug". This should be based on the amount of evidence you had to reach your conclusion.
+                - `missing_evidence`: A short list of evidence that you did NOT have but would increase your confidence score. At most 5 items. Be very specific.
+            """
+        ).format(
+            diff=diff,
+            formatted_warnings=formatted_warnings,
+            formatted_issues=formatted_issues,
+        )
+
+
 class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
     class DoesFixingWarningFixIssue(BaseModel):

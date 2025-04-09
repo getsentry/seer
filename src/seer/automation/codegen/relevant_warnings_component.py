@@ -1,4 +1,5 @@
 import bisect
+import json
 import logging
 import re
 import textwrap
@@ -24,12 +25,19 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesRequest,
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
+    CodePredictStaticAnalysisSuggestionsOutput,
+    CodePredictStaticAnalysisSuggestionsRequest,
     FilterWarningsOutput,
     FilterWarningsRequest,
     PrFile,
     RelevantWarningResult,
+    StaticAnalysisSuggestion,
 )
-from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
+from seer.automation.codegen.prompts import (
+    IsFixableIssuePrompts,
+    ReleventWarningsPrompts,
+    StaticAnalysisSuggestionsPrompts,
+)
 from seer.automation.component import BaseComponent
 from seer.automation.models import EventDetails, IssueDetails
 from seer.dependency_injection import inject, injected
@@ -237,7 +245,9 @@ def _fetch_issues_for_pr_file(
         return []
     if not pr_filename_to_issues:
         return []
-    assert list(pr_filename_to_issues.keys()) == [pr_file.filename]
+    assert list(pr_filename_to_issues.keys()) == [
+        pr_file.filename
+    ], f"expected {pr_file.filename} but got {list(pr_filename_to_issues.keys())}"
     return list(pr_filename_to_issues.values())[0]
 
 
@@ -509,3 +519,51 @@ class PredictRelevantWarningsComponent(
             f"{len(relevant_warning_results)} pairs."
         )
         return CodePredictRelevantWarningsOutput(relevant_warning_results=relevant_warning_results)
+
+
+class StaticAnalysisSuggestionsComponent(
+    BaseComponent[
+        CodePredictStaticAnalysisSuggestionsRequest, CodePredictStaticAnalysisSuggestionsOutput
+    ]
+):
+    """
+    Given a diff, a list of warnings around the diff, and a list of fixable issues,
+    surface potential issues in the diff (according to an LLM)
+    """
+
+    @observe(name="Codegen - Relevant Warnings - Static-Analysis-Suggestions-Based Component")
+    @ai_track(
+        description="Codegen - Relevant Warnings - Static-Analysis-Suggestions-Based Component"
+    )
+    @inject
+    def invoke(
+        self, request: CodePredictStaticAnalysisSuggestionsRequest, llm_client: LlmClient = injected
+    ) -> CodePredictStaticAnalysisSuggestionsOutput | None:
+        diff = "\n".join([pr_file.patch for pr_file in request.pr_files])
+        completion = llm_client.generate_structured(
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
+            system_prompt=StaticAnalysisSuggestionsPrompts.format_system_msg(),
+            prompt=StaticAnalysisSuggestionsPrompts.format_prompt(
+                diff=diff,
+                formatted_warnings=json.dumps(
+                    list(map(lambda w: w.format_warning(), request.warnings)), indent=2
+                ),
+                formatted_issues=json.dumps(
+                    list(
+                        map(
+                            lambda i: EventDetails.from_event(
+                                i.events[0]
+                            ).format_event_without_breadcrumbs(),
+                            request.fixable_issues,
+                        )
+                    ),
+                    indent=2,
+                ),
+            ),
+            response_format=list[StaticAnalysisSuggestion],
+            temperature=0.0,
+            max_tokens=8192,
+        )
+        if completion.parsed is None:
+            return None
+        return CodePredictStaticAnalysisSuggestionsOutput(suggestions=completion.parsed)

@@ -29,10 +29,22 @@ class RelevantWarningResult(BaseModel):
     encoded_location: str
 
 
+class StaticAnalysisSuggestion(BaseModel):
+    path: str
+    line: int
+    short_description: str
+    justification: str
+    related_warning: str | None = None
+    related_issue: str | None = None
+    severity_score: float
+    confidence_score: float
+    missing_evidence: list[str]
+
+
 class CodegenState(BaseModel):
     run_id: int = -1
     file_changes: list[FileChange] = Field(default_factory=list)
-    relevant_warning_results: list[RelevantWarningResult] = Field(default_factory=list)
+    static_analysis_suggestions: list[StaticAnalysisSuggestion] = Field(default_factory=list)
     status: CodegenStatus = CodegenStatus.PENDING
     last_triggered_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
@@ -208,6 +220,16 @@ class CodePredictRelevantWarningsRequest(BaseComponentRequest):
 
 class CodeAreIssuesFixableOutput(BaseComponentOutput):
     are_fixable: list[bool | None]  # None means the issue was not analyzed
+
+
+class CodePredictStaticAnalysisSuggestionsRequest(BaseComponentRequest):
+    warnings: list[StaticAnalysisWarning]
+    fixable_issues: list[IssueDetails]
+    pr_files: list[PrFile]
+
+
+class CodePredictStaticAnalysisSuggestionsOutput(BaseComponentOutput):
+    suggestions: list[StaticAnalysisSuggestion]
 
 
 class CodePredictRelevantWarningsOutput(BaseComponentOutput):
