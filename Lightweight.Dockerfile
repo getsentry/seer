@@ -30,6 +30,8 @@ COPY pyproject.toml .
 # Install dependencies
 COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==24.0
+# Install wheel package before requirements
+RUN pip install wheel
 # pytorch without gpu
 RUN pip install torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install -r requirements.txt --no-cache-dir
