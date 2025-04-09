@@ -36,6 +36,8 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 &
 RUN ln -s /usr/bin/python /usr/local/bin/python && \
     ln -s /usr/bin/python3 /usr/local/bin/python3
 
+COPY pyproject.toml .
+
 # Install dependencies
 COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==24.0
@@ -49,7 +51,6 @@ RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh ./grpcserver.sh
 
 # Copy source code
 COPY src/ src/
-COPY pyproject.toml .
 COPY .test_durations .
 
 # Copy the supervisord.conf file into the container
