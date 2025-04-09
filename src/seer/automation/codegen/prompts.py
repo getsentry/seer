@@ -287,13 +287,7 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
         short_justification: str | None = None
 
     @staticmethod
-    def format_prompt(
-        formatted_warning: str,
-        formatted_error: str,
-        formatted_overlapping_hunks: str,
-        formatted_code_snippet: str,
-        filename: str,
-    ):
+    def format_prompt(formatted_warning: str, formatted_error: str):
         # Defining relevance as "does fixing the warning fix the issue" is taken from BPR:
         # https://github.com/codecov/bug-prediction-research/blob/f79fc1e7c86f7523698993a92ee6557df8f9bbd1/src/scripts/ask_oracle.py#L137
         #
@@ -305,12 +299,6 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             Here is a warning that surfaced somewhere in our codebase:
 
             {formatted_warning}
-
-            The following code in {filename} was modified in the PR:
-            {formatted_overlapping_hunks}
-
-            Here is the code snippet containing the warning:
-            {formatted_code_snippet}
 
             We have no idea if the warning is relevant to the issue. It could be completely irrelevant, for all we know!
             We need to know if this warning is *directly* relevant to the issue. By "directly relevant", we mean that fixing the warning would very likely prevent the issue.
@@ -328,20 +316,17 @@ class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
             You are more than free to point out that the warning is completely irrelevant and should be ignored in the context of the issue.
 
             Next, give a score between 0 and 1 for how likely it is that addressing this warning would prevent the issue based on your `analysis`.
-            This score, the `relevance_probability`, must be very granular, e.g., 0.231.
+            This score, the `relevance_probability`, must be very granular, e.g., 0.32.
             Then give your final answer in `does_fixing_warning_fix_issue`. It should be true if and only if you're quite confident.
 
             Finally, if you believe the warning is relevant to the issue (`does_fixing_warning_fix_issue=true`), then fill in two more sections:
               - `short_description`: a short, fluff-free, information-dense description of the problem caused by not addressing the warning.
                 This description must focus on the problem and not the warning itself. It should be at most 20 words.
-              - `short_justification`: a short, fluff-free, information-dense summary of your analysis for why the warning is relevant to the issue. This justification should be at most 20 words.
+              - `short_justification`: a short, fluff-free, information-dense summary of your analysis for why the warning is relevant to the issue. This justification should be at most 15 words.
             """
         ).format(
             error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error),
             formatted_warning=formatted_warning,
-            filename=filename,
-            formatted_overlapping_hunks=formatted_overlapping_hunks,
-            formatted_code_snippet=formatted_code_snippet,
         )
 
 

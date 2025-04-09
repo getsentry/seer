@@ -2,6 +2,7 @@ import functools
 import logging
 import os
 import shutil
+from pathlib import Path
 
 from seer.automation.codebase.models import Document
 from seer.automation.models import StacktraceFrame
@@ -244,3 +245,25 @@ def code_snippet(
     end_line = start_line + len(lines_snippet) - 1
     line_numbers = right_justified(start_line, end_line)
     return [f"{line_number}| {line}" for line_number, line in zip(line_numbers, lines_snippet)]
+
+
+def left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
+    """
+    Example::
+
+        path = Path("src/seer/automation/agent/client.py")
+        paths = FilterWarningsComponent._left_truncated_paths(path, 2)
+        assert paths == [
+            "seer/automation/agent/client.py",
+            "automation/agent/client.py",
+        ]
+    """
+    parts = list(path.parts)
+    num_dirs = len(parts) - 1  # -1 for the filename
+    num_paths = min(max_num_paths, num_dirs)
+
+    result = []
+    for _ in range(num_paths):
+        parts.pop(0)
+        result.append(Path(*parts).as_posix())
+    return result

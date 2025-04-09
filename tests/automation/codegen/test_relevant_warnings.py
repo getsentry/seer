@@ -181,6 +181,112 @@ def test_format_code_snippet(warning: StaticAnalysisWarning, expected: str):
     assert warning.format_warning() == expected
 
 
+@pytest.fixture
+def warning_and_pr_file():
+    warning = StaticAnalysisWarning(
+        id=1,
+        code="unused-variable",
+        message="Variables unused",  # artificially assuming it's talking about both y, z
+        encoded_location="app/src/main.py:5~8",
+    )
+    pr_file = PrFile(
+        filename="src/main.py",
+        patch=textwrap.dedent(
+            """\
+            @@ -1,2 +1,2 @@
+                def test1():
+            -       return 1
+            +       return 2
+            __WHITESPACE__
+            @@ -4,2 +4,2 @@
+                def test2():
+            -       y = 1
+            +       y = 2
+            __WHITESPACE__
+            @@ -7,2 +7,2 @@
+                def test3():
+            -       z = 1
+            +       z = 2
+            """
+        ).replace("__WHITESPACE__", " "),
+        status="modified",
+        changes=1,
+        sha="abc123",
+    )
+    warning_and_pr_file = WarningAndPrFile(warning=warning, pr_file=pr_file)
+    return warning_and_pr_file
+
+
+class TestWarningAndPrFile:
+    @pytest.mark.parametrize(
+        "warning_range, hunk_ranges, expected",
+        [
+            pytest.param((1, 5), [(1, 5)], [0], id="exact_match"),
+            pytest.param((1, 1), [(1, 5)], [0], id="single_line"),
+            pytest.param((2, 4), [(1, 5)], [0], id="warning_contained_within_hunk"),
+            pytest.param((1, 3), [(2, 5)], [0], id="partial_overlap_at_start"),
+            pytest.param((4, 6), [(2, 5)], [0], id="partial_overlap_at_end"),
+            pytest.param((1, 6), [(2, 4)], [0], id="hunk_contained_within_warning"),
+            pytest.param((3, 6), [(1, 4), (5, 7)], [0, 1], id="overlaps_2"),
+            pytest.param((3, 9), [(1, 4), (5, 7), (8, 10), (11, 12)], [0, 1, 2], id="overlaps_3"),
+            pytest.param((1, 2), [(3, 4)], [], id="no_overlap"),
+            pytest.param((5, 6), [(2, 4)], [], id="warning_after_hunk"),
+            pytest.param((1, 2), [], [], id="empty_hunks"),
+            pytest.param((1, 2), [(10, 12), (20, 25)], [], id="outside_range"),
+            pytest.param((13, 19), [(10, 12), (20, 25)], [], id="no_overlap_between_hunks"),
+        ],
+    )
+    def test_overlapping_hunk_idxs(
+        self,
+        warning_range: tuple[int, int],
+        hunk_ranges: list[tuple[int, int]],
+        expected: list[int],
+    ):
+        warning_start, warning_end = warning_range
+        warning = _mock_static_analysis_warning(
+            encoded_location=f"path/to/file.py:{warning_start}~{warning_end}"
+        )
+        hunks = [
+            textwrap.dedent(
+                """\
+                @@ -1,1 +{target_start},{target_length} @@
+                + pass"""
+            ).format(target_start=hunk_start, target_length=hunk_end - hunk_start + 1)
+            for hunk_start, hunk_end in hunk_ranges
+        ]
+        pr_file = PrFile(
+            filename="path/to/file.py",
+            patch="\n".join(hunks),
+            status="modified",
+            changes=1,
+            sha="abc123",
+        )
+        warning_and_pr_file = WarningAndPrFile(warning=warning, pr_file=pr_file)
+        assert warning_and_pr_file.overlapping_hunk_idxs == expected
+
+    def test_format_overlapping_hunks(self, warning_and_pr_file: WarningAndPrFile):
+        result = warning_and_pr_file.format_overlapping_hunks_prompt()
+        expected = (
+            textwrap.dedent(
+                """\
+                The following code in {expected_path} was modified in the PR:
+                @@ -4,2 +4,2 @@
+                    def test2():
+                -       y = 1
+                +       y = 2
+                __WHITESPACE__
+                @@ -7,2 +7,2 @@
+                    def test3():
+                -       z = 1
+                +       z = 2
+                """
+            )
+            .replace("__WHITESPACE__", " ")
+            .format(expected_path="src/main.py")
+        )
+        assert result == expected
+
+
 class _PrFileMatch(BaseModel):
     pr_file_idx: int
     overlapping_hunk_idxs: list[int]
@@ -198,61 +304,12 @@ class TestFilterWarningsComponent:
         )
         with pytest.raises(
             ValueError,
-            match=f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}",
+            match=f"Found `..` in the middle of the warning's path. Encoded location: {warning.encoded_location}",
         ):
-            component._get_matching_pr_files(
+            component._matching_pr_files(
                 warning,
                 [PrFile(filename="file1.py", patch="", status="modified", changes=1, sha="abc")],
             )
-
-    def test_get_hunk_ranges(self, component: FilterWarningsComponent):
-        pr_file = PrFile(
-            filename="test.py",
-            patch=textwrap.dedent(
-                """\
-                @@ -1,3 +1,4 @@
-                 def hello():
-                     print("hello")
-                +    print("world")  # Line 3 is added
-                 print("goodbye")
-                __WHITESPACE__
-                @@ -20,3 +21,4 @@ def __init__(self):
-                     print("end")
-                +    print("new end")  # Line 22 is added
-                     return"""
-            ).replace("__WHITESPACE__", " "),
-            status="modified",
-            changes=15,
-            sha="sha2",
-        )
-        assert component._get_sorted_hunk_ranges(pr_file) == [(1, 5), (21, 25)]
-
-    @pytest.mark.parametrize(
-        "warning_start, warning_end, hunk_ranges, expected",
-        [
-            (1, 5, [(1, 5)], [0]),  # Exact match
-            (2, 4, [(1, 5)], [0]),  # Warning contained within hunk
-            (1, 3, [(2, 5)], [0]),  # Partial overlap at start
-            (4, 6, [(2, 5)], [0]),  # Partial overlap at end
-            (1, 6, [(2, 4)], [0]),  # Hunk contained within warning
-            (3, 6, [(1, 4), (5, 7)], [0, 1]),  # Overlaps 2 hunks
-            (3, 9, [(1, 4), (5, 7), (8, 10)], [0, 1, 2]),  # Overlaps 3 hunks
-            (1, 2, [(3, 4)], []),  # No overlap
-            (5, 6, [(2, 4)], []),  # Warning after hunk
-            (1, 2, [], []),  # Empty hunks
-            (1, 2, [(10, 12), (20, 25)], []),  # Outside range
-            (13, 19, [(10, 12), (20, 25)], []),  # No overlap
-        ],
-    )
-    def test_overlapping_hunk_idxs(
-        self,
-        component: FilterWarningsComponent,
-        warning_start: int,
-        warning_end: int,
-        hunk_ranges: list[tuple[int, int]],
-        expected: list[int],
-    ):
-        assert component._overlapping_hunk_idxs(warning_start, warning_end, hunk_ranges) == expected
 
     class _TestInvokeTestCase(BaseModel):
         """
@@ -729,6 +786,46 @@ class TestPredictRelevantWarningsComponent:
         ):
             assert warning_and_pr_file.warning.id == result.warning_id
             assert issue.id == result.issue_id
+
+    def test_format_code_snippet_around_warning(
+        self, component: PredictRelevantWarningsComponent, warning_and_pr_file: WarningAndPrFile
+    ):
+        mock_repo_client = MagicMock()
+        mock_repo_client.get_file_content.return_value = (
+            textwrap.dedent(
+                """\
+                def test1():
+                    return 2
+                __BLANK_LINE__
+                def test2():
+                    y = 2
+                __BLANK_LINE__
+                def test3():
+                    z = 2
+                """
+            ).replace("__BLANK_LINE__", ""),
+            "utf-8",
+        )
+        component.context.get_repo_client.return_value = mock_repo_client
+        result = component._format_code_snippet_around_warning(
+            warning_and_pr_file, commit_sha="abc123", padding_size=2
+        )
+        assert (
+            result
+            == textwrap.dedent(
+                """\
+                3| __BLANK_LINE__
+                4| def test2():
+                5|     y = 2
+                6| __BLANK_LINE__
+                7| def test3():
+                8|     z = 2
+                9| __BLANK_LINE__"""
+            ).replace("__BLANK_LINE__", "")
+        )
+        mock_repo_client.get_file_content.assert_called_once_with(
+            warning_and_pr_file.pr_file.filename, sha="abc123"
+        )
 
 
 @patch("seer.automation.codegen.relevant_warnings_component.FilterWarningsComponent.invoke")

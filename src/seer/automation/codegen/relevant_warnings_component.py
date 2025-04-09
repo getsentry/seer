@@ -13,7 +13,7 @@ from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
 from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codebase.utils import code_snippet
+from seer.automation.codebase.utils import code_snippet, left_truncated_paths
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     AssociateWarningsWithIssuesOutput,
@@ -46,101 +46,19 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
 
     context: CodegenContext
 
-    @staticmethod
-    def _left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
-        """
-        Example::
-
-            path = Path("src/seer/automation/agent/client.py")
-            paths = FilterWarningsComponent._left_truncated_paths(path, 2)
-            assert paths == [
-                "seer/automation/agent/client.py",
-                "automation/agent/client.py",
-            ]
-        """
-        parts = list(path.parts)
-        num_dirs = len(parts) - 1  # -1 for the filename
-        num_paths = min(max_num_paths, num_dirs)
-
-        result = []
-        for _ in range(num_paths):
-            parts.pop(0)
-            result.append(Path(*parts).as_posix())
-        return result
-
     def _build_filepath_mapping(self, pr_files: list[PrFile]) -> dict[str, PrFile]:
-        """Build mapping of possible filepaths to PR files, including truncated variations."""
+        """
+        Build mapping of possible filepaths to PR files, including truncated variations.
+        """
         filepath_to_pr_file: dict[str, PrFile] = {}
         for pr_file in pr_files:
-            pr_path = Path(pr_file.filename)
-            filepath_to_pr_file[pr_path.as_posix()] = pr_file
-            for truncated in self._left_truncated_paths(pr_path, max_num_paths=1):
+            path = Path(pr_file.filename)
+            filepath_to_pr_file[path.as_posix()] = pr_file
+            for truncated in left_truncated_paths(path, max_num_paths=1):
                 filepath_to_pr_file[truncated] = pr_file
         return filepath_to_pr_file
 
-    @staticmethod
-    def _overlapping_hunk_idxs(
-        warning_start: int, warning_end: int, hunk_ranges: list[tuple[int, int]]
-    ) -> list[int]:
-        return [
-            idx
-            for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
-            if warning_start <= hunk_end and hunk_start <= warning_end
-        ]
-
-    def _find_matching_pr_file(
-        self,
-        warning: StaticAnalysisWarning,
-        filepath_to_pr_file: dict[str, PrFile],
-    ) -> tuple[PrFile, list[int]] | None:
-        matching_pr_files = self._get_matching_pr_files(warning, filepath_to_pr_file)
-        warning_location = Location.from_encoded(warning.encoded_location)
-        warning_start = int(warning_location.start_line)
-        warning_end = int(warning_location.end_line)
-        for pr_file in matching_pr_files:
-            hunk_ranges = self._get_sorted_hunk_ranges(pr_file)
-            overlapping_hunk_idxs = self._overlapping_hunk_idxs(
-                warning_start, warning_end, hunk_ranges
-            )
-            if overlapping_hunk_idxs:
-                return pr_file, overlapping_hunk_idxs
-        return None
-
-    def _get_sorted_hunk_ranges(self, pr_file: PrFile) -> list[tuple[int, int]]:
-        """Returns sorted tuples of 1-indexed line numbers (start_inclusive, end_exclusive) in the updated pr file.
-
-        Determined by parsing git diff hunk headers of the form:
-        @@ -n,m +p,q @@ where:
-        - n: start line in original file
-        - m: number of lines from original file
-        - p: start line in modified file
-        - q: number of lines in modified file
-
-        For example, given this diff:
-        @@ -1,3 +1,4 @@
-        def hello():
-            print("hello")
-        +    print("world")  # Line 3 is added
-        print("goodbye")
-
-        @@ -20,3 +21,4 @@
-            print("end")
-        +    print("new end")  # Line 22 is added
-            return
-
-        This would return [(1,5), (21,25)] representing the modified file's hunk ranges.
-
-        Args:
-            pr_file: PrFile object containing the patch/diff (sorted by line number)
-
-        Returns:
-            List of sorted tuples containing 1-indexed line numbers (start_inclusive, end_exclusive) in the updated file
-        """
-        return [
-            (hunk.target_start, hunk.target_start + hunk.target_length) for hunk in pr_file.hunks
-        ]
-
-    def _get_matching_pr_files(
+    def _matching_pr_files(
         self, warning: StaticAnalysisWarning, filepath_to_pr_file: dict[str, PrFile]
     ) -> list[PrFile]:
         """
@@ -150,23 +68,39 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         - With or without a repo prefix
         - With relative vs absolute paths
         """
-        filename = warning.encoded_location.split(":")[0]
-        path = Path(filename)
+        warning_filename = warning.encoded_location.split(":")[0]
+        warning_path = Path(warning_filename)
+
         # If the path is relative, it shouldn't contain intermediate `..`s.
-        first_idx_non_dots = next((idx for idx, part in enumerate(path.parts) if part != ".."))
-        path = Path(*path.parts[first_idx_non_dots:])
-        if ".." in path.parts:
+        first_idx_non_dots = next(
+            (idx for idx, part in enumerate(warning_path.parts) if part != "..")
+        )
+        warning_path = Path(*warning_path.parts[first_idx_non_dots:])
+        if ".." in warning_path.parts:
             raise ValueError(
-                f"Found `..` in the middle of path. Encoded location: {warning.encoded_location}"
+                f"Found `..` in the middle of the warning's path. Encoded location: {warning.encoded_location}"
             )
+
         warning_filepath_variations = {
-            path.as_posix(),
-            *self._left_truncated_paths(path, max_num_paths=2),
+            warning_path.as_posix(),
+            *left_truncated_paths(warning_path, max_num_paths=2),
         }
         return [
             filepath_to_pr_file[filepath]
             for filepath in warning_filepath_variations & set(filepath_to_pr_file)
         ]
+
+    def _find_matching_pr_file(
+        self,
+        warning: StaticAnalysisWarning,
+        filepath_to_pr_file: dict[str, PrFile],
+    ) -> WarningAndPrFile | None:
+        matching_pr_files = self._matching_pr_files(warning, filepath_to_pr_file)
+        for pr_file in matching_pr_files:
+            warning_and_pr_file = WarningAndPrFile(warning=warning, pr_file=pr_file)
+            if warning_and_pr_file.overlapping_hunk_idxs:  # the warning is roughly in the patch
+                return warning_and_pr_file
+        return None
 
     @observe(name="Codegen - Relevant Warnings - Filter Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Filter Warnings Component")
@@ -175,23 +109,15 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         warning_and_pr_files: list[WarningAndPrFile] = []
         for warning in request.warnings:
             try:
-                match = self._find_matching_pr_file(warning, filepath_to_pr_file)
+                warning_and_pr_file = self._find_matching_pr_file(warning, filepath_to_pr_file)
             except Exception as e:
                 self.logger.warning(
                     f"Failed to match warning. Skipping: {warning.id} ({warning.encoded_location})",
                     exc_info=e,
                 )
             else:
-                if match is not None:
-                    pr_file, overlapping_hunk_idxs = match
-                    warning_and_pr_files.append(
-                        WarningAndPrFile(
-                            warning=warning,
-                            pr_file=pr_file,
-                            overlapping_hunk_idxs=overlapping_hunk_idxs,
-                        )
-                    )
-
+                if warning_and_pr_file is not None:
+                    warning_and_pr_files.append(warning_and_pr_file)
         return FilterWarningsOutput(warning_and_pr_files=warning_and_pr_files)
 
 
@@ -449,6 +375,11 @@ class PredictRelevantWarningsComponent(
     def _code_snippet_around_warning(
         self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, padding_size: int = 10
     ) -> list[str] | None:
+        extra_logs = {
+            "path": warning_and_pr_file.pr_file.filename,
+            "repo": self.context.repo.full_name,
+            "commit_sha": commit_sha,
+        }
         try:
             file_contents = _cached_file_contents(
                 self.context.get_repo_client(), warning_and_pr_file.pr_file.filename, commit_sha
@@ -456,10 +387,7 @@ class PredictRelevantWarningsComponent(
         except Exception:
             self.logger.exception(
                 "Error getting file contents",
-                extra={
-                    "path": warning_and_pr_file.pr_file.filename,
-                    "repo": self.context.repo.full_name,
-                },
+                extra=extra_logs,
             )
             return None
 
@@ -472,14 +400,16 @@ class PredictRelevantWarningsComponent(
             self.logger.warning(
                 msg=(
                     "The warning's end line is greater than the number of lines in the file. "
-                    "Warning-file matching in FilterWarningsComponent was wrong or outdated.",
+                    "Warning-file matching in FilterWarningsComponent was wrong.",
                 ),
-                extra={
-                    "warning_encoded_location": warning_and_pr_file.warning.encoded_location,
-                    "pr_filename": warning_and_pr_file.pr_file.filename,
-                    "num_lines": len(lines),
-                    "commit_sha": commit_sha,
-                },
+                extra=(
+                    extra_logs
+                    | {
+                        "warning_encoded_location": warning_and_pr_file.warning.encoded_location,
+                        "pr_filename": warning_and_pr_file.pr_file.filename,
+                        "num_lines": len(lines),
+                    }
+                ),
             )
             return None
 
@@ -494,17 +424,6 @@ class PredictRelevantWarningsComponent(
         if code_snippet is None:
             return "< Could not extract the code snippet containing the warning >"
         return "\n".join(code_snippet)
-
-    def _format_overlapping_hunks(self, warning_and_pr_file: WarningAndPrFile) -> str:
-        return textwrap.dedent(
-            """\
-            The following code in {filename} was modified in the PR:
-            {formatted_overlapping_hunks}
-            """
-        ).format(
-            filename=warning_and_pr_file.pr_file.filename,
-            formatted_overlapping_hunks=warning_and_pr_file.format_overlapping_hunks(),
-        )
 
     @observe(name="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
     @ai_track(description="Codegen - Relevant Warnings - Predict Relevant Warnings Component")
@@ -527,11 +446,6 @@ class PredictRelevantWarningsComponent(
                     formatted_error=EventDetails.from_event(
                         issue.events[0]
                     ).format_event_without_breadcrumbs(),
-                    formatted_overlapping_hunks=self._format_overlapping_hunks(warning_and_pr_file),
-                    formatted_code_snippet=self._format_code_snippet_around_warning(
-                        warning_and_pr_file, request.commit_sha, padding_size=10
-                    ),
-                    filename=warning_and_pr_file.pr_file.filename,
                 ),
                 response_format=ReleventWarningsPrompts.DoesFixingWarningFixIssue,
                 temperature=0.0,

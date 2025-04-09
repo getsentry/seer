@@ -1,11 +1,13 @@
 import datetime
+import textwrap
 from enum import Enum
+from functools import cached_property
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from seer.automation.agent.models import Message
-from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
+from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition
 from seer.db import DbRunMemory
@@ -169,14 +171,39 @@ class FilterWarningsRequest(BaseComponentRequest):
 class WarningAndPrFile(BaseModel):
     warning: StaticAnalysisWarning
     pr_file: PrFile
-    overlapping_hunk_idxs: list[int] = Field(default_factory=list)
 
-    def format_overlapping_hunks(self) -> str:
+    @cached_property
+    def overlapping_hunk_idxs(self) -> list[int]:
+        warning_location = Location.from_encoded(self.warning.encoded_location)
+        warning_start = int(warning_location.start_line)
+        warning_end = int(warning_location.end_line)
+        hunk_ranges = [
+            (hunk.target_start, hunk.target_start + hunk.target_length - 1)
+            for hunk in self.pr_file.hunks
+        ]
+        return [
+            idx
+            for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
+            if warning_start <= hunk_end and hunk_start <= warning_end
+        ]
+
+    def _format_overlapping_hunks(self) -> str:
         """
         Sub-patch of hunks overlapping with the warning.
         """
         hunks_overlapping = (self.pr_file.hunks[idx] for idx in self.overlapping_hunk_idxs)
         return "\n".join(hunk.raw_hunk() for hunk in hunks_overlapping)
+
+    def format_overlapping_hunks_prompt(self) -> str:
+        return textwrap.dedent(
+            """\
+            The following code in {filename} was modified in the PR:
+            {formatted_overlapping_hunks}
+            """
+        ).format(
+            filename=self.pr_file.filename,
+            formatted_overlapping_hunks=self._format_overlapping_hunks(),
+        )
 
 
 class FilterWarningsOutput(BaseComponentOutput):

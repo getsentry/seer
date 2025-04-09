@@ -1,5 +1,6 @@
 import datetime
 import json
+import textwrap
 import unittest
 import uuid
 from unittest.mock import Mock, patch
@@ -24,6 +25,9 @@ from seer.automation.autofix.models import (
 from seer.automation.models import (
     BreadcrumbsDetails,
     EventDetails,
+    FilePatch,
+    Hunk,
+    Line,
     Profile,
     ProfileFrame,
     SentryEventData,
@@ -864,3 +868,52 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
             assert vars_str in stack_str
         else:
             assert "---\nVariable" not in stack_str
+
+
+class TestFilePatch:
+    def test_to_hunks(self):
+        patch = textwrap.dedent(
+            """\
+            @@ -1,3 +1,4 @@
+             def hello():
+                 print('hello')
+            +    print('world')  # Line 3 is added
+                 print('goodbye')
+            __WHITESPACE__
+            @@ -20,3 +21,4 @@ def __init__(self):
+                 print('end')
+            +    print('new end')  # Line 22 is added
+                 return
+            """
+        ).replace("__WHITESPACE__", " ")
+        hunks_expected = [
+            Hunk(
+                source_start=1,
+                source_length=3,
+                target_start=1,
+                target_length=4,
+                section_header="@@ -1,3 +1,4 @@",
+                lines=[
+                    Line(value=" def hello():", line_type=" "),
+                    Line(value="     print('hello')", line_type=" "),
+                    Line(value="+    print('world')  # Line 3 is added", line_type="+"),
+                    Line(value="     print('goodbye')", line_type=" "),
+                    Line(value=" ", line_type=" "),
+                ],
+            ),
+            Hunk(
+                source_start=20,
+                source_length=3,
+                target_start=21,
+                target_length=4,
+                section_header="@@ -20,3 +21,4 @@ def __init__(self):",
+                lines=[
+                    Line(value="     print('end')", line_type=" "),
+                    Line(value="+    print('new end')  # Line 22 is added", line_type="+"),
+                    Line(value="     return", line_type=" "),
+                ],
+            ),
+        ]
+        hunks = FilePatch.to_hunks(patch)
+        assert len(hunks) == len(hunks_expected)
+        assert hunks == hunks_expected
