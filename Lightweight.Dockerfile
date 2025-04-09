@@ -25,6 +25,8 @@ RUN curl -L https://storage.googleapis.com/traffic-director/td-grpc-bootstrap-0.
     mv td-grpc-bootstrap-0.16.0/td-grpc-bootstrap /usr/local/td-grpc-bootstrap && \
     rm -rf td-grpc-bootstrap-0.16.0
 
+COPY pyproject.toml .
+
 # Install dependencies
 COPY setup.py requirements.txt ./
 RUN pip install --upgrade pip==24.0
@@ -40,7 +42,7 @@ RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh ./grpcserver.sh
 
 # Copy source code
 COPY src/ src/
-COPY pyproject.toml .
+
 
 # Copy the supervisord.conf file into the container
 COPY supervisord.conf /etc/supervisord.conf
