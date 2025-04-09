@@ -109,7 +109,7 @@ class SentryRpcClient(RpcClient):
             raise RuntimeError("SENTRY_BASE_URL must be set")
         return base_url
 
-    def _generate_request_signature(self, url_path: str, body: bytes) -> str:
+    def _generate_request_signature(self, body: bytes) -> str:
         signature_input = body
         signature = hmac.new(
             self.shared_secret.encode("utf-8"), signature_input, hashlib.sha256
@@ -131,7 +131,7 @@ class SentryRpcClient(RpcClient):
         body_dict = {"args": kwargs}
         body = json_dumps(body_dict, separators=(",", ":"))
         body_bytes = body.encode("utf-8")
-        signature = self._generate_request_signature(url_path, body_bytes)
+        signature = self._generate_request_signature(body_bytes)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Rpcsignature {signature}",

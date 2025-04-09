@@ -104,17 +104,18 @@ def test_rpc_call_200_json(
 def test_rpc_call_200_empty(test_server: TestRpcHttpServer):
     with test_server.enabled() as QueueHandler, ThreadPoolExecutor() as pool:
 
+        client = SentryRpcClient()
+
         def handle_request():
             body, headers, path = QueueHandler.request_queue.get(timeout=5)
             QueueHandler.response_queue.put(b"")
             assert (
                 headers["Authorization"]
-                == "Rpcsignature rpc0:a16521c8142bdf13770fac1b25b97a126eaa4761db9fcdd9dc24d4e098766972"
+                == f"Rpcsignature {client._generate_request_signature(body)}"
             )
 
         future = pool.submit(handle_request)
 
-        client = SentryRpcClient()
         r = client.call("method", issue_id=1)
         assert r is None
 
