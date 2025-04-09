@@ -227,8 +227,8 @@ class BaseTools:
 
             if autocorrected_path:
                 prefixes += f"Showing results instead for {file_path}\n=====\n"
-            else:
-                return f"{prefixes}{lined_content}"
+
+            return f"{prefixes}{lined_content}"
 
         # show potential corrected paths if nothing was found here
         other_paths = self._get_potential_abs_paths(file_path, repo_name)
