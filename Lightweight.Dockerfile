@@ -44,6 +44,7 @@ RUN chmod +x ./celeryworker.sh ./celerybeat.sh ./gunicorn.sh ./grpcserver.sh
 
 # Copy source code
 COPY src/ src/
+COPY .test_durations .
 
 
 # Copy the supervisord.conf file into the container
