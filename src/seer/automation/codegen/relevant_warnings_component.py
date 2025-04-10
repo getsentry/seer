@@ -301,6 +301,11 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
             external_id=self.context.repo.external_id,
             pr_files=request.pr_files,
         )
+        for filename, issues in filename_to_issues.items():
+            self.logger.info(
+                f"Found {len(issues)} issues for file {filename}",
+                extra={"issue_ids": [issue.id for issue in issues]},
+            )
         return CodeFetchIssuesOutput(filename_to_issues=filename_to_issues)
 
 
