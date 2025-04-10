@@ -431,7 +431,7 @@ class AnthropicProvider:
     def get_client(app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
         return anthropic.AnthropicVertex(
             project_id=app_config.GOOGLE_CLOUD_PROJECT,
-            region="europe-west1" if app_config.USE_EU_REGION else "us-east5",
+            region="europe-west1" if app_config.SENTRY_REGION == "eu" else "us-east5",
             max_retries=8,
         )
 
