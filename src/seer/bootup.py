@@ -68,9 +68,8 @@ def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = i
         },
     )
 
-    sentry_region = os.environ.get("SENTRY_REGION")
-    if sentry_region:
-        sentry_sdk.set_tag("sentry_region", sentry_region)
+    if config.SENTRY_REGION:
+        sentry_sdk.set_tag("sentry_region", config.SENTRY_REGION)
 
 
 module.enable()
