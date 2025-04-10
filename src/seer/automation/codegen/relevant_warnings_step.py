@@ -22,8 +22,6 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesOutput,
     CodeFetchIssuesRequest,
     CodegenRelevantWarningsRequest,
-    CodePredictRelevantWarningsOutput,
-    CodePredictRelevantWarningsRequest,
     CodePredictStaticAnalysisSuggestionsOutput,
     CodePredictStaticAnalysisSuggestionsRequest,
     FilterWarningsOutput,
@@ -35,7 +33,6 @@ from seer.automation.codegen.relevant_warnings_component import (
     AssociateWarningsWithIssuesComponent,
     FetchIssuesComponent,
     FilterWarningsComponent,
-    PredictRelevantWarningsComponent,
     StaticAnalysisSuggestionsComponent,
 )
 from seer.automation.codegen.step import CodegenStep
@@ -79,22 +76,29 @@ class RelevantWarningsStep(CodegenStep):
     @inject
     def _post_results_to_overwatch(
         self,
-        relevant_warnings_output: CodePredictStaticAnalysisSuggestionsOutput | None,
+        llm_suggestions: CodePredictStaticAnalysisSuggestionsOutput | None,
         config: AppConfig = injected,
     ):
-        if relevant_warnings_output is None:
+        if llm_suggestions is None:
             self.logger.info("No relevant warnings output to post to Overwatch.")
             return
 
         with open("/app/.artifacts/relevant_warnings_output.json", "w") as f:
-            json.dump(relevant_warnings_output.model_dump(), f, indent=4)
+            json.dump(llm_suggestions.model_dump(), f, indent=4)
         if not self.request.should_post_to_overwatch:
             self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
+        # This should be a temporary solution until we can update
+        # Overwatch to accept the new format.
+        suggestions_to_overwatch_expected_format = [
+            suggestion.to_overwatch_format().model_dump()
+            for suggestion in llm_suggestions.suggestions
+        ]
+
         request = {
             "run_id": self.context.run_id,
-            "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
+            "results": suggestions_to_overwatch_expected_format,
         }
         request_data = json.dumps(request, separators=(",", ":")).encode("utf-8")
         headers = get_codecov_auth_header(
@@ -221,14 +225,6 @@ class RelevantWarningsStep(CodegenStep):
         static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput = (
             static_analysis_suggestions_component.invoke(static_analysis_suggestions_request)
         )
-        # 6. Predict which warnings are relevant to which issues.
-        # prediction_component = PredictRelevantWarningsComponent(self.context)
-        # request = CodePredictRelevantWarningsRequest(
-        #     candidate_associations=fixa
-        # )
-        # relevant_warnings_output: CodePredictRelevantWarningsOutput = prediction_component.invoke(
-        #     request
-        # )
 
         # 7. Save results.
         self._complete_run(static_analysis_suggestions_output)

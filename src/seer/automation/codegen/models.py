@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from seer.automation.agent.models import Message
-from seer.automation.codebase.models import StaticAnalysisWarning
+from seer.automation.codebase.models import Location, StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition
 from seer.db import DbRunMemory
@@ -34,11 +34,34 @@ class StaticAnalysisSuggestion(BaseModel):
     line: int
     short_description: str
     justification: str
-    related_warning: str | None = None
-    related_issue: str | None = None
+    related_warning_id: str | None = None
+    related_issue_id: str | None = None
     severity_score: float
     confidence_score: float
     missing_evidence: list[str]
+
+    def to_overwatch_format(self) -> RelevantWarningResult:
+        """
+        Convert a StaticAnalysisSuggestion to a RelevantWarningResult.
+        This is a temporary format to post to Overwatch, because Overwatch expects a list of
+        RelevantWarningResult objects at this time
+        TODO: update Overwatch and then remove this method
+        """
+        return RelevantWarningResult(
+            warning_id=self.related_warning_id,
+            issue_id=self.related_issue_id,
+            # Let's pretend our suggestions are important
+            does_fixing_warning_fix_issue=True,
+            # Combining both metrics means we will only surface suggestions with high confidence
+            # and severity.
+            relevance_probability=self.confidence_score * self.severity_score,
+            reasoning=self.justification,
+            short_justification=self.justification,
+            short_description=self.short_description,
+            encoded_location=Location(
+                filename=self.path, start_line=self.line, end_line=self.line
+            ).encode(),
+        )
 
 
 class CodegenState(BaseModel):

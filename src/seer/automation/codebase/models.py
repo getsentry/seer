@@ -148,6 +148,7 @@ class StaticAnalysisWarning(BaseModel):
         return (
             textwrap.dedent(
                 f"""\
+            Warning ID: {self.id}
             Warning message: {self.message}
             ----------
             Location:
