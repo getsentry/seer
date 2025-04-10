@@ -1,5 +1,4 @@
 import logging
-import os
 
 import sentry_sdk
 from psycopg import Connection
