@@ -110,10 +110,9 @@ class FilterWarningsComponent(BaseComponent[FilterWarningsRequest, FilterWarning
         for warning in request.warnings:
             try:
                 warning_and_pr_file = self._find_matching_pr_file(warning, filepath_to_pr_file)
-            except Exception as e:
-                self.logger.warning(
-                    f"Failed to match warning. Skipping: {warning.id} ({warning.encoded_location})",
-                    exc_info=e,
+            except Exception:
+                self.logger.exception(
+                    "Failed to match warning. Skipping.", extra={"warning_id": warning.id}
                 )
             else:
                 if warning_and_pr_file is not None:
@@ -375,20 +374,12 @@ class PredictRelevantWarningsComponent(
     def _code_snippet_around_warning(
         self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, padding_size: int = 10
     ) -> list[str] | None:
-        extra_logs = {
-            "path": warning_and_pr_file.pr_file.filename,
-            "repo": self.context.repo.full_name,
-            "commit_sha": commit_sha,
-        }
         try:
             file_contents = _cached_file_contents(
                 self.context.get_repo_client(), warning_and_pr_file.pr_file.filename, commit_sha
             )
         except Exception:
-            self.logger.exception(
-                "Error getting file contents",
-                extra=extra_logs,
-            )
+            self.logger.exception("Error getting file contents")
             return None
 
         warning_location = Location.from_encoded(warning_and_pr_file.warning.encoded_location)
@@ -396,20 +387,10 @@ class PredictRelevantWarningsComponent(
         warning_end_line = int(warning_location.end_line)
 
         lines = file_contents.split("\n")
-        if warning_end_line > len(lines) - 1:
-            self.logger.warning(
-                msg=(
-                    "The warning's end line is greater than the number of lines in the file. "
-                    "Warning-file matching in FilterWarningsComponent was wrong.",
-                ),
-                extra=(
-                    extra_logs
-                    | {
-                        "warning_encoded_location": warning_and_pr_file.warning.encoded_location,
-                        "pr_filename": warning_and_pr_file.pr_file.filename,
-                        "num_lines": len(lines),
-                    }
-                ),
+        if warning_end_line > len(lines):
+            self.logger.error(
+                "The warning's end line is greater than the number of lines in the file. "
+                "Warning-file matching in FilterWarningsComponent was wrong or out of date.",
             )
             return None
 

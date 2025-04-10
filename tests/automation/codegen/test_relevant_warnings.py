@@ -264,7 +264,7 @@ class TestWarningAndPrFile:
         warning_and_pr_file = WarningAndPrFile(warning=warning, pr_file=pr_file)
         assert warning_and_pr_file.overlapping_hunk_idxs == expected
 
-    def test_format_overlapping_hunks(self, warning_and_pr_file: WarningAndPrFile):
+    def test_format_overlapping_hunks_prompt(self, warning_and_pr_file: WarningAndPrFile):
         result = warning_and_pr_file.format_overlapping_hunks_prompt()
         expected = (
             textwrap.dedent(

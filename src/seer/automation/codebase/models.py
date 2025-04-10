@@ -113,6 +113,18 @@ class PrFile(BaseModel):
     def hunks(self) -> list[Hunk]:
         return FilePatch.to_hunks(self.patch)
 
+    def overlapping_hunk_idxs(self, start_line: int, end_line: int | None = None) -> list[int]:
+        if end_line is None:
+            end_line = start_line
+        hunk_ranges = [
+            (hunk.target_start, hunk.target_start + hunk.target_length - 1) for hunk in self.hunks
+        ]
+        return [
+            idx
+            for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
+            if start_line <= hunk_end and hunk_start <= end_line
+        ]
+
 
 # Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py
 class StaticAnalysisRule(BaseModel):

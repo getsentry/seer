@@ -177,17 +177,9 @@ class WarningAndPrFile(BaseModel):
         warning_location = Location.from_encoded(self.warning.encoded_location)
         warning_start = int(warning_location.start_line)
         warning_end = int(warning_location.end_line)
-        hunk_ranges = [
-            (hunk.target_start, hunk.target_start + hunk.target_length - 1)
-            for hunk in self.pr_file.hunks
-        ]
-        return [
-            idx
-            for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
-            if warning_start <= hunk_end and hunk_start <= warning_end
-        ]
+        return self.pr_file.overlapping_hunk_idxs(warning_start, warning_end)
 
-    def _format_overlapping_hunks(self) -> str:
+    def format_overlapping_hunks(self) -> str:
         """
         Sub-patch of hunks overlapping with the warning.
         """
@@ -202,7 +194,7 @@ class WarningAndPrFile(BaseModel):
             """
         ).format(
             filename=self.pr_file.filename,
-            formatted_overlapping_hunks=self._format_overlapping_hunks(),
+            formatted_overlapping_hunks=self.format_overlapping_hunks(),
         )
 
 
