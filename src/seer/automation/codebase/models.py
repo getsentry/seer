@@ -159,15 +159,16 @@ class StaticAnalysisWarning(BaseModel):
             ```{self._try_get_language() or ""}
             CODE_SNIPPET
             ```
+            ----------
             Potentially related issue titles:
-            {formatted_issue_titles}
+            FORMATTED_ISSUE_TITLES
             ----------
             FORMATTED_RULE
             """
             )
             # Multiline strings being substituted inside textwrap.dedent would mess with the formatting.
             # So we substitute afterwards.
-            .replace(
-                "CODE_SNIPPET", textwrap.dedent(self.encoded_code_snippet or "").strip()
-            ).replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
+            .replace("CODE_SNIPPET", textwrap.dedent(self.encoded_code_snippet or "").strip())
+            .replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
+            .replace("FORMATTED_ISSUE_TITLES", formatted_issue_titles)
         )
