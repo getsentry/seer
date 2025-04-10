@@ -84,7 +84,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     tool_calls=[
                         ToolCall(
                             id=str(i),
-                            function="expand_document",
+                            function="view_document",
                             args=json.dumps(
                                 {"file_path": file["file_path"], "repo_name": file["repo_name"]}
                             ),
@@ -95,7 +95,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     role="tool",
                     content=file_content,
                     tool_call_id=str(i),
-                    tool_call_function="expand_document",
+                    tool_call_function="view_document",
                 )
                 memory.append(agent_message)
                 memory.append(user_message)
