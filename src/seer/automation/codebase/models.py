@@ -1,11 +1,12 @@
 import re
 import textwrap
+from functools import cached_property
 from typing import Any, Literal, NotRequired, TypedDict
 
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, ConfigDict, model_serializer
 from pydantic_xml import attr
 
-from seer.automation.models import PromptXmlModel, RepoDefinition
+from seer.automation.models import FilePatch, Hunk, PromptXmlModel, RepoDefinition
 
 
 class DocumentPromptXml(PromptXmlModel, tag="document", skip_empty=True):
@@ -99,6 +100,32 @@ class Location(BaseModel):
         return base
 
 
+class PrFile(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    filename: str
+    patch: str
+    status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
+    changes: int
+    sha: str
+
+    @cached_property
+    def hunks(self) -> list[Hunk]:
+        return FilePatch.to_hunks(self.patch)
+
+    def overlapping_hunk_idxs(self, start_line: int, end_line: int | None = None) -> list[int]:
+        if end_line is None:
+            end_line = start_line
+        hunk_ranges = [
+            (hunk.target_start, hunk.target_start + hunk.target_length - 1) for hunk in self.hunks
+        ]
+        return [
+            idx
+            for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
+            if start_line <= hunk_end and hunk_start <= end_line
+        ]
+
+
 # Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py
 class StaticAnalysisRule(BaseModel):
     id: int
@@ -130,7 +157,6 @@ class StaticAnalysisWarning(BaseModel):
     rule: StaticAnalysisRule | None = None
     encoded_code_snippet: str | None = None
     potentially_related_issue_titles: list[str] | None = None
-    # TODO: project info necessary for seer?
 
     def _try_get_language(self) -> str | None:
         if ".py" in self.encoded_location:
