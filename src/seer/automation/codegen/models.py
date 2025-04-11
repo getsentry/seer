@@ -19,8 +19,8 @@ class CodegenStatus(str, Enum):
 
 
 class RelevantWarningResult(BaseModel):
-    warning_id: int
-    issue_id: int
+    warning_id: int | None
+    issue_id: int | None
     does_fixing_warning_fix_issue: bool
     relevance_probability: float
     reasoning: str
@@ -48,8 +48,8 @@ class StaticAnalysisSuggestion(BaseModel):
         TODO: update Overwatch and then remove this method
         """
         return RelevantWarningResult(
-            warning_id=self.related_warning_id,
-            issue_id=self.related_issue_id,
+            warning_id=int(self.related_warning_id) if self.related_warning_id else None,
+            issue_id=int(self.related_issue_id) if self.related_issue_id else None,
             # Let's pretend our suggestions are important
             does_fixing_warning_fix_issue=True,
             # Combining both metrics means we will only surface suggestions with high confidence
@@ -59,7 +59,7 @@ class StaticAnalysisSuggestion(BaseModel):
             short_justification=self.justification,
             short_description=self.short_description,
             encoded_location=Location(
-                filename=self.path, start_line=self.line, end_line=self.line
+                filename=self.path, start_line=str(self.line), end_line=str(self.line)
             ).encode(),
         )
 

@@ -27,6 +27,7 @@ from seer.automation.codegen.models import (
     FilterWarningsOutput,
     FilterWarningsRequest,
     PrFile,
+    RelevantWarningResult,
     StaticAnalysisSuggestion,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
@@ -857,3 +858,92 @@ class TestStaticAnalysisSuggestionsComponent:
         assert f"<sentry_issue><issue_id>{issue.id}</issue_id>" in formatted_issue
         assert "<title>" in formatted_issue
         assert "</sentry_issue>" in formatted_issue
+
+
+# Tests for to_overwatch_format method
+@pytest.mark.parametrize(
+    "suggestion,expected",
+    [
+        (
+            StaticAnalysisSuggestion(
+                path="src/main.py",
+                line=42,
+                short_description="Test warning",
+                justification="This is a test justification",
+                related_warning_id="123",
+                related_issue_id="456",
+                severity_score=0.8,
+                confidence_score=0.9,
+                missing_evidence=[],
+            ),
+            {
+                "warning_id": 123,
+                "issue_id": 456,
+                "does_fixing_warning_fix_issue": True,
+                "relevance_probability": 0.8 * 0.9,
+                "reasoning": "This is a test justification",
+                "short_justification": "This is a test justification",
+                "short_description": "Test warning",
+                "encoded_location": "src/main.py:42",
+            },
+        ),
+        (
+            StaticAnalysisSuggestion(
+                path="tests/test_file.py",
+                line=100,
+                short_description="Another warning",
+                justification="Another justification",
+                related_warning_id="789",
+                related_issue_id="101",
+                severity_score=0.5,
+                confidence_score=0.6,
+                missing_evidence=["evidence1", "evidence2"],
+            ),
+            {
+                "warning_id": 789,
+                "issue_id": 101,
+                "does_fixing_warning_fix_issue": True,
+                "relevance_probability": 0.5 * 0.6,
+                "reasoning": "Another justification",
+                "short_justification": "Another justification",
+                "short_description": "Another warning",
+                "encoded_location": "tests/test_file.py:100",
+            },
+        ),
+        (
+            StaticAnalysisSuggestion(
+                path="complex/path/to/file.py",
+                line=1,
+                short_description="Minimal warning",
+                justification="Minimal justification",
+                related_warning_id=None,
+                related_issue_id=None,
+                severity_score=0.1,
+                confidence_score=0.2,
+                missing_evidence=[],
+            ),
+            {
+                "warning_id": None,
+                "issue_id": None,
+                "does_fixing_warning_fix_issue": True,
+                "relevance_probability": 0.1 * 0.2,
+                "reasoning": "Minimal justification",
+                "short_justification": "Minimal justification",
+                "short_description": "Minimal warning",
+                "encoded_location": "complex/path/to/file.py:1",
+            },
+        ),
+    ],
+)
+def test_to_overwatch_format(suggestion, expected):
+    """Test the to_overwatch_format method with various inputs."""
+    result = suggestion.to_overwatch_format()
+
+    # Verify the result is a RelevantWarningResult
+    assert isinstance(result, RelevantWarningResult)
+
+    # Verify all fields match expected values
+    for key, value in expected.items():
+        assert (
+            getattr(result, key) == value
+        ), f"Mismatch in {key}: expected {value}, got {getattr(result, key)}"
