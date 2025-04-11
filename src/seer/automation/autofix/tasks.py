@@ -989,127 +989,139 @@ def run_autofix_evaluation_on_item(
     scoring_n_panel = 5
     scoring_model = "o3-mini-2025-01-31"
 
+    dataset_item_trace_id = None
     with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
-
+        dataset_item_trace_id = trace_id
         try:
             final_state = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
         except Exception as e:
             logger.exception(f"Error running evaluation: {e}")
 
+    if final_state:
         root_cause_scores = score_root_causes(
             dataset_item,
             final_state,
             n_panel=scoring_n_panel,
             model=scoring_model,
-            langfuse_session_id=trace_id,  # type: ignore
+            langfuse_session_id=dataset_item_trace_id,  # type: ignore
+        )
+    else:
+        root_cause_scores = None
+
+    if root_cause_scores:
+        root_cause_score, root_cause_verdict, root_cause_helpful = root_cause_scores
+
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="rc_is_correct"
+            ),
+            value=1 if root_cause_verdict else 0,
+        )
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="rc_is_helpful"
+            ),
+            value=1 if root_cause_helpful else 0,
+        )
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
+            ),
+            value=root_cause_score,
+        )
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="rc_score"),
+            value=root_cause_score,
+        )
+    else:
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
+            ),
+            value=0,
         )
 
-        if root_cause_scores:
-            root_cause_score, root_cause_verdict, root_cause_helpful = root_cause_scores
-
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="rc_is_correct"
-                ),
-                value=1 if root_cause_verdict else 0,
-            )
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="rc_is_helpful"
-                ),
-                value=1 if root_cause_helpful else 0,
-            )
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
-                ),
-                value=root_cause_score,
-            )
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="rc_score"),
-                value=root_cause_score,
-            )
-        else:
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="rc_error_weighted_score"
-                ),
-                value=0,
-            )
-
+    if final_state:
         solution_scores = score_solution(
             dataset_item,
             final_state,
             n_panel=scoring_n_panel,
             model=scoring_model,
-            langfuse_session_id=trace_id,  # type: ignore
+            langfuse_session_id=dataset_item_trace_id,  # type: ignore
+        )
+    else:
+        solution_scores = None
+
+    if solution_scores:
+        mean_score, verdict = solution_scores
+
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="solution_is_fixed"
+            ),
+            value=1 if verdict else 0,
+        )
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model,
+                n_panel=scoring_n_panel,
+                name="solution_error_weighted_score",
+            ),
+            value=mean_score,
+        )
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="solution_score"
+            ),
+            value=mean_score,
+        )
+    else:
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model,
+                n_panel=scoring_n_panel,
+                name="solution_error_weighted_score",
+            ),
+            value=0,
         )
 
-        if solution_scores:
-            mean_score, verdict = solution_scores
-
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="solution_is_fixed"
-                ),
-                value=1 if verdict else 0,
-            )
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model,
-                    n_panel=scoring_n_panel,
-                    name="solution_error_weighted_score",
-                ),
-                value=mean_score,
-            )
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="solution_score"
-                ),
-                value=mean_score,
-            )
-        else:
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model,
-                    n_panel=scoring_n_panel,
-                    name="solution_error_weighted_score",
-                ),
-                value=0,
-            )
-
+    if final_state:
         coding_scores = score_coding(
             dataset_item,
             final_state,
             n_panel=scoring_n_panel,
             model=scoring_model,
-            langfuse_session_id=trace_id,  # type: ignore
+            langfuse_session_id=dataset_item_trace_id,  # type: ignore
         )
+    else:
+        coding_scores = None
 
-        if coding_scores:
-            mean_correctness_score, mean_conciseness_score = coding_scores
+    if coding_scores:
+        mean_correctness_score, mean_conciseness_score = coding_scores
 
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="code_correctness_score"
-                ),
-                value=mean_correctness_score,
-            )
-            langfuse.score(
-                trace_id=trace_id,
-                name=make_score_name(
-                    model=scoring_model, n_panel=scoring_n_panel, name="code_conciseness_score"
-                ),
-                value=mean_conciseness_score,
-            )
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="code_correctness_score"
+            ),
+            value=mean_correctness_score,
+        )
+        langfuse.score(
+            trace_id=dataset_item_trace_id,
+            name=make_score_name(
+                model=scoring_model, n_panel=scoring_n_panel, name="code_conciseness_score"
+            ),
+            value=mean_conciseness_score,
+        )
         # If no coding scores, we don't do anything...
+
+    print("I AM DONE!, item_index:", item_index, item_id)
