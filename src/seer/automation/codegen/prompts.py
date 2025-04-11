@@ -277,6 +277,57 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
         ).format(error_prompt=_RelevantWarningsPromptPrefix.format_prompt_error(formatted_error))
 
 
+class StaticAnalysisSuggestionsPrompts:
+
+    @staticmethod
+    def format_system_msg():
+        return textwrap.dedent(
+            """\
+            You are an expert software engineer with deep expertise in static analysis, bug detection, and code review.
+            Your role is to analyze code changes and identify potential bugs or security issues that could lead to runtime errors or exceptions.
+            You have a keen eye for subtle issues that might not be immediately obvious, and you understand how different code patterns can lead to unexpected behavior.
+            When reviewing code, you focus exclusively on actual bugs and security vulnerabilities, ignoring style issues or minor improvements that don't affect functionality.
+            You provide precise, actionable feedback with clear severity and confidence assessments to help developers prioritize fixes.
+            """
+        )
+
+    @staticmethod
+    def format_prompt(diff: str, formatted_warnings: str, formatted_issues: str):
+        return textwrap.dedent(
+            """\
+            You are given a diff block:
+            {diff}
+
+            You are also given a list of static analysis warnings that exist in the codebase close to the diff:
+            {formatted_warnings}
+
+            You are also given a list of existing Sentry issues that exist in the codebase close to the diff:
+            {formatted_issues}
+
+            # Your Goal:
+            Carefully review the code changes in the diff, understand the context and surface any potential bugs that might be introduced by the changes. In your review focus on actual bugs. You should IGNORE code style, nit suggestions, and anything else that is not likely to cause a Sentry issue.
+            You SHOULD make suggestions based on the warnings and issues provided, as well as your own analysis of the code.
+            Follow ALL the guidelines!!!
+
+            # Guidelines:
+            - Return AT MOST 5 suggestions, and AT MOST 1 suggestion per line of code.
+            - Focus ONLY on _bugs_ and _security issues_.
+            - Only surface issues that are caused by the code changes in the diff, or directly related to a warning.
+            - Do NOT propose issues if the are outside the diff.
+            - ALWAYS include the exact file path and line of the suggestion.
+            - Assign a severity score and confidence score to each suggestion, from 0 to 1. The score should be granular, e.g., 0.432.
+                - Severity score: 1 being "guaranteed an _uncaught_ exception will happen and not be caught by the code"; 0.5 being "an exception will happen but it's being caught" OR "an exception may happen depending on inputs"; 0 being "no exception will happen";
+                - Confidence score: 1 being "I am 100%% confident that this is a bug";
+            - Before giving your final answer, think step-by-step to ensure your review is thorough. We prefer fewer suggestions with high quality over more suggestions with low quality.
+            - Return your response as a list of JSON objects, where each object is a suggestion. Your response should be ONLY the list of objects.
+            """
+        ).format(
+            diff=diff,
+            formatted_warnings=formatted_warnings,
+            formatted_issues=formatted_issues,
+        )
+
+
 class ReleventWarningsPrompts(_RelevantWarningsPromptPrefix):
 
     class DoesFixingWarningFixIssue(BaseModel):

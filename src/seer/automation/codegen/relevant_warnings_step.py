@@ -1,3 +1,4 @@
+import itertools
 import json
 import logging
 from typing import Any
@@ -21,8 +22,8 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesOutput,
     CodeFetchIssuesRequest,
     CodegenRelevantWarningsRequest,
-    CodePredictRelevantWarningsOutput,
-    CodePredictRelevantWarningsRequest,
+    CodePredictStaticAnalysisSuggestionsOutput,
+    CodePredictStaticAnalysisSuggestionsRequest,
     FilterWarningsOutput,
     FilterWarningsRequest,
     PrFile,
@@ -32,7 +33,7 @@ from seer.automation.codegen.relevant_warnings_component import (
     AssociateWarningsWithIssuesComponent,
     FetchIssuesComponent,
     FilterWarningsComponent,
-    PredictRelevantWarningsComponent,
+    StaticAnalysisSuggestionsComponent,
 )
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -75,16 +76,28 @@ class RelevantWarningsStep(CodegenStep):
     @inject
     def _post_results_to_overwatch(
         self,
-        relevant_warnings_output: CodePredictRelevantWarningsOutput,
+        llm_suggestions: CodePredictStaticAnalysisSuggestionsOutput | None,
         config: AppConfig = injected,
     ):
+
         if not self.request.should_post_to_overwatch:
             self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
+        # This should be a temporary solution until we can update
+        # Overwatch to accept the new format.
+        suggestions_to_overwatch_expected_format = (
+            [
+                suggestion.to_overwatch_format().model_dump()
+                for suggestion in llm_suggestions.suggestions
+            ]
+            if llm_suggestions
+            else []
+        )
+
         request = {
             "run_id": self.context.run_id,
-            "results": relevant_warnings_output.model_dump()["relevant_warning_results"],
+            "results": suggestions_to_overwatch_expected_format,
         }
         request_data = json.dumps(request, separators=(",", ":")).encode("utf-8")
         headers = get_codecov_auth_header(
@@ -98,20 +111,24 @@ class RelevantWarningsStep(CodegenStep):
             data=request_data,
         ).raise_for_status()
 
-    def _complete_run(self, relevant_warnings_output: CodePredictRelevantWarningsOutput):
+    def _complete_run(
+        self, static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput | None
+    ):
         try:
-            self._post_results_to_overwatch(relevant_warnings_output)
+            self._post_results_to_overwatch(static_analysis_suggestions_output)
         except Exception:
             self.logger.exception("Error posting relevant warnings results to Overwatch")
             raise
         finally:
-            self.context.event_manager.mark_completed_and_extend_relevant_warning_results(
-                relevant_warnings_output.relevant_warning_results
+            self.context.event_manager.mark_completed_and_extend_static_analysis_suggestions(
+                static_analysis_suggestions_output.suggestions
+                if static_analysis_suggestions_output
+                else []
             )
 
     @observe(name="Codegen - Relevant Warnings Step")
     @ai_track(description="Codegen - Relevant Warnings Step")
-    def _invoke(self, **kwargs):
+    def _invoke(self, **kwargs) -> None:
         self.logger.info("Executing Codegen - Relevant Warnings Step")
         self.context.event_manager.mark_running()
 
@@ -142,7 +159,7 @@ class RelevantWarningsStep(CodegenStep):
 
         if not warnings:  # exit early to avoid unnecessary issue-fetching.
             self.logger.info("No warnings to predict relevancy for.")
-            self._complete_run(CodePredictRelevantWarningsOutput(relevant_warning_results=[]))
+            self._complete_run(None)
             return
 
         # 3. Fetch issues related to the PR.
@@ -153,7 +170,11 @@ class RelevantWarningsStep(CodegenStep):
         fetch_issues_output: CodeFetchIssuesOutput = fetch_issues_component.invoke(
             fetch_issues_request
         )
-
+        # Clamp issue to max_num_issues_analyzed
+        all_selected_issues = list(
+            itertools.chain.from_iterable(fetch_issues_output.filename_to_issues.values())
+        )
+        all_selected_issues = all_selected_issues[: self.request.max_num_issues_analyzed]
         # 4. Limit the number of warning-issue associations we analyze to the top
         #    max_num_associations.
         association_component = AssociateWarningsWithIssuesComponent(self.context)
@@ -165,33 +186,44 @@ class RelevantWarningsStep(CodegenStep):
         associations_output: AssociateWarningsWithIssuesOutput = association_component.invoke(
             associations_request
         )
-        associations = associations_output.candidate_associations
+        # Annotate the warnings with potential issues associated
+        for association in associations_output.candidate_associations:
+            assoc_warning, assoc_issue = association
+            warning_from_list = next((w for w in warnings if w.id == assoc_warning.id), None)
+            if warning_from_list:
+                if isinstance(warning_from_list.potentially_related_issue_titles, list):
+                    warning_from_list.potentially_related_issue_titles.append(assoc_issue.title)
+                else:
+                    warning_from_list.potentially_related_issue_titles = [assoc_issue.title]
 
-        # 5. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
-        #    will fix the issue.
+        # 5. Filter out unfixable issues b/c it doesn't make much sense to raise suggestions for issues you can't fix.
         are_issues_fixable_component = AreIssuesFixableComponent(self.context)
         are_fixable_output: CodeAreIssuesFixableOutput = are_issues_fixable_component.invoke(
             CodeAreIssuesFixableRequest(
-                candidate_issues=[issue for _, issue in associations],
+                candidate_issues=all_selected_issues,
                 max_num_issues_analyzed=self.request.max_num_issues_analyzed,
             )
         )
-        associations_with_fixable_issues = [
-            association
-            for association, is_fixable in zip(
-                associations, are_fixable_output.are_fixable, strict=True
+        fixable_issues = [
+            issue
+            for issue, is_fixable in zip(
+                all_selected_issues,
+                are_fixable_output.are_fixable,
+                strict=True,
             )
             if is_fixable
         ]
 
-        # 6. Predict which warnings are relevant to which issues.
-        prediction_component = PredictRelevantWarningsComponent(self.context)
-        request = CodePredictRelevantWarningsRequest(
-            candidate_associations=associations_with_fixable_issues
+        # 6. Suggest issues based on static analysis warnings and fixable issues.
+        static_analysis_suggestions_component = StaticAnalysisSuggestionsComponent(self.context)
+        static_analysis_suggestions_request = CodePredictStaticAnalysisSuggestionsRequest(
+            warnings=warnings,
+            fixable_issues=fixable_issues,
+            pr_files=pr_files,
         )
-        relevant_warnings_output: CodePredictRelevantWarningsOutput = prediction_component.invoke(
-            request
+        static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput = (
+            static_analysis_suggestions_component.invoke(static_analysis_suggestions_request)
         )
 
         # 7. Save results.
-        self._complete_run(relevant_warnings_output)
+        self._complete_run(static_analysis_suggestions_output)
