@@ -32,6 +32,8 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
+MAX_GREP_LINE_CHARACTER_LENGTH = 1024
+TOTAL_GREP_RESULTS_CHARACTER_LENGTH = 16384
 
 
 class BaseTools:
@@ -491,8 +493,24 @@ class BaseTools:
                     ):  # grep returns 1 when no matches found
                         all_results.append(f"Results from {repo_name}: {process.stderr}")
                     elif process.stdout:
+                        final_output = process.stdout
+                        # Each line is a grep result, -A, -B, -C are ways to get lines before, after, and around the match
+                        if "-A" not in cmd_args and "-B" not in cmd_args and "-C" not in cmd_args:
+                            lines = process.stdout.split("\n")
+                            final_output = ""
+                            for line in lines:
+                                if len(line) > MAX_GREP_LINE_CHARACTER_LENGTH:
+                                    line = line[:MAX_GREP_LINE_CHARACTER_LENGTH] + "...[TRUNCATED]"
+                                final_output += line + "\n"
+
+                        if len(final_output) > TOTAL_GREP_RESULTS_CHARACTER_LENGTH:
+                            final_output = (
+                                final_output[:TOTAL_GREP_RESULTS_CHARACTER_LENGTH]
+                                + "...[GREP RESULTS TRUNCATED]"
+                            )
+
                         all_results.append(
-                            f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                            f"Results from {repo_name}:\n------\n{final_output}\n------"
                         )
                     else:
                         all_results.append(f"Results from {repo_name}: no results found.")
