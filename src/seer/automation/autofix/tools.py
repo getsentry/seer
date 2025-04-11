@@ -475,25 +475,31 @@ class BaseTools:
 
             try:
                 # Run the grep command in the repo directory
-                process = subprocess.run(
-                    cmd_args,
-                    shell=False,
-                    cwd=tmp_repo_dir,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-
-                if (
-                    process.returncode != 0 and process.returncode != 1
-                ):  # grep returns 1 when no matches found
-                    all_results.append(f"Results from {repo_name}: {process.stderr}")
-                elif process.stdout:
-                    all_results.append(
-                        f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                try:
+                    process = subprocess.run(
+                        cmd_args,
+                        shell=False,
+                        cwd=tmp_repo_dir,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=45,
                     )
-                else:
-                    all_results.append(f"Results from {repo_name}: no results found.")
+
+                    if (
+                        process.returncode != 0 and process.returncode != 1
+                    ):  # grep returns 1 when no matches found
+                        all_results.append(f"Results from {repo_name}: {process.stderr}")
+                    elif process.stdout:
+                        all_results.append(
+                            f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                        )
+                    else:
+                        all_results.append(f"Results from {repo_name}: no results found.")
+                except subprocess.TimeoutExpired:
+                    all_results.append(
+                        f"Results from {repo_name}: command timed out. Try narrowing your search."
+                    )
             except Exception as e:
                 all_results.append(f"Error in repo {repo_name}: {str(e)}")
 
@@ -624,23 +630,29 @@ class BaseTools:
 
             try:
                 # Run the find command in the repo directory
-                process = subprocess.run(
-                    cmd_args,
-                    shell=False,
-                    cwd=tmp_repo_dir,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-
-                if process.returncode != 0:
-                    all_results.append(f"Results from {repo_name}: {process.stderr}")
-                elif process.stdout:
-                    all_results.append(
-                        f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                try:
+                    process = subprocess.run(
+                        cmd_args,
+                        shell=False,
+                        cwd=tmp_repo_dir,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                        timeout=45,
                     )
-                else:
-                    all_results.append(f"Results from {repo_name}: no files found.")
+
+                    if process.returncode != 0:
+                        all_results.append(f"Results from {repo_name}: {process.stderr}")
+                    elif process.stdout:
+                        all_results.append(
+                            f"Results from {repo_name}:\n------\n{process.stdout}\n------"
+                        )
+                    else:
+                        all_results.append(f"Results from {repo_name}: no files found.")
+                except subprocess.TimeoutExpired:
+                    all_results.append(
+                        f"Results from {repo_name}: command timed out. Try narrowing your search."
+                    )
             except Exception as e:
                 all_results.append(f"Error in repo {repo_name}: {str(e)}")
 
