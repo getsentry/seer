@@ -280,6 +280,18 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
 class StaticAnalysisSuggestionsPrompts:
 
     @staticmethod
+    def format_system_msg():
+        return textwrap.dedent(
+            """\
+            You are an expert software engineer with deep expertise in static analysis, bug detection, and code review.
+            Your role is to analyze code changes and identify potential bugs or security issues that could lead to runtime errors or exceptions.
+            You have a keen eye for subtle issues that might not be immediately obvious, and you understand how different code patterns can lead to unexpected behavior.
+            When reviewing code, you focus exclusively on actual bugs and security vulnerabilities, ignoring style issues or minor improvements that don't affect functionality.
+            You provide precise, actionable feedback with clear severity and confidence assessments to help developers prioritize fixes.
+            """
+        )
+
+    @staticmethod
     def format_prompt(diff: str, formatted_warnings: str, formatted_issues: str):
         return textwrap.dedent(
             """\
