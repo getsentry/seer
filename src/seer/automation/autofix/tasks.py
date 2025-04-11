@@ -1123,5 +1123,3 @@ def run_autofix_evaluation_on_item(
             value=mean_conciseness_score,
         )
         # If no coding scores, we don't do anything...
-
-    print("I AM DONE!, item_index:", item_index, item_id)
