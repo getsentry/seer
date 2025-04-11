@@ -124,7 +124,7 @@ Send a POST request to `/v1/automation/autofix/evaluations/start` with the follo
 ```jsonc
 {
 "dataset_name": "string", // Name of the dataset to run on (currently only internal datasets available)
-"run_name": "string", // Custom name for your evaluation run
+"run_name": "string", // Custom name for your evaluation run...MAKE SURE THIS NAME IS UNIQUE EVEN IF YOU DELETED A PREVIOUS RUN! LANGFUSE KEYS ON THIS!!
 "run_description": "string", // Description of your evaluation run
 "run_type": "full | root_cause | execution", // Type of evaluation to perform
 "test": boolean, // Set to true to run on a single item (for testing)
