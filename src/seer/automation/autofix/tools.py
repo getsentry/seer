@@ -483,7 +483,7 @@ class BaseTools:
                         capture_output=True,
                         text=True,
                         check=False,
-                        timeout=45,  # Add 45-second timeout to prevent hanging on large repos
+                        timeout=45,
                     )
 
                     if (
