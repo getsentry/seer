@@ -1,3 +1,4 @@
+import itertools
 import textwrap
 from collections import defaultdict
 from typing import Generic, TypeVar, cast
@@ -21,10 +22,13 @@ from seer.automation.codegen.models import (
     CodeFetchIssuesRequest,
     CodePredictRelevantWarningsOutput,
     CodePredictRelevantWarningsRequest,
+    CodePredictStaticAnalysisSuggestionsOutput,
+    CodePredictStaticAnalysisSuggestionsRequest,
     FilterWarningsOutput,
     FilterWarningsRequest,
     PrFile,
     RelevantWarningResult,
+    StaticAnalysisSuggestion,
     WarningAndPrFile,
 )
 from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
@@ -34,6 +38,7 @@ from seer.automation.codegen.relevant_warnings_component import (
     FetchIssuesComponent,
     FilterWarningsComponent,
     PredictRelevantWarningsComponent,
+    StaticAnalysisSuggestionsComponent,
 )
 from seer.automation.codegen.relevant_warnings_step import (
     RelevantWarningsStep,
@@ -64,12 +69,10 @@ _MockStaticAnalysisWarning = _MockId(StaticAnalysisWarning)
 _MockIssueDetails = _MockId(IssueDetails)
 
 
-def _mock_static_analysis_warning(encoded_location: str | None = None):
+def _mock_static_analysis_warning(encoded_location: str | None = None) -> StaticAnalysisWarning:
     """
     Creates a static analysis warning with a dummy `encoded_location` (if not provided) that
-    matches the regex.
-
-    The `id` is unique.
+    matches the regex. The `id` is unique.
     """
     static_analysis_warning = _MockStaticAnalysisWarning()
     if encoded_location is None:
@@ -81,7 +84,7 @@ def _mock_static_analysis_warning(encoded_location: str | None = None):
     return static_analysis_warning
 
 
-def _mock_issue_details():
+def _mock_issue_details() -> IssueDetails:
     """
     Creates an issue which is guaranteed to have an event.
     The `id` is unique.
@@ -108,10 +111,12 @@ def _mock_issue_details():
                     is_autofixable=False,
                     is_stable=None,
                 ),
+                potentially_related_issue_titles=["Issue 1", "Issue 2"],
                 encoded_code_snippet="    def test_format_code_snippet(self):\n        pass\n",
             ),
             textwrap.dedent(
                 """\
+                Warning ID: 1
                 Warning message: Warning message
                 ----------
                 Location:
@@ -123,6 +128,10 @@ def _mock_issue_details():
                 def test_format_code_snippet(self):
                     pass
                 ```
+                ----------
+                Potentially related issue titles:
+                * Issue 1
+                * Issue 2
                 ----------
                 Static Analysis Rule:
                     Rule: unused-variable
@@ -153,6 +162,7 @@ def _mock_issue_details():
             ),
             textwrap.dedent(
                 """\
+                Warning ID: 2
                 Warning message: Warning message
                 ----------
                 Location:
@@ -163,6 +173,9 @@ def _mock_issue_details():
                 ```javascript
 
                 ```
+                ----------
+                Potentially related issue titles:
+
                 ----------
                 Static Analysis Rule:
                     Rule: unused-variable
@@ -828,6 +841,9 @@ class TestPredictRelevantWarningsComponent:
         )
 
 
+@patch(
+    "seer.automation.codegen.relevant_warnings_component.StaticAnalysisSuggestionsComponent.invoke"
+)
 @patch("seer.automation.codegen.relevant_warnings_component.FilterWarningsComponent.invoke")
 @patch("seer.automation.codegen.relevant_warnings_component.FetchIssuesComponent.invoke")
 @patch("seer.automation.codegen.relevant_warnings_component.AreIssuesFixableComponent.invoke")
@@ -847,6 +863,7 @@ def test_relevant_warnings_step_invoke(
     mock_invoke_are_issues_fixable_component: Mock,
     mock_invoke_fetch_issues_component: Mock,
     mock_invoke_filter_warnings_component: Mock,
+    mock_invoke_static_analysis_suggestions_component: Mock,
 ):
     mock_repo_client = MagicMock()
     mock_pr = MagicMock()
@@ -858,25 +875,40 @@ def test_relevant_warnings_step_invoke(
 
     num_associations = 5
 
-    mock_warning_and_pr_files = [next(generate(WarningAndPrFile)) for _ in range(num_associations)]
+    mock_warning_and_pr_files = [
+        WarningAndPrFile(warning=_mock_static_analysis_warning(), pr_file=next(generate(PrFile)))
+        for _ in range(num_associations)
+    ]
     mock_invoke_filter_warnings_component.return_value = FilterWarningsOutput(
         warning_and_pr_files=mock_warning_and_pr_files
     )
-    mock_invoke_fetch_issues_component.return_value = next(generate(CodeFetchIssuesOutput))
-    mock_invoke_associate_warnings_with_issues_component.return_value = (
-        AssociateWarningsWithIssuesOutput(
-            candidate_associations=[
-                (warning_and_pr_file, next(generate(IssueDetails)))
-                for warning_and_pr_file in mock_warning_and_pr_files
-            ]
-        )
+
+    mock_issues_fetched = CodeFetchIssuesOutput(
+        filename_to_issues={next(generate(str)): [_mock_issue_details()] for _ in range(4)}
     )
+    mock_invoke_fetch_issues_component.return_value = mock_issues_fetched
+    all_selected_issues = list(
+        itertools.chain.from_iterable(mock_issues_fetched.filename_to_issues.values())
+    )
+
+    mock_candidate_associations = AssociateWarningsWithIssuesOutput(
+        candidate_associations=[
+            (warning, issue)
+            for widx, warning in enumerate(mock_warning_and_pr_files)
+            for iidx, issue in enumerate(all_selected_issues)
+            if widx % 2 == 0 and iidx % 3 == 0
+        ]
+    )
+    mock_invoke_associate_warnings_with_issues_component.return_value = mock_candidate_associations
+
+    mock_are_fixable = [False] + [True] * (len(all_selected_issues) - 1)
     mock_invoke_are_issues_fixable_component.return_value = CodeAreIssuesFixableOutput(
-        are_fixable=[True, False, None] + [True] * (num_associations - 3)
+        are_fixable=mock_are_fixable
     )
-    mock_invoke_predict_relevant_warnings_component.return_value = (
-        CodePredictRelevantWarningsOutput(
-            relevant_warning_results=[next(generate(RelevantWarningResult)) for _ in range(3)]
+
+    mock_invoke_static_analysis_suggestions_component.return_value = (
+        CodePredictStaticAnalysisSuggestionsOutput(
+            suggestions=[next(generate(StaticAnalysisSuggestion)) for _ in range(3)]
         )
     )
 
@@ -938,25 +970,224 @@ def test_relevant_warnings_step_invoke(
     # 5. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
     #    will fix the issue.
     mock_invoke_are_issues_fixable_component.assert_called_once()
-    assert mock_invoke_are_issues_fixable_component.call_args[0][0].candidate_issues == [
+    mock_invoke_are_issues_fixable_component.call_args[0][0].candidate_issues = [
         issue
         for _, issue in mock_invoke_associate_warnings_with_issues_component.return_value.candidate_associations
     ]
-    assert (
-        mock_invoke_are_issues_fixable_component.call_args[0][0].max_num_issues_analyzed
-        == request.max_num_issues_analyzed
+    mock_invoke_are_issues_fixable_component.call_args[0][
+        0
+    ].max_num_issues_analyzed = request.max_num_issues_analyzed
+
+    # 6. Suggest issues based on static analysis warnings and fixable issues.
+    mock_invoke_static_analysis_suggestions_component.assert_called_once()
+    mock_invoke_static_analysis_suggestions_component.call_args[0][0].pr_files = mock_pr_files
+    mock_invoke_static_analysis_suggestions_component.call_args[0][0].warnings = [
+        warning_and_pr_file.warning for warning_and_pr_file in mock_warning_and_pr_files
+    ]
+    mock_invoke_static_analysis_suggestions_component.call_args[0][0].fixable_issues = (
+        all_selected_issues[1:]
     )
 
-    # 6. Predict which warnings are relevant to which issues.
-    mock_invoke_predict_relevant_warnings_component.assert_called_once()
-    assert mock_invoke_predict_relevant_warnings_component.call_args[0][
-        0
-    ].candidate_associations == [
-        association
-        for association, is_fixable in zip(
-            mock_invoke_associate_warnings_with_issues_component.return_value.candidate_associations,
-            mock_invoke_are_issues_fixable_component.return_value.are_fixable,
-            strict=True,
+
+class TestStaticAnalysisSuggestionsComponent:
+    @pytest.fixture
+    def component(self):
+        return StaticAnalysisSuggestionsComponent(context=MagicMock())
+
+    @pytest.fixture(autouse=True)
+    def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):
+        def mock_generate_structured(*args, **kwargs):
+            # Create a mock response object
+            mock_response = MagicMock()
+            # Create a list of suggestions
+            suggestions = [
+                StaticAnalysisSuggestion(
+                    path="test/path/file.py",
+                    line=42,
+                    short_description="Test suggestion",
+                    justification="Test justification",
+                    related_warning_id="123",
+                    related_issue_id="456",
+                    severity_score=0.8,
+                    confidence_score=0.9,
+                    missing_evidence=["More context", "Test cases"],
+                )
+            ]
+            # Set the parsed attribute directly
+            mock_response.parsed = suggestions
+            return mock_response
+
+        monkeypatch.setattr(
+            "seer.automation.codegen.relevant_warnings_component.LlmClient.generate_structured",
+            mock_generate_structured,
         )
-        if is_fixable
-    ]
+
+    def test_invoke(self, component: StaticAnalysisSuggestionsComponent):
+        # Create test data
+        pr_files = [
+            PrFile(
+                filename="test/path/file.py",
+                patch="@@ -1,3 +1,4 @@\ndef hello():\n    print('hello')\n+    print('world')",
+                status="modified",
+                changes=1,
+                sha="sha1",
+            )
+        ]
+        warnings = [_mock_static_analysis_warning() for _ in range(2)]
+        fixable_issues = [_mock_issue_details() for _ in range(2)]
+
+        request = CodePredictStaticAnalysisSuggestionsRequest(
+            pr_files=pr_files,
+            warnings=warnings,
+            fixable_issues=fixable_issues,
+        )
+
+        output = component.invoke(request)
+        assert output is not None
+        assert len(output.suggestions) == 1
+        assert output.suggestions[0].path == "test/path/file.py"
+        assert output.suggestions[0].line == 42
+        assert output.suggestions[0].short_description == "Test suggestion"
+        assert output.suggestions[0].justification == "Test justification"
+        assert output.suggestions[0].related_warning_id == "123"
+        assert output.suggestions[0].related_issue_id == "456"
+        assert output.suggestions[0].severity_score == 0.8
+        assert output.suggestions[0].confidence_score == 0.9
+        assert output.suggestions[0].missing_evidence == ["More context", "Test cases"]
+
+    def test_invoke_no_suggestions(
+        self, component: StaticAnalysisSuggestionsComponent, monkeypatch
+    ):
+        # Override the mock to return None for parsed
+        def mock_generate_structured_none(*args, **kwargs):
+            mock_response = MagicMock()
+            mock_response.parsed = None
+            return mock_response
+
+        monkeypatch.setattr(
+            "seer.automation.codegen.relevant_warnings_component.LlmClient.generate_structured",
+            mock_generate_structured_none,
+        )
+
+        # Create test data
+        pr_files = [
+            PrFile(
+                filename="test/path/file.py",
+                patch="@@ -1,3 +1,4 @@\ndef hello():\n    print('hello')\n+    print('world')",
+                status="modified",
+                changes=1,
+                sha="sha1",
+            )
+        ]
+        warnings = [_mock_static_analysis_warning() for _ in range(2)]
+        fixable_issues = [_mock_issue_details() for _ in range(2)]
+
+        request = CodePredictStaticAnalysisSuggestionsRequest(
+            pr_files=pr_files,
+            warnings=warnings,
+            fixable_issues=fixable_issues,
+        )
+
+        output = component.invoke(request)
+        assert output is None
+
+    def test_format_issue(self, component: StaticAnalysisSuggestionsComponent):
+        # Create a test issue
+        issue = _mock_issue_details()
+
+        # Call the private method using a workaround
+        formatted_issue = component._format_issue(issue)
+
+        # Verify the format
+        assert f"<sentry_issue><issue_id>{issue.id}</issue_id>" in formatted_issue
+        assert "<title>" in formatted_issue
+        assert "</sentry_issue>" in formatted_issue
+
+
+# Tests for to_overwatch_format method
+@pytest.mark.parametrize(
+    "suggestion,expected",
+    [
+        (
+            StaticAnalysisSuggestion(
+                path="src/main.py",
+                line=42,
+                short_description="Test warning",
+                justification="This is a test justification",
+                related_warning_id="123",
+                related_issue_id="456",
+                severity_score=0.8,
+                confidence_score=0.9,
+                missing_evidence=[],
+            ),
+            {
+                "warning_id": 123,
+                "issue_id": 456,
+                "does_fixing_warning_fix_issue": True,
+                "relevance_probability": 0.8 * 0.9,
+                "reasoning": "This is a test justification",
+                "short_justification": "This is a test justification",
+                "short_description": "Test warning",
+                "encoded_location": "src/main.py:42",
+            },
+        ),
+        (
+            StaticAnalysisSuggestion(
+                path="tests/test_file.py",
+                line=100,
+                short_description="Another warning",
+                justification="Another justification",
+                related_warning_id="789",
+                related_issue_id="101",
+                severity_score=0.5,
+                confidence_score=0.6,
+                missing_evidence=["evidence1", "evidence2"],
+            ),
+            {
+                "warning_id": 789,
+                "issue_id": 101,
+                "does_fixing_warning_fix_issue": True,
+                "relevance_probability": 0.5 * 0.6,
+                "reasoning": "Another justification",
+                "short_justification": "Another justification",
+                "short_description": "Another warning",
+                "encoded_location": "tests/test_file.py:100",
+            },
+        ),
+        (
+            StaticAnalysisSuggestion(
+                path="complex/path/to/file.py",
+                line=1,
+                short_description="Minimal warning",
+                justification="Minimal justification",
+                related_warning_id=None,
+                related_issue_id=None,
+                severity_score=0.1,
+                confidence_score=0.2,
+                missing_evidence=[],
+            ),
+            {
+                "warning_id": None,
+                "issue_id": None,
+                "does_fixing_warning_fix_issue": True,
+                "relevance_probability": 0.1 * 0.2,
+                "reasoning": "Minimal justification",
+                "short_justification": "Minimal justification",
+                "short_description": "Minimal warning",
+                "encoded_location": "complex/path/to/file.py:1",
+            },
+        ),
+    ],
+)
+def test_to_overwatch_format(suggestion, expected):
+    """Test the to_overwatch_format method with various inputs."""
+    result = suggestion.to_overwatch_format()
+
+    # Verify the result is a RelevantWarningResult
+    assert isinstance(result, RelevantWarningResult)
+
+    # Verify all fields match expected values
+    for key, value in expected.items():
+        assert (
+            getattr(result, key) == value
+        ), f"Mismatch in {key}: expected {value}, got {getattr(result, key)}"

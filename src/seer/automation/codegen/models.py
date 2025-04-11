@@ -21,8 +21,8 @@ class CodegenStatus(str, Enum):
 
 
 class RelevantWarningResult(BaseModel):
-    warning_id: int
-    issue_id: int
+    warning_id: int | None
+    issue_id: int | None
     does_fixing_warning_fix_issue: bool
     relevance_probability: float
     reasoning: str
@@ -31,10 +31,61 @@ class RelevantWarningResult(BaseModel):
     encoded_location: str
 
 
+class StaticAnalysisSuggestion(BaseModel):
+    path: str = Field(description="The path to the file that contains the suggestion.")
+    line: int = Field(description="The line number of the suggestion.")
+    short_description: str = Field(
+        description="A short, fluff-free, information-dense description of the problem. Max 30 words."
+    )
+    justification: str = Field(
+        description="A short, fluff-free, information-dense summary of your analysis for why this is a problem. This justification should be at most 15 words."
+    )
+    related_warning_id: str | None = Field(
+        default=None,
+        description="If this suggestion is based on a warning, include the warning id here. Else use null.",
+    )
+    related_issue_id: str | None = Field(
+        default=None,
+        description="If this suggestion is based on an issue, include the issue id here. Else use null.",
+    )
+    severity_score: float = Field(
+        description="From 0 to 1 how serious is this potential bug? 1 being 'guaranteed exception will happen and not be caught by the code'."
+    )
+    confidence_score: float = Field(
+        description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion."
+    )
+    missing_evidence: list[str] = Field(
+        description="A short list of evidence that you did NOT have but would increase your confidence score. At most 5 items. Be very specific."
+    )
+
+    def to_overwatch_format(self) -> RelevantWarningResult:
+        """
+        Convert a StaticAnalysisSuggestion to a RelevantWarningResult.
+        This is a temporary format to post to Overwatch, because Overwatch expects a list of
+        RelevantWarningResult objects at this time
+        TODO: update Overwatch and then remove this method
+        """
+        return RelevantWarningResult(
+            warning_id=int(self.related_warning_id) if self.related_warning_id else None,
+            issue_id=int(self.related_issue_id) if self.related_issue_id else None,
+            # Let's pretend our suggestions are important
+            does_fixing_warning_fix_issue=True,
+            # Combining both metrics means we will only surface suggestions with high confidence
+            # and severity.
+            relevance_probability=self.confidence_score * self.severity_score,
+            reasoning=self.justification,
+            short_justification=self.justification,
+            short_description=self.short_description,
+            encoded_location=Location(
+                filename=self.path, start_line=str(self.line), end_line=str(self.line)
+            ).encode(),
+        )
+
+
 class CodegenState(BaseModel):
     run_id: int = -1
     file_changes: list[FileChange] = Field(default_factory=list)
-    relevant_warning_results: list[RelevantWarningResult] = Field(default_factory=list)
+    static_analysis_suggestions: list[StaticAnalysisSuggestion] = Field(default_factory=list)
     status: CodegenStatus = CodegenStatus.PENDING
     last_triggered_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
@@ -233,6 +284,16 @@ class CodeAreIssuesFixableOutput(BaseComponentOutput):
 class CodePredictRelevantWarningsRequest(BaseComponentRequest):
     candidate_associations: list[tuple[WarningAndPrFile, IssueDetails]]
     commit_sha: str
+
+
+class CodePredictStaticAnalysisSuggestionsRequest(BaseComponentRequest):
+    warnings: list[StaticAnalysisWarning]
+    fixable_issues: list[IssueDetails]
+    pr_files: list[PrFile]
+
+
+class CodePredictStaticAnalysisSuggestionsOutput(BaseComponentOutput):
+    suggestions: list[StaticAnalysisSuggestion]
 
 
 class CodePredictRelevantWarningsOutput(BaseComponentOutput):

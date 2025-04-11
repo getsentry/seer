@@ -44,6 +44,7 @@ class AppConfig(BaseModel):
 
     SENTRY_DSN: str = ""
     SENTRY_ENVIRONMENT: str = "production"
+    SENTRY_REGION: str = ""
 
     DATABASE_URL: str
     DATABASE_MIGRATIONS_URL: str | None = None
@@ -71,7 +72,6 @@ class AppConfig(BaseModel):
     DEV: ParseBool = False
 
     GOOGLE_CLOUD_PROJECT: str = ""
-    USE_EU_REGION: ParseBool = False
 
     SMOKE_CHECK: ParseBool = False
 
@@ -147,6 +147,7 @@ class AppConfig(BaseModel):
 
             assert self.has_sentry_integration, "Sentry integration required for production mode."
             assert self.SENTRY_DSN, "SENTRY_DSN required for production!"
+            assert self.SENTRY_REGION, "SENTRY_REGION required for production!"
 
             # assert self.LANGFUSE_HOST, "LANGFUSE_HOST required for production!"
             # assert self.LANGFUSE_PUBLIC_KEY, "LANGFUSE_PUBLIC_KEY required for production!"

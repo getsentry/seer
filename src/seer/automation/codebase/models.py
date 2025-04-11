@@ -156,6 +156,7 @@ class StaticAnalysisWarning(BaseModel):
     rule_id: int | None = None
     rule: StaticAnalysisRule | None = None
     encoded_code_snippet: str | None = None
+    potentially_related_issue_titles: list[str] | None = None
 
     def _try_get_language(self) -> str | None:
         if ".py" in self.encoded_location:
@@ -168,9 +169,12 @@ class StaticAnalysisWarning(BaseModel):
 
     def format_warning(self) -> str:
         location = Location.from_encoded(self.encoded_location)
+        related_issue_titles = self.potentially_related_issue_titles or []
+        formatted_issue_titles = "\n".join([f"* {title}" for title in related_issue_titles])
         return (
             textwrap.dedent(
                 f"""\
+            Warning ID: {self.id}
             Warning message: {self.message}
             ----------
             Location:
@@ -182,12 +186,15 @@ class StaticAnalysisWarning(BaseModel):
             CODE_SNIPPET
             ```
             ----------
+            Potentially related issue titles:
+            FORMATTED_ISSUE_TITLES
+            ----------
             FORMATTED_RULE
             """
             )
             # Multiline strings being substituted inside textwrap.dedent would mess with the formatting.
             # So we substitute afterwards.
-            .replace(
-                "CODE_SNIPPET", textwrap.dedent(self.encoded_code_snippet or "").strip()
-            ).replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
+            .replace("CODE_SNIPPET", textwrap.dedent(self.encoded_code_snippet or "").strip())
+            .replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
+            .replace("FORMATTED_ISSUE_TITLES", formatted_issue_titles)
         )
