@@ -79,22 +79,21 @@ class RelevantWarningsStep(CodegenStep):
         llm_suggestions: CodePredictStaticAnalysisSuggestionsOutput | None,
         config: AppConfig = injected,
     ):
-        if llm_suggestions is None:
-            self.logger.info("No relevant warnings output to post to Overwatch.")
-            return
 
-        with open("/app/.artifacts/relevant_warnings_output.json", "w") as f:
-            json.dump(llm_suggestions.model_dump(), f, indent=4)
         if not self.request.should_post_to_overwatch:
             self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
         # This should be a temporary solution until we can update
         # Overwatch to accept the new format.
-        suggestions_to_overwatch_expected_format = [
-            suggestion.to_overwatch_format().model_dump()
-            for suggestion in llm_suggestions.suggestions
-        ]
+        suggestions_to_overwatch_expected_format = (
+            [
+                suggestion.to_overwatch_format().model_dump()
+                for suggestion in llm_suggestions.suggestions
+            ]
+            if llm_suggestions
+            else []
+        )
 
         request = {
             "run_id": self.context.run_id,
