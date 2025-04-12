@@ -175,6 +175,7 @@ class RelevantWarningsStep(CodegenStep):
             itertools.chain.from_iterable(fetch_issues_output.filename_to_issues.values())
         )
         all_selected_issues = all_selected_issues[: self.request.max_num_issues_analyzed]
+
         # 4. Limit the number of warning-issue associations we analyze to the top
         #    max_num_associations.
         association_component = AssociateWarningsWithIssuesComponent(self.context)

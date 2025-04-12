@@ -967,25 +967,28 @@ def test_relevant_warnings_step_invoke(
         == request.max_num_associations
     )
 
-    # 5. Filter out unfixable issues b/c our definition of "relevant" is that fixing the warning
-    #    will fix the issue.
+    # 5. Filter out unfixable issues b/c it doesn't make much sense to raise suggestions for issues you can't fix.
     mock_invoke_are_issues_fixable_component.assert_called_once()
-    mock_invoke_are_issues_fixable_component.call_args[0][0].candidate_issues = [
-        issue
-        for _, issue in mock_invoke_associate_warnings_with_issues_component.return_value.candidate_associations
-    ]
-    mock_invoke_are_issues_fixable_component.call_args[0][
-        0
-    ].max_num_issues_analyzed = request.max_num_issues_analyzed
+    assert (
+        mock_invoke_are_issues_fixable_component.call_args[0][0].candidate_issues
+        == all_selected_issues
+    )
+    assert (
+        mock_invoke_are_issues_fixable_component.call_args[0][0].max_num_issues_analyzed
+        == request.max_num_issues_analyzed
+    )
 
     # 6. Suggest issues based on static analysis warnings and fixable issues.
     mock_invoke_static_analysis_suggestions_component.assert_called_once()
-    mock_invoke_static_analysis_suggestions_component.call_args[0][0].pr_files = mock_pr_files
-    mock_invoke_static_analysis_suggestions_component.call_args[0][0].warnings = [
+    assert (
+        mock_invoke_static_analysis_suggestions_component.call_args[0][0].pr_files == mock_pr_files
+    )
+    assert mock_invoke_static_analysis_suggestions_component.call_args[0][0].warnings == [
         warning_and_pr_file.warning for warning_and_pr_file in mock_warning_and_pr_files
     ]
-    mock_invoke_static_analysis_suggestions_component.call_args[0][0].fixable_issues = (
-        all_selected_issues[1:]
+    assert (
+        mock_invoke_static_analysis_suggestions_component.call_args[0][0].fixable_issues
+        == all_selected_issues[1:]
     )
 
 
