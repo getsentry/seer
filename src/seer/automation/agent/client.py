@@ -665,7 +665,7 @@ class AnthropicProvider:
         return message_dicts, tool_dicts, system_prompt_block
 
     def _do_nothing(self) -> None:
-        # Same file, different hunk, should not be included.
+        # Same file, different hunk, no warning.
         pass
 
     @observe(as_type="generation", name="Anthropic Stream")
