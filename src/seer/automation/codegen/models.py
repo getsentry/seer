@@ -48,14 +48,14 @@ class StaticAnalysisSuggestion(BaseModel):
         default=None,
         description="If this suggestion is based on an issue, include the issue id here. Else use null.",
     )
+    missing_evidence: list[str] = Field(
+        description="A short list of evidence that you did NOT have but would increase your confidence score. At most 5 items. Be very specific."
+    )
     severity_score: float = Field(
         description="From 0 to 1 how serious is this potential bug? 1 being 'guaranteed exception will happen and not be caught by the code'."
     )
     confidence_score: float = Field(
         description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion."
-    )
-    missing_evidence: list[str] = Field(
-        description="A short list of evidence that you did NOT have but would increase your confidence score. At most 5 items. Be very specific."
     )
 
     def to_overwatch_format(self) -> RelevantWarningResult:

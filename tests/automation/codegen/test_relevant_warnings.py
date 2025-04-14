@@ -1011,9 +1011,9 @@ class TestStaticAnalysisSuggestionsComponent:
                     justification="Test justification",
                     related_warning_id="123",
                     related_issue_id="456",
+                    missing_evidence=["More context", "Test cases"],
                     severity_score=0.8,
                     confidence_score=0.9,
-                    missing_evidence=["More context", "Test cases"],
                 )
             ]
             # Set the parsed attribute directly
@@ -1054,9 +1054,9 @@ class TestStaticAnalysisSuggestionsComponent:
         assert output.suggestions[0].justification == "Test justification"
         assert output.suggestions[0].related_warning_id == "123"
         assert output.suggestions[0].related_issue_id == "456"
+        assert output.suggestions[0].missing_evidence == ["More context", "Test cases"]
         assert output.suggestions[0].severity_score == 0.8
         assert output.suggestions[0].confidence_score == 0.9
-        assert output.suggestions[0].missing_evidence == ["More context", "Test cases"]
 
     def test_invoke_no_suggestions(
         self, component: StaticAnalysisSuggestionsComponent, monkeypatch
@@ -1119,9 +1119,9 @@ class TestStaticAnalysisSuggestionsComponent:
                 justification="This is a test justification",
                 related_warning_id="123",
                 related_issue_id="456",
+                missing_evidence=[],
                 severity_score=0.8,
                 confidence_score=0.9,
-                missing_evidence=[],
             ),
             {
                 "warning_id": 123,
@@ -1142,9 +1142,9 @@ class TestStaticAnalysisSuggestionsComponent:
                 justification="Another justification",
                 related_warning_id="789",
                 related_issue_id="101",
+                missing_evidence=["evidence1", "evidence2"],
                 severity_score=0.5,
                 confidence_score=0.6,
-                missing_evidence=["evidence1", "evidence2"],
             ),
             {
                 "warning_id": 789,
@@ -1165,9 +1165,9 @@ class TestStaticAnalysisSuggestionsComponent:
                 justification="Minimal justification",
                 related_warning_id=None,
                 related_issue_id=None,
+                missing_evidence=[],
                 severity_score=0.1,
                 confidence_score=0.2,
-                missing_evidence=[],
             ),
             {
                 "warning_id": None,
