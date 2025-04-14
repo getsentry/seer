@@ -32,9 +32,7 @@ class RelevantWarningResult(BaseModel):
 
 
 class StaticAnalysisSuggestion(BaseModel):
-    path: str = Field(
-        description="The path to the file that contains the suggestion, as indicated in the <filename> tag."
-    )
+    path: str = Field(description="The path to the file that contains the suggestion.")
     line: int = Field(description="The line number of the suggestion.")
     short_description: str = Field(
         description=(

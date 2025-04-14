@@ -175,7 +175,7 @@ class StaticAnalysisWarning(BaseModel):
     def end_line(self) -> int:
         return int(Location.from_encoded(self.encoded_location).end_line)
 
-    def format_warning(self) -> str:
+    def format_warning(self, filename: str | None = None) -> str:
         location = Location.from_encoded(self.encoded_location)
         if not self.potentially_related_issue_titles:
             formatted_issue_titles = "    (no related issues found)"
@@ -213,7 +213,7 @@ class StaticAnalysisWarning(BaseModel):
         ).format(
             id=self.id,
             message=self.message,
-            location_filename=location.filename,
+            location_filename=filename or location.filename,
             location_start_line=location.start_line,
             location_end_line=location.end_line,
             formatted_code_snippet=formatted_code_snippet,
