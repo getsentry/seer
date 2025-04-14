@@ -1,11 +1,9 @@
 import datetime
 import json
-import textwrap
 import unittest
 import uuid
 from unittest.mock import Mock, patch
 
-import pytest
 from johen.pytest import parametrize
 from pydantic import ValidationError
 
@@ -26,9 +24,6 @@ from seer.automation.autofix.models import (
 from seer.automation.models import (
     BreadcrumbsDetails,
     EventDetails,
-    FilePatch,
-    Hunk,
-    Line,
     Profile,
     ProfileFrame,
     SentryEventData,
@@ -36,8 +31,6 @@ from seer.automation.models import (
     SentryExceptionEntry,
     Stacktrace,
     StacktraceFrame,
-    format_annotated_hunks,
-    right_justified,
 )
 from seer.automation.utils import make_kill_signal
 from tests.generators import InvalidEventEntry, NoStacktraceExceptionEntry, SentryFrameDict
@@ -871,163 +864,3 @@ def test_stacktrace_frame_vars_stringify(stacktrace: Stacktrace):
             assert vars_str in stack_str
         else:
             assert "---\nVariable" not in stack_str
-
-
-class TestRightJustified:
-    def test_single_digit(self):
-        result = right_justified(1, 5)
-        assert result == ["1", "2", "3", "4", "5"]
-
-    def test_double_digit(self):
-        result = right_justified(5, 15)
-        assert result == [" 5", " 6", " 7", " 8", " 9", "10", "11", "12", "13", "14", "15"]
-
-    def test_triple_digit(self):
-        result = right_justified(95, 105)
-        assert result == [
-            " 95",
-            " 96",
-            " 97",
-            " 98",
-            " 99",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-        ]
-
-
-@pytest.fixture
-def patch_and_hunks() -> tuple[str, list[Hunk]]:
-    patch = textwrap.dedent(
-        """\
-        @@ -1,3 +1,4 @@
-         def hello():
-             print('hello')
-        +    print('world')  # Line 3 is added
-             print('goodbye')
-        __WHITESPACE__
-        @@ -20,2 +21,3 @@ def __init__(self):
-             print('end')
-        +    print('new end')  # Line 22 is added
-             return"""
-    ).replace("__WHITESPACE__", " ")
-
-    hunks = [
-        Hunk(
-            source_start=1,
-            source_length=3,
-            target_start=1,
-            target_length=4,
-            section_header="@@ -1,3 +1,4 @@",
-            lines=[
-                Line(
-                    source_line_no=1,
-                    target_line_no=1,
-                    line_type=" ",
-                    value=" def hello():",
-                ),
-                Line(
-                    source_line_no=2,
-                    target_line_no=2,
-                    line_type=" ",
-                    value="     print('hello')",
-                ),
-                Line(
-                    source_line_no=None,
-                    target_line_no=3,
-                    line_type="+",
-                    value="+    print('world')  # Line 3 is added",
-                ),
-                Line(
-                    source_line_no=3,
-                    target_line_no=4,
-                    line_type=" ",
-                    value="     print('goodbye')",
-                ),
-                Line(
-                    source_line_no=4,
-                    target_line_no=5,
-                    line_type=" ",
-                    value=" ",
-                ),
-            ],
-        ),
-        Hunk(
-            source_start=20,
-            source_length=2,
-            target_start=21,
-            target_length=3,
-            section_header="@@ -20,2 +21,3 @@ def __init__(self):",
-            lines=[
-                Line(
-                    source_line_no=20,
-                    target_line_no=21,
-                    line_type=" ",
-                    value="     print('end')",
-                ),
-                Line(
-                    source_line_no=None,
-                    target_line_no=22,
-                    line_type="+",
-                    value="+    print('new end')  # Line 22 is added",
-                ),
-                Line(
-                    source_line_no=21,
-                    target_line_no=23,
-                    line_type=" ",
-                    value="     return",
-                ),
-            ],
-        ),
-    ]
-
-    return patch, hunks
-
-
-class TestFilePatch:
-    def test_to_hunks(self, patch_and_hunks: tuple[str, list[Hunk]]):
-        patch, hunks_expected = patch_and_hunks
-        hunks = FilePatch.to_hunks(patch)
-        assert len(hunks) == len(hunks_expected)
-        assert hunks == hunks_expected
-
-        assert "\n".join(hunk.raw() for hunk in hunks) == patch
-
-        num_lines_hunks = [len(hunk.annotated().split("\n")) for hunk in hunks]
-        assert num_lines_hunks == [len(hunk.lines) + 1 for hunk in hunks_expected]
-        # +1 for the section header
-
-        annotated_hunk = hunks[0].annotated()
-        annotated_hunk_expected = textwrap.dedent(
-            """\
-                    @@ -1,3 +1,4 @@
-            1    1  def hello():
-            2    2      print('hello')
-                 3 +    print('world')  # Line 3 is added
-            3    4      print('goodbye')
-            4    5  """
-        )
-        assert annotated_hunk == annotated_hunk_expected
-
-
-def test_format_annotated_hunks(patch_and_hunks: tuple[str, list[Hunk]]):
-    _, hunks = patch_and_hunks
-    annotated_hunks = format_annotated_hunks(hunks)
-    annotated_hunks_expected = textwrap.dedent(
-        """\
-                  @@ -1,3 +1,4 @@
-         1     1  def hello():
-         2     2      print('hello')
-               3 +    print('world')  # Line 3 is added
-         3     4      print('goodbye')
-         4     5  __NO_SPACE__
-        __NO_SPACE__
-                  @@ -20,2 +21,3 @@ def __init__(self):
-        20    21      print('end')
-              22 +    print('new end')  # Line 22 is added
-        21    23      return"""
-    ).replace("__NO_SPACE__", "")
-    assert annotated_hunks == annotated_hunks_expected
