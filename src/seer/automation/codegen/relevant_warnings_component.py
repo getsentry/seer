@@ -392,13 +392,18 @@ def _format_patch_with_warnings(
 
     if include_warnings_after_patch:
         formatted_warnings = "\n\n".join(warning.format_warning() for warning in warnings)
-        formatted_warnings = f"<warnings>\n\n{formatted_warnings}\n\n</warnings>"
+        formatted_warnings = "\n\n".join(
+            (
+                f"Here's more information about the static analysis warnings in {pr_file.filename}:",
+                f"<warnings>\n\n{formatted_warnings}\n\n</warnings>",
+            )
+        )
     else:
         formatted_warnings = ""
 
     tag_start = f"<file><filename>{pr_file.filename}</filename>"
     tag_end = "</file>"
-    title = f"Here are the changes made to file {pr_file.filename}"
+    title = f"Here are the changes made to file {pr_file.filename}:"
     return "\n\n".join((tag_start, title, formatted_hunks, formatted_warnings, tag_end))
 
 

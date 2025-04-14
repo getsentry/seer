@@ -209,8 +209,7 @@ class StaticAnalysisWarning(BaseModel):
             Potentially related issue titles:
             {formatted_issue_titles}
             ----------
-            {formatted_rule}</warning>
-            """
+            {formatted_rule}</warning>"""
         ).format(
             id=self.id,
             message=self.message,

@@ -141,8 +141,7 @@ def _mock_issue_details() -> IssueDetails:
                     Is auto-fixable: False
                     Is stable: None
                     Category: style
-                </warning>
-                """
+                </warning>"""
             ),
             id="python-warning",
         ),
@@ -181,8 +180,7 @@ def _mock_issue_details() -> IssueDetails:
                     Is auto-fixable: False
                     Is stable: False
                     Category: style
-                </warning>
-                """
+                </warning>"""
             ),
             id="javascript-warning-no-snippet",
         ),
