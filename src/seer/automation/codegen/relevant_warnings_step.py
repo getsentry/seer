@@ -200,7 +200,6 @@ class RelevantWarningsStep(CodegenStep):
             {
                 "step": "Relevant Warnings - Fetch Issues Component",
                 "all_selected_issues": [issue.id for issue in all_selected_issues],
-                "max_num_issues_analyzed": self.request.max_num_issues_analyzed,
             }
         )
 
