@@ -36,15 +36,18 @@ class StaticAnalysisSuggestion(BaseModel):
     line: int = Field(description="The line number of the suggestion.")
     short_description: str = Field(
         description=(
-            "A short, fluff-free, information-dense description of the problem. Max 30 words. "
-            "Don't mention warnings or issues by their IDs; mention the substantive problem."
+            "A short, fluff-free, information-dense description of the problem. "
+            "Max 30 words. "
+            "Don't mention warnings or issues by their IDs, or that this is a static analysis warning. "
+            "Focus on the substantive problem."
         )
     )
     justification: str = Field(
         description=(
             "A short, fluff-free, information-dense summary of your analysis for why this is a problem. "
-            "This justification should be at most 15 words. "
-            "Don't mention warnings or issues by their IDs; justify the substantive problem."
+            "Max 30 words. "
+            "Don't mention warnings or issues by their IDs, or that this is a static analysis warning. "
+            "Focus on the substantive problem."
         )
     )
     related_warning_id: str | None = Field(
