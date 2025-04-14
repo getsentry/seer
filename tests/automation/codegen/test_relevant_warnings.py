@@ -855,7 +855,9 @@ class TestPredictRelevantWarningsComponent:
 )
 @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
 @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
-@patch("seer.automation.codegen.relevant_warnings_step.RelevantWarningsStep._post_results_to_overwatch")
+@patch(
+    "seer.automation.codegen.relevant_warnings_step.RelevantWarningsStep._post_results_to_overwatch"
+)
 def test_relevant_warnings_step_invoke(
     mock_post_results_to_overwatch: Mock,
     mock_instantiate_context: Mock,
@@ -995,7 +997,9 @@ def test_relevant_warnings_step_invoke(
 
     # Verify that _post_results_to_overwatch was called with the correct parameters
     mock_post_results_to_overwatch.assert_called_once()
-    static_analysis_suggestions_output = mock_invoke_static_analysis_suggestions_component.return_value
+    static_analysis_suggestions_output = (
+        mock_invoke_static_analysis_suggestions_component.return_value
+    )
     diagnostics = [
         {
             "step": "Relevant Warnings - Read PR",

@@ -114,7 +114,9 @@ class RelevantWarningsStep(CodegenStep):
         ).raise_for_status()
 
     def _complete_run(
-        self, static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput | None, diagnostics: list | None
+        self,
+        static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput | None,
+        diagnostics: list | None,
     ):
         try:
             self._post_results_to_overwatch(static_analysis_suggestions_output, diagnostics)
@@ -149,11 +151,13 @@ class RelevantWarningsStep(CodegenStep):
             for file in pr_files
             if file.patch
         ]
-        diagnostics.append({
-            "step": "Relevant Warnings - Read PR",
-            "pr_files": [pr_file.filename for pr_file in pr_files],
-            "warnings": [warning.rule_id for warning in self.request.warnings],
-        })
+        diagnostics.append(
+            {
+                "step": "Relevant Warnings - Read PR",
+                "pr_files": [pr_file.filename for pr_file in pr_files],
+                "warnings": [warning.rule_id for warning in self.request.warnings],
+            }
+        )
 
         # 2. Only consider warnings from lines changed in the PR.
         filter_warnings_component = FilterWarningsComponent(self.context)
@@ -165,13 +169,15 @@ class RelevantWarningsStep(CodegenStep):
         )
         warning_and_pr_files = filter_warnings_output.warning_and_pr_files
 
-        diagnostics.append({
-            "step": "Relevant Warnings - Filter Warnings Component",
-            "filtered_warning_and_pr_files": [
-                [item.warning.rule_id, item.pr_file.filename]
-                for item in filter_warnings_output.warning_and_pr_files
-            ],
-        })
+        diagnostics.append(
+            {
+                "step": "Relevant Warnings - Filter Warnings Component",
+                "filtered_warning_and_pr_files": [
+                    [item.warning.rule_id, item.pr_file.filename]
+                    for item in filter_warnings_output.warning_and_pr_files
+                ],
+            }
+        )
         if not warning_and_pr_files:  # exit early to avoid unnecessary issue-fetching.
             self.logger.info("No warnings to predict relevancy for.")
             self._complete_run(None, diagnostics)
@@ -190,11 +196,13 @@ class RelevantWarningsStep(CodegenStep):
             itertools.chain.from_iterable(fetch_issues_output.filename_to_issues.values())
         )
         all_selected_issues = all_selected_issues[: self.request.max_num_issues_analyzed]
-        diagnostics.append({
-            "step": "Relevant Warnings - Fetch Issues Component",
-            "all_selected_issues": [issue.id for issue in all_selected_issues],
-            "max_num_issues_analyzed": self.request.max_num_issues_analyzed,
-        })
+        diagnostics.append(
+            {
+                "step": "Relevant Warnings - Fetch Issues Component",
+                "all_selected_issues": [issue.id for issue in all_selected_issues],
+                "max_num_issues_analyzed": self.request.max_num_issues_analyzed,
+            }
+        )
 
         # 4. Limit the number of warning-issue associations we analyze to the top
         #    max_num_associations.
@@ -220,25 +228,27 @@ class RelevantWarningsStep(CodegenStep):
                     )
                 else:
                     warning_from_list.warning.potentially_related_issue_titles = [assoc_issue.title]
-        diagnostics.append({
-            "step": "Relevant Warnings - Associate Warnings With Issues Component",
-            "candidate_associations": [
-                {
-                    "warning_rule_id": association[0].warning.rule_id,
-                    "pr_file": association[0].pr_file.filename,
-                    "issue_id": association[1].id,
-                }
-                for association in associations_output.candidate_associations
-            ],
-            "potentially_related_issue_titles": [
-                {
-                    "warning_rule_id": warning_and_pr_file.warning.rule_id,
-                    "potentially_related_issue_titles": warning_and_pr_file.warning.potentially_related_issue_titles,
-                    "pr_file": warning_and_pr_file.pr_file.filename,
-                }
-                for warning_and_pr_file in warning_and_pr_files
-            ],
-        })
+        diagnostics.append(
+            {
+                "step": "Relevant Warnings - Associate Warnings With Issues Component",
+                "candidate_associations": [
+                    {
+                        "warning_rule_id": association[0].warning.rule_id,
+                        "pr_file": association[0].pr_file.filename,
+                        "issue_id": association[1].id,
+                    }
+                    for association in associations_output.candidate_associations
+                ],
+                "potentially_related_issue_titles": [
+                    {
+                        "warning_rule_id": warning_and_pr_file.warning.rule_id,
+                        "potentially_related_issue_titles": warning_and_pr_file.warning.potentially_related_issue_titles,
+                        "pr_file": warning_and_pr_file.pr_file.filename,
+                    }
+                    for warning_and_pr_file in warning_and_pr_files
+                ],
+            }
+        )
 
         # 5. Filter out unfixable issues b/c it doesn't make much sense to raise suggestions for issues you can't fix.
         are_issues_fixable_component = AreIssuesFixableComponent(self.context)
@@ -257,10 +267,12 @@ class RelevantWarningsStep(CodegenStep):
             )
             if is_fixable
         ]
-        diagnostics.append({
-            "step": "Relevant Warnings - Are Issues Fixable Component",
-            "fixable_issues": [issue.id for issue in fixable_issues],
-        })
+        diagnostics.append(
+            {
+                "step": "Relevant Warnings - Are Issues Fixable Component",
+                "fixable_issues": [issue.id for issue in fixable_issues],
+            }
+        )
 
         # 6. Suggest issues based on static analysis warnings and fixable issues.
         static_analysis_suggestions_component = StaticAnalysisSuggestionsComponent(self.context)
