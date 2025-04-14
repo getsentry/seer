@@ -190,7 +190,8 @@ class StaticAnalysisWarning(BaseModel):
                 Code Snippet:
                 ```{language}
                 {snippet}
-                ```"""
+                ```
+                """
             ).format(language=language, snippet=self.encoded_code_snippet)
         else:
             formatted_code_snippet = ""
@@ -204,13 +205,11 @@ class StaticAnalysisWarning(BaseModel):
                 filename: {location_filename}
                 start_line: {location_start_line}
                 end_line: {location_end_line}
-            {formatted_code_snippet}
-            ----------
+            {formatted_code_snippet}----------
             Potentially related issue titles:
             {formatted_issue_titles}
             ----------
-            {formatted_rule}
-            </warning>
+            {formatted_rule}</warning>
             """
         ).format(
             id=self.id,

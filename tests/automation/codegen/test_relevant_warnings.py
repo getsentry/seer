@@ -141,7 +141,6 @@ def _mock_issue_details() -> IssueDetails:
                     Is auto-fixable: False
                     Is stable: None
                     Category: style
-
                 </warning>
                 """
             ),
@@ -172,7 +171,6 @@ def _mock_issue_details() -> IssueDetails:
                     filename: path/to/file.js
                     start_line: 1
                     end_line: 2
-
                 ----------
                 Potentially related issue titles:
                     (no related issues found)
@@ -183,7 +181,6 @@ def _mock_issue_details() -> IssueDetails:
                     Is auto-fixable: False
                     Is stable: False
                     Category: style
-
                 </warning>
                 """
             ),

@@ -392,7 +392,7 @@ def _format_patch_with_warnings(
 
     if include_warnings_after_patch:
         formatted_warnings = "\n\n".join(warning.format_warning() for warning in warnings)
-        formatted_warnings = f"<warnings>\n{formatted_warnings}\n</warnings>"
+        formatted_warnings = f"<warnings>\n\n{formatted_warnings}\n\n</warnings>"
     else:
         formatted_warnings = ""
 
@@ -422,7 +422,7 @@ def format_diff(
         )
         for file_idx, pr_file in enumerate(pr_files)
     )
-    return f"<diff>\n{body}\n</diff>"
+    return f"<diff>\n\n{body}\n\n</diff>"
 
 
 @cached(cache=LRUCache(maxsize=MAX_FILES_ANALYZED))
