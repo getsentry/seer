@@ -39,7 +39,7 @@ from seer.automation.codegen.prompts import (
     StaticAnalysisSuggestionsPrompts,
 )
 from seer.automation.component import BaseComponent
-from seer.automation.models import EventDetails, FilePatch, IssueDetails, format_annotated_hunks
+from seer.automation.models import EventDetails, FilePatch, IssueDetails, annotate_hunks
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
@@ -368,6 +368,7 @@ class AreIssuesFixableComponent(
 
 
 def _format_patch_with_warnings(
+    file_idx: int,
     pr_file: PrFile,
     warnings: list[StaticAnalysisWarning],
     include_warnings_after_patch: bool = False,
@@ -378,42 +379,50 @@ def _format_patch_with_warnings(
 
     target_line_to_warning_annotation = {
         target_line: "  <-- STATIC ANALYSIS WARNINGS: "
-        + " || ".join(warning.format_warning_id_and_message() for warning in warnings)
+        + " || ".join(
+            warning.format_warning_id_and_message().replace("\n", "\\n") for warning in warnings
+        )
         for target_line, warnings in target_line_to_warnings.items()
     }
 
     hunks = FilePatch.to_hunks(
         pr_file.patch, target_line_to_extra=target_line_to_warning_annotation
     )
-    formatted_hunks = format_annotated_hunks(hunks)
-    title = f"Changes made to {pr_file.filename}"
+    formatted_hunks = "\n\n".join(annotate_hunks(hunks))
+
     if include_warnings_after_patch:
         formatted_warnings = "\n\n".join(warning.format_warning() for warning in warnings)
+        formatted_warnings = f"<warnings>\n{formatted_warnings}\n</warnings>"
     else:
         formatted_warnings = ""
 
-    return "\n\n".join((title, formatted_hunks, formatted_warnings))
+    tag_start = f"<file><filename>{pr_file.filename}</filename>"
+    tag_end = "</file>"
+    title = f"Here are the changes made to file {pr_file.filename}"
+    return "\n\n".join((tag_start, title, formatted_hunks, formatted_warnings, tag_end))
 
 
 def format_diff(
     warning_and_pr_files: list[WarningAndPrFile],
     pr_files: list[PrFile],
-    patch_delim: str = "\n\n-----------\n\n",
-    include_warnings_after_patch: bool = False,
+    patch_delim: str = "\n\n#################\n\n",
+    include_warnings_after_patch: bool = True,
 ) -> str:
     filename_to_warnings: dict[str, list[StaticAnalysisWarning]] = defaultdict(list)
     for warning_and_pr_file in warning_and_pr_files:
         filename_to_warnings[warning_and_pr_file.pr_file.filename].append(
             warning_and_pr_file.warning
         )
-    return patch_delim.join(
-        (
-            _format_patch_with_warnings(
-                pr_file, filename_to_warnings[pr_file.filename], include_warnings_after_patch
-            )
-            for pr_file in pr_files
+    body = patch_delim.join(
+        _format_patch_with_warnings(
+            file_idx,
+            pr_file,
+            filename_to_warnings[pr_file.filename],
+            include_warnings_after_patch,
         )
+        for file_idx, pr_file in enumerate(pr_files)
     )
+    return f"<diff>\n{body}\n</diff>"
 
 
 @cached(cache=LRUCache(maxsize=MAX_FILES_ANALYZED))

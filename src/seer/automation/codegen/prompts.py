@@ -296,6 +296,7 @@ class StaticAnalysisSuggestionsPrompts:
         return textwrap.dedent(
             """\
             You are given a diff block annotated with static analysis warnings:
+
             {diff_with_warnings}
 
             You are also given a list of existing Sentry issues that exist in the codebase close to the diff:

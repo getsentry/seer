@@ -1142,16 +1142,17 @@ class Hunk(BaseModel):
         )
 
 
-def format_annotated_hunks(hunks: list[Hunk]) -> str:
+def annotate_hunks(hunks: list[Hunk]) -> list[str]:
     """
-    Patch string with line numbers for the source and target, like you see in GitHub.
+    Hunks annotated with line numbers for the source and target, like you see in GitHub.
+    Join via `"\\n\\n"` to get the full annotated patch.
     """
     max_digits_source = max(len(str(hunk.lines[-1].source_line_no)) for hunk in hunks)
     max_digits_target = max(len(str(hunk.lines[-1].target_line_no)) for hunk in hunks)
-    return "\n\n".join(
+    return [
         hunk.annotated(max_digits_source=max_digits_source, max_digits_target=max_digits_target)
         for hunk in hunks
-    )
+    ]
 
 
 class FilePatch(BaseModel):
