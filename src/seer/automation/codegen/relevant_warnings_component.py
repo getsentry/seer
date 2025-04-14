@@ -1,6 +1,7 @@
 import json
 import logging
 import textwrap
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
-from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
+from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import code_snippet, left_truncated_paths
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -39,7 +40,7 @@ from seer.automation.codegen.prompts import (
     StaticAnalysisSuggestionsPrompts,
 )
 from seer.automation.component import BaseComponent
-from seer.automation.models import EventDetails, IssueDetails
+from seer.automation.models import EventDetails, FilePatch, IssueDetails, format_annotated_hunks
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
@@ -367,6 +368,26 @@ class AreIssuesFixableComponent(
         )
 
 
+def _format_diff(warning_and_pr_files: list[WarningAndPrFile], pr_files: list[PrFile]) -> str:
+    filename_to_warnings: dict[str, list[StaticAnalysisWarning]] = defaultdict(list)
+    for warning_and_pr_file in warning_and_pr_files:
+        filename_to_warnings[warning_and_pr_file.pr_file.filename].append(
+            warning_and_pr_file.warning
+        )
+    diffs = []
+    for pr_file in pr_files:
+        warnings = filename_to_warnings[pr_file.filename]
+        target_line_to_extra = {
+            warning.start_line: f"  <-- WARNING (ID {warning.id}): {warning.format_warning()}"
+            for warning in warnings
+        }
+        hunks = FilePatch.to_hunks(pr_file.patch, target_line_to_extra=target_line_to_extra)
+        diff = format_annotated_hunks(hunks)
+        title = f"Changes made to {pr_file.filename}"
+        diffs.append(f"{title}\n\n{diff}")
+    return "\n".join(diffs)
+
+
 @cached(cache=LRUCache(maxsize=MAX_FILES_ANALYZED))
 def _cached_file_contents(repo_client: RepoClient, path: str, commit_sha: str) -> str:
     file_contents, _ = repo_client.get_file_content(path, sha=commit_sha)
@@ -397,19 +418,20 @@ class PredictRelevantWarningsComponent(
             self.logger.exception("Error getting file contents")
             return None
 
-        warning_location = Location.from_encoded(warning_and_pr_file.warning.encoded_location)
-        warning_start_line = int(warning_location.start_line)
-        warning_end_line = int(warning_location.end_line)
-
         lines = file_contents.split("\n")
-        if warning_end_line > len(lines):
+        if warning_and_pr_file.warning.end_line > len(lines):
             self.logger.error(
                 "The warning's end line is greater than the number of lines in the file. "
                 "Warning-file matching in FilterWarningsComponent was wrong or out of date.",
             )
             return None
 
-        return code_snippet(lines, warning_start_line, warning_end_line, padding_size=padding_size)
+        return code_snippet(
+            lines,
+            warning_and_pr_file.warning.start_line,
+            warning_and_pr_file.warning.end_line,
+            padding_size=padding_size,
+        )
 
     def _format_code_snippet_around_warning(
         self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, padding_size: int = 10
@@ -510,7 +532,7 @@ class StaticAnalysisSuggestionsComponent(
         # Limit number of warnings?
         # Limit number of fixable issues? or issue size?
         # Better, more concise way to encode the information for the LLM in the prompt?
-        diff = "\n".join([pr_file.patch for pr_file in request.pr_files])
+        diff = _format_diff(request.warning_and_pr_files, request.pr_files)
         formatted_issues = (
             "<sentry_issues>\n"
             + "\n".join([self._format_issue(issue) for issue in request.fixable_issues])

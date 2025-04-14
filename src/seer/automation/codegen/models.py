@@ -225,10 +225,7 @@ class WarningAndPrFile(BaseModel):
 
     @cached_property
     def overlapping_hunk_idxs(self) -> list[int]:
-        warning_location = Location.from_encoded(self.warning.encoded_location)
-        warning_start = int(warning_location.start_line)
-        warning_end = int(warning_location.end_line)
-        return self.pr_file.overlapping_hunk_idxs(warning_start, warning_end)
+        return self.pr_file.overlapping_hunk_idxs(self.warning.start_line, self.warning.end_line)
 
     def format_overlapping_hunks(self) -> str:
         """
@@ -287,7 +284,7 @@ class CodePredictRelevantWarningsRequest(BaseComponentRequest):
 
 
 class CodePredictStaticAnalysisSuggestionsRequest(BaseComponentRequest):
-    warnings: list[StaticAnalysisWarning]
+    warning_and_pr_files: list[WarningAndPrFile]
     fixable_issues: list[IssueDetails]
     pr_files: list[PrFile]
 

@@ -167,6 +167,14 @@ class StaticAnalysisWarning(BaseModel):
             return "php"
         return None
 
+    @property
+    def start_line(self) -> int:
+        return int(Location.from_encoded(self.encoded_location).start_line)
+
+    @property
+    def end_line(self) -> int:
+        return int(Location.from_encoded(self.encoded_location).end_line)
+
     def format_warning(self) -> str:
         location = Location.from_encoded(self.encoded_location)
         related_issue_titles = self.potentially_related_issue_titles or []

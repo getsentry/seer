@@ -1038,14 +1038,24 @@ class Line(BaseModel):
     line_type: Literal[" ", "+", "-"]
 
 
-def raw_lines_to_lines(lines: list[str], source_start: int, target_start: int) -> list[Line]:
+def raw_lines_to_lines(
+    lines: list[str],
+    source_start: int,
+    target_start: int,
+    target_line_to_extra: dict[int, str] | None = None,
+) -> list[Line]:
     lines_after_header = lines[1:]
     result = []
     current_source_line = source_start
     current_target_line = target_start
+    target_line_to_extra = target_line_to_extra or {}
 
     for line in lines_after_header:
         line_type = line[0]
+
+        if current_target_line in target_line_to_extra:
+            extra = target_line_to_extra[current_target_line]
+            line = line + extra
 
         if line_type == " ":
             result.append(
@@ -1199,7 +1209,7 @@ class FilePatch(BaseModel):
         return "".join(result).rstrip("\n")
 
     @staticmethod
-    def to_hunks(patch: str) -> list[Hunk]:
+    def to_hunks(patch: str, target_line_to_extra: dict[int, str] | None = None) -> list[Hunk]:
         hunk_header_pattern = r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@"
 
         hunks: list[Hunk] = []
@@ -1219,7 +1229,10 @@ class FilePatch(BaseModel):
             if match:
                 if current_lines:
                     current_hunk.lines = raw_lines_to_lines(
-                        current_lines, current_hunk.source_start, current_hunk.target_start
+                        current_lines,
+                        current_hunk.source_start,
+                        current_hunk.target_start,
+                        target_line_to_extra=target_line_to_extra,
                     )
                     hunks.append(current_hunk)
                     current_lines = []
@@ -1238,7 +1251,10 @@ class FilePatch(BaseModel):
 
         if current_lines:
             current_hunk.lines = raw_lines_to_lines(
-                current_lines, current_hunk.source_start, current_hunk.target_start
+                current_lines,
+                current_hunk.source_start,
+                current_hunk.target_start,
+                target_line_to_extra=target_line_to_extra,
             )
             hunks.append(current_hunk)
 
