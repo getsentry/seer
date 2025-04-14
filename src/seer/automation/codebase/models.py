@@ -206,3 +206,6 @@ class StaticAnalysisWarning(BaseModel):
             .replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
             .replace("FORMATTED_ISSUE_TITLES", formatted_issue_titles)
         )
+
+    def format_warning_id_and_message(self) -> str:
+        return f"WARNING (ID {self.id}): {self.message}"

@@ -1,4 +1,3 @@
-import json
 import logging
 import textwrap
 from collections import defaultdict
@@ -368,24 +367,53 @@ class AreIssuesFixableComponent(
         )
 
 
-def _format_diff(warning_and_pr_files: list[WarningAndPrFile], pr_files: list[PrFile]) -> str:
+def _format_patch_with_warnings(
+    pr_file: PrFile,
+    warnings: list[StaticAnalysisWarning],
+    include_warnings_after_patch: bool = False,
+) -> str:
+    target_line_to_warnings: dict[int, list[StaticAnalysisWarning]] = defaultdict(list)
+    for warning in warnings:
+        target_line_to_warnings[warning.start_line].append(warning)
+
+    target_line_to_warning_annotation = {
+        target_line: "  <-- STATIC ANALYSIS WARNINGS: "
+        + " || ".join(warning.format_warning_id_and_message() for warning in warnings)
+        for target_line, warnings in target_line_to_warnings.items()
+    }
+
+    hunks = FilePatch.to_hunks(
+        pr_file.patch, target_line_to_extra=target_line_to_warning_annotation
+    )
+    formatted_hunks = format_annotated_hunks(hunks)
+    title = f"Changes made to {pr_file.filename}"
+    if include_warnings_after_patch:
+        formatted_warnings = "\n\n".join(warning.format_warning() for warning in warnings)
+    else:
+        formatted_warnings = ""
+
+    return "\n\n".join((title, formatted_hunks, formatted_warnings))
+
+
+def format_diff(
+    warning_and_pr_files: list[WarningAndPrFile],
+    pr_files: list[PrFile],
+    patch_delim: str = "\n\n-----------\n\n",
+    include_warnings_after_patch: bool = False,
+) -> str:
     filename_to_warnings: dict[str, list[StaticAnalysisWarning]] = defaultdict(list)
     for warning_and_pr_file in warning_and_pr_files:
         filename_to_warnings[warning_and_pr_file.pr_file.filename].append(
             warning_and_pr_file.warning
         )
-    diffs = []
-    for pr_file in pr_files:
-        warnings = filename_to_warnings[pr_file.filename]
-        target_line_to_extra = {
-            warning.start_line: f"  <-- WARNING (ID {warning.id}): {warning.format_warning()}"
-            for warning in warnings
-        }
-        hunks = FilePatch.to_hunks(pr_file.patch, target_line_to_extra=target_line_to_extra)
-        diff = format_annotated_hunks(hunks)
-        title = f"Changes made to {pr_file.filename}"
-        diffs.append(f"{title}\n\n{diff}")
-    return "\n".join(diffs)
+    return patch_delim.join(
+        (
+            _format_patch_with_warnings(
+                pr_file, filename_to_warnings[pr_file.filename], include_warnings_after_patch
+            )
+            for pr_file in pr_files
+        )
+    )
 
 
 @cached(cache=LRUCache(maxsize=MAX_FILES_ANALYZED))
@@ -532,7 +560,9 @@ class StaticAnalysisSuggestionsComponent(
         # Limit number of warnings?
         # Limit number of fixable issues? or issue size?
         # Better, more concise way to encode the information for the LLM in the prompt?
-        diff = _format_diff(request.warning_and_pr_files, request.pr_files)
+        diff_with_warnings = format_diff(
+            request.warning_and_pr_files, request.pr_files, include_warnings_after_patch=True
+        )
         formatted_issues = (
             "<sentry_issues>\n"
             + "\n".join([self._format_issue(issue) for issue in request.fixable_issues])
@@ -542,10 +572,7 @@ class StaticAnalysisSuggestionsComponent(
             model=GeminiProvider.model("gemini-2.0-flash-001"),
             system_prompt=StaticAnalysisSuggestionsPrompts.format_system_msg(),
             prompt=StaticAnalysisSuggestionsPrompts.format_prompt(
-                diff=diff,
-                formatted_warnings=json.dumps(
-                    list(map(lambda w: w.format_warning(), request.warnings)), indent=2
-                ),
+                diff_with_warnings=diff_with_warnings,
                 formatted_issues=formatted_issues,
             ),
             response_format=list[StaticAnalysisSuggestion],
