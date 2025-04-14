@@ -880,7 +880,7 @@ class TestFilePatch:
             +    print('world')  # Line 3 is added
                  print('goodbye')
             __WHITESPACE__
-            @@ -20,3 +21,4 @@ def __init__(self):
+            @@ -20,2 +21,3 @@ def __init__(self):
                  print('end')
             +    print('new end')  # Line 22 is added
                  return
@@ -894,23 +894,63 @@ class TestFilePatch:
                 target_length=4,
                 section_header="@@ -1,3 +1,4 @@",
                 lines=[
-                    Line(value=" def hello():", line_type=" "),
-                    Line(value="     print('hello')", line_type=" "),
-                    Line(value="+    print('world')  # Line 3 is added", line_type="+"),
-                    Line(value="     print('goodbye')", line_type=" "),
-                    Line(value=" ", line_type=" "),
+                    Line(
+                        source_line_no=1,
+                        target_line_no=1,
+                        line_type=" ",
+                        value=" def hello():",
+                    ),
+                    Line(
+                        source_line_no=2,
+                        target_line_no=2,
+                        line_type=" ",
+                        value="     print('hello')",
+                    ),
+                    Line(
+                        source_line_no=None,
+                        target_line_no=3,
+                        line_type="+",
+                        value="+    print('world')  # Line 3 is added",
+                    ),
+                    Line(
+                        source_line_no=3,
+                        target_line_no=4,
+                        line_type=" ",
+                        value="     print('goodbye')",
+                    ),
+                    Line(
+                        source_line_no=4,
+                        target_line_no=5,
+                        line_type=" ",
+                        value=" ",
+                    ),
                 ],
             ),
             Hunk(
                 source_start=20,
-                source_length=3,
+                source_length=2,
                 target_start=21,
-                target_length=4,
-                section_header="@@ -20,3 +21,4 @@ def __init__(self):",
+                target_length=3,
+                section_header="@@ -20,2 +21,3 @@ def __init__(self):",
                 lines=[
-                    Line(value="     print('end')", line_type=" "),
-                    Line(value="+    print('new end')  # Line 22 is added", line_type="+"),
-                    Line(value="     return", line_type=" "),
+                    Line(
+                        source_line_no=20,
+                        target_line_no=21,
+                        line_type=" ",
+                        value="     print('end')",
+                    ),
+                    Line(
+                        source_line_no=None,
+                        target_line_no=22,
+                        line_type="+",
+                        value="+    print('new end')  # Line 22 is added",
+                    ),
+                    Line(
+                        source_line_no=21,
+                        target_line_no=23,
+                        line_type=" ",
+                        value="     return",
+                    ),
                 ],
             ),
         ]

@@ -1038,6 +1038,52 @@ class Line(BaseModel):
     line_type: Literal[" ", "+", "-"]
 
 
+def raw_lines_to_lines(lines: list[str], source_start: int, target_start: int) -> list[Line]:
+    lines_after_header = lines[1:]
+    result = []
+    current_source_line = source_start
+    current_target_line = target_start
+
+    for line in lines_after_header:
+        line_type = line[0]
+
+        if line_type == " ":
+            result.append(
+                Line(
+                    value=line,
+                    line_type=line_type,
+                    source_line_no=current_source_line,
+                    target_line_no=current_target_line,
+                )
+            )
+            current_source_line += 1
+            current_target_line += 1
+        elif line_type == "+":
+            result.append(
+                Line(
+                    value=line,
+                    line_type=line_type,
+                    source_line_no=None,
+                    target_line_no=current_target_line,
+                )
+            )
+            current_target_line += 1
+        elif line_type == "-":
+            result.append(
+                Line(
+                    value=line,
+                    line_type=line_type,
+                    source_line_no=current_source_line,
+                    target_line_no=None,
+                )
+            )
+            current_source_line += 1
+        else:
+            raise ValueError(f"Invalid line type: {line_type}")
+
+    return result
+
+
 class Hunk(BaseModel):
     source_start: int
     source_length: int
@@ -1109,11 +1155,6 @@ class FilePatch(BaseModel):
 
     @staticmethod
     def to_hunks(patch: str) -> list[Hunk]:
-
-        def _process_lines(lines: list[str]) -> list[Line]:
-            lines_after_header = lines[1:]
-            return [Line(value=line, line_type=line[0]) for line in lines_after_header]
-
         hunk_header_pattern = r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@"
 
         hunks: list[Hunk] = []
@@ -1132,7 +1173,9 @@ class FilePatch(BaseModel):
             match = re.match(hunk_header_pattern, line)
             if match:
                 if current_lines:
-                    current_hunk.lines = _process_lines(current_lines)
+                    current_hunk.lines = raw_lines_to_lines(
+                        current_lines, current_hunk.source_start, current_hunk.target_start
+                    )
                     hunks.append(current_hunk)
                     current_lines = []
                 source_start, source_length, target_start, target_length = map(int, match.groups())
@@ -1149,7 +1192,9 @@ class FilePatch(BaseModel):
                 current_lines.append(line)
 
         if current_lines:
-            current_hunk.lines = _process_lines(current_lines)
+            current_hunk.lines = raw_lines_to_lines(
+                current_lines, current_hunk.source_start, current_hunk.target_start
+            )
             hunks.append(current_hunk)
 
         return hunks
