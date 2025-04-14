@@ -31,7 +31,11 @@ from seer.automation.codegen.models import (
     StaticAnalysisSuggestion,
     WarningAndPrFile,
 )
-from seer.automation.codegen.prompts import IsFixableIssuePrompts, ReleventWarningsPrompts
+from seer.automation.codegen.prompts import (
+    IsFixableIssuePrompts,
+    ReleventWarningsPrompts,
+    StaticAnalysisSuggestionsPrompts,
+)
 from seer.automation.codegen.relevant_warnings_component import (
     AreIssuesFixableComponent,
     AssociateWarningsWithIssuesComponent,
@@ -1000,9 +1004,7 @@ class TestStaticAnalysisSuggestionsComponent:
     @pytest.fixture(autouse=True)
     def patch_generate_structured(self, monkeypatch: pytest.MonkeyPatch):
         def mock_generate_structured(*args, **kwargs):
-            # Create a mock response object
             mock_response = MagicMock()
-            # Create a list of suggestions
             suggestions = [
                 StaticAnalysisSuggestion(
                     path="test/path/file.py",
@@ -1016,8 +1018,10 @@ class TestStaticAnalysisSuggestionsComponent:
                     confidence_score=0.9,
                 )
             ]
-            # Set the parsed attribute directly
-            mock_response.parsed = suggestions
+            analysis_and_suggestions = StaticAnalysisSuggestionsPrompts.AnalysisAndSuggestions(
+                analysis="Test analysis", suggestions=suggestions
+            )
+            mock_response.parsed = analysis_and_suggestions
             return mock_response
 
         monkeypatch.setattr(

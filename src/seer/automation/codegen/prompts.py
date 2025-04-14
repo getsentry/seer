@@ -1,8 +1,9 @@
 import textwrap
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
+from seer.automation.codegen.models import StaticAnalysisSuggestion
 
 
 class CodingUnitTestPrompts:
@@ -279,6 +280,10 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
 
 class StaticAnalysisSuggestionsPrompts:
 
+    class AnalysisAndSuggestions(BaseModel):
+        analysis: str = Field(description="Your room to think step-by-step. At most 1000 words.")
+        suggestions: list[StaticAnalysisSuggestion]
+
     @staticmethod
     def format_system_msg():
         return textwrap.dedent(
@@ -319,7 +324,6 @@ class StaticAnalysisSuggestionsPrompts:
                 - Severity score: 1 being "guaranteed an _uncaught_ exception will happen and not be caught by the code"; 0.5 being "an exception will happen but it's being caught" OR "an exception may happen depending on inputs"; 0 being "no exception will happen";
                 - Confidence score: 1 being "I am 100%% confident that this is a bug";
             - Before giving your final answer, think step-by-step to ensure your review is thorough. We prefer fewer suggestions with high quality over more suggestions with low quality.
-            - Return your response as a list of JSON objects, where each object is a suggestion. Your response should be ONLY the list of objects.
             """
         ).format(
             diff=diff,
