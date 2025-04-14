@@ -1,11 +1,13 @@
 import datetime
+import textwrap
 from enum import Enum
+from functools import cached_property
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from seer.automation.agent.models import Message
-from seer.automation.codebase.models import Location, StaticAnalysisWarning
+from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition
 from seer.db import DbRunMemory
@@ -46,14 +48,14 @@ class StaticAnalysisSuggestion(BaseModel):
         default=None,
         description="If this suggestion is based on an issue, include the issue id here. Else use null.",
     )
+    missing_evidence: list[str] = Field(
+        description="A short list of evidence that you did NOT have but would increase your confidence score. At most 5 items. Be very specific."
+    )
     severity_score: float = Field(
         description="From 0 to 1 how serious is this potential bug? 1 being 'guaranteed exception will happen and not be caught by the code'."
     )
     confidence_score: float = Field(
         description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion."
-    )
-    missing_evidence: list[str] = Field(
-        description="A short list of evidence that you did NOT have but would increase your confidence score. At most 5 items. Be very specific."
     )
 
     def to_overwatch_format(self) -> RelevantWarningResult:
@@ -212,21 +214,43 @@ class CodegenRelevantWarningsStateResponse(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
-class PrFile(BaseModel):
-    filename: str
-    patch: str
-    status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
-    changes: int
-    sha: str
-
-
 class FilterWarningsRequest(BaseComponentRequest):
     warnings: list[StaticAnalysisWarning]
     pr_files: list[PrFile]
 
 
+class WarningAndPrFile(BaseModel):
+    warning: StaticAnalysisWarning
+    pr_file: PrFile
+
+    @cached_property
+    def overlapping_hunk_idxs(self) -> list[int]:
+        warning_location = Location.from_encoded(self.warning.encoded_location)
+        warning_start = int(warning_location.start_line)
+        warning_end = int(warning_location.end_line)
+        return self.pr_file.overlapping_hunk_idxs(warning_start, warning_end)
+
+    def format_overlapping_hunks(self) -> str:
+        """
+        Sub-patch of hunks overlapping with the warning.
+        """
+        hunks_overlapping = (self.pr_file.hunks[idx] for idx in self.overlapping_hunk_idxs)
+        return "\n".join(hunk.raw() for hunk in hunks_overlapping)
+
+    def format_overlapping_hunks_prompt(self) -> str:
+        return textwrap.dedent(
+            """\
+            The following code in {filename} was modified in the PR:
+            {formatted_overlapping_hunks}
+            """
+        ).format(
+            filename=self.pr_file.filename,
+            formatted_overlapping_hunks=self.format_overlapping_hunks(),
+        )
+
+
 class FilterWarningsOutput(BaseComponentOutput):
-    warnings: list[StaticAnalysisWarning]
+    warning_and_pr_files: list[WarningAndPrFile]
 
 
 class CodeFetchIssuesRequest(BaseComponentRequest):
@@ -239,13 +263,13 @@ class CodeFetchIssuesOutput(BaseComponentOutput):
 
 
 class AssociateWarningsWithIssuesRequest(BaseComponentRequest):
-    warnings: list[StaticAnalysisWarning]
+    warning_and_pr_files: list[WarningAndPrFile]
     filename_to_issues: dict[str, list[IssueDetails]]
     max_num_associations: int
 
 
 class AssociateWarningsWithIssuesOutput(BaseComponentOutput):
-    candidate_associations: list[tuple[StaticAnalysisWarning, IssueDetails]]
+    candidate_associations: list[tuple[WarningAndPrFile, IssueDetails]]
 
 
 class CodeAreIssuesFixableRequest(BaseComponentRequest):
@@ -253,12 +277,13 @@ class CodeAreIssuesFixableRequest(BaseComponentRequest):
     max_num_issues_analyzed: int
 
 
-class CodePredictRelevantWarningsRequest(BaseComponentRequest):
-    candidate_associations: list[tuple[StaticAnalysisWarning, IssueDetails]]
-
-
 class CodeAreIssuesFixableOutput(BaseComponentOutput):
     are_fixable: list[bool | None]  # None means the issue was not analyzed
+
+
+class CodePredictRelevantWarningsRequest(BaseComponentRequest):
+    candidate_associations: list[tuple[WarningAndPrFile, IssueDetails]]
+    commit_sha: str
 
 
 class CodePredictStaticAnalysisSuggestionsRequest(BaseComponentRequest):
@@ -273,7 +298,6 @@ class CodePredictStaticAnalysisSuggestionsOutput(BaseComponentOutput):
 
 class CodePredictRelevantWarningsOutput(BaseComponentOutput):
     """
-    A list of results for all pairs of warnings and issues.
     Includes both relevant and irrelevant warnings.
     """
 

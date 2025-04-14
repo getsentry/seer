@@ -1,6 +1,7 @@
 import json
+import re
 import textwrap
-from typing import Annotated, Any, List, Literal, NotRequired, Optional
+from typing import Annotated, Any, Literal, NotRequired, Optional
 from xml.etree import ElementTree as ET
 
 import sentry_sdk
@@ -1037,13 +1038,110 @@ class Line(BaseModel):
     line_type: Literal[" ", "+", "-"]
 
 
+def raw_lines_to_lines(lines: list[str], source_start: int, target_start: int) -> list[Line]:
+    lines_after_header = lines[1:]
+    result = []
+    current_source_line = source_start
+    current_target_line = target_start
+
+    for line in lines_after_header:
+        line_type = line[0]
+
+        if line_type == " ":
+            result.append(
+                Line(
+                    value=line,
+                    line_type=line_type,
+                    source_line_no=current_source_line,
+                    target_line_no=current_target_line,
+                )
+            )
+            current_source_line += 1
+            current_target_line += 1
+        elif line_type == "+":
+            result.append(
+                Line(
+                    value=line,
+                    line_type=line_type,
+                    source_line_no=None,
+                    target_line_no=current_target_line,
+                )
+            )
+            current_target_line += 1
+        elif line_type == "-":
+            result.append(
+                Line(
+                    value=line,
+                    line_type=line_type,
+                    source_line_no=current_source_line,
+                    target_line_no=None,
+                )
+            )
+            current_source_line += 1
+        elif line_type == "\\":
+            # Skip the "\ No newline at end of file" marker
+            continue
+        else:
+            raise ValueError(f"Invalid line type: {line_type}")
+
+    return result
+
+
+def right_justified(min_num: int, max_num: int) -> list[str]:
+    max_digits = len(str(max_num))
+    return [f"{number:>{max_digits}}" for number in range(min_num, max_num + 1)]
+
+
 class Hunk(BaseModel):
     source_start: int
     source_length: int
     target_start: int
     target_length: int
     section_header: str
-    lines: List[Line]
+    lines: list[Line]
+
+    def raw(self) -> str:
+        """
+        The raw hunk, like you see in `git diff` or the original patch string.
+        """
+        return "\n".join((self.section_header, *(line.value for line in self.lines)))
+
+    def annotated(
+        self,
+        max_digits_source: int | None = None,
+        max_digits_target: int | None = None,
+        source_target_delim: str = "    ",
+    ) -> str:
+        """
+        Hunk string with line numbers for the source and target, like you see in GitHub.
+        """
+        if max_digits_source is None:
+            max_digits_source = len(str(self.lines[-1].source_line_no))
+        if max_digits_target is None:
+            max_digits_target = len(str(self.lines[-1].target_line_no))
+        header_start = " " * (max_digits_source + len(source_target_delim) + max_digits_target + 2)
+        # +2 for the whitespace and then the line type character
+        return "\n".join(
+            (
+                f"{header_start}{self.section_header}",
+                *(
+                    f"{line.source_line_no or '':>{max_digits_source}}{source_target_delim}{line.target_line_no or '':>{max_digits_target}} {line.value}"
+                    for line in self.lines
+                ),
+            )
+        )
+
+
+def format_annotated_hunks(hunks: list[Hunk]) -> str:
+    """
+    Patch string with line numbers for the source and target, like you see in GitHub.
+    """
+    max_digits_source = max(len(str(hunk.lines[-1].source_line_no)) for hunk in hunks)
+    max_digits_target = max(len(str(hunk.lines[-1].target_line_no)) for hunk in hunks)
+    return "\n\n".join(
+        hunk.annotated(max_digits_source=max_digits_source, max_digits_target=max_digits_target)
+        for hunk in hunks
+    )
 
 
 class FilePatch(BaseModel):
@@ -1053,7 +1151,7 @@ class FilePatch(BaseModel):
     removed: int
     source_file: str
     target_file: str
-    hunks: List[Hunk]
+    hunks: list[Hunk]
 
     def apply(self, file_contents: str | None) -> str | None:
         if self.type == "A":
@@ -1080,7 +1178,7 @@ class FilePatch(BaseModel):
 
         return new_contents
 
-    def _apply_hunks(self, lines: List[str]) -> str:
+    def _apply_hunks(self, lines: list[str]) -> str:
         result = []
         current_line = 0
 
@@ -1102,6 +1200,52 @@ class FilePatch(BaseModel):
         result.extend(lines[current_line:])
 
         return "".join(result).rstrip("\n")
+
+    @staticmethod
+    def to_hunks(patch: str) -> list[Hunk]:
+        hunk_header_pattern = r"@@ -(\d+),(\d+) \+(\d+),(\d+) @@"
+
+        hunks: list[Hunk] = []
+        lines = patch.splitlines()
+        current_hunk = Hunk(
+            source_start=0,
+            source_length=0,
+            target_start=0,
+            target_length=0,
+            section_header="",
+            lines=[],
+        )
+        current_lines: list[str] = []
+
+        for line in lines:
+            match = re.match(hunk_header_pattern, line)
+            if match:
+                if current_lines:
+                    current_hunk.lines = raw_lines_to_lines(
+                        current_lines, current_hunk.source_start, current_hunk.target_start
+                    )
+                    hunks.append(current_hunk)
+                    current_lines = []
+                source_start, source_length, target_start, target_length = map(int, match.groups())
+                current_hunk = Hunk(
+                    source_start=source_start,
+                    source_length=source_length,
+                    target_start=target_start,
+                    target_length=target_length,
+                    section_header=line,
+                    lines=[],
+                )
+                current_lines = [line]  # starts with section header
+            elif current_lines:
+                current_lines.append(line)
+
+        if current_lines:
+            current_hunk.lines = raw_lines_to_lines(
+                current_lines, current_hunk.source_start, current_hunk.target_start
+            )
+            hunks.append(current_hunk)
+
+        return hunks
 
 
 class FileChangeError(Exception):
