@@ -1078,6 +1078,9 @@ def raw_lines_to_lines(lines: list[str], source_start: int, target_start: int) -
                 )
             )
             current_source_line += 1
+        elif line_type == "\\":
+            # Skip the "\ No newline at end of file" marker
+            continue
         else:
             raise ValueError(f"Invalid line type: {line_type}")
 
