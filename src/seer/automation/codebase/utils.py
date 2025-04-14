@@ -247,7 +247,7 @@ def left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
     Example::
 
         path = Path("src/seer/automation/agent/client.py")
-        paths = FilterWarningsComponent._left_truncated_paths(path, 2)
+        paths = left_truncated_paths(path, 2)
         assert paths == [
             "seer/automation/agent/client.py",
             "automation/agent/client.py",
