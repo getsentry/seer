@@ -977,6 +977,10 @@ def test_relevant_warnings_step_invoke(
         mock_invoke_are_issues_fixable_component.call_args[0][0].candidate_issues
         == all_selected_issues
     )
+    assert (
+        mock_invoke_are_issues_fixable_component.call_args[0][0].max_num_issues_analyzed
+        == request.max_num_issues_analyzed
+    )
 
     # 6. Suggest issues based on static analysis warnings and fixable issues.
     mock_invoke_static_analysis_suggestions_component.assert_called_once()
@@ -1012,7 +1016,6 @@ def test_relevant_warnings_step_invoke(
         {
             "step": "Relevant Warnings - Fetch Issues Component",
             "all_selected_issues": [issue.id for issue in all_selected_issues],
-            "max_num_issues_analyzed": request.max_num_issues_analyzed,
         },
         {
             "step": "Relevant Warnings - Associate Warnings With Issues Component",
