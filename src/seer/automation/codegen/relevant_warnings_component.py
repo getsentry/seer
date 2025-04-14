@@ -368,7 +368,6 @@ class AreIssuesFixableComponent(
 
 
 def _format_patch_with_warnings(
-    file_idx: int,
     pr_file: PrFile,
     warnings: list[StaticAnalysisWarning],
     include_warnings_after_patch: bool = False,
@@ -420,12 +419,9 @@ def format_diff(
         )
     body = patch_delim.join(
         _format_patch_with_warnings(
-            file_idx,
-            pr_file,
-            filename_to_warnings[pr_file.filename],
-            include_warnings_after_patch,
+            pr_file, filename_to_warnings[pr_file.filename], include_warnings_after_patch
         )
-        for file_idx, pr_file in enumerate(pr_files)
+        for pr_file in pr_files
     )
     return f"<diff>\n\n{body}\n\n</diff>"
 
