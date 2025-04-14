@@ -643,7 +643,9 @@ class TestPredictRelevantWarningsComponent:
 )
 @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
 @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+@patch("seer.automation.codegen.relevant_warnings_step.RelevantWarningsStep._post_results_to_overwatch")
 def test_relevant_warnings_step_invoke(
+    mock_post_results_to_overwatch: Mock,
     mock_instantiate_context: Mock,
     mock_pipeline_step: MagicMock,
     mock_invoke_predict_relevant_warnings_component: Mock,
@@ -742,6 +744,49 @@ def test_relevant_warnings_step_invoke(
     mock_invoke_static_analysis_suggestions_component.call_args[0][0].warnings = mock_all_warnings
     mock_invoke_static_analysis_suggestions_component.call_args[0][0].fixable_issues = (
         all_selected_issues[1:]
+    )
+
+    # Verify that _post_results_to_overwatch was called with the correct parameters
+    mock_post_results_to_overwatch.assert_called_once()
+    static_analysis_suggestions_output = mock_invoke_static_analysis_suggestions_component.return_value
+    diagnostics = [
+        {
+            "step": "Relevant Warnings - Read PR",
+            "pr_files": [pr_file.filename for pr_file in mock_pr_files],
+        },
+        {
+            "step": "Relevant Warnings - Filter Warnings Component",
+            "warning_rule_ids": [warning.rule_id for warning in request.warnings],
+        },
+        {
+            "step": "Relevant Warnings - Fetch Issues Component",
+            "all_selected_issues": [issue.id for issue in all_selected_issues],
+            "max_num_issues_analyzed": request.max_num_issues_analyzed,
+        },
+        {
+            "step": "Relevant Warnings - Associate Warnings With Issues Component",
+            "candidate_associations": [
+                {
+                    "warning_rule_id": association[0].rule_id,
+                    "issue_id": association[1].id,
+                }
+                for association in mock_invoke_associate_warnings_with_issues_component.return_value.candidate_associations
+            ],
+            "potentially_related_issue_titles": [
+                {
+                    "warning_rule_id": warning.rule_id,
+                    "potentially_related_issue_titles": warning.potentially_related_issue_titles,
+                }
+                for warning in mock_all_warnings
+            ],
+        },
+        {
+            "step": "Relevant Warnings - Are Issues Fixable Component",
+            "fixable_issues": [issue.id for issue in all_selected_issues[1:]],
+        },
+    ]
+    mock_post_results_to_overwatch.assert_called_with(
+        static_analysis_suggestions_output, diagnostics
     )
 
 
