@@ -1084,6 +1084,11 @@ def raw_lines_to_lines(lines: list[str], source_start: int, target_start: int) -
     return result
 
 
+def right_justified(min_num: int, max_num: int) -> list[str]:
+    max_digits = len(str(max_num))
+    return [f"{number:>{max_digits}}" for number in range(min_num, max_num + 1)]
+
+
 class Hunk(BaseModel):
     source_start: int
     source_length: int
@@ -1092,8 +1097,48 @@ class Hunk(BaseModel):
     section_header: str
     lines: list[Line]
 
-    def raw_hunk(self) -> str:
+    def raw(self) -> str:
+        """
+        The raw hunk, like you see in `git diff` or the original patch string.
+        """
         return "\n".join((self.section_header, *(line.value for line in self.lines)))
+
+    def annotated(
+        self,
+        max_digits_source: int | None = None,
+        max_digits_target: int | None = None,
+        source_target_delim: str = "    ",
+    ) -> str:
+        """
+        Hunk string with line numbers for the source and target, like you see in GitHub.
+        """
+        if max_digits_source is None:
+            max_digits_source = len(str(self.lines[-1].source_line_no))
+        if max_digits_target is None:
+            max_digits_target = len(str(self.lines[-1].target_line_no))
+        header_start = " " * (max_digits_source + len(source_target_delim) + max_digits_target + 2)
+        # +2 for the whitespace and then the line type character
+        return "\n".join(
+            (
+                f"{header_start}{self.section_header}",
+                *(
+                    f"{line.source_line_no or '':>{max_digits_source}}{source_target_delim}{line.target_line_no or '':>{max_digits_target}} {line.value}"
+                    for line in self.lines
+                ),
+            )
+        )
+
+
+def format_annotated_hunks(hunks: list[Hunk]) -> str:
+    """
+    Patch string with line numbers for the source and target, like you see in GitHub.
+    """
+    max_digits_source = max(len(str(hunk.lines[-1].source_line_no)) for hunk in hunks)
+    max_digits_target = max(len(str(hunk.lines[-1].target_line_no)) for hunk in hunks)
+    return "\n\n".join(
+        hunk.annotated(max_digits_source=max_digits_source, max_digits_target=max_digits_target)
+        for hunk in hunks
+    )
 
 
 class FilePatch(BaseModel):

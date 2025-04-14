@@ -235,7 +235,7 @@ class WarningAndPrFile(BaseModel):
         Sub-patch of hunks overlapping with the warning.
         """
         hunks_overlapping = (self.pr_file.hunks[idx] for idx in self.overlapping_hunk_idxs)
-        return "\n".join(hunk.raw_hunk() for hunk in hunks_overlapping)
+        return "\n".join(hunk.raw() for hunk in hunks_overlapping)
 
     def format_overlapping_hunks_prompt(self) -> str:
         return textwrap.dedent(

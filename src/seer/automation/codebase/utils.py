@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 from seer.automation.codebase.models import Document
-from seer.automation.models import StacktraceFrame
+from seer.automation.models import StacktraceFrame, right_justified
 
 logger = logging.getLogger(__name__)
 
@@ -213,11 +213,6 @@ def group_documents_by_language(documents: list[Document]) -> dict[str, list[Doc
         file_type_count[file_type].append(doc)
 
     return file_type_count
-
-
-def right_justified(min_num: int, max_num: int) -> list[str]:
-    max_digits = len(str(max_num))
-    return [f"{number:>{max_digits}}" for number in range(min_num, max_num + 1)]
 
 
 def code_snippet(

@@ -1,6 +1,6 @@
 import pytest
 
-from seer.automation.codebase.utils import code_snippet, potential_frame_match, right_justified
+from seer.automation.codebase.utils import code_snippet, potential_frame_match
 from seer.automation.models import StacktraceFrame
 
 
@@ -50,32 +50,6 @@ class TestPotentialFrameMatch:
         assert not (
             potential_frame_match("/home/app/src/seer/automation/codebase/test_utils.py", frame)
         )
-
-
-class TestRightJustified:
-    def test_single_digit(self):
-        result = right_justified(1, 5)
-        assert result == ["1", "2", "3", "4", "5"]
-
-    def test_double_digit(self):
-        result = right_justified(5, 15)
-        assert result == [" 5", " 6", " 7", " 8", " 9", "10", "11", "12", "13", "14", "15"]
-
-    def test_triple_digit(self):
-        result = right_justified(95, 105)
-        assert result == [
-            " 95",
-            " 96",
-            " 97",
-            " 98",
-            " 99",
-            "100",
-            "101",
-            "102",
-            "103",
-            "104",
-            "105",
-        ]
 
 
 class TestCodeSnippet:
