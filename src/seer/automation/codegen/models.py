@@ -35,10 +35,17 @@ class StaticAnalysisSuggestion(BaseModel):
     path: str = Field(description="The path to the file that contains the suggestion.")
     line: int = Field(description="The line number of the suggestion.")
     short_description: str = Field(
-        description="A short, fluff-free, information-dense description of the problem. Max 30 words."
+        description=(
+            "A short, fluff-free, information-dense description of the problem. Max 30 words. "
+            "Don't mention warnings or issues by their IDs; mention the substantive problem."
+        )
     )
     justification: str = Field(
-        description="A short, fluff-free, information-dense summary of your analysis for why this is a problem. This justification should be at most 15 words."
+        description=(
+            "A short, fluff-free, information-dense summary of your analysis for why this is a problem. "
+            "This justification should be at most 15 words. "
+            "Don't mention warnings or issues by their IDs; justify the substantive problem."
+        )
     )
     related_warning_id: str | None = Field(
         default=None,
