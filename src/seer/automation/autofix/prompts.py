@@ -20,11 +20,8 @@ def format_instruction(instruction: str | None):
 
 
 def format_repo_instructions(repo: RepoDefinition):
-    return (
-        f"\n<repo_instructions>\n{repo.instructions.rstrip()}\n</repo_instructions>"
-        if hasattr(repo, "instructions") and repo.instructions
-        else ""
-    )
+    instructions = repo.instructions.rstrip().replace("\n", " ") if repo.instructions else None
+    return f": {instructions}\n" if instructions else ""
 
 
 def format_repo_prompt(
@@ -45,10 +42,7 @@ def format_repo_prompt(
         {names_list_str}"""
     ).format(
         names_list_str="\n".join(
-            [
-                f"<repo>\n{repo.full_name}{format_repo_instructions(repo)}\n</repo>"
-                for repo in readable_repos
-            ]
+            [f"- {repo.full_name}{format_repo_instructions(repo)}" for repo in readable_repos]
         )
     )
 

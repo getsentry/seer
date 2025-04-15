@@ -35,6 +35,7 @@ from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
     LlmModelDefaultConfig,
+    LlmNoCompletionTokensError,
     LlmProviderDefaults,
     LlmProviderType,
     LlmRefusalError,
@@ -868,6 +869,7 @@ class GeminiProvider:
                 isinstance(exception, ClientError)
                 and any(error in str(exception) for error in retryable_errors)
             )
+            or isinstance(exception, LlmNoCompletionTokensError)
         ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Gemini Generation")
@@ -988,6 +990,8 @@ class GeminiProvider:
                     if chunk.usage_metadata.candidates_token_count:
                         total_completion_tokens = chunk.usage_metadata.candidates_token_count
 
+            if total_completion_tokens == 0:
+                raise LlmNoCompletionTokensError("No completion tokens returned from Gemini")
         finally:
             # Yield final usage statistics
             usage = Usage(
