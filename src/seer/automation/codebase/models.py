@@ -1,11 +1,12 @@
 import re
 import textwrap
+from functools import cached_property
 from typing import Any, Literal, NotRequired, TypedDict
 
-from pydantic import BaseModel, model_serializer
+from pydantic import BaseModel, ConfigDict, model_serializer
 from pydantic_xml import attr
 
-from seer.automation.models import PromptXmlModel, RepoDefinition
+from seer.automation.models import FilePatch, Hunk, PromptXmlModel, RepoDefinition
 
 
 class DocumentPromptXml(PromptXmlModel, tag="document", skip_empty=True):
@@ -99,6 +100,32 @@ class Location(BaseModel):
         return base
 
 
+class PrFile(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    filename: str
+    patch: str
+    status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
+    changes: int
+    sha: str
+
+    @cached_property
+    def hunks(self) -> list[Hunk]:
+        return FilePatch.to_hunks(self.patch)
+
+    def overlapping_hunk_idxs(self, start_line: int, end_line: int | None = None) -> list[int]:
+        if end_line is None:
+            end_line = start_line
+        hunk_ranges = [
+            (hunk.target_start, hunk.target_start + hunk.target_length - 1) for hunk in self.hunks
+        ]
+        return [
+            idx
+            for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
+            if start_line <= hunk_end and hunk_start <= end_line
+        ]
+
+
 # Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py
 class StaticAnalysisRule(BaseModel):
     id: int
@@ -130,7 +157,6 @@ class StaticAnalysisWarning(BaseModel):
     rule: StaticAnalysisRule | None = None
     encoded_code_snippet: str | None = None
     potentially_related_issue_titles: list[str] | None = None
-    # TODO: project info necessary for seer?
 
     def _try_get_language(self) -> str | None:
         if ".py" in self.encoded_location:
@@ -141,34 +167,60 @@ class StaticAnalysisWarning(BaseModel):
             return "php"
         return None
 
-    def format_warning(self) -> str:
+    @property
+    def start_line(self) -> int:
+        return int(Location.from_encoded(self.encoded_location).start_line)
+
+    @property
+    def end_line(self) -> int:
+        return int(Location.from_encoded(self.encoded_location).end_line)
+
+    def format_warning(self, filename: str | None = None) -> str:
         location = Location.from_encoded(self.encoded_location)
-        related_issue_titles = self.potentially_related_issue_titles or []
-        formatted_issue_titles = "\n".join([f"* {title}" for title in related_issue_titles])
-        return (
-            textwrap.dedent(
-                f"""\
-            Warning ID: {self.id}
-            Warning message: {self.message}
+        if not self.potentially_related_issue_titles:
+            formatted_issue_titles = "    (no related issues found)"
+        else:
+            related_issue_titles = self.potentially_related_issue_titles or []
+            formatted_issue_titles = "\n".join([f"* {title}" for title in related_issue_titles])
+
+        if (language := self._try_get_language()) and (self.encoded_code_snippet):
+            formatted_code_snippet = textwrap.dedent(
+                """\
+                ----------
+                Code Snippet:
+                ```{language}
+                {snippet}
+                ```
+                """
+            ).format(language=language, snippet=self.encoded_code_snippet)
+        else:
+            formatted_code_snippet = ""
+
+        return textwrap.dedent(
+            """\
+            <warning><warning_id>{id}</warning_id>
+            Warning (ID {id})
+            Warning message: {message}
             ----------
             Location:
-                filename: {location.filename}
-                start_line: {location.start_line}
-                end_line: {location.end_line}
-            Code Snippet:
-            ```{self._try_get_language() or ""}
-            CODE_SNIPPET
-            ```
-            ----------
+                filename: {location_filename}
+                start_line: {location_start_line}
+                end_line: {location_end_line}
+            {formatted_code_snippet}----------
             Potentially related issue titles:
-            FORMATTED_ISSUE_TITLES
+            {formatted_issue_titles}
             ----------
-            FORMATTED_RULE
-            """
-            )
-            # Multiline strings being substituted inside textwrap.dedent would mess with the formatting.
-            # So we substitute afterwards.
-            .replace("CODE_SNIPPET", textwrap.dedent(self.encoded_code_snippet or "").strip())
-            .replace("FORMATTED_RULE", self.rule.format_rule() if self.rule else "")
-            .replace("FORMATTED_ISSUE_TITLES", formatted_issue_titles)
+            {formatted_rule}</warning>"""
+        ).format(
+            id=self.id,
+            message=self.message,
+            location_filename=filename or location.filename,
+            location_start_line=location.start_line,
+            location_end_line=location.end_line,
+            formatted_code_snippet=formatted_code_snippet,
+            formatted_issue_titles=formatted_issue_titles,
+            formatted_rule=self.rule.format_rule() if self.rule else "",
         )
+
+    def format_warning_id_and_message(self) -> str:
+        return f"WARNING (ID {self.id}): {self.message}"

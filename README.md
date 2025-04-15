@@ -124,7 +124,7 @@ Send a POST request to `/v1/automation/autofix/evaluations/start` with the follo
 ```jsonc
 {
 "dataset_name": "string", // Name of the dataset to run on (currently only internal datasets available)
-"run_name": "string", // Custom name for your evaluation run
+"run_name": "string", // Custom name for your evaluation run...MAKE SURE THIS NAME IS UNIQUE EVEN IF YOU DELETED A PREVIOUS RUN! LANGFUSE KEYS ON THIS!!
 "run_description": "string", // Description of your evaluation run
 "run_type": "full | root_cause | execution", // Type of evaluation to perform
 "test": boolean, // Set to true to run on a single item (for testing)
@@ -217,3 +217,7 @@ The durations should be updated every once in a while or especially when you add
 You can set the queue that the celery worker listens on via the `CELERY_WORKER_QUEUE` environment variable.
 
 If not set, the default queue name is `"seer"`.
+
+## Debugging Celery with Flower
+
+When `DEV=1`, the flower dashboard is available at `http://localhost:5555`. Use it to debug Celery.

@@ -2,9 +2,10 @@ import functools
 import logging
 import os
 import shutil
+from pathlib import Path
 
 from seer.automation.codebase.models import Document
-from seer.automation.models import StacktraceFrame
+from seer.automation.models import StacktraceFrame, right_justified
 
 logger = logging.getLogger(__name__)
 
@@ -212,3 +213,52 @@ def group_documents_by_language(documents: list[Document]) -> dict[str, list[Doc
         file_type_count[file_type].append(doc)
 
     return file_type_count
+
+
+def code_snippet(
+    lines: list[str],
+    start_line: int,
+    end_line: int,
+    padding_size: int = 0,
+    start_line_override: int | None = None,
+) -> list[str]:
+    """
+    `start_line` and `end_line` are assumed to be 1-indexed. `end_line` is inclusive.
+
+    Pass `start_line_override` to override the line numbers as shown in the snippet.
+    """
+    if (start_line <= 0) or (end_line <= 0):
+        raise ValueError("start_line and end_line must be greater than 0. They're 1-indexed.")
+
+    start_idx = start_line - 1
+    end_idx = end_line - 1
+    start_snippet = max(0, start_idx - padding_size)
+    end_snippet = min(end_idx + padding_size + 1, len(lines))
+    lines_snippet = lines[start_snippet:end_snippet]
+
+    start_line = start_line_override or start_snippet + 1
+    end_line = start_line + len(lines_snippet) - 1
+    line_numbers = right_justified(start_line, end_line)
+    return [f"{line_number}| {line}" for line_number, line in zip(line_numbers, lines_snippet)]
+
+
+def left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
+    """
+    Example::
+
+        path = Path("src/seer/automation/agent/client.py")
+        paths = left_truncated_paths(path, 2)
+        assert paths == [
+            "seer/automation/agent/client.py",
+            "automation/agent/client.py",
+        ]
+    """
+    parts = list(path.parts)
+    num_dirs = len(parts) - 1  # -1 for the filename
+    num_paths = min(max_num_paths, num_dirs)
+
+    result = []
+    for _ in range(num_paths):
+        parts.pop(0)
+        result.append(Path(*parts).as_posix())
+    return result
