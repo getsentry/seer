@@ -321,7 +321,8 @@ class StaticAnalysisSuggestionsPrompts:
             - Assign a severity score and confidence score to each suggestion, from 0 to 1. The score should be granular, e.g., 0.432.
                 - Severity score: 1 being "guaranteed an _uncaught_ exception will happen and not be caught by the code"; 0.5 being "an exception will happen but it's being caught" OR "an exception may happen depending on inputs"; 0 being "no exception will happen";
                 - Confidence score: 1 being "I am 100%% confident that this is a bug";
-            - Before giving your final answer, think step-by-step to ensure your review is thorough. We prefer fewer suggestions with high quality over more suggestions with low quality.
+            - Before giving your final answer, think carefully about which warnings caused by the code change will cause production errors.
+              Only consider suggestions that are critical to address. Ignore issues or warnings that aren't caused by the code change.
             """
         ).format(
             diff_with_warnings=diff_with_warnings,
