@@ -243,5 +243,5 @@ def evaluate_autofixability(
         f"Possible cause: {issue_summary.possible_cause}"
     )
     score = autofixability_model.score(issue_summary_input)
-    is_fixable = score > 0.724  # 80th percentile
+    is_fixable = score > 0.718  # 75th percentile on test set
     return score, is_fixable
