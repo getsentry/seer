@@ -122,3 +122,9 @@ class LlmStreamInactivityTimeoutError(LlmStreamTimeoutError):
     """Raised when the LLM stream times out due to inactivity."""
 
     pass
+
+
+class LlmNoCompletionTokensError(Exception):
+    """Raised when the LLM returns no completion tokens."""
+
+    pass
