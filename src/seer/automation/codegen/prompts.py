@@ -292,20 +292,18 @@ class StaticAnalysisSuggestionsPrompts:
         )
 
     @staticmethod
-    def format_prompt(diff: str, formatted_warnings: str, formatted_issues: str):
+    def format_prompt(diff_with_warnings: str, formatted_issues: str):
         return textwrap.dedent(
             """\
-            You are given a diff block:
-            {diff}
+            You are given a diff block annotated with static analysis warnings:
 
-            You are also given a list of static analysis warnings that exist in the codebase close to the diff:
-            {formatted_warnings}
+            {diff_with_warnings}
 
             You are also given a list of existing Sentry issues that exist in the codebase close to the diff:
             {formatted_issues}
 
             # Your Goal:
-            Carefully review the code changes in the diff, understand the context and surface any potential bugs that might be introduced by the changes. In your review focus on actual bugs. You should IGNORE code style, nit suggestions, and anything else that is not likely to cause a Sentry issue.
+            Carefully review the code changes in the diff, understand the context and surface any potential bugs that might be introduced by the changes. In your review focus on actual bugs. You should IGNORE code style, nit suggestions, and anything else that is not likely to cause a production issue.
             You SHOULD make suggestions based on the warnings and issues provided, as well as your own analysis of the code.
             Follow ALL the guidelines!!!
 
@@ -322,8 +320,7 @@ class StaticAnalysisSuggestionsPrompts:
             - Return your response as a list of JSON objects, where each object is a suggestion. Your response should be ONLY the list of objects.
             """
         ).format(
-            diff=diff,
-            formatted_warnings=formatted_warnings,
+            diff_with_warnings=diff_with_warnings,
             formatted_issues=formatted_issues,
         )
 

@@ -276,7 +276,7 @@ class RelevantWarningsStep(CodegenStep):
         # 6. Suggest issues based on static analysis warnings and fixable issues.
         static_analysis_suggestions_component = StaticAnalysisSuggestionsComponent(self.context)
         static_analysis_suggestions_request = CodePredictStaticAnalysisSuggestionsRequest(
-            warnings=[warning.warning for warning in warning_and_pr_files],
+            warning_and_pr_files=warning_and_pr_files,
             fixable_issues=fixable_issues,
             pr_files=pr_files,
         )

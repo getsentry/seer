@@ -15,7 +15,7 @@ from seer.automation.models import (
     Span,
     TraceEvent,
     TraceTree,
-    format_annotated_hunks,
+    annotate_hunks,
     right_justified,
 )
 
@@ -1285,10 +1285,10 @@ def test_file_patch_to_hunks(patch_and_hunks: tuple[str, list[Hunk]]):
     assert annotated_hunk == annotated_hunk_expected
 
 
-def test_format_annotated_hunks(patch_and_hunks: tuple[str, list[Hunk]]):
+def test_annotated_hunks(patch_and_hunks: tuple[str, list[Hunk]]):
     _, hunks = patch_and_hunks
-    annotated_hunks = format_annotated_hunks(hunks)
-    annotated_hunks_expected = textwrap.dedent(
+    formatted_annotated_hunks = "\n\n".join(annotate_hunks(hunks))
+    formatted_annotated_hunks_expected = textwrap.dedent(
         """\
                   @@ -1,3 +1,4 @@
          1     1  def hello():
@@ -1302,4 +1302,4 @@ def test_format_annotated_hunks(patch_and_hunks: tuple[str, list[Hunk]]):
               22 +    print('new end')  # Line 22 is added
         21    23      return"""
     ).replace("__NO_SPACE__", "")
-    assert annotated_hunks == annotated_hunks_expected
+    assert formatted_annotated_hunks == formatted_annotated_hunks_expected

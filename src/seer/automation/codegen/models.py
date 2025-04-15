@@ -35,10 +35,20 @@ class StaticAnalysisSuggestion(BaseModel):
     path: str = Field(description="The path to the file that contains the suggestion.")
     line: int = Field(description="The line number of the suggestion.")
     short_description: str = Field(
-        description="A short, fluff-free, information-dense description of the problem. Max 30 words."
+        description=(
+            "A short, fluff-free, information-dense description of the problem. "
+            "Max 30 words. "
+            "Don't mention warnings or issues by their IDs, or that this is a static analysis warning. "
+            "Focus on the substantive problem."
+        )
     )
     justification: str = Field(
-        description="A short, fluff-free, information-dense summary of your analysis for why this is a problem. This justification should be at most 15 words."
+        description=(
+            "A short, fluff-free, information-dense summary of your analysis for why this is a problem. "
+            "Max 30 words. "
+            "Don't mention warnings or issues by their IDs, or that this is a static analysis warning. "
+            "Focus on the substantive problem."
+        )
     )
     related_warning_id: str | None = Field(
         default=None,
@@ -225,10 +235,7 @@ class WarningAndPrFile(BaseModel):
 
     @cached_property
     def overlapping_hunk_idxs(self) -> list[int]:
-        warning_location = Location.from_encoded(self.warning.encoded_location)
-        warning_start = int(warning_location.start_line)
-        warning_end = int(warning_location.end_line)
-        return self.pr_file.overlapping_hunk_idxs(warning_start, warning_end)
+        return self.pr_file.overlapping_hunk_idxs(self.warning.start_line, self.warning.end_line)
 
     def format_overlapping_hunks(self) -> str:
         """
@@ -287,7 +294,7 @@ class CodePredictRelevantWarningsRequest(BaseComponentRequest):
 
 
 class CodePredictStaticAnalysisSuggestionsRequest(BaseComponentRequest):
-    warnings: list[StaticAnalysisWarning]
+    warning_and_pr_files: list[WarningAndPrFile]
     fixable_issues: list[IssueDetails]
     pr_files: list[PrFile]
 
