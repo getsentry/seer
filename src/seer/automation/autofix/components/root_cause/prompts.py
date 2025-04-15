@@ -51,7 +51,7 @@ class RootCauseAnalysisPrompts:
             </issue_details>"""
         ).format(
             explore_msg=(
-                "Gather all information needed to understand what happened, from the entry point of the code to the error."
+                "Gather all information needed to understand what happened, from the entry point of the code to the error, and WHY it happened. Dig deep into the root of the issue."
             ),
             error_str=event,
             repos_str=repos_str,
