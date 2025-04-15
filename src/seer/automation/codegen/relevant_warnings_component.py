@@ -30,7 +30,6 @@ from seer.automation.codegen.models import (
     FilterWarningsOutput,
     FilterWarningsRequest,
     RelevantWarningResult,
-    StaticAnalysisSuggestion,
     WarningAndPrFile,
 )
 from seer.automation.codegen.prompts import (
@@ -587,10 +586,10 @@ class StaticAnalysisSuggestionsComponent(
                 diff_with_warnings=diff_with_warnings,
                 formatted_issues=formatted_issues,
             ),
-            response_format=list[StaticAnalysisSuggestion],
+            response_format=StaticAnalysisSuggestionsPrompts.AnalysisAndSuggestions,
             temperature=0.0,
             max_tokens=8192,
         )
         if completion.parsed is None:
             return None
-        return CodePredictStaticAnalysisSuggestionsOutput(suggestions=completion.parsed)
+        return CodePredictStaticAnalysisSuggestionsOutput(suggestions=completion.parsed.suggestions)
