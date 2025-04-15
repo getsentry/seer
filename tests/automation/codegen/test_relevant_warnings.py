@@ -117,6 +117,7 @@ def _mock_issue_details() -> IssueDetails:
             textwrap.dedent(
                 """\
                 <warning><warning_id>1</warning_id>
+                Warning (ID 1)
                 Warning message: Warning message
                 ----------
                 Location:
@@ -164,6 +165,7 @@ def _mock_issue_details() -> IssueDetails:
             textwrap.dedent(
                 """\
                 <warning><warning_id>2</warning_id>
+                Warning (ID 2)
                 Warning message: Warning message
                 ----------
                 Location:
