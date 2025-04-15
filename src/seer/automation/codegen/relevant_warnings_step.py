@@ -153,9 +153,9 @@ class RelevantWarningsStep(CodegenStep):
         ]
         diagnostics.append(
             {
-                "step": "Relevant Warnings - Read PR",
+                "component": "Relevant Warnings - Read PR",
                 "pr_files": [pr_file.filename for pr_file in pr_files],
-                "warnings": [warning.rule_id for warning in self.request.warnings],
+                "warnings": [warning.id for warning in self.request.warnings],
             }
         )
 
@@ -171,9 +171,9 @@ class RelevantWarningsStep(CodegenStep):
 
         diagnostics.append(
             {
-                "step": "Relevant Warnings - Filter Warnings Component",
+                "component": "Relevant Warnings - Filter Warnings Component",
                 "filtered_warning_and_pr_files": [
-                    [item.warning.rule_id, item.pr_file.filename]
+                    [item.warning.id, item.pr_file.filename]
                     for item in filter_warnings_output.warning_and_pr_files
                 ],
             }
@@ -198,7 +198,7 @@ class RelevantWarningsStep(CodegenStep):
         all_selected_issues = all_selected_issues[: self.request.max_num_issues_analyzed]
         diagnostics.append(
             {
-                "step": "Relevant Warnings - Fetch Issues Component",
+                "component": "Relevant Warnings - Fetch Issues Component",
                 "all_selected_issues": [issue.id for issue in all_selected_issues],
             }
         )
@@ -229,10 +229,10 @@ class RelevantWarningsStep(CodegenStep):
                     warning_from_list.warning.potentially_related_issue_titles = [assoc_issue.title]
         diagnostics.append(
             {
-                "step": "Relevant Warnings - Associate Warnings With Issues Component",
+                "component": "Relevant Warnings - Associate Warnings With Issues Component",
                 "candidate_associations": [
                     {
-                        "warning_rule_id": association[0].warning.rule_id,
+                        "warning_id": association[0].warning.id,
                         "pr_file": association[0].pr_file.filename,
                         "issue_id": association[1].id,
                     }
@@ -240,7 +240,7 @@ class RelevantWarningsStep(CodegenStep):
                 ],
                 "potentially_related_issue_titles": [
                     {
-                        "warning_rule_id": warning_and_pr_file.warning.rule_id,
+                        "warning_id": warning_and_pr_file.warning.id,
                         "potentially_related_issue_titles": warning_and_pr_file.warning.potentially_related_issue_titles,
                         "pr_file": warning_and_pr_file.pr_file.filename,
                     }
@@ -268,7 +268,7 @@ class RelevantWarningsStep(CodegenStep):
         ]
         diagnostics.append(
             {
-                "step": "Relevant Warnings - Are Issues Fixable Component",
+                "component": "Relevant Warnings - Are Issues Fixable Component",
                 "fixable_issues": [issue.id for issue in fixable_issues],
             }
         )

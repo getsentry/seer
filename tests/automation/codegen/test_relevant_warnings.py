@@ -1002,26 +1002,26 @@ def test_relevant_warnings_step_invoke(
     )
     diagnostics = [
         {
-            "step": "Relevant Warnings - Read PR",
+            "component": "Relevant Warnings - Read PR",
             "pr_files": [pr_file.filename for pr_file in mock_pr_files],
-            "warnings": [warning.rule_id for warning in request.warnings],
+            "warnings": [warning.id for warning in request.warnings],
         },
         {
-            "step": "Relevant Warnings - Filter Warnings Component",
+            "component": "Relevant Warnings - Filter Warnings Component",
             "filtered_warning_and_pr_files": [
-                [item.warning.rule_id, item.pr_file.filename]
+                [item.warning.id, item.pr_file.filename]
                 for item in mock_invoke_filter_warnings_component.return_value.warning_and_pr_files
             ],
         },
         {
-            "step": "Relevant Warnings - Fetch Issues Component",
+            "component": "Relevant Warnings - Fetch Issues Component",
             "all_selected_issues": [issue.id for issue in all_selected_issues],
         },
         {
-            "step": "Relevant Warnings - Associate Warnings With Issues Component",
+            "component": "Relevant Warnings - Associate Warnings With Issues Component",
             "candidate_associations": [
                 {
-                    "warning_rule_id": association[0].warning.rule_id,
+                    "warning_id": association[0].warning.id,
                     "pr_file": association[0].pr_file.filename,
                     "issue_id": association[1].id,
                 }
@@ -1029,7 +1029,7 @@ def test_relevant_warnings_step_invoke(
             ],
             "potentially_related_issue_titles": [
                 {
-                    "warning_rule_id": warning_and_pr_file.warning.rule_id,
+                    "warning_id": warning_and_pr_file.warning.id,
                     "potentially_related_issue_titles": warning_and_pr_file.warning.potentially_related_issue_titles,
                     "pr_file": warning_and_pr_file.pr_file.filename,
                 }
@@ -1037,7 +1037,7 @@ def test_relevant_warnings_step_invoke(
             ],
         },
         {
-            "step": "Relevant Warnings - Are Issues Fixable Component",
+            "component": "Relevant Warnings - Are Issues Fixable Component",
             "fixable_issues": [issue.id for issue in all_selected_issues[1:]],
         },
     ]
