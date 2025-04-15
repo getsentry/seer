@@ -120,17 +120,20 @@ def _mock_issue_details() -> IssueDetails:
             ),
             textwrap.dedent(
                 """\
-                Warning ID: 1
+                <warning><warning_id>1</warning_id>
+                Warning (ID 1)
                 Warning message: Warning message
                 ----------
                 Location:
                     filename: path/to/file.py
                     start_line: 1
                     end_line: 2
+                ----------
                 Code Snippet:
                 ```python
-                def test_format_code_snippet(self):
-                    pass
+                    def test_format_code_snippet(self):
+                        pass
+
                 ```
                 ----------
                 Potentially related issue titles:
@@ -143,8 +146,7 @@ def _mock_issue_details() -> IssueDetails:
                     Is auto-fixable: False
                     Is stable: None
                     Category: style
-
-                """
+                </warning>"""
             ),
             id="python-warning",
         ),
@@ -166,20 +168,17 @@ def _mock_issue_details() -> IssueDetails:
             ),
             textwrap.dedent(
                 """\
-                Warning ID: 2
+                <warning><warning_id>2</warning_id>
+                Warning (ID 2)
                 Warning message: Warning message
                 ----------
                 Location:
                     filename: path/to/file.js
                     start_line: 1
                     end_line: 2
-                Code Snippet:
-                ```javascript
-
-                ```
                 ----------
                 Potentially related issue titles:
-
+                    (no related issues found)
                 ----------
                 Static Analysis Rule:
                     Rule: unused-variable
@@ -187,8 +186,7 @@ def _mock_issue_details() -> IssueDetails:
                     Is auto-fixable: False
                     Is stable: False
                     Category: style
-
-                """
+                </warning>"""
             ),
             id="javascript-warning-no-snippet",
         ),
@@ -859,7 +857,11 @@ class TestPredictRelevantWarningsComponent:
 )
 @patch("seer.automation.pipeline.PipelineStep", new_callable=MagicMock)
 @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
+@patch(
+    "seer.automation.codegen.relevant_warnings_step.RelevantWarningsStep._post_results_to_overwatch"
+)
 def test_relevant_warnings_step_invoke(
+    mock_post_results_to_overwatch: Mock,
     mock_instantiate_context: Mock,
     mock_pipeline_step: MagicMock,
     mock_invoke_predict_relevant_warnings_component: Mock,
@@ -987,12 +989,63 @@ def test_relevant_warnings_step_invoke(
     assert (
         mock_invoke_static_analysis_suggestions_component.call_args[0][0].pr_files == mock_pr_files
     )
-    assert mock_invoke_static_analysis_suggestions_component.call_args[0][0].warnings == [
-        warning_and_pr_file.warning for warning_and_pr_file in mock_warning_and_pr_files
-    ]
+    assert (
+        mock_invoke_static_analysis_suggestions_component.call_args[0][0].warning_and_pr_files
+        == mock_warning_and_pr_files
+    )
     assert (
         mock_invoke_static_analysis_suggestions_component.call_args[0][0].fixable_issues
         == all_selected_issues[1:]
+    )
+
+    # Verify that _post_results_to_overwatch was called with the correct parameters
+    mock_post_results_to_overwatch.assert_called_once()
+    static_analysis_suggestions_output = (
+        mock_invoke_static_analysis_suggestions_component.return_value
+    )
+    diagnostics = [
+        {
+            "component": "Relevant Warnings - Read PR",
+            "pr_files": [pr_file.filename for pr_file in mock_pr_files],
+            "warnings": [warning.id for warning in request.warnings],
+        },
+        {
+            "component": "Relevant Warnings - Filter Warnings Component",
+            "filtered_warning_and_pr_files": [
+                [item.warning.id, item.pr_file.filename]
+                for item in mock_invoke_filter_warnings_component.return_value.warning_and_pr_files
+            ],
+        },
+        {
+            "component": "Relevant Warnings - Fetch Issues Component",
+            "all_selected_issues": [issue.id for issue in all_selected_issues],
+        },
+        {
+            "component": "Relevant Warnings - Associate Warnings With Issues Component",
+            "candidate_associations": [
+                {
+                    "warning_id": association[0].warning.id,
+                    "pr_file": association[0].pr_file.filename,
+                    "issue_id": association[1].id,
+                }
+                for association in mock_candidate_associations.candidate_associations
+            ],
+            "potentially_related_issue_titles": [
+                {
+                    "warning_id": warning_and_pr_file.warning.id,
+                    "potentially_related_issue_titles": warning_and_pr_file.warning.potentially_related_issue_titles,
+                    "pr_file": warning_and_pr_file.pr_file.filename,
+                }
+                for warning_and_pr_file in mock_warning_and_pr_files
+            ],
+        },
+        {
+            "component": "Relevant Warnings - Are Issues Fixable Component",
+            "fixable_issues": [issue.id for issue in all_selected_issues[1:]],
+        },
+    ]
+    mock_post_results_to_overwatch.assert_called_with(
+        static_analysis_suggestions_output, diagnostics
     )
 
 
@@ -1034,7 +1087,7 @@ class TestStaticAnalysisSuggestionsComponent:
         pr_files = [
             PrFile(
                 filename="test/path/file.py",
-                patch="@@ -1,3 +1,4 @@\ndef hello():\n    print('hello')\n+    print('world')",
+                patch="@@ -1,3 +1,4 @@\n def hello():\n     print('hello')\n+    print('world')",
                 status="modified",
                 changes=1,
                 sha="sha1",
@@ -1044,9 +1097,11 @@ class TestStaticAnalysisSuggestionsComponent:
         fixable_issues = [_mock_issue_details() for _ in range(2)]
 
         request = CodePredictStaticAnalysisSuggestionsRequest(
-            pr_files=pr_files,
-            warnings=warnings,
+            warning_and_pr_files=[
+                WarningAndPrFile(warning=warning, pr_file=pr_files[0]) for warning in warnings
+            ],
             fixable_issues=fixable_issues,
+            pr_files=pr_files,
         )
 
         output = component.invoke(request)
@@ -1080,7 +1135,7 @@ class TestStaticAnalysisSuggestionsComponent:
         pr_files = [
             PrFile(
                 filename="test/path/file.py",
-                patch="@@ -1,3 +1,4 @@\ndef hello():\n    print('hello')\n+    print('world')",
+                patch="@@ -1,3 +1,4 @@\n def hello():\n     print('hello')\n+    print('world')",
                 status="modified",
                 changes=1,
                 sha="sha1",
@@ -1090,9 +1145,11 @@ class TestStaticAnalysisSuggestionsComponent:
         fixable_issues = [_mock_issue_details() for _ in range(2)]
 
         request = CodePredictStaticAnalysisSuggestionsRequest(
-            pr_files=pr_files,
-            warnings=warnings,
+            warning_and_pr_files=[
+                WarningAndPrFile(warning=warning, pr_file=pr_files[0]) for warning in warnings
+            ],
             fixable_issues=fixable_issues,
+            pr_files=pr_files,
         )
 
         output = component.invoke(request)
