@@ -175,6 +175,9 @@ class StaticAnalysisWarning(BaseModel):
     def end_line(self) -> int:
         return int(Location.from_encoded(self.encoded_location).end_line)
 
+    def format_warning_id_and_message(self) -> str:
+        return f"Warning (ID {self.id}): {self.message}"
+
     def format_warning(self, filename: str | None = None) -> str:
         location = Location.from_encoded(self.encoded_location)
         if not self.potentially_related_issue_titles:
@@ -199,8 +202,7 @@ class StaticAnalysisWarning(BaseModel):
         return textwrap.dedent(
             """\
             <warning><warning_id>{id}</warning_id>
-            Warning (ID {id})
-            Warning message: {message}
+            {warning_id_and_message}
             ----------
             Location:
                 filename: {location_filename}
@@ -213,7 +215,7 @@ class StaticAnalysisWarning(BaseModel):
             {formatted_rule}</warning>"""
         ).format(
             id=self.id,
-            message=self.message,
+            warning_id_and_message=self.format_warning_id_and_message(),
             location_filename=filename or location.filename,
             location_start_line=location.start_line,
             location_end_line=location.end_line,
@@ -221,6 +223,3 @@ class StaticAnalysisWarning(BaseModel):
             formatted_issue_titles=formatted_issue_titles,
             formatted_rule=self.rule.format_rule() if self.rule else "",
         )
-
-    def format_warning_id_and_message(self) -> str:
-        return f"WARNING (ID {self.id}): {self.message}"
