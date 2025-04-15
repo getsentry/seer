@@ -389,15 +389,18 @@ def _format_patch_with_warnings(
     formatted_hunks = "\n\n".join(annotate_hunks(hunks))
 
     if include_warnings_after_patch:
-        formatted_warnings = "\n\n".join(
-            warning.format_warning(filename=pr_file.filename) for warning in warnings
-        )  # override the filename to reduce the chance of a hallucinated path
-        formatted_warnings = "\n\n".join(
-            (
-                f"Here's more information about the static analysis warnings in {pr_file.filename}:",
-                f"<warnings>\n\n{formatted_warnings}\n\n</warnings>",
+        if not warnings:
+            formatted_warnings = "No warnings were found in this file."
+        else:
+            formatted_warnings = "\n\n".join(
+                warning.format_warning(filename=pr_file.filename) for warning in warnings
+            )  # override the filename to reduce the chance of a hallucinated path
+            formatted_warnings = "\n\n".join(
+                (
+                    f"Here's more information about the static analysis warnings in {pr_file.filename}:",
+                    f"<warnings>\n\n{formatted_warnings}\n\n</warnings>",
+                )
             )
-        )
     else:
         formatted_warnings = ""
 
