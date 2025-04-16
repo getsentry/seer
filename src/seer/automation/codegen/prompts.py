@@ -300,7 +300,7 @@ class StaticAnalysisSuggestionsPrompts:
     def format_prompt(diff_with_warnings: str, formatted_issues: str):
         return textwrap.dedent(
             """\
-            You are given a diff block annotated with static analysis warnings:
+            You are given a diff block annotated with static analysis warnings which may or may not be important:
 
             {diff_with_warnings}
 
@@ -322,8 +322,11 @@ class StaticAnalysisSuggestionsPrompts:
                 - Severity score: 1 being "guaranteed an _uncaught_ exception will happen and not be caught by the code"; 0.5 being "an exception will happen but it's being caught" OR "an exception may happen depending on inputs"; 0 being "no exception will happen";
                 - Confidence score: 1 being "I am 100%% confident that this is a bug";
             - Before giving your final answer, in the `analysis` section (500 to 1000 words), think carefully and out loud about which specific warnings caused by the code change will cause production errors.
-              For the most alarming warnings, reason through the pathway from the code change to the warning to the production error. You're more than welcome to dismiss warnings that are not going to cause errors.
-              Focus on problems and suggestions that are critical to address. Ignore issues or warnings that aren't caused by the code change.
+              Apply a high level of scrutiny when thinking through whether there's a clear, explainable, and evidenced pathway between the warning and a production error.
+              Our engineers hate sorting through noisy suggestions. So we're not asking if a warning or issue could hypothetically, under unknown and unevidenced circumstances, vaguely cause an error. You're more than welcome to dismiss warnings that are not going to cause errors.
+              Ignore issues or warnings that aren't caused by the code change.
+              Pay more attention to warnings and issues around wrong types, values, and syntax. Linter warnings about unnecessary imports, suboptimal style, etc. are rarely critical.
+              Express in words what you're uncertain about, and what you're more confident about. You are more than free to point out that the warnings and issues are not clearly problematic in context of the code change, and should be ignored.
             """
         ).format(
             diff_with_warnings=diff_with_warnings,
