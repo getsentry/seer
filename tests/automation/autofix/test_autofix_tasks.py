@@ -49,7 +49,6 @@ from seer.automation.autofix.tasks import (
     run_autofix_coding,
     run_autofix_push_changes,
     run_autofix_root_cause,
-    run_autofix_solution,
     truncate_file_changes_to_match_memory,
     truncate_memory_to_match_insights,
     update_code_change,

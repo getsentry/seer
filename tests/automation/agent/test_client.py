@@ -507,7 +507,7 @@ def test_construct_message_from_stream_invalid_provider():
 @pytest.mark.vcr()
 def test_gemini_generate_text():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-exp")
+    model = GeminiProvider.model("gemini-2.0-flash-001")
 
     response = llm_client.generate_text(
         prompt="Say hello",
@@ -516,34 +516,34 @@ def test_gemini_generate_text():
 
     assert isinstance(response, LlmGenerateTextResponse)
     assert response.message.content is not None
-    assert response.message.content.strip() == "Hello! How can I help you today?"
+    assert "hello" in response.message.content.lower()
     assert response.message.role == "assistant"
-    assert response.metadata.model == "gemini-2.0-flash-exp"
+    assert response.metadata.model == "gemini-2.0-flash-001"
     assert response.metadata.provider_name == LlmProviderType.GEMINI
-    assert response.metadata.usage == Usage(completion_tokens=10, prompt_tokens=2, total_tokens=12)
+    assert response.metadata.usage == Usage(completion_tokens=11, prompt_tokens=2, total_tokens=13)
 
 
 @pytest.mark.vcr()
 def test_gemini_generate_text_with_tools():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-exp")
+    model = GeminiProvider.model("gemini-2.0-flash-001")
 
     tools = [
         FunctionTool(
-            name="test_function",
+            name="submit",
             description="A test function",
             parameters=[
                 {
-                    "name": "x",
-                    "type": "string",
+                    "name": "complete",
+                    "type": "boolean",
                 },
             ],
-            fn=lambda x: x,
+            fn=lambda complete: complete,
         )
     ]
 
     response = llm_client.generate_text(
-        prompt="Please invoke test_function with x = 'i love poetry' and write a haiku about the night sky.",
+        prompt="Please write a haiku, then invoke 'submit' with complete = true",
         model=model,
         tools=tools,
     )
@@ -555,8 +555,8 @@ def test_gemini_generate_text_with_tools():
     assert response.message.tool_calls is not None
     assert response.message.tool_calls == [
         ToolCall(
-            function="test_function",
-            args='{"x": "i love poetry"}',
+            function="submit",
+            args='{"complete": true}',
         ),
     ]
 
@@ -564,7 +564,7 @@ def test_gemini_generate_text_with_tools():
 @pytest.mark.vcr()
 def test_gemini_generate_structured():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-exp")
+    model = GeminiProvider.model("gemini-2.0-flash-001")
 
     class TestStructure(BaseModel):
         name: str
@@ -578,7 +578,7 @@ def test_gemini_generate_structured():
 
     assert isinstance(response, LlmGenerateStructuredResponse)
     assert response.parsed == TestStructure(name="John Doe", age=30)
-    assert response.metadata.model == "gemini-2.0-flash-exp"
+    assert response.metadata.model == "gemini-2.0-flash-001"
     assert response.metadata.provider_name == LlmProviderType.GEMINI
 
 
@@ -640,7 +640,7 @@ def test_gemini_prep_message_and_tools():
 @pytest.mark.vcr()
 def test_gemini_generate_text_stream():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-exp")
+    model = GeminiProvider.model("gemini-2.0-flash-001")
 
     stream_items = list(
         llm_client.generate_text_stream(
@@ -654,7 +654,7 @@ def test_gemini_generate_text_stream():
     usage_items = [item for item in stream_items if isinstance(item, Usage)]
 
     assert len(content_chunks) > 0
-    assert "".join(content_chunks).strip() == "Hello! How can I help you today?"
+    assert "hello" in "".join(content_chunks).lower()
     assert len(usage_items) == 1
     assert usage_items[0].completion_tokens > 0
     assert usage_items[0].prompt_tokens > 0
@@ -667,25 +667,25 @@ def test_gemini_generate_text_stream():
 @pytest.mark.vcr()
 def test_gemini_generate_text_stream_with_tools():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-exp")
+    model = GeminiProvider.model("gemini-2.0-flash-001")
 
     tools = [
         FunctionTool(
-            name="test_function",
+            name="submit",
             description="A test function",
             parameters=[
                 {
-                    "name": "x",
-                    "type": "string",
+                    "name": "complete",
+                    "type": "boolean",
                 },
             ],
-            fn=lambda x: x,
+            fn=lambda complete: complete,
         )
     ]
 
     stream_items = list(
         llm_client.generate_text_stream(
-            prompt="Please invoke test_function with x = 'i love poetry' and write a haiku about the night sky.",
+            prompt="Please write a haiku, then invoke 'submit' with complete = true",
             model=model,
             tools=tools,
         )
@@ -698,13 +698,13 @@ def test_gemini_generate_text_stream_with_tools():
 
     assert len(content_chunks) > 0
     assert len(tool_calls) == 1
-    assert tool_calls[0].function == "test_function"
-    assert tool_calls[0].args == '{"x": "i love poetry"}'
+    assert tool_calls[0].function == "submit"
+    assert tool_calls[0].args == '{"complete": true}'
     assert len(usage_items) == 1
 
 
 def test_construct_message_from_stream_gemini():
-    model = GeminiProvider.model("gemini-2.0-flash-exp")
+    model = GeminiProvider.model("gemini-2.0-flash-001")
 
     content_chunks = ["Hello", " world", "!"]
     tool_calls = [ToolCall(id="123", function="test_function", args='{"x": "test"}')]
@@ -724,7 +724,7 @@ def test_construct_message_from_stream_gemini():
 @pytest.mark.vcr()
 def test_gemini_generate_text_from_web_search():
     llm_client = LlmClient()
-    model = GeminiProvider(model_name="gemini-2.0-flash-exp")
+    model = GeminiProvider(model_name="gemini-2.0-flash-001")
 
     response = llm_client.generate_text_from_web_search(
         prompt="What year is it?",
@@ -732,7 +732,7 @@ def test_gemini_generate_text_from_web_search():
     )
 
     assert isinstance(response, str)
-    assert "2024" in response
+    assert "2025" in response
 
 
 @pytest.mark.parametrize(
@@ -740,7 +740,7 @@ def test_gemini_generate_text_from_web_search():
     [
         (OpenAiProvider, "gpt-3.5-turbo"),
         (AnthropicProvider, "claude-3-5-sonnet@20240620"),
-        (GeminiProvider, "gemini-2.0-flash-exp"),
+        (GeminiProvider, "gemini-2.0-flash-001"),
     ],
 )
 def test_generate_text_stream_with_first_token_timeout(provider_class, model_name, monkeypatch):
@@ -792,7 +792,7 @@ def test_generate_text_stream_with_first_token_timeout(provider_class, model_nam
     [
         (OpenAiProvider, "gpt-3.5-turbo"),
         (AnthropicProvider, "claude-3-5-sonnet@20240620"),
-        (GeminiProvider, "gemini-2.0-flash-exp"),
+        (GeminiProvider, "gemini-2.0-flash-001"),
     ],
 )
 def test_generate_text_stream_with_inactivity_timeout(provider_class, model_name, monkeypatch):
