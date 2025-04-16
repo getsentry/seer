@@ -430,15 +430,9 @@ class AnthropicProvider:
     @staticmethod
     @inject
     def get_client(app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
-        if app_config.SENTRY_REGION == "de":
-            region = "europe-west1"
-        elif app_config.DEV:
-            region = "us-east5"
-        else:
-            region = "global"
         return anthropic.AnthropicVertex(
             project_id=app_config.GOOGLE_CLOUD_PROJECT,
-            region=region,
+            region="europe-west1" if app_config.SENTRY_REGION == "de" else "us-east5",
             max_retries=8,
         )
 
