@@ -488,6 +488,25 @@ class BaseTools:
                         timeout=45,
                     )
 
+                    # Check if error is due to "is a directory" and retry with -r flag
+                    if (
+                        process.returncode != 0
+                        and process.returncode != 1
+                        and "is a directory" in process.stderr.lower()
+                    ):
+                        if "-r" not in cmd_args and "--recursive" not in cmd_args:
+                            recursive_cmd_args = cmd_args.copy()
+                            recursive_cmd_args.insert(1, "-r")
+                            process = subprocess.run(
+                                recursive_cmd_args,
+                                shell=False,
+                                cwd=tmp_repo_dir,
+                                capture_output=True,
+                                text=True,
+                                check=False,
+                                timeout=45,
+                            )
+
                     if (
                         process.returncode != 0 and process.returncode != 1
                     ):  # grep returns 1 when no matches found
