@@ -57,12 +57,12 @@ class TestSummarizeIssue:
         print(f"Actual result scores: {result.scores}")
 
         expected_result = IssueSummaryWithScores(
-            title="Multiple Issues in Session: Shared Resource Failure?",
-            whats_wrong="**red-timothy-sandwich** issue occurred.",
-            session_related_issues="Other issues: **cyan-vincent-banana** and **green-fred-tennis** occurred in the same session.",
-            possible_cause="Perhaps a **shared resource** or **dependency** is failing, affecting multiple features.",
+            title="red-timothy-sandwich: Data Corruption?",
+            whats_wrong="**red-timothy-sandwich** is the main issue.",
+            session_related_issues="Other issues: **cyan-vincent-banana**, **green-fred-tennis**.",
+            possible_cause="Perhaps a **data corruption** issue is the root cause.",
             scores=SummarizeIssueScores(
-                possible_cause_confidence=0.5,
+                possible_cause_confidence=0.4,
                 possible_cause_novelty=0.8,
                 fixability_score=None,
                 fixability_score_version=None,
