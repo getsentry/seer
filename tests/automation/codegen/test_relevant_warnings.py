@@ -121,8 +121,7 @@ def _mock_issue_details() -> IssueDetails:
             textwrap.dedent(
                 """\
                 <warning><warning_id>1</warning_id>
-                Warning (ID 1)
-                Warning message: Warning message
+                Warning (ID 1): Warning message
                 ----------
                 Location:
                     filename: path/to/file.py
@@ -169,8 +168,7 @@ def _mock_issue_details() -> IssueDetails:
             textwrap.dedent(
                 """\
                 <warning><warning_id>2</warning_id>
-                Warning (ID 2)
-                Warning message: Warning message
+                Warning (ID 2): Warning message
                 ----------
                 Location:
                     filename: path/to/file.js

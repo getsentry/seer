@@ -1,6 +1,6 @@
 import textwrap
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
 from seer.automation.codegen.models import StaticAnalysisSuggestion
@@ -281,7 +281,7 @@ class IsFixableIssuePrompts(_RelevantWarningsPromptPrefix):
 class StaticAnalysisSuggestionsPrompts:
 
     class AnalysisAndSuggestions(BaseModel):
-        analysis: str = Field(description="Your room to think step-by-step. At most 1000 words.")
+        analysis: str
         suggestions: list[StaticAnalysisSuggestion]
 
     @staticmethod
@@ -304,7 +304,7 @@ class StaticAnalysisSuggestionsPrompts:
 
             {diff_with_warnings}
 
-            You are also given a list of existing Sentry issues that exist in the codebase close to the diff:
+            You are also given a list of past Sentry issues that exist in the codebase close to the diff:
             {formatted_issues}
 
             # Your Goal:
@@ -321,8 +321,9 @@ class StaticAnalysisSuggestionsPrompts:
             - Assign a severity score and confidence score to each suggestion, from 0 to 1. The score should be granular, e.g., 0.432.
                 - Severity score: 1 being "guaranteed an _uncaught_ exception will happen and not be caught by the code"; 0.5 being "an exception will happen but it's being caught" OR "an exception may happen depending on inputs"; 0 being "no exception will happen";
                 - Confidence score: 1 being "I am 100%% confident that this is a bug";
-            - Before giving your final answer, think carefully about which warnings caused by the code change will cause production errors.
-              Only consider suggestions that are critical to address. Ignore issues or warnings that aren't caused by the code change.
+            - Before giving your final answer, in the `analysis` section (500 to 1000 words), think carefully and out loud about which specific warnings caused by the code change will cause production errors.
+              For the most alarming warnings, reason through the pathway from the code change to the warning to the production error. You're more than welcome to dismiss warnings that are not going to cause errors.
+              Focus on problems and suggestions that are critical to address. Ignore issues or warnings that aren't caused by the code change.
             """
         ).format(
             diff_with_warnings=diff_with_warnings,
