@@ -14,7 +14,7 @@ from seer.automation.autofix.components.coding.models import CodingOutput, Codin
 from seer.automation.autofix.components.coding.prompts import CodingPrompts
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
 from seer.automation.autofix.prompts import format_repo_prompt
-from seer.automation.autofix.tools import BaseTools
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected

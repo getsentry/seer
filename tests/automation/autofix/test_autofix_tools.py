@@ -5,7 +5,7 @@ import pytest
 
 from seer.automation.agent.client import LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.tools import BaseTools
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.models import FileChange
 

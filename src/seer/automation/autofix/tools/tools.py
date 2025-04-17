@@ -147,41 +147,16 @@ class BaseTools:
     @ai_track(description="Semantic File Search")
     @inject
     def semantic_file_search(self, query: str, llm_client: LlmClient = injected):
-        repo_names = self._get_repo_names()
-        files_per_repo = {}
-        for repo_name in repo_names:
-            repo_client = self.context.get_repo_client(
-                repo_name=repo_name, type=self.repo_client_type
-            )
-            valid_file_paths = repo_client.get_valid_file_paths()
-
-            # Convert the list of file paths to a tree structure
-            files_with_status = [{"path": path, "status": ""} for path in valid_file_paths]
-            tree_representation = repo_client._build_file_tree_string(files_with_status)
-            files_per_repo[repo_name] = tree_representation
+        from seer.automation.autofix.tools.semantic_search import semantic_search
 
         self.context.event_manager.add_log(f'Searching for "{query}"...')
 
-        all_valid_paths = "\n".join(
-            [
-                f"FILES IN REPO {repo_name}:\n{files_per_repo[repo_name]}\n------------"
-                for repo_name in repo_names
-            ]
-        )
-        file_location = self._semantic_file_search_completion(
-            query, all_valid_paths, repo_names, llm_client
-        )
-        file_path = file_location.file_path if file_location else None
-        repo_name = file_location.repo_name if file_location else None
-        if file_path is None or repo_name is None:
+        result = semantic_search(query=query, context=self.context)
+
+        if not result:
             return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
 
-        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
-
-        if file_contents is None:
-            return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
-
-        return f"This file might be what you're looking for: `{file_path}`. Contents:\n\n{file_contents}"
+        return result
 
     @observe(name="Expand Document")
     @ai_track(description="Expand Document")
@@ -1275,3 +1250,55 @@ class BaseTools:
                 )
 
         return tools
+
+
+class SemanticSearchTools(BaseTools):
+    def get_tools(
+        self, can_access_repos: bool = True, include_claude_tools: bool = False
+    ) -> list[ClaudeTool | FunctionTool]:
+        if not can_access_repos:
+            return []
+
+        return [
+            FunctionTool(
+                name="tree",
+                fn=self.tree,
+                description="Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.",
+                parameters=[
+                    {
+                        "name": "path",
+                        "type": "string",
+                        "description": 'The path to view. For example, "src/app/components"',
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
+                ],
+                required=["path"],
+            ),
+            FunctionTool(
+                name="expand_document",
+                fn=self.expand_document,
+                description=textwrap.dedent(
+                    """\
+                Given a document path, returns the entire document text.
+                - Note: To save time and money, if you're looking to expand multiple documents, call this tool multiple times in the same message.
+                - If a document has already been expanded earlier in the conversation, don't use this tool again for the same file path."""
+                ),
+                parameters=[
+                    {
+                        "name": "file_path",
+                        "type": "string",
+                        "description": "The document path to expand.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Name of the repository containing the file.",
+                    },
+                ],
+                required=["file_path", "repo_name"],
+            ),
+        ]

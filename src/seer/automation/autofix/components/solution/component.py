@@ -13,7 +13,7 @@ from seer.automation.autofix.components.root_cause.models import RootCauseAnalys
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionRequest
 from seer.automation.autofix.components.solution.prompts import SolutionPrompts
 from seer.automation.autofix.prompts import format_repo_prompt
-from seer.automation.autofix.tools import BaseTools
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
 
