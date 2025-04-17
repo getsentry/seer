@@ -1,12 +1,9 @@
-import textwrap
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
-from seer.automation.agent.client import LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools.tools import BaseTools
-from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.models import FileChange
 
 
@@ -106,172 +103,33 @@ class TestFileSystem:
 
 
 class TestSemanticFileSearch:
-    def test_semantic_file_search_found(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(full_name="owner/test_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
+    @patch("seer.automation.autofix.tools.semantic_search.semantic_search")
+    def test_semantic_file_search_found(self, mock_semantic_search, autofix_tools: BaseTools):
+        query = "find the main file"
+        expected_result = "Found relevant file: `src/main.py`"
+        mock_semantic_search.return_value = expected_result
 
-        mock_repo_client = MagicMock()
-        # Files available in the repo
-        mock_repo_client.get_valid_file_paths.return_value = [
-            "src/file1.py",
-            "tests/test_file1.py",
-            "src/subfolder/file2.py",
-        ]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-        autofix_tools.context.get_file_contents.return_value = "test file contents"
+        result = autofix_tools.semantic_file_search(query)
 
-        mock_llm_client = MagicMock()
-        # The parsed response now includes both file_path and the repo_name built from the dummy repo.
-        mock_llm_client.generate_structured.return_value.parsed = MagicMock(
-            file_path="src/file1.py", repo_name="owner/test_repo"
+        mock_semantic_search.assert_called_once_with(query=query, context=autofix_tools.context)
+        autofix_tools.context.event_manager.add_log.assert_called_with(
+            f'Searching for "{query}"...'
         )
+        assert result == expected_result
 
-        result = autofix_tools.semantic_file_search(
-            "find the main file", llm_client=mock_llm_client
+    @patch("seer.automation.autofix.tools.semantic_search.semantic_search")
+    def test_semantic_file_search_not_found(self, mock_semantic_search, autofix_tools: BaseTools):
+        query = "find nonexistent file"
+        expected_result = "Could not figure out which file matches what you were looking for. You'll have to try yourself."
+        mock_semantic_search.return_value = ""  # Simulate agent returning nothing
+
+        result = autofix_tools.semantic_file_search(query)
+
+        mock_semantic_search.assert_called_once_with(query=query, context=autofix_tools.context)
+        autofix_tools.context.event_manager.add_log.assert_called_with(
+            f'Searching for "{query}"...'
         )
-        expected = "This file might be what you're looking for: `src/file1.py`. Contents:\n\ntest file contents"
-        assert result == expected
-
-    @pytest.mark.vcr()
-    @pytest.mark.parametrize(
-        "repo_names",
-        (
-            ["owner/repo", "owner/another-repo"],
-            ["owner/another-repo"],  # fall back to str RepoName
-            ["owner/repo", "owner/another-repo"] * 100,  # fall back to str RepoName
-        ),
-    )
-    def test_semantic_file_search_completion(self, autofix_tools: BaseTools, repo_names: list[str]):
-        query = "find the file which tests google's LLM"
-        valid_file_paths = textwrap.dedent(
-            """
-            FILES IN REPO owner/repo:
-            src/
-            └──something.py
-            tests/
-            └──another/
-                └──test_thing.py
-            ------------
-            FILES IN REPO owner/another-repo:
-            src/
-            └──clients/
-                ├──claude.py
-                ├──gemini.py
-                └──openai.py
-            tests/
-            └──clients/
-                ├──test_claude.py
-                ├──test_gemini.py
-                └──test_openai.py
-            """
-        )
-
-        llm_client = LlmClient()
-        file_location = autofix_tools._semantic_file_search_completion(
-            query, valid_file_paths, repo_names, llm_client
-        )
-        assert file_location.repo_name == "owner/another-repo"
-        assert file_location.file_path == "tests/clients/test_gemini.py"
-
-    def test_semantic_file_search_not_found_no_file_path(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(full_name="owner/test_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.get_valid_file_paths.return_value = [
-            "src/file1.py",
-            "tests/test_file1.py",
-        ]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value.parsed = None
-
-        result = autofix_tools.semantic_file_search(
-            "find nonexistent file", llm_client=mock_llm_client
-        )
-        expected = "Could not figure out which file matches what you were looking for. You'll have to try yourself."
-        assert result == expected
-
-    def test_semantic_file_search_not_found_no_contents(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(full_name="owner/test_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.get_valid_file_paths.return_value = [
-            "src/file1.py",
-            "tests/test_file1.py",
-        ]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-        autofix_tools.context.get_file_contents.return_value = None
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value.parsed = MagicMock(
-            file_path="src/file1.py", repo_name="owner/test_repo"
-        )
-
-        result = autofix_tools.semantic_file_search(
-            "find file with no contents", llm_client=mock_llm_client
-        )
-        expected = "Could not figure out which file matches what you were looking for. You'll have to try yourself."
-        assert result == expected
-
-    def test_semantic_file_search_with_repo_name(self, autofix_tools: BaseTools):
-        # Instead of passing repo_name directly as an argument,
-        # set context.repos so that _get_repo_names() returns "owner/specific_repo"
-        dummy_repo = MagicMock(full_name="owner/specific_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.get_valid_file_paths.return_value = ["src/file1.py"]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-        autofix_tools.context.get_file_contents.return_value = "test file contents"
-        autofix_tools.repo_client_type = RepoClientType.READ
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value.parsed = MagicMock(
-            file_path="src/file1.py", repo_name="owner/specific_repo"
-        )
-
-        autofix_tools.semantic_file_search("find file", llm_client=mock_llm_client)
-        autofix_tools.context.get_repo_client.assert_any_call(
-            repo_name="owner/specific_repo", type=RepoClientType.READ
-        )
-
-    def test_semantic_file_search_multi_repo(self, autofix_tools: BaseTools):
-        # Create two dummy repos
-        dummy_repo1 = MagicMock(full_name="owner/repo1")
-        dummy_repo2 = MagicMock(full_name="owner/repo2")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo1, dummy_repo2]
-
-        # Each repo returns a different set of valid file paths.
-        client_repo1 = MagicMock()
-        client_repo1.get_valid_file_paths.return_value = ["src/main.py", "src/helper.py"]
-        client_repo2 = MagicMock()
-        client_repo2.get_valid_file_paths.return_value = ["src/main.py", "README.md"]
-
-        # Use a side effect to return the proper client for each repo.
-        def get_repo_client_side_effect(repo_name, type):
-            if repo_name == "owner/repo1":
-                return client_repo1
-            elif repo_name == "owner/repo2":
-                return client_repo2
-            return MagicMock()
-
-        autofix_tools.context.get_repo_client.side_effect = get_repo_client_side_effect
-
-        # Simulate file contents for a file in repo2.
-        autofix_tools.context.get_file_contents.return_value = "print('Hello from repo2')"
-
-        # Create a dummy LLM client which returns that for the query 'find main'
-        response = MagicMock()
-        response.parsed = MagicMock(file_path="src/main.py", repo_name="owner/repo2")
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value = response
-
-        result = autofix_tools.semantic_file_search("find main", llm_client=mock_llm_client)
-        expected = "This file might be what you're looking for: `src/main.py`. Contents:\n\nprint('Hello from repo2')"
-        assert result == expected
+        assert result == expected_result
 
 
 class TestViewDiff:
