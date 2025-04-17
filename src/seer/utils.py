@@ -103,7 +103,7 @@ def backoff_on_exception(
 
     def decorator(func):
         @functools.wraps(func)
-        def wrapped_func(*args, **kwargs):
+        def wrapped_func(*args, **kwargs):  # should fetch issue 6544335976
             last_exception = None
             for num_tries in range(1, max_tries + 1):
                 try:
