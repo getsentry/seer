@@ -3,9 +3,11 @@ import textwrap
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.client import GeminiProvider
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.models import AutofixContinuation
 from seer.automation.autofix.prompts import format_repo_prompt
 from seer.automation.autofix.tools.tools import SemanticSearchTools
 from seer.automation.codegen.codegen_context import CodegenContext
+from seer.automation.codegen.models import CodegenContinuation
 
 
 def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str:
@@ -29,13 +31,13 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
     )
 
     state = context.state.get()
-    if isinstance(context, AutofixContext):
+    if isinstance(state, AutofixContinuation):
         readable_repos = state.readable_repos
         unreadable_repos = state.unreadable_repos
         repo_str = format_repo_prompt(
             readable_repos=readable_repos, unreadable_repos=unreadable_repos
         )
-    elif isinstance(context, CodegenContext):
+    elif isinstance(context, CodegenContinuation):
         repo_str = format_repo_prompt(readable_repos=[context.repo], unreadable_repos=[])
 
     system_prompt = textwrap.dedent(
