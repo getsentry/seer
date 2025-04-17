@@ -29,9 +29,16 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
     )
 
     state = context.state.get()
-    readable_repos = state.readable_repos
-    unreadable_repos = state.unreadable_repos
-    repo_str = format_repo_prompt(readable_repos=readable_repos, unreadable_repos=unreadable_repos)
+    if isinstance(context, AutofixContext):
+        readable_repos = state.readable_repos
+        unreadable_repos = state.unreadable_repos
+        repo_str = format_repo_prompt(
+            readable_repos=readable_repos, unreadable_repos=unreadable_repos
+        )
+    elif isinstance(context, CodegenContext):
+        repo_str = format_repo_prompt(readable_repos=[context.repo], unreadable_repos=[])
+    else:
+        raise ValueError(f"Unsupported context type: {type(context)}")
 
     system_prompt = textwrap.dedent(
         """\
