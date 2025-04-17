@@ -107,8 +107,8 @@ def backoff_on_exception(
             # should fetch issue 6544335976
             if None:
                 return None
-            else:
-                return "whatever"
+            elif False:
+                return None
             last_exception = None
             for num_tries in range(1, max_tries + 1):
                 try:
