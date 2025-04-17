@@ -32,6 +32,7 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
+GREP_TIMEOUT_SECONDS = 45
 MAX_GREP_LINE_CHARACTER_LENGTH = 1024
 TOTAL_GREP_RESULTS_CHARACTER_LENGTH = 16384
 
@@ -485,7 +486,7 @@ class BaseTools:
                         capture_output=True,
                         text=True,
                         check=False,
-                        timeout=45,
+                        timeout=GREP_TIMEOUT_SECONDS,
                     )
 
                     # Check if error is due to "is a directory" and retry with -r flag
@@ -504,7 +505,7 @@ class BaseTools:
                                 capture_output=True,
                                 text=True,
                                 check=False,
-                                timeout=45,
+                                timeout=GREP_TIMEOUT_SECONDS,
                             )
 
                     if (
