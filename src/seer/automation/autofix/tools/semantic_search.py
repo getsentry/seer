@@ -37,8 +37,6 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
         )
     elif isinstance(context, CodegenContext):
         repo_str = format_repo_prompt(readable_repos=[context.repo], unreadable_repos=[])
-    else:
-        raise ValueError(f"Unsupported context type: {type(context)}")
 
     system_prompt = textwrap.dedent(
         """\
