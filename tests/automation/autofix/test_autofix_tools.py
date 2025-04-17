@@ -412,6 +412,44 @@ class TestGrepSearch:
         assert "file1.py:10:def example_function()" in result
 
     @patch("subprocess.run")
+    def test_grep_search_directory_error_adds_recursive_flag(
+        self, mock_run, autofix_tools: BaseTools
+    ):
+        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+
+        # First call returns directory error
+        first_process = MagicMock()
+        first_process.returncode = 2
+        first_process.stderr = "grep: src/dir: Is a directory"
+        first_process.stdout = ""
+
+        # Second call (with -r flag) succeeds
+        second_process = MagicMock()
+        second_process.returncode = 0
+        second_process.stdout = "src/dir/file.py:10:def example_function():"
+
+        # Set up mock_run to return different responses on consecutive calls
+        mock_run.side_effect = [first_process, second_process]
+
+        result = autofix_tools.grep_search("grep 'example_function' src/dir")
+
+        # Verify subprocess.run was called twice
+        assert mock_run.call_count == 2
+
+        # First call should be with original arguments
+        first_call_args = mock_run.call_args_list[0][0][0]
+        assert first_call_args == ["grep", "example_function", "src/dir"]
+
+        # Second call should include the -r flag
+        second_call_args = mock_run.call_args_list[1][0][0]
+        assert second_call_args == ["grep", "-r", "example_function", "src/dir"]
+
+        # Result should contain the successful output
+        assert "Results from owner/test_repo:" in result
+        assert "src/dir/file.py:10:def example_function():" in result
+
+    @patch("subprocess.run")
     def test_grep_search_no_results(self, mock_run, autofix_tools: BaseTools):
         autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
         autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])

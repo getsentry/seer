@@ -133,10 +133,10 @@ class AutofixAgent(LlmAgent):
             if isinstance(chunk, tuple):
                 with self.context.state.update() as cur:
                     cur_step = cur.steps[-1]
-                    if not cleared:
-                        cur_step.clear_output_stream()
-                        cleared = True
                     if chunk[0] == "thinking_content" or chunk[0] == "content":
+                        if not cleared and len(chunk[1]) > 0:
+                            cur_step.clear_output_stream()
+                            cleared = True
                         cur_step.receive_output_stream(chunk[1])
                 if chunk[0] == "thinking_content":
                     thinking_content_chunks.append(chunk[1])

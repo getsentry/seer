@@ -35,6 +35,7 @@ from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
     LlmModelDefaultConfig,
+    LlmNoCompletionTokensError,
     LlmProviderDefaults,
     LlmProviderType,
     LlmRefusalError,
@@ -426,14 +427,35 @@ class AnthropicProvider:
         ),
     ]
 
-    @staticmethod
     @inject
-    def get_client(app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
-        return anthropic.AnthropicVertex(
-            project_id=app_config.GOOGLE_CLOUD_PROJECT,
-            region="europe-west1" if app_config.SENTRY_REGION == "de" else "us-east5",
-            max_retries=8,
-        )
+    def get_client(self, app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
+        project_id = app_config.GOOGLE_CLOUD_PROJECT
+        max_retries = 8
+
+        supported_models_on_global_endpoint = [
+            "claude-3-5-sonnet-v2@20241022",
+            "claude-3-7-sonnet@20250219",
+        ]
+
+        if app_config.SENTRY_REGION == "de":
+            return anthropic.AnthropicVertex(
+                project_id=project_id,
+                region="europe-west1",
+                max_retries=max_retries,
+            )
+        elif app_config.DEV or self.model_name not in supported_models_on_global_endpoint:
+            return anthropic.AnthropicVertex(
+                project_id=project_id,
+                region="us-east5",
+                max_retries=max_retries,
+            )
+        else:
+            return anthropic.AnthropicVertex(
+                project_id=project_id,
+                region="global",
+                base_url="https://aiplatform.googleapis.com/v1/",
+                max_retries=max_retries,
+            )
 
     @classmethod
     def model(cls, model_name: str) -> "AnthropicProvider":
@@ -800,10 +822,12 @@ class GeminiProvider:
     ]
 
     @staticmethod
-    def get_client() -> genai.Client:
+    @inject
+    def get_client(app_config: AppConfig = injected) -> genai.Client:
+        region = "europe-west1" if app_config.SENTRY_REGION == "de" else "global"
         client = genai.Client(
             vertexai=True,
-            location="us-central1",
+            location=region,
         )
         # The gemini client currently doesn't have a built-in retry mechanism.
         retrier = backoff_on_exception(
@@ -868,6 +892,7 @@ class GeminiProvider:
                 isinstance(exception, ClientError)
                 and any(error in str(exception) for error in retryable_errors)
             )
+            or isinstance(exception, LlmNoCompletionTokensError)
         ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Gemini Generation")
@@ -988,6 +1013,8 @@ class GeminiProvider:
                     if chunk.usage_metadata.candidates_token_count:
                         total_completion_tokens = chunk.usage_metadata.candidates_token_count
 
+            if total_completion_tokens == 0:
+                raise LlmNoCompletionTokensError("No completion tokens returned from Gemini")
         finally:
             # Yield final usage statistics
             usage = Usage(

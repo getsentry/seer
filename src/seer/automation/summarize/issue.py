@@ -149,7 +149,7 @@ def summarize_issue(
 
         try:
             completion = llm_client.generate_structured(
-                model=GeminiProvider.model("gemini-2.0-flash-lite"),
+                model=GeminiProvider.model("gemini-2.0-flash-lite-001"),
                 prompt=prompt,
                 response_format=IssueSummaryForLlmToGenerate,
                 temperature=0.0,
@@ -243,5 +243,5 @@ def evaluate_autofixability(
         f"Possible cause: {issue_summary.possible_cause}"
     )
     score = autofixability_model.score(issue_summary_input)
-    is_fixable = score > 0.724  # 80th percentile
+    is_fixable = score > 0.718  # 75th percentile on test set
     return score, is_fixable

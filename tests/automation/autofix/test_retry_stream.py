@@ -96,7 +96,7 @@ def flakify(
         _max_num_flaky_clients: int = 2
 
         def get_client(self):
-            client = provider_class.get_client()
+            client = super().get_client()
             if self._num_flaky_clients < self._max_num_flaky_clients:
                 self._num_flaky_clients += 1
                 # Put the client in a flaky state, i.e., make all of its streams flaky
@@ -164,7 +164,7 @@ def create_flaky_openai():
 
 
 def create_flaky_gemini():
-    return GeminiProviderFlaky.model("gemini-1.5-flash")
+    return GeminiProviderFlaky.model("gemini-2.0-flash-lite-001")
 
 
 @pytest.fixture(

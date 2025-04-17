@@ -1,6 +1,6 @@
-import json
 import logging
 import textwrap
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +12,7 @@ from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.embeddings import GoogleProviderEmbeddings
-from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
+from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import code_snippet, left_truncated_paths
 from seer.automation.codegen.codegen_context import CodegenContext
@@ -30,7 +30,6 @@ from seer.automation.codegen.models import (
     FilterWarningsOutput,
     FilterWarningsRequest,
     RelevantWarningResult,
-    StaticAnalysisSuggestion,
     WarningAndPrFile,
 )
 from seer.automation.codegen.prompts import (
@@ -39,7 +38,7 @@ from seer.automation.codegen.prompts import (
     StaticAnalysisSuggestionsPrompts,
 )
 from seer.automation.component import BaseComponent
-from seer.automation.models import EventDetails, IssueDetails
+from seer.automation.models import EventDetails, FilePatch, IssueDetails, annotate_hunks
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
@@ -318,7 +317,7 @@ def _is_issue_fixable(issue: IssueDetails, llm_client: LlmClient = injected) -> 
     # LRU-cached by the issue id. The same issue could be analyzed many times if, e.g.,
     # a repo has a set of files which are frequently used to handle and raise exceptions.
     completion = llm_client.generate_structured(
-        model=GeminiProvider.model("gemini-2.0-flash-lite"),
+        model=GeminiProvider.model("gemini-2.0-flash-lite-001"),
         system_prompt=IsFixableIssuePrompts.format_system_msg(),
         prompt=IsFixableIssuePrompts.format_prompt(
             formatted_error=EventDetails.from_event(
@@ -367,6 +366,70 @@ class AreIssuesFixableComponent(
         )
 
 
+def _format_patch_with_warnings(
+    pr_file: PrFile,
+    warnings: list[StaticAnalysisWarning],
+    include_warnings_after_patch: bool = False,
+) -> str:
+    target_line_to_warnings: dict[int, list[StaticAnalysisWarning]] = defaultdict(list)
+    for warning in warnings:
+        target_line_to_warnings[warning.start_line].append(warning)
+
+    target_line_to_warning_annotation = {
+        target_line: "  <-- STATIC ANALYSIS WARNINGS: "
+        + " || ".join(
+            warning.format_warning_id_and_message().replace("\n", "\\n") for warning in warnings
+        )
+        for target_line, warnings in target_line_to_warnings.items()
+    }
+
+    hunks = FilePatch.to_hunks(
+        pr_file.patch, target_line_to_extra=target_line_to_warning_annotation
+    )
+    formatted_hunks = "\n\n".join(annotate_hunks(hunks))
+
+    if include_warnings_after_patch:
+        if not warnings:
+            formatted_warnings = "No warnings were found in this file."
+        else:
+            formatted_warnings = "\n\n".join(
+                warning.format_warning(filename=pr_file.filename) for warning in warnings
+            )  # override the filename to reduce the chance of a hallucinated path
+            formatted_warnings = "\n\n".join(
+                (
+                    f"Here's more information about the static analysis warnings in {pr_file.filename}:",
+                    f"<warnings>\n\n{formatted_warnings}\n\n</warnings>",
+                )
+            )
+    else:
+        formatted_warnings = ""
+
+    tag_start = f"<file><filename>{pr_file.filename}</filename>"
+    tag_end = "</file>"
+    title = f"Here are the changes made to file {pr_file.filename}:"
+    return "\n\n".join((tag_start, title, formatted_hunks, formatted_warnings, tag_end))
+
+
+def format_diff(
+    warning_and_pr_files: list[WarningAndPrFile],
+    pr_files: list[PrFile],
+    patch_delim: str = "\n\n#################\n\n",
+    include_warnings_after_patch: bool = True,
+) -> str:
+    filename_to_warnings: dict[str, list[StaticAnalysisWarning]] = defaultdict(list)
+    for warning_and_pr_file in warning_and_pr_files:
+        filename_to_warnings[warning_and_pr_file.pr_file.filename].append(
+            warning_and_pr_file.warning
+        )
+    body = patch_delim.join(
+        _format_patch_with_warnings(
+            pr_file, filename_to_warnings[pr_file.filename], include_warnings_after_patch
+        )
+        for pr_file in pr_files
+    )
+    return f"<diff>\n\n{body}\n\n</diff>"
+
+
 @cached(cache=LRUCache(maxsize=MAX_FILES_ANALYZED))
 def _cached_file_contents(repo_client: RepoClient, path: str, commit_sha: str) -> str:
     file_contents, _ = repo_client.get_file_content(path, sha=commit_sha)
@@ -397,19 +460,20 @@ class PredictRelevantWarningsComponent(
             self.logger.exception("Error getting file contents")
             return None
 
-        warning_location = Location.from_encoded(warning_and_pr_file.warning.encoded_location)
-        warning_start_line = int(warning_location.start_line)
-        warning_end_line = int(warning_location.end_line)
-
         lines = file_contents.split("\n")
-        if warning_end_line > len(lines):
+        if warning_and_pr_file.warning.end_line > len(lines):
             self.logger.error(
                 "The warning's end line is greater than the number of lines in the file. "
                 "Warning-file matching in FilterWarningsComponent was wrong or out of date.",
             )
             return None
 
-        return code_snippet(lines, warning_start_line, warning_end_line, padding_size=padding_size)
+        return code_snippet(
+            lines,
+            warning_and_pr_file.warning.start_line,
+            warning_and_pr_file.warning.end_line,
+            padding_size=padding_size,
+        )
 
     def _format_code_snippet_around_warning(
         self, warning_and_pr_file: WarningAndPrFile, commit_sha: str, padding_size: int = 10
@@ -510,7 +574,9 @@ class StaticAnalysisSuggestionsComponent(
         # Limit number of warnings?
         # Limit number of fixable issues? or issue size?
         # Better, more concise way to encode the information for the LLM in the prompt?
-        diff = "\n".join([pr_file.patch for pr_file in request.pr_files])
+        diff_with_warnings = format_diff(
+            request.warning_and_pr_files, request.pr_files, include_warnings_after_patch=True
+        )
         formatted_issues = (
             "<sentry_issues>\n"
             + "\n".join([self._format_issue(issue) for issue in request.fixable_issues])
@@ -520,16 +586,13 @@ class StaticAnalysisSuggestionsComponent(
             model=GeminiProvider.model("gemini-2.0-flash-001"),
             system_prompt=StaticAnalysisSuggestionsPrompts.format_system_msg(),
             prompt=StaticAnalysisSuggestionsPrompts.format_prompt(
-                diff=diff,
-                formatted_warnings=json.dumps(
-                    list(map(lambda w: w.format_warning(), request.warnings)), indent=2
-                ),
+                diff_with_warnings=diff_with_warnings,
                 formatted_issues=formatted_issues,
             ),
-            response_format=list[StaticAnalysisSuggestion],
+            response_format=StaticAnalysisSuggestionsPrompts.AnalysisAndSuggestions,
             temperature=0.0,
             max_tokens=8192,
         )
         if completion.parsed is None:
             return None
-        return CodePredictStaticAnalysisSuggestionsOutput(suggestions=completion.parsed)
+        return CodePredictStaticAnalysisSuggestionsOutput(suggestions=completion.parsed.suggestions)
