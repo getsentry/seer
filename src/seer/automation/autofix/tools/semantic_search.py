@@ -37,8 +37,8 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
         repo_str = format_repo_prompt(
             readable_repos=readable_repos, unreadable_repos=unreadable_repos
         )
-    elif isinstance(context, CodegenContinuation):
-        repo_str = format_repo_prompt(readable_repos=[context.repo], unreadable_repos=[])
+    elif isinstance(state, CodegenContinuation):
+        repo_str = format_repo_prompt(readable_repos=[state.request.repo], unreadable_repos=[])
 
     system_prompt = textwrap.dedent(
         """\

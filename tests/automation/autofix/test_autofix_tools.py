@@ -66,14 +66,14 @@ def autofix_tools(test_state):
     context._attempt_fix_path = MagicMock(return_value="test.py")
 
     with patch(
-        "seer.automation.autofix.tools.BaseTools._start_parallel_repo_download", MagicMock()
+        "seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download", MagicMock()
     ):
         tools = BaseTools(context)
     return tools
 
 
 class TestFileSystem:
-    @patch("seer.automation.autofix.tools.cleanup_dir")
+    @patch("seer.automation.autofix.tools.tools.cleanup_dir")
     def test_context_manager_cleanup(self, mock_cleanup_dir, autofix_tools: BaseTools):
         with autofix_tools as tools:
             tools.tmp_dir = {"dummy": ("/tmp/test_dir", "/tmp/test_dir/repo")}
@@ -81,7 +81,7 @@ class TestFileSystem:
         mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
         assert autofix_tools.tmp_dir == {}
 
-    @patch("seer.automation.autofix.tools.cleanup_dir")
+    @patch("seer.automation.autofix.tools.tools.cleanup_dir")
     def test_cleanup_method(self, mock_cleanup_dir, autofix_tools: BaseTools):
         autofix_tools.tmp_dir = {"dummy": ("/tmp/test_dir", "/tmp/test_dir/repo")}
 
@@ -90,7 +90,7 @@ class TestFileSystem:
         mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
         assert autofix_tools.tmp_dir == {}
 
-    @patch("seer.automation.autofix.tools.cleanup_dir")
+    @patch("seer.automation.autofix.tools.tools.cleanup_dir")
     def test_cleanup_not_called_when_tmp_dir_is_none(
         self, mock_cleanup_dir, autofix_tools: BaseTools
     ):
@@ -366,7 +366,7 @@ class TestGrepSearch:
         assert "Results from owner/repo2" in result
         assert "repo2_file.py:20:result" in result
 
-    @patch("seer.automation.autofix.tools.BaseTools._ensure_repos_downloaded")
+    @patch("seer.automation.autofix.tools.tools.BaseTools._ensure_repos_downloaded")
     def test_grep_search_specific_repo(self, mock_ensure_repos, autofix_tools: BaseTools):
         autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
 
@@ -464,7 +464,7 @@ class TestFindFiles:
         assert "Results from owner/repo2" in result
         assert "./repo2_file.py" in result
 
-    @patch("seer.automation.autofix.tools.BaseTools._ensure_repos_downloaded")
+    @patch("seer.automation.autofix.tools.tools.BaseTools._ensure_repos_downloaded")
     def test_find_files_specific_repo(self, mock_ensure_repos, autofix_tools: BaseTools):
         autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
 
@@ -481,8 +481,8 @@ class TestFindFiles:
 
 
 class TestParallelRepoDownload:
-    @patch("seer.automation.autofix.tools.copy_modules_initializer")
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.copy_modules_initializer")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_init_starts_parallel_download(self, mock_executor_class, mock_copy_initializer):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -500,7 +500,7 @@ class TestParallelRepoDownload:
         assert mock_executor.submit.called
         assert tools._download_future is not None
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_cleanup_cancels_download_future(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -511,7 +511,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = [MagicMock(full_name="owner/repo1")]
 
         # Patch _start_parallel_repo_download to avoid starting real threads
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Set a mock future
@@ -525,7 +525,7 @@ class TestParallelRepoDownload:
         mock_future.cancel.assert_called_once()
         assert tools._download_future is None
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_exit_shuts_down_executor(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -535,7 +535,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = []
 
         # Patch _start_parallel_repo_download to avoid starting real threads
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Call __exit__
@@ -550,7 +550,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = [MagicMock(full_name="owner/repo1")]
 
         # Patch _start_parallel_repo_download to avoid starting real threads
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Setup a completed future
@@ -582,8 +582,8 @@ class TestParallelRepoDownload:
         assert "owner/repo1" in tools.tmp_dir
         assert tools.tmp_dir["owner/repo1"] == ("/tmp/dir", "/tmp/dir/repo")
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
-    @patch("seer.automation.autofix.tools.as_completed")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.as_completed")
     def test_ensure_repos_downloaded_parallel(self, mock_as_completed, mock_executor_class):
         # Setup ThreadPoolExecutor context manager mock
         thread_pool_cm = MagicMock()
@@ -602,7 +602,7 @@ class TestParallelRepoDownload:
 
         # We need to patch out the _download_future because our test focuses on _ensure_repos_downloaded
         # Create tools with a pre-completed download_future to avoid extra ThreadPoolExecutor usage
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Setup a completed future to avoid triggering more ThreadPoolExecutor creation
@@ -639,7 +639,7 @@ class TestParallelRepoDownload:
         mock_executor_class.reset_mock()
 
         # Call method
-        with patch("seer.automation.autofix.tools.append_langfuse_observation_metadata"):
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
             tools._ensure_repos_downloaded()
 
         # Verify ThreadPoolExecutor was created exactly once during the test
@@ -654,7 +654,7 @@ class TestParallelRepoDownload:
         assert "owner/repo2" in tools.tmp_dir
         assert "owner/repo3" in tools.tmp_dir
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_cleanup_handles_future_cancel_exception(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -664,7 +664,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = []
 
         # Create tools
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Set up a future that raises an exception when cancelled
@@ -674,7 +674,7 @@ class TestParallelRepoDownload:
         tools._download_future = mock_future
 
         # Call cleanup - should handle the exception gracefully
-        with patch("seer.automation.autofix.tools.logger.exception") as mock_logger:
+        with patch("seer.automation.autofix.tools.tools.logger.exception") as mock_logger:
             tools.cleanup()
 
         # Verify exception was logged
@@ -682,7 +682,7 @@ class TestParallelRepoDownload:
         assert "Cancel failed" in str(mock_logger.call_args)
         assert tools._download_future is None
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_exit_handles_executor_shutdown_exception(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -693,11 +693,11 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = []
 
         # Create tools
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Call __exit__ - should handle the exception gracefully
-        with patch("seer.automation.autofix.tools.logger.exception") as mock_logger:
+        with patch("seer.automation.autofix.tools.tools.logger.exception") as mock_logger:
             tools.__exit__(None, None, None)
 
         # Verify exception was logged
@@ -705,7 +705,7 @@ class TestParallelRepoDownload:
         assert "Shutdown failed" in str(mock_logger.call_args)
         mock_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_ensure_repos_downloaded_skips_already_downloaded(self, mock_executor_class):
         # Setup mocks
         mock_executor = MagicMock()
@@ -720,7 +720,7 @@ class TestParallelRepoDownload:
         ]
 
         # Create tools with some repos already in tmp_dir
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Set up tmp_dir to simulate already downloaded repo
@@ -733,7 +733,7 @@ class TestParallelRepoDownload:
         context.get_repo_client.return_value = mock_repo_client
 
         # Call method
-        with patch("seer.automation.autofix.tools.append_langfuse_observation_metadata"):
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
             tools._ensure_repos_downloaded()
 
         # Verify only the second repo was downloaded
