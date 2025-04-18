@@ -31,6 +31,10 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
     )
 
     state = context.state.get()
+    repo_str = ""
+    initial_tree_str = "No directory information available."
+
+    readable_repos = []
     if isinstance(state, AutofixContinuation):
         readable_repos = state.readable_repos
         unreadable_repos = state.unreadable_repos
@@ -38,7 +42,17 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
             readable_repos=readable_repos, unreadable_repos=unreadable_repos
         )
     elif isinstance(state, CodegenContinuation):
-        repo_str = format_repo_prompt(readable_repos=[state.request.repo], unreadable_repos=[])
+        readable_repos = [state.request.repo]
+        repo_str = format_repo_prompt(readable_repos=readable_repos, unreadable_repos=[])
+
+    tree_outputs = []
+    for repo in readable_repos:
+        tree_output = tools.tree(
+            path="", repo_name=repo.full_name
+        )  # get a top level tree for the repo
+        tree_outputs.append(f"Tree for repository '{repo.full_name}':\n{tree_output}")
+    if tree_outputs:
+        initial_tree_str = "\n\n".join(tree_outputs)
 
     system_prompt = textwrap.dedent(
         """\
@@ -46,11 +60,13 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
 
         Use the available tools to explore the codebase tree structure, and when necessary, to read the contents of specific files.
 
-        You have access to the following repositories:
         {repo_str}
 
+        Here is the initial directory structure for the accessible repositories:
+        {initial_tree_str}
+
         In your final response, list the relevant files and their full paths, and explain why they are relevant to the query."""
-    ).format(repo_str=repo_str)
+    ).format(repo_str=repo_str, initial_tree_str=initial_tree_str)
 
     run_config = RunConfig(
         system_prompt=system_prompt,

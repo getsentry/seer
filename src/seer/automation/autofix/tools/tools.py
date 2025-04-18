@@ -5,10 +5,9 @@ import subprocess
 import textwrap
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from threading import Lock
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, cast
 
 from langfuse.decorators import observe
-from pydantic import BaseModel
 from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
@@ -113,35 +112,6 @@ class BaseTools:
             return [self.context.repo.full_name]
         else:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
-
-    def _semantic_file_search_completion(
-        self, query: str, valid_file_paths: str, repo_names: list[str], llm_client: LlmClient
-    ):
-        prompt = textwrap.dedent(
-            """
-            I'm searching for the file in this codebase that contains {query}. Please pick the most relevant file from the following list:
-            ------------
-            {valid_file_paths}
-            """
-        ).format(query=query, valid_file_paths=valid_file_paths)
-
-        if 2 <= len(repo_names) < 100:
-            # Lower bound avoids Gemini-Pydantic incompatibility.
-            # Upper bound is b/c structured output can't handle too many options in a Literal.
-            RepoName: TypeAlias = Literal[tuple(repo_names)]  # type: ignore[valid-type]
-        else:
-            RepoName: TypeAlias = str  # type: ignore[no-redef]
-
-        class FileLocation(BaseModel):
-            file_path: str
-            repo_name: RepoName  # type: ignore
-
-        response = llm_client.generate_structured(
-            prompt=prompt,
-            model=GeminiProvider(model_name="gemini-2.0-flash-001"),
-            response_format=FileLocation,
-        )
-        return response.parsed
 
     @observe(name="Semantic File Search")
     @ai_track(description="Semantic File Search")
