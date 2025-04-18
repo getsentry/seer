@@ -144,12 +144,13 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 if has_tools:  # run context gatherer
                     response = agent.run(
                         run_config=RunConfig(
-                            model=GeminiProvider.model("gemini-2.5-pro-preview-03-25"),
+                            model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
                             system_prompt=SolutionPrompts.format_system_msg(),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
                             max_iterations=64,
                             temperature=1.0,
+                            max_tokens=32000,
                         ),
                     )
 

@@ -52,7 +52,7 @@ class SolutionPrompts:
     ):
         return textwrap.dedent(
             """\
-            <goal>Gather all information needed to understand what the ideal behavior of the code should be in the context of the real-world application and the developer's past design decisions.</goal>
+            <goal>Gather all information that may be needed to understand how to fix this issue at its root in the way the developer would most likely want to fix it. (don't worry about proposing the fix itself yet)</goal>
 
             <available_repos>
             {repos_str}
