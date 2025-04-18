@@ -51,7 +51,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             try:
                 response = agent.run(
                     run_config=RunConfig(
-                        model=GeminiProvider.model("gemini-2.5-pro-preview-03-25"),
+                        model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
@@ -69,6 +69,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
                         temperature=1.0,
+                        max_tokens=32000,
                     ),
                 )
 

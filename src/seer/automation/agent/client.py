@@ -821,10 +821,23 @@ class GeminiProvider:
         ),
     ]
 
-    @staticmethod
     @inject
-    def get_client(app_config: AppConfig = injected) -> genai.Client:
-        region = "europe-west1" if app_config.SENTRY_REGION == "de" else "global"
+    def get_client(self, app_config: AppConfig = injected) -> genai.Client:
+        supported_models_on_global_endpoint = [
+            "gemini-2.0-flash-001",
+            "gemini-2.0-flash-lite-001",
+            "gemini-2.5-pro-preview-03-25",
+        ]
+
+        region = (
+            "europe-west1"
+            if app_config.SENTRY_REGION == "de"
+            else (
+                "global"
+                if self.model_name in supported_models_on_global_endpoint
+                else "us-central1"
+            )
+        )
         client = genai.Client(
             vertexai=True,
             location=region,
