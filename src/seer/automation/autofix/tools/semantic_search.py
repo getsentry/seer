@@ -73,6 +73,7 @@ def semantic_search(query: str, context: AutofixContext | CodegenContext) -> str
         prompt=query,
         model=GeminiProvider(model_name="gemini-2.0-flash-001"),
         temperature=0.0,
+        max_iterations=32,
     )
 
     return agent.run(run_config)
