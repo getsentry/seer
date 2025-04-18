@@ -117,4 +117,3 @@ google-genai==1.*
 httpx==0.27.2 # v0.28 is breaking OpenAI and Anthropic as of Dec 16 2024
 tsmoothie==1.0.*
 datadog==0.51.*
-flower==2.0.1

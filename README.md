@@ -217,7 +217,3 @@ The durations should be updated every once in a while or especially when you add
 You can set the queue that the celery worker listens on via the `CELERY_WORKER_QUEUE` environment variable.
 
 If not set, the default queue name is `"seer"`.
-
-## Debugging Celery with Flower
-
-When `DEV=1`, the flower dashboard is available at `http://localhost:5555`. Use it to debug Celery.

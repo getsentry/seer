@@ -68,7 +68,6 @@ services:
             - IGNORE_API_AUTH=1
         ports:
             - "${APP_PORT:-9091}:9091" # Local dev sentry app looks for port 9091 for the seer service.
-            - 5555:5555 # Flower
 volumes:
     pgdata:
     pgdata_test:
