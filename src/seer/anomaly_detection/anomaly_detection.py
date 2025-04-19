@@ -9,6 +9,7 @@ import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
 from datadog.dogstatsd.base import statsd
 from pydantic import BaseModel
+from stumpy import cache
 
 from seer.anomaly_detection.accessors import AlertDataAccessor, DbAlertDataAccessor
 from seer.anomaly_detection.anomaly_detection_di import anomaly_detection_module
@@ -55,6 +56,7 @@ class AnomalyDetection(BaseModel):
         Note: compilation triggered here is very specific to the exact values of parameters ignore_trivial, normalize etc. A
             future call with different values for one or more parameter will still trigger a recompilation.
         """
+        cache._enable()  # This ensures that the compiled version of stumpy is cached on disk for future use.
         data = np.arange(10.0)
         mp = stumpy.stump(data, m=3, ignore_trivial=True, normalize=False)
         stream = stumpy.stumpi(

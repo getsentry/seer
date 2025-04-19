@@ -104,10 +104,10 @@ from seer.grouping.grouping import (
     SimilarityResponse,
 )
 from seer.inference_models import (
-    anomaly_detection,
     autofixability_model,
     embeddings_model,
     grouping_lookup,
+    load_anomaly_detection,
     test_grouping_model,
 )
 from seer.json_api import json_api
@@ -426,7 +426,7 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     sentry_sdk.set_tag("project_id", data.project_id)
     try:
         with statsd.timed("seer.anomaly_detection.detect.duration"):
-            response = anomaly_detection().detect_anomalies(data)
+            response = load_anomaly_detection().detect_anomalies(data)
             statsd.increment("seer.anomaly_detection.detect.success")
     except ClientError as e:
         statsd.increment("seer.anomaly_detection.detect.client_error")
@@ -447,7 +447,7 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
         with statsd.timed("seer.anomaly_detection.store.duration"):
-            response = anomaly_detection().store_data(data)
+            response = load_anomaly_detection().store_data(data)
             statsd.increment("seer.anomaly_detection.store.success")
     except ClientError as e:
         statsd.increment("seer.anomaly_detection.store.client_error")
@@ -471,7 +471,7 @@ def delete_alert__data_endpoint(
     sentry_sdk.set_tag("alert_id", data.alert.id)
     try:
         with statsd.timed("seer.anomaly_detection.delete_alert_data.duration"):
-            response = anomaly_detection().delete_alert_data(data)
+            response = load_anomaly_detection().delete_alert_data(data)
             statsd.increment("seer.anomaly_detection.delete_alert_data.success")
     except ClientError as e:
         statsd.increment("seer.anomaly_detection.delete_alert_data.client_error")
