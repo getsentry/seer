@@ -162,7 +162,7 @@ class GroupingLookup:
         self.encode_text("IndexError: list index out of range")
         logger.info(f"Grouping model warm-up complete")
         return True
-        
+
     @sentry_sdk.tracing.trace
     @handle_out_of_memory
     def encode_text(self, stacktrace: str) -> np.ndarray:

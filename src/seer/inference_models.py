@@ -91,17 +91,17 @@ def start_loading() -> threading.Thread:
             for item in _deferred:
                 model_instance = item()
                 loaded_models.append(model_instance)
-                
+
             # Warm up models that support it
             for model in loaded_models:
-                if hasattr(model, 'warm_up') and callable(getattr(model, 'warm_up')):
+                if hasattr(model, "warm_up") and callable(getattr(model, "warm_up")):
                     try:
                         model.warm_up()
                     except Exception as e:
                         logger = logging.getLogger(__name__)
                         logger.exception(f"Error warming up model {model.__class__.__name__}: {e}")
                         raise
-                        
+
             with _loading_lock:
                 _loading_result = LoadingResult.DONE
         except Exception:
