@@ -1,4 +1,3 @@
-import logging
 import threading
 from typing import Optional, Protocol
 
@@ -30,21 +29,16 @@ class SeverityClassifier(Protocol):
         pass
 
 
-logger = logging.getLogger(__name__)
-
-
 def _init_embeddings_model(path: str) -> SentenceTransformer:
     """Initialize embeddings model."""
     if can_use_model_stubs():
         return DummySentenceTransformer(embedding_size=384)
 
-    logger.info(f"Number of threads - load embeddings model: {threading.active_count()}")
     embeddings_model = SentenceTransformer(
         path,
         device=(torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")),
     )
     test_str = """Error: [GraphQL error]: Message: "Not a team repl", Location: [{"line":2,"column":3}], Path: ["startTeamReplPresenceSession"]..."""
-    logger.info(f"Number of threads - warm up: {threading.active_count()}")
     _ = embeddings_model.encode(test_str, convert_to_numpy=True)  # Ensure warm start
     return embeddings_model
 
@@ -70,7 +64,7 @@ class SeverityInference:
 
     def get_embeddings(self, text) -> np.ndarray:
         """Generate embeddings for the given text using the pre-trained model."""
-        logger.info(f"Number of threads - get embeddings: {threading.active_count()}")
+        sentry_sdk.set_tag("thread-count", threading.active_count())
         return self.embeddings_model.encode(text, convert_to_numpy=True)
 
     def severity_score(self, data: SeverityRequest) -> SeverityResponse:
