@@ -151,8 +151,18 @@ class GroupingLookup:
         :param model_path: Path to the sentence transformer model.
         """
         self.model = _load_model(model_path)
-        self.encode_text("IndexError: list index out of range")  # Ensure warm start
 
+    @sentry_sdk.tracing.trace
+    @handle_out_of_memory
+    def warm_up(self):
+        """
+        Warms up the model by encoding a simple string.
+        """
+        logger.info(f"Warming up grouping model...")
+        self.encode_text("IndexError: list index out of range")
+        logger.info(f"Grouping model warm-up complete")
+        return True
+        
     @sentry_sdk.tracing.trace
     @handle_out_of_memory
     def encode_text(self, stacktrace: str) -> np.ndarray:
