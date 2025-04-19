@@ -48,10 +48,7 @@ def embeddings_model() -> SeverityInference:
 
 @deferred_loading("GROUPING_ENABLED")
 def grouping_lookup() -> GroupingLookup:
-    return GroupingLookup(
-        model_path=model_path("issue_grouping_v0/embeddings"),
-        data_path=model_path("issue_grouping_v0/data.pkl"),
-    )
+    return GroupingLookup(model_path=model_path("issue_grouping_v0/embeddings"))
 
 
 @deferred_loading("AUTOFIXABILITY_SCORING_ENABLED")

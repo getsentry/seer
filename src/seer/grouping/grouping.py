@@ -144,7 +144,7 @@ class GroupingLookup:
     Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
     """
 
-    def __init__(self, model_path: str, data_path: str):
+    def __init__(self, model_path: str):
         """
         Initializes the GroupingLookup with the sentence transformer model.
 
@@ -158,9 +158,9 @@ class GroupingLookup:
         """
         Warms up the model by encoding a simple string.
         """
-        logger.info(f"Warming up grouping model...")
+        logger.info("Warming up grouping model...")
         self.encode_text("IndexError: list index out of range")
-        logger.info(f"Grouping model warm-up complete")
+        logger.info("Grouping model warm-up complete")
         return True
 
     @sentry_sdk.tracing.trace
