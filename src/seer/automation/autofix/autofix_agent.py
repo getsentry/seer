@@ -3,8 +3,8 @@ import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from typing import Callable, Optional
 
+import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
@@ -292,7 +292,7 @@ class AutofixAgent(LlmAgent):
             self.context.event_manager.add_log("Got it. Initiating deep reflection...")
 
     @observe(name="Share Insights in parallel")
-    @ai_track(description="Share Insights in parallel")
+    @sentry_sdk.trace
     def share_insights(
         self,
         text: str,

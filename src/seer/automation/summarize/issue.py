@@ -1,5 +1,6 @@
 import textwrap
 
+import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel
 
@@ -73,6 +74,7 @@ class IssueSummaryForLlmToGenerate(BaseModel):
 
 
 @observe(name="Summarize Issue")
+@sentry_sdk.trace
 @inject
 def summarize_issue(
     request: SummarizeIssueRequest, llm_client: LlmClient = injected
@@ -182,6 +184,7 @@ def summarize_issue(
     return result
 
 
+@sentry_sdk.trace
 def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueResponse:
     langfuse_tags = []
     if request.organization_slug:
@@ -199,6 +202,17 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
         ),
     }
 
+    sentry_sdk.set_tags(
+        {
+            "org_slug": request.organization_slug,
+            "project_id": request.project_id,
+            "group_id": request.group_id,
+            "num_connected_issues": (
+                len(request.connected_issues) if request.connected_issues else 0
+            ),
+        }
+    )
+
     summary = summarize_issue(request, **extra_kwargs)
 
     with Session() as session:
@@ -210,6 +224,7 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
 
 
 @observe(name="Get Fixability Score")
+@sentry_sdk.trace
 def run_fixability_score(
     request: GetFixabilityScoreRequest, autofixability_model: AutofixabilityModel
 ) -> SummarizeIssueResponse:
@@ -233,6 +248,7 @@ def run_fixability_score(
 
 
 @observe(name="Evaluate Autofixability")
+@sentry_sdk.trace
 def evaluate_autofixability(
     issue_summary: IssueSummaryWithScores, autofixability_model: AutofixabilityModel
 ) -> tuple[float, bool]:

@@ -20,6 +20,7 @@ def delete_data_for_ttl():
     logger.info(f"Deleted {deleted_summary_count} summaries")
 
 
+@sentry_sdk.trace
 def delete_all_runs_before(before: datetime.datetime, batch_size=1000):
     deleted_count = 0
     while True:
@@ -40,14 +41,11 @@ def delete_all_runs_before(before: datetime.datetime, batch_size=1000):
             deleted_count += count
             if count == 0:
                 break
-            sentry_sdk.metrics.incr(
-                key="autofix_state_TTL_deletion",
-                value=count,
-            )
 
     return deleted_count
 
 
+@sentry_sdk.trace
 def delete_all_summaries_before(before: datetime.datetime, batch_size=1000):
     deleted_count = 0
     while True:
@@ -68,9 +66,5 @@ def delete_all_summaries_before(before: datetime.datetime, batch_size=1000):
             deleted_count += count
             if count == 0:
                 break
-            sentry_sdk.metrics.incr(
-                key="issue_summary_TTL_deletion",
-                value=count,
-            )
 
     return deleted_count

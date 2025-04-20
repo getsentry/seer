@@ -1,5 +1,6 @@
 import random
 
+import sentry_sdk
 from langfuse.decorators import observe
 from rapidfuzz import fuzz, process
 
@@ -25,6 +26,7 @@ def get_last_non_empty_line(text: str) -> str:
 
 
 @observe(name="Find original snippet")
+@sentry_sdk.trace
 def find_original_snippet(
     snippet: str, file_contents: str, threshold: float = 0.8, initial_line_threshold: float = 0.9
 ) -> tuple[str, int, int] | None:

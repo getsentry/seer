@@ -1,12 +1,11 @@
 import json
 import logging
 
+import sentry_sdk
 from langfuse.decorators import observe
-from pydantic import BaseModel
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
+from seer.automation.agent.client import AnthropicProvider, LlmClient
 from seer.automation.agent.models import Message, ToolCall
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -107,63 +106,6 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
         return memory
 
-    @observe(name="Is Obvious")
-    @ai_track(description="Is Obvious")
-    @inject
-    def _is_obvious(
-        self,
-        request: CodingRequest,
-        memory: list[Message],
-        llm_client: LlmClient = injected,
-    ) -> bool:
-        if memory:
-
-            class IsObviousOutput(BaseModel):
-                need_to_search_codebase: bool
-
-            output = llm_client.generate_structured(
-                messages=memory,
-                prompt=CodingPrompts.format_is_obvious_msg(
-                    root_cause=request.root_cause,
-                    original_instruction=request.original_instruction,
-                    root_cause_extra_instruction=request.root_cause_extra_instruction,
-                    custom_solution=request.solution if isinstance(request.solution, str) else None,
-                    auto_solution=(
-                        request.solution if isinstance(request.solution, list) else None
-                    ),
-                    mode=request.mode,
-                ),
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
-                response_format=IsObviousOutput,
-            )
-
-            return not output.parsed.need_to_search_codebase
-
-        return False
-
-    @observe(name="Feedback Check")
-    @ai_track(description="Feedback Check")
-    @inject
-    def _is_feedback_obvious(self, memory: list[Message], llm_client: LlmClient = injected) -> bool:
-        if memory:
-
-            class NeedToSearchCodebaseOutput(BaseModel):
-                need_to_search_codebase: bool
-
-            output = llm_client.generate_structured(
-                messages=memory,
-                prompt="Given the above instruction, do you need to search the codebase for more context or have an immediate answer?",
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
-                response_format=NeedToSearchCodebaseOutput,
-            )
-
-            with self.context.state.update() as cur:
-                cur.usage += output.metadata.usage
-
-            return not output.parsed.need_to_search_codebase
-
-        return False
-
     @inject
     def _get_llm_client(self, llm_client: LlmClient = injected) -> LlmClient:
         return llm_client
@@ -173,7 +115,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
         return app_config
 
     @observe(name="Code")
-    @ai_track(description="Code")
+    @sentry_sdk.trace
     def invoke(self, request: CodingRequest) -> None:
         with BaseTools(self.context) as tools:
             memory = request.initial_memory
@@ -184,6 +126,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 if isinstance(request.solution, list)
                 else False
             )
+            sentry_sdk.set_tag("coding_with_tests", has_test)
+            sentry_sdk.set_tag("is_rethinking", len(memory) > 0)
 
             if not memory:
                 memory = self._prefill_initial_memory(request=request)

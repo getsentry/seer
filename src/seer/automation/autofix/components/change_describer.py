@@ -1,7 +1,7 @@
 import textwrap
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -48,7 +48,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
     context: AutofixContext
 
     @observe(name="Change Describer")
-    @ai_track(description="Change Describer")
+    @sentry_sdk.trace
     @inject
     def invoke(
         self, request: ChangeDescriptionRequest, llm_client: LlmClient = injected

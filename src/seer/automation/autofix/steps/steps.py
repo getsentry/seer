@@ -52,9 +52,28 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
         return AutofixContext.from_run_id(request.run_id)
 
     def _invoke(self, **kwargs: Any) -> Any:
-        sentry_sdk.set_tag("organization_id", self.context.organization_id)
-        sentry_sdk.set_tag("project", self.context.project_id)
-        sentry_sdk.set_tag("run_id", self.context.state.get().run_id)
+        state = self.context.state.get()
+        autofix_request = state.request
+
+        sentry_sdk.set_tags(
+            {
+                "organization_id": self.context.organization_id,
+                "org_slug": self.context.get_org_slug(self.context.organization_id),
+                "project": self.context.project_id,
+                "run_id": self.context.state.get().run_id,
+                "num_readable_repos": len(state.readable_repos),
+                "num_unreadable_repos": len(state.unreadable_repos),
+                "has_trace_tree": autofix_request.trace_tree is not None,
+                "has_profile": autofix_request.profile is not None,
+                "has_issue_summary": autofix_request.issue_summary is not None,
+                "has_custom_instruction": autofix_request.instruction is not None,
+            }
+        )
+
+        user = autofix_request.invoking_user
+        if user:
+            sentry_sdk.set_user({"id": user.id, "username": user.display_name})
+
         super()._invoke(**kwargs)
 
     def _pre_invoke(self) -> bool:

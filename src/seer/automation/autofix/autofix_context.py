@@ -1,3 +1,4 @@
+import functools
 import logging
 import textwrap
 from typing import Mapping
@@ -454,6 +455,7 @@ class AutofixContext(PipelineContext):
             pr_url, state.run_id, state.request.issue.id, markdown_comment
         )
 
+    @functools.lru_cache(maxsize=8)
     def get_org_slug(self, organization_id: int) -> str | None:
         slug: str | None = None
         try:
