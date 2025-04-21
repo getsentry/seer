@@ -1,5 +1,6 @@
 import logging
 
+import sentry_sdk
 from langfuse.decorators import observe
 
 from seer.automation.autofix.components.coding.models import FuzzyDiffChunk, PlanTaskPromptXml
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 @observe(name="Extract diff original/replacement chunks")
+@sentry_sdk.trace
 def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
     """
     Extract chunks from a diff using the hunk headers (@@ .. @@) as delimiters.
@@ -82,6 +84,7 @@ def extract_diff_chunks(diff_text: str) -> list[FuzzyDiffChunk]:
 
 
 @observe(name="Convert task to file create")
+@sentry_sdk.trace
 def task_to_file_create(task: PlanTaskPromptXml) -> FileChange:
     """
     Convert a PlanTaskPromptXml to a FileChange object for file creation.
@@ -111,6 +114,7 @@ def task_to_file_create(task: PlanTaskPromptXml) -> FileChange:
 
 
 @observe(name="Convert task to file delete")
+@sentry_sdk.trace
 def task_to_file_delete(task: PlanTaskPromptXml) -> FileChange:
     """
     Convert a PlanTaskPromptXml to a FileChange object for file deletion.
@@ -133,6 +137,7 @@ def task_to_file_delete(task: PlanTaskPromptXml) -> FileChange:
 
 
 @observe(name="Convert task to file change")
+@sentry_sdk.trace
 def task_to_file_change(
     task: PlanTaskPromptXml, file_content: str
 ) -> tuple[list[FileChange], list[FuzzyDiffChunk]]:

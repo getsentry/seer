@@ -1,8 +1,8 @@
 import uuid
 from typing import Any
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.agent.models import Message
@@ -56,9 +56,11 @@ class AutofixCodingStep(AutofixPipelineStep):
         return autofix_coding_task
 
     @observe(name="Autofix - Coding Step")
-    @ai_track(description="Autofix - Coding Step")
+    @sentry_sdk.trace
     @inject
-    def _invoke(self, app_config: AppConfig = injected):
+    def _invoke(self, app_config: AppConfig = injected, **kwargs):
+        super()._invoke()
+
         if not self.request.initial_memory:
             # Only clear when not a rethink/continue
             self.context.event_manager.clear_file_changes()

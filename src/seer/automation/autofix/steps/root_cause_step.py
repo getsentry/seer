@@ -1,8 +1,8 @@
 import uuid
 from typing import Any
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.agent.models import Message
@@ -61,9 +61,11 @@ class RootCauseStep(AutofixPipelineStep):
         return RootCauseStepRequest.model_validate(request)
 
     @observe(name="Autofix - Root Cause Step")
-    @ai_track(description="Autofix - Root Cause Step")
+    @sentry_sdk.trace
     @inject
-    def _invoke(self, app_config: AppConfig = injected):
+    def _invoke(self, app_config: AppConfig = injected, **kwargs):
+        super()._invoke()
+
         self.context.event_manager.send_root_cause_analysis_start()
 
         if not self.request.initial_memory:

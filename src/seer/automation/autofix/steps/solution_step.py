@@ -1,8 +1,8 @@
 import uuid
 from typing import Any
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.agent.models import Message
@@ -50,8 +50,10 @@ class AutofixSolutionStep(AutofixPipelineStep):
         return autofix_solution_task
 
     @observe(name="Autofix - Solution Step")
-    @ai_track(description="Autofix - Solution Step")
-    def _invoke(self):
+    @sentry_sdk.trace
+    def _invoke(self, **kwargs):
+        super()._invoke()
+
         self.logger.info("Executing Autofix - Solution Step")
 
         self.context.event_manager.send_solution_start()

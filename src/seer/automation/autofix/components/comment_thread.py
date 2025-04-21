@@ -1,7 +1,7 @@
 import textwrap
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.models import Message
@@ -47,7 +47,7 @@ class CommentThreadComponent(BaseComponent[CommentThreadRequest, CommentThreadOu
     context: AutofixContext
 
     @observe(name="Comment Thread")
-    @ai_track(description="Comment Thread")
+    @sentry_sdk.trace
     @inject
     def invoke(
         self, request: CommentThreadRequest, llm_client: LlmClient = injected
