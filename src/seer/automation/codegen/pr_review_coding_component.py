@@ -54,7 +54,7 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                 max_tokens=8192,
             )
 
-            if not formatted_response:
+            if formatted_response.parsed is None:
                 return None
 
             for comment in formatted_response.parsed:
