@@ -63,7 +63,7 @@ class RootCauseStep(AutofixPipelineStep):
     @observe(name="Autofix - Root Cause Step")
     @sentry_sdk.trace
     @inject
-    def _invoke(self, app_config: AppConfig = injected):
+    def _invoke(self, app_config: AppConfig = injected, **kwargs):
         super()._invoke()
 
         self.context.event_manager.send_root_cause_analysis_start()

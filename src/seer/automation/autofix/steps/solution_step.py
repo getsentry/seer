@@ -51,7 +51,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
 
     @observe(name="Autofix - Solution Step")
     @sentry_sdk.trace
-    def _invoke(self):
+    def _invoke(self, **kwargs):
         super()._invoke()
 
         self.logger.info("Executing Autofix - Solution Step")

@@ -58,7 +58,7 @@ class AutofixCodingStep(AutofixPipelineStep):
     @observe(name="Autofix - Coding Step")
     @sentry_sdk.trace
     @inject
-    def _invoke(self, app_config: AppConfig = injected):
+    def _invoke(self, app_config: AppConfig = injected, **kwargs):
         super()._invoke()
 
         if not self.request.initial_memory:
