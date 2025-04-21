@@ -1,7 +1,7 @@
 import logging
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
@@ -25,7 +25,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     context: AutofixContext
 
     @observe(name="Root Cause Analysis")
-    @ai_track(description="Root Cause Analysis")
+    @sentry_sdk.trace
     @inject
     def invoke(
         self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
@@ -35,6 +35,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
             readable_repos = state.readable_repos
             unreadable_repos = state.unreadable_repos
+
+            sentry_sdk.set_tag("is_rethinking", len(request.initial_memory) > 0)
 
             agent = AutofixAgent(
                 tools=(tools.get_tools(can_access_repos=bool(readable_repos))),
