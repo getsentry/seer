@@ -65,7 +65,7 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
                 "has_trace_tree": autofix_request.trace_tree is not None,
                 "has_profile": autofix_request.profile is not None,
                 "has_issue_summary": autofix_request.issue_summary is not None,
-                "has_custom_instruction": autofix_request.instruction is not None,
+                "has_custom_instruction": bool(autofix_request.instruction),
             }
         )
 
