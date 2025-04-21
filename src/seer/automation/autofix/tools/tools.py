@@ -18,6 +18,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.tools.grep_search import run_grep_search
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
@@ -27,8 +28,6 @@ from seer.automation.models import EventDetails, FileChange, Profile, SentryEven
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
 from seer.rpc import RpcClient
-
-from .grep_search import run_grep_search
 
 logger = logging.getLogger(__name__)
 
