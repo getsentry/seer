@@ -122,7 +122,10 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             custom_solution = request.solution if isinstance(request.solution, str) else None
             auto_solution = request.solution if isinstance(request.solution, list) else None
             has_test = (
-                any(step.timeline_item_type == "repro_test" for step in request.solution)
+                any(
+                    step.timeline_item_type == "repro_test" and step.is_active
+                    for step in request.solution
+                )
                 if isinstance(request.solution, list)
                 else False
             )
