@@ -6,16 +6,14 @@ from seer.dependency_injection import copy_modules_initializer
 
 logger = logging.getLogger(__name__)
 
-# Constants moved from tools.py
-GREP_TIMEOUT_SECONDS = 10
-MAX_GREP_LINE_CHARACTER_LENGTH = 1000
-TOTAL_GREP_RESULTS_CHARACTER_LENGTH = 20000
+GREP_TIMEOUT_SECONDS = 45
+MAX_GREP_LINE_CHARACTER_LENGTH = 1024
+TOTAL_GREP_RESULTS_CHARACTER_LENGTH = 16384
 
 
 def _run_grep_in_repo(
     repo_name: str,
     cmd_args: list[str],
-    tmp_dir: dict[str, tuple[str, str]],
     tmp_repo_dir: str,
 ) -> str | None:
     """Runs the grep command in a specific repository directory."""
@@ -113,7 +111,7 @@ def run_grep_search(
         _, tmp_repo_dir = tmp_dirs[repo_name]
         if not tmp_repo_dir:
             return None
-        return _run_grep_in_repo(repo_name, cmd_args, tmp_dirs, tmp_repo_dir)
+        return _run_grep_in_repo(repo_name, cmd_args, tmp_repo_dir)
 
     if len(repo_names) == 1:
         result = run_grep_for_repo(repo_names[0])

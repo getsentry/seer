@@ -32,9 +32,6 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
-GREP_TIMEOUT_SECONDS = 10
-MAX_GREP_LINE_CHARACTER_LENGTH = 1000
-TOTAL_GREP_RESULTS_CHARACTER_LENGTH = 20000
 
 
 class BaseTools:
