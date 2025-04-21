@@ -164,7 +164,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             response = agent.run(
                 RunConfig(
                     system_prompt=CodingPrompts.format_system_msg(),
-                    model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     memory_storage_key="code",
                     run_name="Code",
                     max_iterations=64,
