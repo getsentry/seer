@@ -177,9 +177,10 @@ class CodingCodeReviewPrompts:
             - You also MUST think step-by-step before giving the final answer."""
         )
 
+    # TODO - handle max token limit if additional context is too long
     @staticmethod
-    def format_pr_review_plan_step(diff_str: str):
-        return textwrap.dedent(
+    def format_pr_review_plan_step(diff_str: str, additional_context: str):
+        prompt = textwrap.dedent(
             """\
             You are given the below code changes as a diff:
             {diff_str}
@@ -212,8 +213,24 @@ class CodingCodeReviewPrompts:
             - Return all comments as a list of JSON objects, ready to be used in a GitHub pull request review.
             - Wrap the comments in a <comments> and </comments> block.
             """
-        ).format(
+        )
+
+        if additional_context:
+            prompt += textwrap.dedent(
+                """
+                # Additional context:
+                When reviewing the code changes, please consider this additional context about the codebase. This information may help you understand:
+                - The project's architecture and design patterns
+                - Existing conventions and coding standards
+                - Related functions and components that interact with the changed code
+                Use this context to provide more informed and relevant feedback in your review, where applicable.
+                {additional_context}
+                """
+            )
+
+        return prompt.format(
             diff_str=diff_str,
+            additional_context=additional_context,
         )
 
     @staticmethod

@@ -8,7 +8,12 @@ from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmC
 from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
-from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
+from seer.automation.codegen.models import (
+    CodegenPRReviewAdditionalContextRequest,
+    CodePrReviewOutput,
+    CodePrReviewRequest,
+)
+from seer.automation.codegen.pr_review_additional_context import PrReviewAdditionalContext
 from seer.automation.codegen.prompts import CodingCodeReviewPrompts, CodingUnitTestPrompts
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
@@ -35,6 +40,7 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                 run_config=RunConfig(
                     prompt=CodingCodeReviewPrompts.format_pr_review_plan_step(
                         diff_str=request.diff,
+                        additional_context=request.additional_context,
                     ),
                     system_prompt=CodingUnitTestPrompts.format_system_msg(),
                     model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),

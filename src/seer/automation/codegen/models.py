@@ -182,8 +182,18 @@ class CodegenPrReviewStateResponse(BaseModel):
     completed_at: datetime.datetime | None = None
 
 
+class CodegenPRReviewAdditionalContextRequest(BaseComponentRequest):
+    pr_files: list[PrFile]
+    max_num_issues_analyzed: int
+
+
+class CodegenPRReviewAdditionalContextOutput(BaseComponentOutput):
+    additional_context: str | None
+
+
 class CodePrReviewRequest(BaseComponentRequest):
     diff: str
+    additional_context: str | None
 
 
 class CodePrReviewOutput(BaseComponentOutput):
