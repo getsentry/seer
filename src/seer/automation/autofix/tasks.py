@@ -326,6 +326,7 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
         event_manager.send_push_changes_result()
 
 
+@sentry_sdk.trace
 def receive_feedback(request: AutofixUpdateRequest):
     autofix_state = get_autofix_state(run_id=request.run_id)
 
@@ -390,6 +391,7 @@ def restart_step_with_user_response(
             ).apply_async()
 
 
+@sentry_sdk.trace
 def receive_user_message(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixUserMessagePayload):
         raise ValueError("Invalid payload type for user_message")
@@ -540,6 +542,7 @@ def truncate_file_changes_to_match_memory(file_changes: list[FileChange], memory
     return truncated_file_changes
 
 
+@sentry_sdk.trace
 @inject
 def restart_from_point_with_feedback(
     request: AutofixUpdateRequest,
@@ -680,6 +683,7 @@ def restart_from_point_with_feedback(
         ).apply_async()
 
 
+@sentry_sdk.trace
 def update_code_change(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixUpdateCodeChangePayload):
         raise ValueError("Invalid payload type for update_code_change")
@@ -757,6 +761,7 @@ def update_code_change(request: AutofixUpdateRequest):
         cur.steps[-1] = last_step
 
 
+@sentry_sdk.trace
 def comment_on_thread(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixCommentThreadPayload):
         raise ValueError("Invalid payload type for comment_on_thread")
@@ -907,6 +912,7 @@ def comment_on_thread(request: AutofixUpdateRequest):
         )
 
 
+@sentry_sdk.trace
 def resolve_comment_thread(request: AutofixUpdateRequest):
     if not isinstance(request.payload, AutofixResolveCommentThreadPayload):
         raise ValueError("Invalid payload type for resolve_comment_thread")
