@@ -3,7 +3,7 @@ import os
 import shlex
 import subprocess
 import textwrap
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError, as_completed
 from threading import Lock
 from typing import Any, cast
 
@@ -18,6 +18,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.tools.grep_search import run_grep_search
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
@@ -31,9 +32,6 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
-GREP_TIMEOUT_SECONDS = 45
-MAX_GREP_LINE_CHARACTER_LENGTH = 1024
-TOTAL_GREP_RESULTS_CHARACTER_LENGTH = 16384
 
 
 class BaseTools:
@@ -408,7 +406,6 @@ class BaseTools:
         self._ensure_repos_downloaded(repo_name)
 
         repo_names = [repo_name] if repo_name else self._get_repo_names()
-        all_results = []
 
         # Parse the command into a list of arguments
         try:
@@ -416,85 +413,7 @@ class BaseTools:
         except Exception as e:
             return f"Error parsing grep command: {str(e)}"
 
-        for repo_name in repo_names:
-            if repo_name not in self.tmp_dir:
-                continue
-            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
-            if not tmp_repo_dir:
-                continue
-
-            try:
-                # Run the grep command in the repo directory
-                try:
-                    process = subprocess.run(
-                        cmd_args,
-                        shell=False,
-                        cwd=tmp_repo_dir,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                        timeout=GREP_TIMEOUT_SECONDS,
-                    )
-
-                    # Check if error is due to "is a directory" and retry with -r flag
-                    if (
-                        process.returncode != 0
-                        and process.returncode != 1
-                        and "is a directory" in process.stderr.lower()
-                    ):
-                        if "-r" not in cmd_args and "--recursive" not in cmd_args:
-                            recursive_cmd_args = cmd_args.copy()
-                            recursive_cmd_args.insert(1, "-r")
-                            process = subprocess.run(
-                                recursive_cmd_args,
-                                shell=False,
-                                cwd=tmp_repo_dir,
-                                capture_output=True,
-                                text=True,
-                                check=False,
-                                timeout=GREP_TIMEOUT_SECONDS,
-                            )
-
-                    if (
-                        process.returncode != 0 and process.returncode != 1
-                    ):  # grep returns 1 when no matches found
-                        all_results.append(f"Results from {repo_name}: {process.stderr}")
-                    elif process.stdout:
-                        final_output = process.stdout
-                        # Each line is a grep result, -A, -B, -C are ways to get lines before, after, and around the match
-                        if "-A" not in cmd_args and "-B" not in cmd_args and "-C" not in cmd_args:
-                            lines = process.stdout.split("\n")
-                            final_output = ""
-                            for line in lines:
-                                if len(line) > MAX_GREP_LINE_CHARACTER_LENGTH:
-                                    line = (
-                                        line[:MAX_GREP_LINE_CHARACTER_LENGTH]
-                                        + "...[TRUNCATED: line too long to display]"
-                                    )
-                                final_output += line + "\n"
-
-                        if len(final_output) > TOTAL_GREP_RESULTS_CHARACTER_LENGTH:
-                            final_output = (
-                                final_output[:TOTAL_GREP_RESULTS_CHARACTER_LENGTH]
-                                + "...[GREP RESULTS TRUNCATED: too long to display, try narrowing your search]"
-                            )
-
-                        all_results.append(
-                            f"Results from {repo_name}:\n------\n{final_output}\n------"
-                        )
-                    else:
-                        all_results.append(f"Results from {repo_name}: no results found.")
-                except subprocess.TimeoutExpired:
-                    all_results.append(
-                        f"Results from {repo_name}: command timed out. Try narrowing your search."
-                    )
-            except Exception as e:
-                all_results.append(f"Error in repo {repo_name}: {str(e)}")
-
-        if not all_results:
-            return "No results found."
-
-        return "\n\n".join(all_results)
+        return run_grep_search(cmd_args, repo_names, self.tmp_dir)
 
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
