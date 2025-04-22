@@ -128,7 +128,7 @@ def get_codecov_pr_review_app_credentials(
 
 def _is_within_tmp_dir(directory: Path, target: Path) -> bool:
     try:
-        _path = target.resolve(strict=False).relative_to(directory.resolve())
+        target.resolve(strict=False).relative_to(directory.resolve())
         return True
     except ValueError:
         return False
