@@ -177,7 +177,6 @@ class CodingCodeReviewPrompts:
             - You also MUST think step-by-step before giving the final answer."""
         )
 
-    # TODO - handle max token limit if additional context is too long
     @staticmethod
     def format_pr_review_plan_step(diff_str: str, additional_context: str):
         return textwrap.dedent(

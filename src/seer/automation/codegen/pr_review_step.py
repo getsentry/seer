@@ -10,7 +10,7 @@ from seer.automation.autofix.config import (
 )
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import CodePrReviewRequest, PrAdditionalContextRequest, PrFile
-from seer.automation.codegen.pr_additional_context import PrAdditionalContext
+from seer.automation.codegen.pr_additional_context_component import PrAdditionalContext
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.pr_review_publisher import PrReviewPublisher
 from seer.automation.codegen.step import CodegenStep

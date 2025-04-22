@@ -29,7 +29,7 @@ from seer.automation.codegen.models import (
     FilterWarningsRequest,
     PrAdditionalContextRequest,
 )
-from seer.automation.codegen.pr_additional_context import (
+from seer.automation.codegen.pr_additional_context_component import (
     PrAdditionalContext,
     PrAdditionalContextOutput,
 )

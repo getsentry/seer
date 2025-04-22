@@ -210,7 +210,7 @@ class PrAdditionalContextRequest(BaseComponentRequest):
 class PrAdditionalContextOutput(BaseComponentOutput):
     filename_to_additional_context: dict[str, PrAdditionalContext]
 
-    def to_llm_prompt(self) -> str:
+    def to_llm_prompt(self, max_chars: int = 8000) -> str:
         """
         Converts the additional context to a string format suitable for LLM prompts.
         """
@@ -245,7 +245,7 @@ class PrAdditionalContextOutput(BaseComponentOutput):
 
             result.append("--------------------------------")
 
-        return "\n".join(result)
+        return "\n".join(result)[:max_chars]
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
