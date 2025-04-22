@@ -103,6 +103,31 @@ class TestRepoClient:
         mock_tarfile.assert_called_once()
 
     @patch("seer.automation.codebase.repo_client.requests.get")
+    @patch("seer.automation.codebase.repo_client.tarfile.open")
+    def test_load_repo_to_tmp_dir_prevents_directory_traversal(
+        self, mock_tarfile, mock_requests, repo_client, tmp_path
+    ):
+        mock_requests.return_value.status_code = 200
+        mock_requests.return_value.content = b"test_content"
+
+        # Create a mock tar file with a malicious path
+        mock_tar = MagicMock()
+        malicious_member = MagicMock()
+        malicious_member.name = "../../../etc/passwd"  # Directory traversal attempt
+        mock_tar.getmembers.return_value = [malicious_member]
+        mock_tarfile.return_value.__enter__.return_value = mock_tar
+
+        with patch(
+            "seer.automation.codebase.repo_client.tempfile.mkdtemp", return_value=str(tmp_path)
+        ):
+            # The extraction should raise a ValueError due to the directory traversal attempt
+            with pytest.raises(ValueError, match="Illegal tar archive entry"):
+                repo_client.load_repo_to_tmp_dir()
+
+        mock_requests.assert_called_once()
+        mock_tarfile.assert_called_once()
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
     def test_get_file_content(self, mock_requests, repo_client, mock_github):
         mock_content = MagicMock()
         mock_content.decoded_content = b"test content"
