@@ -340,13 +340,15 @@ class RepoClient:
 
                 # directory traversal prevention
                 if not _is_within_tmp_dir(Path(expected_commonpath), Path(member_path)):
-                    raise Exception(f"Illegal tar archive entry: {member.name}")
+                    sentry_sdk.capture_message(f"Illegal tar archive entry: {member.name}")
+                    raise Exception("Illegal tar archive entry")
 
                 # symlink directory traversal prevention
                 if member.issym() or member.islnk():
                     target = _resolve_symlink_target(member, Path(expected_commonpath))
                     if not _is_within_tmp_dir(Path(expected_commonpath), target):
-                        raise Exception(f"Illegal symlink archive entry: {member.name}")
+                        sentry_sdk.capture_message(f"Illegal symlink archive entry: {member.name}")
+                        raise Exception("Illegal symlink archive entry")
 
                 tar.extract(member, tmp_repo_dir)
 
