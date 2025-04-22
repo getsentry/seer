@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel
@@ -34,3 +35,9 @@ class ModelResponse(BaseModel):
 
 class ValuesResponse(BaseModel):
     values: list[str]
+
+
+class ModelProvider(Enum):
+    GEMINI = "gemini"
+    ANTHROPIC = "anthropic"
+    OPENAI = "openai"

@@ -1,4 +1,11 @@
-from seer.assisted_query.models import Chart, ModelResponse, TranslateRequest, TranslateResponse
+from seer.assisted_query.models import (
+    Chart,
+    ModelProvider,
+    ModelResponse,
+    TranslateRequest,
+    TranslateResponse,
+)
+from seer.automation.agent.client import GeminiProvider, LlmClient
 
 
 def translate_query(request: TranslateRequest) -> TranslateResponse:
@@ -16,9 +23,18 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
     )
 
 
-def create_query_from_natural_language(natural_language_query: str) -> ModelResponse:
+def create_query_from_natural_language(
+    natural_language_query: str, model_provider: ModelProvider = ModelProvider.GEMINI
+) -> ModelResponse:
 
-    # TODO: Step 0: Check if system prompt (field/values) is in cache
+    if model_provider == ModelProvider.GEMINI:
+        client = LlmClient(
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
+            system_prompt="",
+        )
+
+        # TODO: Step 0: Check if system prompt (field/values) is in cache
+        client.caches.list()
 
     # TODO: Step 1: Figure out relevant fields
 
