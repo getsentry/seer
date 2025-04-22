@@ -737,7 +737,7 @@ tokenizers==0.15.2
     # via
     #   chromadb
     #   transformers
-torch==2.2.0
+torch==2.6.0
     # via
     #   -r requirements-constraints.txt
     #   optimum
