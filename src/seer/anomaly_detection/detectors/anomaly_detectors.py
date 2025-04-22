@@ -55,25 +55,6 @@ class MPBatchAnomalyDetector(AnomalyDetector):
     This class encapsulates the logic for using Matrix Profile for batch anomaly detection.
     """
 
-    @sentry_sdk.trace
-    def __init__(self):
-        """
-        Force Stumpy compilation by making a dummy call to the library.
-
-        Note: compilation triggered here is very specific to the exact values of parameters ignore_trivial, normalize etc. A
-            future call with different values for one or more parameter will still trigger a recompilation.
-        """
-        data = np.arange(10.0)
-        mp = stumpy.stump(data, m=3, ignore_trivial=True, normalize=False)
-        stream = stumpy.stumpi(
-            data,
-            m=3,
-            mp=mp,
-            normalize=False,
-            egress=False,
-        )
-        stream.update(6.0)
-
     @inject
     @sentry_sdk.trace
     def detect(
