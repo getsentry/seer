@@ -303,7 +303,7 @@ def run_autofix_push_changes(
         raise e
 
 
-@celery_app.task(time_limit=60, soft_time_limit=55)
+@celery_app.task(time_limit=60, soft_time_limit=55, acks_late=True)
 def commit_changes_task(run_id, repo_external_id, make_pr):
     try:
         state = ContinuationState(run_id)
