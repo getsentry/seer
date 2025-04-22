@@ -259,6 +259,6 @@ def evaluate_autofixability(
         f"Possible cause: {issue_summary.possible_cause}"
     )
     score = autofixability_model.score(issue_summary_input)
-    is_fixable = score > 0.718  # 75th percentile on test set
+    is_fixable = score > 0.687  # 65th percentile on test set, which is a mix of many orgs' issues
     sentry_sdk.set_tag("is_fixable", is_fixable)
     return score, is_fixable
