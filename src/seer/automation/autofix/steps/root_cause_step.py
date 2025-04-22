@@ -118,6 +118,11 @@ class RootCauseStep(AutofixPipelineStep):
                     cur.steps[-1].proceed_confidence_score = (
                         confidence_output.proceed_confidence_score
                     )
+                    sentry_sdk.set_tags(
+                        {
+                            "has_agent_comment": bool(confidence_output.question),
+                        }
+                    )
                     if confidence_output.question:
                         cur.steps[-1].agent_comment_thread = CommentThread(
                             id=str(uuid.uuid4()),
