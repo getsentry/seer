@@ -347,7 +347,7 @@ class RepoClient:
                     if not _is_within_tmp_dir(Path(expected_commonpath), target):
                         raise Exception(f"Illegal symlink archive entry: {member.name}")
 
-            tar.extractall(path=tmp_repo_dir)
+                tar.extract(member, tmp_repo_dir)
 
             extracted_folders = [
                 name
