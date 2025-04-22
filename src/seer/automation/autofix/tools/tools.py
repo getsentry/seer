@@ -581,7 +581,7 @@ class BaseTools:
         return False
 
     def _get_repo_name_and_path(
-        self, kwargs: dict[str, Any]
+        self, kwargs: dict[str, Any], allow_nonexistent_paths: bool = False
     ) -> tuple[str | None, str | None, str | None]:
         repos = self._get_repo_names()
 
@@ -607,7 +607,7 @@ class BaseTools:
             path = path_args
 
         fixed_path = self._attempt_fix_path(path, repo_name)
-        if not fixed_path:
+        if not fixed_path and not allow_nonexistent_paths:
             return (
                 f"Error: The path you provided '{path}' does not exist in the repository '{repo_name}'.",
                 None,
@@ -633,7 +633,9 @@ class BaseTools:
             str: Success message or error description
         """
         command = kwargs.get("command", "")
-        error, repo_name, path = self._get_repo_name_and_path(kwargs)
+        error, repo_name, path = self._get_repo_name_and_path(
+            kwargs, allow_nonexistent_paths=command in ["create", "undo_edit"]
+        )
 
         if error:
             return error
