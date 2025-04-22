@@ -588,6 +588,7 @@ class StaticAnalysisSuggestionsComponent(
             prompt=StaticAnalysisSuggestionsPrompts.format_prompt(
                 diff_with_warnings=diff_with_warnings,
                 formatted_issues=formatted_issues,
+                additional_context=request.additional_context.to_llm_prompt(),
             ),
             response_format=StaticAnalysisSuggestionsPrompts.AnalysisAndSuggestions,
             temperature=0.0,

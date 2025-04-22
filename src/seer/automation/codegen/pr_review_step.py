@@ -9,12 +9,8 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.models import (
-    CodegenPRReviewAdditionalContextRequest,
-    CodePrReviewRequest,
-    PrFile,
-)
-from seer.automation.codegen.pr_review_additional_context import PrReviewAdditionalContext
+from seer.automation.codegen.models import CodePrReviewRequest, PrAdditionalContextRequest, PrFile
+from seer.automation.codegen.pr_additional_context import PrAdditionalContext
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.pr_review_publisher import PrReviewPublisher
 from seer.automation.codegen.step import CodegenStep
@@ -88,16 +84,17 @@ class PrReviewStep(CodegenStep):
 
         # 2. Fetch additional context for PR review
         try:
-            additional_context = PrReviewAdditionalContext(
-                pr_files=pr_files,
-            ).invoke(
-                request=CodegenPRReviewAdditionalContextRequest(
-                    diff=diff_content,
+            additional_context_component = PrAdditionalContext(self.context)
+            additional_context = additional_context_component.invoke(
+                request=PrAdditionalContextRequest(
+                    pr_files=pr_files,
                 )
             )
+            additional_context_prompt = additional_context.to_llm_prompt()
         except Exception as e:
             self.logger.error(f"Error fetching additional context for {pr.url}: {e}")
             # proceed even if additional context fails
+            additional_context_prompt = ""
             pass
 
         # 3. Generate PR review
@@ -105,7 +102,7 @@ class PrReviewStep(CodegenStep):
             generated_pr_review = generator.invoke(
                 CodePrReviewRequest(
                     diff=diff_content,
-                    additional_context=additional_context,
+                    additional_context=additional_context_prompt,
                 ),
             )
         except ValueError as e:
