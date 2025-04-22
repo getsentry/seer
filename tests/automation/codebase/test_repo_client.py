@@ -1,3 +1,6 @@
+import io
+import os
+import tarfile
 from unittest.mock import ANY, MagicMock, call, patch
 
 import pytest
@@ -8,10 +11,6 @@ from seer.automation.codebase.repo_client import CompleteGitTree, RepoClient
 from seer.automation.models import FileChange, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import resolve
-
-import os
-import tarfile
-import io
 
 
 @pytest.fixture(autouse=True)
