@@ -1,6 +1,7 @@
 import functools
 import logging
 import os
+from pathlib import Path
 import shutil
 import tarfile
 import tempfile
@@ -123,6 +124,23 @@ def get_codecov_pr_review_app_credentials(
         return get_write_app_credentials()
 
     return app_id, private_key
+
+
+def _is_within_tmp_dir(directory: Path, target: Path) -> bool:
+    try:
+        return target.resolve(strict=False).relative_to(directory.resolve())
+    except ValueError:
+        return False
+
+
+def _resolve_symlink_target(member: tarfile.TarInfo, extract_path: Path) -> Path:
+    symlink_path = extract_path / member.name
+    link_target = Path(member.linkname)
+
+    if not link_target.is_absolute():
+        link_target = (symlink_path.parent / link_target).resolve(strict=False)
+
+    return link_target
 
 
 class RepoClientType(str, Enum):
@@ -313,12 +331,23 @@ class RepoClient:
 
         # Extract tarball into the output directory
         with tarfile.open(tarfile_path, "r:gz") as tar:
+            expected_commonpath = os.path.realpath(tmp_repo_dir)
+
             for member in tar.getmembers():
                 # Validate the member's path
                 member_path = os.path.join(tmp_repo_dir, member.name)
-                if not os.path.commonpath([tmp_repo_dir, member_path]).startswith(tmp_repo_dir):
-                    raise ValueError(f"Illegal tar archive entry: {member.name}")
-                tar.extract(member, path=tmp_repo_dir)
+
+                # directory traversal prevention
+                if not _is_within_tmp_dir(Path(expected_commonpath), Path(member_path)):
+                    raise Exception(f"Illegal tar archive entry: {member.name}")
+
+                # symlink directory traversal prevention
+                if member.issym() or member.islnk():
+                    target = _resolve_symlink_target(member, Path(expected_commonpath))
+                    if not _is_within_tmp_dir(Path(expected_commonpath), target):
+                        raise Exception(f"Illegal symlink archive entry: {member.name}")
+
+            tar.extractall(path=tmp_repo_dir)
 
             extracted_folders = [
                 name

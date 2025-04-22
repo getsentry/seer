@@ -9,6 +9,10 @@ from seer.automation.models import FileChange, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import resolve
 
+import os
+import tarfile
+import io
+
 
 @pytest.fixture(autouse=True)
 def clear_repo_client_cache():
@@ -103,29 +107,85 @@ class TestRepoClient:
         mock_tarfile.assert_called_once()
 
     @patch("seer.automation.codebase.repo_client.requests.get")
-    @patch("seer.automation.codebase.repo_client.tarfile.open")
     def test_load_repo_to_tmp_dir_prevents_directory_traversal(
-        self, mock_tarfile, mock_requests, repo_client, tmp_path
+        self, mock_requests, repo_client, tmp_path
     ):
-        mock_requests.return_value.status_code = 200
-        mock_requests.return_value.content = b"test_content"
+        # Mock the github instance's get_archive_link method
+        mock_repo = MagicMock()
+        mock_repo.get_archive_link.return_value = "http://example.com/archive.tar.gz"
+        repo_client._github = MagicMock()
+        repo_client._github.get_repo.return_value = mock_repo
 
-        # Create a mock tar file with a malicious path
-        mock_tar = MagicMock()
-        malicious_member = MagicMock()
-        malicious_member.name = "../../../etc/passwd"  # Directory traversal attempt
-        mock_tar.getmembers.return_value = [malicious_member]
-        mock_tarfile.return_value.__enter__.return_value = mock_tar
+        # Create a real tar file with a malicious path
+        tar_path = os.path.join(str(tmp_path), "malicious.tar.gz")
+
+        # Create a tar file with a malicious path
+        with tarfile.open(tar_path, "w:gz") as tar:
+            # Create a file with a malicious path
+            malicious_path = "../../../etc/passwd"  # This is a relative path
+            data = b"malicious content"
+
+            # Create a TarInfo object with the malicious path
+            info = tarfile.TarInfo(malicious_path)
+            info.size = len(data)
+
+            # Add the file to the tar
+            tar.addfile(info, io.BytesIO(data))
+
+            # Create a symlink to the malicious path
+            symlink = tarfile.TarInfo("myfile.js")
+            symlink.type = tarfile.SYMTYPE
+            symlink.linkname = "/etc/passwd"
+            tar.addfile(symlink)
+
+        # Mock the requests.get to return our malicious tar file
+        with open(tar_path, "rb") as f:
+            mock_requests.return_value.status_code = 200
+            mock_requests.return_value.content = f.read()
 
         with patch(
             "seer.automation.codebase.repo_client.tempfile.mkdtemp", return_value=str(tmp_path)
         ):
             # The extraction should raise a ValueError due to the directory traversal attempt
-            with pytest.raises(ValueError, match="Illegal tar archive entry"):
+            with pytest.raises(Exception, match="Illegal tar archive entry"):
                 repo_client.load_repo_to_tmp_dir()
 
         mock_requests.assert_called_once()
-        mock_tarfile.assert_called_once()
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_load_repo_to_tmp_dir_prevents_symlink_directory_traversal(
+        self, mock_requests, repo_client, tmp_path
+    ):
+        # Mock the github instance's get_archive_link method
+        mock_repo = MagicMock()
+        mock_repo.get_archive_link.return_value = "http://example.com/archive.tar.gz"
+        repo_client._github = MagicMock()
+        repo_client._github.get_repo.return_value = mock_repo
+
+        # Create a real tar file with a malicious path
+        tar_path = os.path.join(str(tmp_path), "malicious.tar.gz")
+
+        # Create a tar file with a malicious path
+        with tarfile.open(tar_path, "w:gz") as tar:
+            # Create a symlink to the malicious path
+            symlink = tarfile.TarInfo("myfile.js")
+            symlink.type = tarfile.SYMTYPE
+            symlink.linkname = "/etc/passwd"
+            tar.addfile(symlink)
+
+        # Mock the requests.get to return our malicious tar file
+        with open(tar_path, "rb") as f:
+            mock_requests.return_value.status_code = 200
+            mock_requests.return_value.content = f.read()
+
+        with patch(
+            "seer.automation.codebase.repo_client.tempfile.mkdtemp", return_value=str(tmp_path)
+        ):
+            # The extraction should raise a ValueError due to the directory traversal attempt
+            with pytest.raises(Exception, match="Illegal symlink archive entry"):
+                repo_client.load_repo_to_tmp_dir()
+
+        mock_requests.assert_called_once()
 
     @patch("seer.automation.codebase.repo_client.requests.get")
     def test_get_file_content(self, mock_requests, repo_client, mock_github):
