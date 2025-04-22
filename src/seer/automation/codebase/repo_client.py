@@ -313,7 +313,13 @@ class RepoClient:
 
         # Extract tarball into the output directory
         with tarfile.open(tarfile_path, "r:gz") as tar:
-            tar.extractall(path=tmp_repo_dir)  # extract all members normally
+            for member in tar.getmembers():
+                # Validate the member's path
+                member_path = os.path.join(tmp_repo_dir, member.name)
+                if not os.path.commonpath([tmp_repo_dir, member_path]).startswith(tmp_repo_dir):
+                    raise ValueError(f"Illegal tar archive entry: {member.name}")
+                tar.extract(member, path=tmp_repo_dir)
+
             extracted_folders = [
                 name
                 for name in os.listdir(tmp_repo_dir)
