@@ -62,8 +62,10 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
                 "project": self.context.project_id,
                 "run_id": self.context.state.get().run_id,
                 "num_repos": len(autofix_request.repos),
-                "has_trace_tree": autofix_request.trace_tree is not None,
-                "has_profile": autofix_request.profile is not None,
+                "has_trace_tree": autofix_request.trace_tree is not None
+                and len(autofix_request.trace_tree.events) > 1,
+                "has_profile": autofix_request.profile is not None
+                and len(autofix_request.profile.execution_tree) > 0,
                 "has_issue_summary": autofix_request.issue_summary is not None,
                 "has_custom_instruction": bool(autofix_request.instruction),
             }

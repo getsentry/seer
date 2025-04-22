@@ -310,6 +310,13 @@ def commit_changes_task(run_id, repo_external_id, make_pr):
         event_manager = AutofixEventManager(state)
         context = AutofixContext(state=state, event_manager=event_manager)
 
+        sentry_sdk.set_tags(
+            {
+                "run_id": state.get().run_id,
+                "making_pr": make_pr,
+            }
+        )
+
         event_manager.send_push_changes_start()
 
         return context.commit_changes(
