@@ -634,7 +634,8 @@ def restart_from_point_with_feedback(
             )
 
     # add feedback to memory and to insights
-    if request.payload.message:
+    user_message = request.payload.message.strip()
+    if user_message:
         # enforce alternating user/assistant messages
         for item in reversed(memory):
             if item.role == "user":
@@ -642,14 +643,14 @@ def restart_from_point_with_feedback(
                 break
             elif item.role == "assistant":
                 break
-        memory.append(Message(content=request.payload.message, role="user"))
+        memory.append(Message(content=user_message, role="user"))
 
         if request.payload.add_to_insights:
             with state.update() as cur:
                 if isinstance(cur.steps[-1], DefaultStep):
                     cur.steps[-1].insights.append(
                         InsightSharingOutput(
-                            insight=request.payload.message,
+                            insight=user_message,
                             justification="USER",
                             generated_at_memory_index=(
                                 memory_index_of_insight_to_rethink
