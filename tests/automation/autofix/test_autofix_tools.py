@@ -4,7 +4,7 @@ import pytest
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools.tools import BaseTools
-from seer.automation.models import FileChange
+from seer.automation.models import FileChange, FilePatch, Hunk, Line
 
 
 class TestRepo:
@@ -1083,15 +1083,35 @@ class TestClaudeTools:
         autofix_tools.context._get_repo_names = MagicMock(return_value=[repo_name])
         # Mock _attempt_fix_path to return None, simulating the path not existing
         # Note: This mock is on the context, as that's where _get_repo_name_and_path calls it
-        autofix_tools.context._attempt_fix_path = MagicMock(return_value=None)
+        autofix_tools._attempt_fix_path = MagicMock(return_value=None)
         # Mock get_file_contents to return None (as the file shouldn't exist yet)
         autofix_tools.context.get_file_contents = MagicMock(return_value=None)
         # Mock _append_file_change to simulate successful application
         autofix_tools._append_file_change = MagicMock(return_value=True)
-        # Mock make_file_patches to return a dummy diff
+        # Mock make_file_patches to return a proper FilePatch for file creation
         with patch("seer.automation.autofix.tools.tools.make_file_patches") as mock_make_patches:
-            # Return diff as a list
-            mock_make_patches.return_value = (["+ new file content"], None)
+            # Create a proper FilePatch for file creation
+            file_patch = FilePatch(
+                type="A",
+                path=new_path,
+                added=1,
+                removed=0,
+                source_file="/dev/null",
+                target_file=new_path,
+                hunks=[
+                    Hunk(
+                        source_start=0,
+                        source_length=0,
+                        target_start=1,
+                        target_length=1,
+                        section_header="@@ -0,0 +1,1 @@",
+                        lines=[
+                            Line(target_line_no=1, value=file_text, line_type="+"),
+                        ],
+                    )
+                ],
+            )
+            mock_make_patches.return_value = ([file_patch], "")
 
             # Mock event manager's send_insight method
             autofix_tools.context.event_manager.send_insight = MagicMock()
@@ -1102,7 +1122,7 @@ class TestClaudeTools:
 
             # Assert
             # 1. Check that _attempt_fix_path was called for the new path (it should be)
-            autofix_tools.context._attempt_fix_path.assert_called_once_with(new_path, repo_name)
+            autofix_tools._attempt_fix_path.assert_called_once_with(new_path, repo_name)
             # 2. Check that get_file_contents was called (by _handle_create_command)
             autofix_tools.context.get_file_contents.assert_called_once_with(
                 new_path, repo_name=repo_name
