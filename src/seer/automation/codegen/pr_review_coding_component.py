@@ -56,8 +56,6 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                 max_tokens=2048,
             )
 
-            print(pr_description.message.content, "YO CHECK ME OUT")
-
             formatted_response = llm_client.generate_structured(
                 messages=agent.memory,
                 prompt=CodingCodeReviewPrompts.pr_review_formatter_msg(),
