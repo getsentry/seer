@@ -1572,7 +1572,11 @@ class LlmClient:
                 new_messages.append(
                     Message(
                         role="user",
-                        content=message.content.strip() or "[empty result]",
+                        content=(
+                            message.content
+                            if message.content and message.content.strip()
+                            else "[empty result]"
+                        ),
                         tool_calls=[],
                     )
                 )
