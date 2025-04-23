@@ -17,20 +17,20 @@ jobs:
       id-token: "write"
       packages: "write"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3
 
       - id: "auth"
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 # v1
         with:
           workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
           service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
@@ -58,10 +58,10 @@ jobs:
     env:
       IMAGE_TAG: cache-${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -94,17 +94,17 @@ jobs:
       matrix:
         group: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: "auth"
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@3a3c4c57d294ef65efaaee4ff17b22fa88dd3c69 # v1
         with:
           workload_identity_provider: "projects/868781662168/locations/global/workloadIdentityPools/prod-github/providers/github-oidc-pool"
           service_account: "gha-seer-models@sac-prod-sa.iam.gserviceaccount.com"
@@ -114,7 +114,7 @@ jobs:
           create_credentials_file: true
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@e30db14379863a8c79331b04a9969f4c1e225e0b # v1
 
       - name: Pull pre-built Docker image
         run: |
@@ -158,7 +158,7 @@ jobs:
 
       - name: Upload to codecov
         if: ${{ always() }}
-        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044
+        uses: codecov/codecov-action@e0b68c6749509c5f83f984dd99a76a1c1a231044 # v4.0.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ".artifacts/coverage.xml"

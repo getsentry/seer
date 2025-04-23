@@ -581,7 +581,7 @@ class BaseTools:
         return False
 
     def _get_repo_name_and_path(
-        self, kwargs: dict[str, Any]
+        self, kwargs: dict[str, Any], allow_nonexistent_paths: bool = False
     ) -> tuple[str | None, str | None, str | None]:
         repos = self._get_repo_names()
 
@@ -591,6 +591,7 @@ class BaseTools:
         if not repos:
             return "Error: No repositories found.", None, None
 
+        path: str
         if len(repos) > 1:
             if ":" not in path_args:
                 return (
@@ -608,13 +609,16 @@ class BaseTools:
 
         fixed_path = self._attempt_fix_path(path, repo_name)
         if not fixed_path:
+            if allow_nonexistent_paths:
+                return None, repo_name, path
+
             return (
                 f"Error: The path you provided '{path}' does not exist in the repository '{repo_name}'.",
                 None,
                 None,
             )
 
-        return None, repo_name, path
+        return None, repo_name, fixed_path
 
     @observe(name="Claude Tools")
     @sentry_sdk.trace
@@ -633,10 +637,15 @@ class BaseTools:
             str: Success message or error description
         """
         command = kwargs.get("command", "")
-        error, repo_name, path = self._get_repo_name_and_path(kwargs)
+        error, repo_name, path = self._get_repo_name_and_path(
+            kwargs, allow_nonexistent_paths=command in ["create", "undo_edit"]
+        )
 
         if error:
             return error
+
+        if not path:
+            return "Error: Path could not be resolved"
 
         tool_call_id = kwargs.get("tool_call_id", None)
         current_memory_index = kwargs.get("current_memory_index", -1)
