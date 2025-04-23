@@ -32,9 +32,19 @@ class PrReviewPublisher:
         # Add PR description as a comment if available
         if pr_review.description:
             try:
-                repo_client.post_issue_comment(
-                    pr_url, f"PR Description:\n\n{pr_review.description}"
+                description_content = (
+                    f"## PR Description\n\n"
+                    f"{pr_review.description.purpose}\n\n"
+                    f"<details>\n"
+                    f"<summary><b>Click to see more</b></summary>\n\n"
+                    f"### Key Technical Changes\n{pr_review.description.key_technical_changes}\n\n"
+                    f"### Architecture Decisions\n{pr_review.description.architecture_decisions}\n\n"
+                    f"### Dependencies and Interactions\n{pr_review.description.dependencies_and_interactions}\n\n"
+                    f"### Risk Considerations\n{pr_review.description.risk_considerations}\n\n"
+                    f"### Notable Implementation Details\n{pr_review.description.notable_implementation_details}\n"
+                    f"</details>"
                 )
+                repo_client.post_issue_comment(pr_url, description_content)
             except ValueError as e:
                 logger.warning(f"Failed to post PR description on PR {pr_url}: {e}")
 

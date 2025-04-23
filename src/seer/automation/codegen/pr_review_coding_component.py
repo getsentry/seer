@@ -46,17 +46,16 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                 return None
 
             # Get detailed PR description
-            pr_description = llm_client.generate_text(
+            pr_description = llm_client.generate_structured(
                 messages=agent.memory,
                 prompt=CodingCodeReviewPrompts.format_pr_description_step(
                     diff_str=request.diff,
                 ),
-                model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                model=GeminiProvider(model_name="gemini-2.0-flash-001"),
+                response_format=CodePrReviewOutput.PrDescription,
                 run_name="Generate PR description",
                 max_tokens=2048,
             )
-
-            print(pr_description.message.content, "YO CHECK ME OUT")
 
             formatted_response = llm_client.generate_structured(
                 messages=agent.memory,
@@ -75,5 +74,5 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                     comment.body += f"\n```suggestion\n{comment.suggestion}\n```"
 
             return CodePrReviewOutput(
-                comments=formatted_response.parsed, description=pr_description.message.content
+                comments=formatted_response.parsed, description=pr_description.parsed
             )

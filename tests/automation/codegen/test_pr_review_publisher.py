@@ -140,3 +140,56 @@ class TestPrReviewPublisher(unittest.TestCase):
             mock_is_positive.assert_any_call("Good comment", owner)
             mock_is_positive.assert_any_call("Bad comment", owner)
             self.assertEqual(mock_is_positive.call_count, 2)
+
+    def test_publish_generated_pr_review_with_structured_description(self):
+        # Create a mock PR review with a structured description
+        mock_pr_description = MagicMock()
+        mock_pr_description.purpose = "Test purpose"
+        mock_pr_description.key_technical_changes = "Test technical changes"
+        mock_pr_description.architecture_decisions = "Test architecture decisions"
+        mock_pr_description.dependencies_and_interactions = "Test dependencies"
+        mock_pr_description.risk_considerations = "Test risks"
+        mock_pr_description.notable_implementation_details = "Test implementation details"
+
+        mock_comment = MagicMock()
+        mock_comment.path = "file1.py"
+        mock_comment.line = 10
+        mock_comment.start_line = 5
+        mock_comment.body = "Test comment"
+
+        mock_pr_review = MagicMock(spec=CodePrReviewOutput)
+        mock_pr_review.comments = [mock_comment]
+        mock_pr_review.description = mock_pr_description
+
+        # Mock the necessary objects
+        mock_repo_client = self.mock_repo_client
+        mock_pr = self.mock_pr
+        mock_pr.head.sha = "test-sha"
+
+        # Create publisher instance
+        publisher = PrReviewPublisher(mock_repo_client, mock_pr)
+
+        # Mock the _format_comments method to return a predefined result
+        with patch.object(PrReviewPublisher, "_format_comments") as mock_format_comments:
+            mock_format_comments.return_value = [{"dummy": "comment"}]
+
+            # Call the method under test
+            publisher.publish_generated_pr_review(mock_pr_review)
+
+            # Verify the PR description was posted with the correct format
+            expected_description_content = (
+                f"## PR Description\n\n"
+                f"{mock_pr_description.purpose}\n\n"
+                f"<details>\n"
+                f"<summary><b>Click to see more</b></summary>\n\n"
+                f"### Key Technical Changes\n{mock_pr_description.key_technical_changes}\n\n"
+                f"### Architecture Decisions\n{mock_pr_description.architecture_decisions}\n\n"
+                f"### Dependencies and Interactions\n{mock_pr_description.dependencies_and_interactions}\n\n"
+                f"### Risk Considerations\n{mock_pr_description.risk_considerations}\n\n"
+                f"### Notable Implementation Details\n{mock_pr_description.notable_implementation_details}\n"
+                f"</details>"
+            )
+
+            mock_repo_client.post_issue_comment.assert_called_with(
+                mock_pr.url, expected_description_content
+            )
