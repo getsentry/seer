@@ -7,6 +7,7 @@ import tempfile
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Literal
 
 import requests
@@ -123,6 +124,24 @@ def get_codecov_pr_review_app_credentials(
         return get_write_app_credentials()
 
     return app_id, private_key
+
+
+def _is_within_tmp_dir(directory: Path, target: Path) -> bool:
+    try:
+        target.resolve(strict=False).relative_to(directory.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _resolve_symlink_target(member: tarfile.TarInfo, extract_path: Path) -> Path:
+    symlink_path = extract_path / member.name
+    link_target = Path(member.linkname)
+
+    if not link_target.is_absolute():
+        link_target = (symlink_path.parent / link_target).resolve(strict=False)
+
+    return link_target
 
 
 class RepoClientType(str, Enum):
@@ -313,7 +332,26 @@ class RepoClient:
 
         # Extract tarball into the output directory
         with tarfile.open(tarfile_path, "r:gz") as tar:
-            tar.extractall(path=tmp_repo_dir)  # extract all members normally
+            expected_commonpath = os.path.realpath(tmp_repo_dir)
+
+            for member in tar.getmembers():
+                # Validate the member's path
+                member_path = os.path.join(tmp_repo_dir, member.name)
+
+                # directory traversal prevention
+                if not _is_within_tmp_dir(Path(expected_commonpath), Path(member_path)):
+                    sentry_sdk.capture_message(f"Illegal tar archive entry: {member.name}")
+                    raise Exception("Illegal tar archive entry")
+
+                # symlink directory traversal prevention
+                if member.issym() or member.islnk():
+                    target = _resolve_symlink_target(member, Path(expected_commonpath))
+                    if not _is_within_tmp_dir(Path(expected_commonpath), target):
+                        sentry_sdk.capture_message(f"Illegal symlink archive entry: {member.name}")
+                        raise Exception("Illegal symlink archive entry")
+
+                tar.extract(member, tmp_repo_dir)
+
             extracted_folders = [
                 name
                 for name in os.listdir(tmp_repo_dir)
