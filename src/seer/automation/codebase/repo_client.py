@@ -452,7 +452,7 @@ class RepoClient:
 
         commits = self.repo.get_commits(sha=sha, path=path or NotSet, until=until_date or NotSet)
         if skip_first_n_commits >= len(commits):
-            return ["No commits foundin selected range."]
+            return ["No commits found in selected range."]
         commit_list = list(commits[skip_first_n_commits : skip_first_n_commits + max_commits])
         commit_strs = []
 
