@@ -928,3 +928,60 @@ def test_generate_text_stream_different_timeouts(monkeypatch):
     # Only first token should have been generated before timeout
     assert len(tokens_generated) == 1
     assert tokens_generated[0][0] == "first"
+
+
+@pytest.mark.vcr()
+def test_create_cache_gemini():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-001")
+
+    contents = "test" * 5000  # Min cache is 4096
+
+    cache_name = llm_client.create_cache(
+        contents=contents,
+        cache_key="test_cache",
+        model=model,
+        ttl=3600,
+    )
+
+    assert isinstance(cache_name, str)
+    assert len(cache_name) > 0
+
+
+def test_create_cache_invalid_provider():
+    llm_client = LlmClient()
+    model = OpenAiProvider.model("gpt-3.5-turbo")
+
+    with pytest.raises(ValueError, match="Manual cache creation is only supported for Gemini"):
+        llm_client.create_cache(
+            contents="Test content",
+            cache_key="test_cache",
+            model=model,
+        )
+
+
+@pytest.mark.vcr()
+def test_create_cache_different_ttl():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.0-flash-001")
+
+    contents = "test" * 5000  # Min cache is 4096
+
+    # Create cache with default TTL (3600)
+    cache_name1 = llm_client.create_cache(
+        contents=contents,
+        cache_key="test_cache_1",
+        model=model,
+    )
+
+    # Create cache with custom TTL
+    cache_name2 = llm_client.create_cache(
+        contents=contents,
+        cache_key="test_cache_2",
+        model=model,
+        ttl=7200,
+    )
+
+    assert isinstance(cache_name1, str)
+    assert isinstance(cache_name2, str)
+    assert cache_name1 != cache_name2

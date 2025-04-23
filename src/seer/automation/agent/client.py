@@ -21,6 +21,7 @@ from google import genai  # type: ignore[attr-defined]
 from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
+    CreateCachedContentConfig,
     FunctionDeclaration,
     GenerateContentConfig,
     GenerateContentResponse,
@@ -828,7 +829,9 @@ class GeminiProvider:
     ]
 
     @inject
-    def get_client(self, app_config: AppConfig = injected) -> genai.Client:
+    def get_client(
+        self, use_local_endpoint: bool = False, app_config: AppConfig = injected
+    ) -> genai.Client:
         supported_models_on_global_endpoint = [
             "gemini-2.0-flash-001",
             "gemini-2.0-flash-lite-001",
@@ -840,10 +843,11 @@ class GeminiProvider:
             if app_config.SENTRY_REGION == "de"
             else (
                 "global"
-                if self.model_name in supported_models_on_global_endpoint
+                if self.model_name in supported_models_on_global_endpoint and not use_local_endpoint
                 else "us-central1"
             )
         )
+        print(f"Region: {region}")
         client = genai.Client(
             vertexai=True,
             location=region,
@@ -1267,6 +1271,29 @@ class GeminiProvider:
 
         return message
 
+    def create_cache(self, contents: str, cache_key: str, ttl: int = 3600) -> str:
+        """
+        Create a cache for the given content and cache key.
+
+        Args:
+            content: The content to cache.
+            cache_key: The key to be used as the display name of the cache.
+            ttl: The time to live (in seconds) for the cache. Defaults to 1 hour.
+        Returns:
+            Cache name as specified by Gemini.
+        """
+        client = self.get_client(use_local_endpoint=True)
+
+        cache = client.caches.create(
+            model=self.model_name,
+            config=CreateCachedContentConfig(
+                display_name=cache_key,
+                contents=contents,
+                ttl=f"{ttl}s",
+            ),
+        )
+        return cache.name
+
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
@@ -1619,6 +1646,16 @@ class LlmClient:
             return model.construct_message_from_stream(content_chunks, tool_calls)
         else:
             raise ValueError(f"Invalid provider: {model.provider_name}")
+
+    @sentry_sdk.trace
+    def create_cache(
+        self, contents: str, cache_key: str, model: LlmProvider, ttl: int = 3600
+    ) -> str:
+        if model.provider_name == LlmProviderType.GEMINI:
+            model = cast(GeminiProvider, model)
+            return model.create_cache(contents, cache_key, ttl)
+        else:
+            raise ValueError("Manual cache creation is only supported for Gemini.")
 
 
 @module.provider
