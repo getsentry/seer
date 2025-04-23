@@ -38,6 +38,7 @@ class TestPrReviewPublisher(unittest.TestCase):
     def test_publish_generated_pr_review_no_comments(self):
         mock_pr_review_output = MagicMock(spec=CodePrReviewOutput)
         mock_pr_review_output.comments = []
+        mock_pr_review_output.description = None
 
         self.publisher.publish_generated_pr_review(mock_pr_review_output)
         self.mock_repo_client.post_issue_comment.assert_called_once_with(
@@ -52,6 +53,7 @@ class TestPrReviewPublisher(unittest.TestCase):
 
         mock_pr_review_output = MagicMock(spec=CodePrReviewOutput)
         mock_pr_review_output.comments = [mock_comment]
+        mock_pr_review_output.description = None
 
         with patch.object(
             PrReviewPublisher, "_format_comments", return_value=[mock_comment]
@@ -76,6 +78,7 @@ class TestPrReviewPublisher(unittest.TestCase):
 
         mock_pr_review_output = MagicMock(spec=CodePrReviewOutput)
         mock_pr_review_output.comments = [mock_comment]
+        mock_pr_review_output.description = None
 
         self.mock_repo_client.post_pr_review_comment.side_effect = ValueError("Invalid comment")
 
@@ -110,6 +113,7 @@ class TestPrReviewPublisher(unittest.TestCase):
 
         pr_review = MagicMock(spec=CodePrReviewOutput)
         pr_review.comments = [review_comment1, review_comment2, review_comment3]
+        pr_review.description = None
 
         commit_id = "test-commit-id"
         owner = "owner-name"
