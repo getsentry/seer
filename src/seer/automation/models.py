@@ -377,6 +377,18 @@ class EventDetails(BaseModel):
             elif entry.get("type") == "request":
                 request = RequestDetails.model_validate(entry.get("data", {}))
 
+        sentry_sdk.set_tags(
+            {
+                "num_stacktraces": len(stacktraces),
+                "num_threads": len(threads),
+                "num_breadcrumbs": len(breadcrumbs),
+                "num_exceptions": len(exceptions),
+                "has_transaction_name": transaction_name is not None,
+                "has_http_request": request is not None,
+                "has_error_message": message is not None,
+            }
+        )
+
         return cls(
             title=error_event.get("title"),
             transaction_name=transaction_name,

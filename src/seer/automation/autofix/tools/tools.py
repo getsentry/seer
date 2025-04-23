@@ -3,13 +3,12 @@ import os
 import shlex
 import subprocess
 import textwrap
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError, as_completed
 from threading import Lock
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, cast
 
+import sentry_sdk
 from langfuse.decorators import observe
-from pydantic import BaseModel
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.tools import ClaudeTool, FunctionTool
@@ -19,6 +18,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.tools.grep_search import run_grep_search
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
@@ -32,9 +32,6 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
-GREP_TIMEOUT_SECONDS = 45
-MAX_GREP_LINE_CHARACTER_LENGTH = 1024
-TOTAL_GREP_RESULTS_CHARACTER_LENGTH = 16384
 
 
 class BaseTools:
@@ -60,6 +57,7 @@ class BaseTools:
         self._executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
         self._start_parallel_repo_download()
 
+    @sentry_sdk.trace
     def _start_parallel_repo_download(self):
         """Start downloading all repositories in parallel in the background."""
         repo_names = self._get_repo_names()
@@ -114,77 +112,23 @@ class BaseTools:
         else:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
 
-    def _semantic_file_search_completion(
-        self, query: str, valid_file_paths: str, repo_names: list[str], llm_client: LlmClient
-    ):
-        prompt = textwrap.dedent(
-            """
-            I'm searching for the file in this codebase that contains {query}. Please pick the most relevant file from the following list:
-            ------------
-            {valid_file_paths}
-            """
-        ).format(query=query, valid_file_paths=valid_file_paths)
-
-        if 2 <= len(repo_names) < 100:
-            # Lower bound avoids Gemini-Pydantic incompatibility.
-            # Upper bound is b/c structured output can't handle too many options in a Literal.
-            RepoName: TypeAlias = Literal[tuple(repo_names)]  # type: ignore[valid-type]
-        else:
-            RepoName: TypeAlias = str  # type: ignore[no-redef]
-
-        class FileLocation(BaseModel):
-            file_path: str
-            repo_name: RepoName  # type: ignore
-
-        response = llm_client.generate_structured(
-            prompt=prompt,
-            model=GeminiProvider(model_name="gemini-2.0-flash-001"),
-            response_format=FileLocation,
-        )
-        return response.parsed
-
     @observe(name="Semantic File Search")
-    @ai_track(description="Semantic File Search")
+    @sentry_sdk.trace
     @inject
     def semantic_file_search(self, query: str, llm_client: LlmClient = injected):
-        repo_names = self._get_repo_names()
-        files_per_repo = {}
-        for repo_name in repo_names:
-            repo_client = self.context.get_repo_client(
-                repo_name=repo_name, type=self.repo_client_type
-            )
-            valid_file_paths = repo_client.get_valid_file_paths()
-
-            # Convert the list of file paths to a tree structure
-            files_with_status = [{"path": path, "status": ""} for path in valid_file_paths]
-            tree_representation = repo_client._build_file_tree_string(files_with_status)
-            files_per_repo[repo_name] = tree_representation
+        from seer.automation.autofix.tools.semantic_search import semantic_search
 
         self.context.event_manager.add_log(f'Searching for "{query}"...')
 
-        all_valid_paths = "\n".join(
-            [
-                f"FILES IN REPO {repo_name}:\n{files_per_repo[repo_name]}\n------------"
-                for repo_name in repo_names
-            ]
-        )
-        file_location = self._semantic_file_search_completion(
-            query, all_valid_paths, repo_names, llm_client
-        )
-        file_path = file_location.file_path if file_location else None
-        repo_name = file_location.repo_name if file_location else None
-        if file_path is None or repo_name is None:
+        result = semantic_search(query=query, context=self.context)
+
+        if not result:
             return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
 
-        file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
-
-        if file_contents is None:
-            return "Could not figure out which file matches what you were looking for. You'll have to try yourself."
-
-        return f"This file might be what you're looking for: `{file_path}`. Contents:\n\n{file_contents}"
+        return result
 
     @observe(name="Expand Document")
-    @ai_track(description="Expand Document")
+    @sentry_sdk.trace
     def expand_document(self, file_path: str, repo_name: str):
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
@@ -198,7 +142,7 @@ class BaseTools:
         return f"<document with the provided path not found/>\n{other_paths}".strip()
 
     @observe(name="View Diff")
-    @ai_track(description="View Diff")
+    @sentry_sdk.trace
     def view_diff(self, file_path: str, repo_name: str, commit_sha: str):
         """
         Given a file path, repository name, and commit SHA, returns the diff for the file in the given commit.
@@ -216,7 +160,7 @@ class BaseTools:
         return patch
 
     @observe(name="Explain File")
-    @ai_track(description="Explain File")
+    @sentry_sdk.trace
     def explain_file(self, file_path: str, repo_name: str):
         """
         Given a file path and repository name, returns recent commits and related files.
@@ -232,7 +176,7 @@ class BaseTools:
         return "No commit history found for the given file. Either the file path or repo name is incorrect, or it is just unavailable right now."
 
     @observe(name="Tree")
-    @ai_track(description="Tree")
+    @sentry_sdk.trace
     def tree(self, path: str, repo_name: str | None = None) -> str:
         """
         Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.
@@ -322,6 +266,7 @@ class BaseTools:
         normalized_path = path.strip("/") + "/" if path.strip("/") else ""
         return normalized_path
 
+    @sentry_sdk.trace
     def cleanup(self):
         # Clean up any in-progress downloads
         if self._download_future and not self._download_future.done():
@@ -339,7 +284,7 @@ class BaseTools:
         self.tmp_dir = {}
 
     @observe(name="Search Google")
-    @ai_track(description="Search Google")
+    @sentry_sdk.trace
     @inject
     def google_search(self, question: str, llm_client: LlmClient = injected):
         """
@@ -351,7 +296,7 @@ class BaseTools:
         )
 
     @observe(name="Get Profile")
-    @ai_track(description="Get Profile")
+    @sentry_sdk.trace
     @inject
     def get_profile(self, event_id: str, rpc_client: RpcClient = injected):
         """
@@ -392,7 +337,7 @@ class BaseTools:
             return "Could not fetch profile."
 
     @observe(name="Get Trace Event Details")
-    @ai_track(description="Get Trace Event Details")
+    @sentry_sdk.trace
     @inject
     def get_trace_event_details(self, event_id: str, rpc_client: RpcClient = injected):
         """
@@ -444,7 +389,7 @@ class BaseTools:
             return "Cannot fetch information for this event."
 
     @observe(name="Grep Search")
-    @ai_track(description="Grep Search")
+    @sentry_sdk.trace
     def grep_search(self, command: str, repo_name: str | None = None):
         """
         Runs a grep command over the downloaded repositories.
@@ -461,7 +406,6 @@ class BaseTools:
         self._ensure_repos_downloaded(repo_name)
 
         repo_names = [repo_name] if repo_name else self._get_repo_names()
-        all_results = []
 
         # Parse the command into a list of arguments
         try:
@@ -469,85 +413,7 @@ class BaseTools:
         except Exception as e:
             return f"Error parsing grep command: {str(e)}"
 
-        for repo_name in repo_names:
-            if repo_name not in self.tmp_dir:
-                continue
-            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
-            if not tmp_repo_dir:
-                continue
-
-            try:
-                # Run the grep command in the repo directory
-                try:
-                    process = subprocess.run(
-                        cmd_args,
-                        shell=False,
-                        cwd=tmp_repo_dir,
-                        capture_output=True,
-                        text=True,
-                        check=False,
-                        timeout=GREP_TIMEOUT_SECONDS,
-                    )
-
-                    # Check if error is due to "is a directory" and retry with -r flag
-                    if (
-                        process.returncode != 0
-                        and process.returncode != 1
-                        and "is a directory" in process.stderr.lower()
-                    ):
-                        if "-r" not in cmd_args and "--recursive" not in cmd_args:
-                            recursive_cmd_args = cmd_args.copy()
-                            recursive_cmd_args.insert(1, "-r")
-                            process = subprocess.run(
-                                recursive_cmd_args,
-                                shell=False,
-                                cwd=tmp_repo_dir,
-                                capture_output=True,
-                                text=True,
-                                check=False,
-                                timeout=GREP_TIMEOUT_SECONDS,
-                            )
-
-                    if (
-                        process.returncode != 0 and process.returncode != 1
-                    ):  # grep returns 1 when no matches found
-                        all_results.append(f"Results from {repo_name}: {process.stderr}")
-                    elif process.stdout:
-                        final_output = process.stdout
-                        # Each line is a grep result, -A, -B, -C are ways to get lines before, after, and around the match
-                        if "-A" not in cmd_args and "-B" not in cmd_args and "-C" not in cmd_args:
-                            lines = process.stdout.split("\n")
-                            final_output = ""
-                            for line in lines:
-                                if len(line) > MAX_GREP_LINE_CHARACTER_LENGTH:
-                                    line = (
-                                        line[:MAX_GREP_LINE_CHARACTER_LENGTH]
-                                        + "...[TRUNCATED: line too long to display]"
-                                    )
-                                final_output += line + "\n"
-
-                        if len(final_output) > TOTAL_GREP_RESULTS_CHARACTER_LENGTH:
-                            final_output = (
-                                final_output[:TOTAL_GREP_RESULTS_CHARACTER_LENGTH]
-                                + "...[GREP RESULTS TRUNCATED: too long to display, try narrowing your search]"
-                            )
-
-                        all_results.append(
-                            f"Results from {repo_name}:\n------\n{final_output}\n------"
-                        )
-                    else:
-                        all_results.append(f"Results from {repo_name}: no results found.")
-                except subprocess.TimeoutExpired:
-                    all_results.append(
-                        f"Results from {repo_name}: command timed out. Try narrowing your search."
-                    )
-            except Exception as e:
-                all_results.append(f"Error in repo {repo_name}: {str(e)}")
-
-        if not all_results:
-            return "No results found."
-
-        return "\n\n".join(all_results)
+        return run_grep_search(cmd_args, repo_names, self.tmp_dir)
 
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
@@ -571,17 +437,18 @@ class BaseTools:
                     self._download_future = None
             else:
                 # Download in progress - wait for it to complete with a timeout
-                try:
-                    self._download_future.result(timeout=60)
-                    self._download_future = None
-                except TimeoutError:
-                    logger.warning(
-                        "Parallel repo download taking too long, proceeding with individual downloads"
-                    )
-                    self._download_future = None
-                except Exception as e:
-                    logger.exception(f"Error waiting for parallel repo download: {e}")
-                    self._download_future = None
+                with sentry_sdk.start_span(name="Waiting for parallel repo download to complete"):
+                    try:
+                        self._download_future.result(timeout=60)
+                        self._download_future = None
+                    except TimeoutError:
+                        logger.warning(
+                            "Parallel repo download taking too long, proceeding with individual downloads"
+                        )
+                        self._download_future = None
+                    except Exception as e:
+                        logger.exception(f"Error waiting for parallel repo download: {e}")
+                        self._download_future = None
 
         if repo_name:
             repo_names_to_download = [repo_name] if repo_name not in self.tmp_dir else []
@@ -596,48 +463,49 @@ class BaseTools:
         if not hasattr(self, "_tmp_dir_lock"):
             self._tmp_dir_lock = Lock()
 
-        if len(repo_names_to_download) == 1:
-            # Single repo - download synchronously
-            try:
-                repo_name = repo_names_to_download[0]
-                repo_client = self.context.get_repo_client(
-                    repo_name=repo_name, type=self.repo_client_type
-                )
-                tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-
-                with self._tmp_dir_lock:
-                    self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
-            except Exception as e:
-                logger.exception(f"Error downloading repo {repo_name}: {e}")
-        else:
-            # Multiple repos - download in parallel
-            def download_repo(repo_name):
+        with sentry_sdk.start_span(name="Downloading repos individually"):
+            if len(repo_names_to_download) == 1:
+                # Single repo - download synchronously
                 try:
+                    repo_name = repo_names_to_download[0]
                     repo_client = self.context.get_repo_client(
                         repo_name=repo_name, type=self.repo_client_type
                     )
                     tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-                    return repo_name, (tmp_dir, tmp_repo_dir)
+
+                    with self._tmp_dir_lock:
+                        self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
                 except Exception as e:
                     logger.exception(f"Error downloading repo {repo_name}: {e}")
-                    return None
+            else:
+                # Multiple repos - download in parallel
+                def download_repo(repo_name):
+                    try:
+                        repo_client = self.context.get_repo_client(
+                            repo_name=repo_name, type=self.repo_client_type
+                        )
+                        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                        return repo_name, (tmp_dir, tmp_repo_dir)
+                    except Exception as e:
+                        logger.exception(f"Error downloading repo {repo_name}: {e}")
+                        return None
 
-            with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
-                futures = {
-                    executor.submit(download_repo, repo_name): repo_name
-                    for repo_name in repo_names_to_download
-                }
+                with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+                    futures = {
+                        executor.submit(download_repo, repo_name): repo_name
+                        for repo_name in repo_names_to_download
+                    }
 
-                for future in as_completed(futures):
-                    result = future.result()
-                    if result:
-                        repo_name, repo_dirs = result
-                        with self._tmp_dir_lock:
-                            if repo_name is not None:
-                                self.tmp_dir[repo_name] = repo_dirs
+                    for future in as_completed(futures):
+                        result = future.result()
+                        if result:
+                            repo_name, repo_dirs = result
+                            with self._tmp_dir_lock:
+                                if repo_name is not None:
+                                    self.tmp_dir[repo_name] = repo_dirs
 
     @observe(name="Find Files")
-    @ai_track(description="Find Files")
+    @sentry_sdk.trace
     def find_files(self, command: str, repo_name: str | None = None):
         """
         Runs a `find` command over the downloaded repositories to search for files.
@@ -749,6 +617,7 @@ class BaseTools:
         return None, repo_name, path
 
     @observe(name="Claude Tools")
+    @sentry_sdk.trace
     def handle_claude_tools(self, **kwargs: Any) -> str:
         """
         Handles various file editing commands from Claude tools.
@@ -830,6 +699,7 @@ class BaseTools:
             return f"Error: Failed to apply changes to file: {str(e)}"
 
     @observe(name="View")
+    @sentry_sdk.trace
     def _handle_view_command(
         self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
     ) -> str:
@@ -867,6 +737,7 @@ class BaseTools:
             return str(e)
 
     @observe(name="String Replace")
+    @sentry_sdk.trace
     def _handle_str_replace_command(
         self,
         kwargs: dict[str, Any],
@@ -913,6 +784,7 @@ class BaseTools:
             return str(e)
 
     @observe(name="Create File")
+    @sentry_sdk.trace
     def _handle_create_command(
         self,
         kwargs: dict[str, Any],
@@ -958,6 +830,7 @@ class BaseTools:
         return self._apply_file_change(repo_name, file_change)
 
     @observe(name="Insert Text")
+    @sentry_sdk.trace
     def _handle_insert_command(
         self,
         kwargs: dict[str, Any],
@@ -1014,6 +887,7 @@ class BaseTools:
             return str(e)
 
     @observe(name="Undo Edit")
+    @sentry_sdk.trace
     def _handle_undo_edit_command(
         self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
     ) -> str:
@@ -1275,3 +1149,55 @@ class BaseTools:
                 )
 
         return tools
+
+
+class SemanticSearchTools(BaseTools):
+    def get_tools(
+        self, can_access_repos: bool = True, include_claude_tools: bool = False
+    ) -> list[ClaudeTool | FunctionTool]:
+        if not can_access_repos:
+            return []
+
+        return [
+            FunctionTool(
+                name="tree",
+                fn=self.tree,
+                description="Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.",
+                parameters=[
+                    {
+                        "name": "path",
+                        "type": "string",
+                        "description": 'The path to view. For example, "src/app/components"',
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Optional name of the repository to search in if you know it.",
+                    },
+                ],
+                required=["path"],
+            ),
+            FunctionTool(
+                name="expand_document",
+                fn=self.expand_document,
+                description=textwrap.dedent(
+                    """\
+                Given a document path, returns the entire document text.
+                - Note: To save time and money, if you're looking to expand multiple documents, call this tool multiple times in the same message.
+                - If a document has already been expanded earlier in the conversation, don't use this tool again for the same file path."""
+                ),
+                parameters=[
+                    {
+                        "name": "file_path",
+                        "type": "string",
+                        "description": "The document path to expand.",
+                    },
+                    {
+                        "name": "repo_name",
+                        "type": "string",
+                        "description": "Name of the repository containing the file.",
+                    },
+                ],
+                required=["file_path", "repo_name"],
+            ),
+        ]

@@ -1,7 +1,7 @@
 import textwrap
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.models import Message, Usage
@@ -86,7 +86,7 @@ class InsightSharingPrompts:
 
 
 @observe(name="Sharing Insights")
-@ai_track(description="Sharing Insights")
+@sentry_sdk.trace
 @inject
 def create_insight_output(
     *,

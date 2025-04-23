@@ -1,8 +1,8 @@
 import json
 import logging
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
@@ -13,7 +13,7 @@ from seer.automation.autofix.components.root_cause.models import RootCauseAnalys
 from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionRequest
 from seer.automation.autofix.components.solution.prompts import SolutionPrompts
 from seer.automation.autofix.prompts import format_repo_prompt
-from seer.automation.autofix.tools import BaseTools
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
 
@@ -90,7 +90,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
         return memory
 
     @observe(name="Solution")
-    @ai_track(description="Solution")
+    @sentry_sdk.trace
     @inject
     def invoke(
         self, request: SolutionRequest, llm_client: LlmClient = injected
@@ -104,6 +104,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             readable_repos = state.readable_repos
             unreadable_repos = state.unreadable_repos
 
+            sentry_sdk.set_tag("is_rethinking", len(memory) > 0)
             if not memory:
                 memory = self._prefill_initial_memory(request)
 
@@ -120,7 +121,9 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
 
             # pass in last message from RCA memory instead of root cause timeline
             root_cause_raw = None
-            if isinstance(request.root_cause_and_fix, str):  # custom root cause
+            is_custom_root_cause = isinstance(request.root_cause_and_fix, str)
+            sentry_sdk.set_tag("is_custom_root_cause", is_custom_root_cause)
+            if is_custom_root_cause:
                 root_cause_raw = request.root_cause_and_fix
             else:
                 root_cause_memory = self.context.get_memory("root_cause_analysis")
@@ -144,12 +147,13 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 if has_tools:  # run context gatherer
                     response = agent.run(
                         run_config=RunConfig(
-                            model=GeminiProvider.model("gemini-2.5-pro-preview-03-25"),
+                            model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
                             system_prompt=SolutionPrompts.format_system_msg(),
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
                             max_iterations=64,
                             temperature=1.0,
+                            max_tokens=32000,
                         ),
                     )
 

@@ -1,12 +1,9 @@
-import textwrap
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 
-from seer.automation.agent.client import LlmClient
 from seer.automation.autofix.autofix_context import AutofixContext
-from seer.automation.autofix.tools import BaseTools
-from seer.automation.codebase.repo_client import RepoClientType
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.models import FileChange
 
 
@@ -69,14 +66,14 @@ def autofix_tools(test_state):
     context._attempt_fix_path = MagicMock(return_value="test.py")
 
     with patch(
-        "seer.automation.autofix.tools.BaseTools._start_parallel_repo_download", MagicMock()
+        "seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download", MagicMock()
     ):
         tools = BaseTools(context)
     return tools
 
 
 class TestFileSystem:
-    @patch("seer.automation.autofix.tools.cleanup_dir")
+    @patch("seer.automation.autofix.tools.tools.cleanup_dir")
     def test_context_manager_cleanup(self, mock_cleanup_dir, autofix_tools: BaseTools):
         with autofix_tools as tools:
             tools.tmp_dir = {"dummy": ("/tmp/test_dir", "/tmp/test_dir/repo")}
@@ -84,7 +81,7 @@ class TestFileSystem:
         mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
         assert autofix_tools.tmp_dir == {}
 
-    @patch("seer.automation.autofix.tools.cleanup_dir")
+    @patch("seer.automation.autofix.tools.tools.cleanup_dir")
     def test_cleanup_method(self, mock_cleanup_dir, autofix_tools: BaseTools):
         autofix_tools.tmp_dir = {"dummy": ("/tmp/test_dir", "/tmp/test_dir/repo")}
 
@@ -93,7 +90,7 @@ class TestFileSystem:
         mock_cleanup_dir.assert_called_once_with("/tmp/test_dir")
         assert autofix_tools.tmp_dir == {}
 
-    @patch("seer.automation.autofix.tools.cleanup_dir")
+    @patch("seer.automation.autofix.tools.tools.cleanup_dir")
     def test_cleanup_not_called_when_tmp_dir_is_none(
         self, mock_cleanup_dir, autofix_tools: BaseTools
     ):
@@ -106,172 +103,33 @@ class TestFileSystem:
 
 
 class TestSemanticFileSearch:
-    def test_semantic_file_search_found(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(full_name="owner/test_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
+    @patch("seer.automation.autofix.tools.semantic_search.semantic_search")
+    def test_semantic_file_search_found(self, mock_semantic_search, autofix_tools: BaseTools):
+        query = "find the main file"
+        expected_result = "Found relevant file: `src/main.py`"
+        mock_semantic_search.return_value = expected_result
 
-        mock_repo_client = MagicMock()
-        # Files available in the repo
-        mock_repo_client.get_valid_file_paths.return_value = [
-            "src/file1.py",
-            "tests/test_file1.py",
-            "src/subfolder/file2.py",
-        ]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-        autofix_tools.context.get_file_contents.return_value = "test file contents"
+        result = autofix_tools.semantic_file_search(query)
 
-        mock_llm_client = MagicMock()
-        # The parsed response now includes both file_path and the repo_name built from the dummy repo.
-        mock_llm_client.generate_structured.return_value.parsed = MagicMock(
-            file_path="src/file1.py", repo_name="owner/test_repo"
+        mock_semantic_search.assert_called_once_with(query=query, context=autofix_tools.context)
+        autofix_tools.context.event_manager.add_log.assert_called_with(
+            f'Searching for "{query}"...'
         )
+        assert result == expected_result
 
-        result = autofix_tools.semantic_file_search(
-            "find the main file", llm_client=mock_llm_client
+    @patch("seer.automation.autofix.tools.semantic_search.semantic_search")
+    def test_semantic_file_search_not_found(self, mock_semantic_search, autofix_tools: BaseTools):
+        query = "find nonexistent file"
+        expected_result = "Could not figure out which file matches what you were looking for. You'll have to try yourself."
+        mock_semantic_search.return_value = ""  # Simulate agent returning nothing
+
+        result = autofix_tools.semantic_file_search(query)
+
+        mock_semantic_search.assert_called_once_with(query=query, context=autofix_tools.context)
+        autofix_tools.context.event_manager.add_log.assert_called_with(
+            f'Searching for "{query}"...'
         )
-        expected = "This file might be what you're looking for: `src/file1.py`. Contents:\n\ntest file contents"
-        assert result == expected
-
-    @pytest.mark.vcr()
-    @pytest.mark.parametrize(
-        "repo_names",
-        (
-            ["owner/repo", "owner/another-repo"],
-            ["owner/another-repo"],  # fall back to str RepoName
-            ["owner/repo", "owner/another-repo"] * 100,  # fall back to str RepoName
-        ),
-    )
-    def test_semantic_file_search_completion(self, autofix_tools: BaseTools, repo_names: list[str]):
-        query = "find the file which tests google's LLM"
-        valid_file_paths = textwrap.dedent(
-            """
-            FILES IN REPO owner/repo:
-            src/
-            └──something.py
-            tests/
-            └──another/
-                └──test_thing.py
-            ------------
-            FILES IN REPO owner/another-repo:
-            src/
-            └──clients/
-                ├──claude.py
-                ├──gemini.py
-                └──openai.py
-            tests/
-            └──clients/
-                ├──test_claude.py
-                ├──test_gemini.py
-                └──test_openai.py
-            """
-        )
-
-        llm_client = LlmClient()
-        file_location = autofix_tools._semantic_file_search_completion(
-            query, valid_file_paths, repo_names, llm_client
-        )
-        assert file_location.repo_name == "owner/another-repo"
-        assert file_location.file_path == "tests/clients/test_gemini.py"
-
-    def test_semantic_file_search_not_found_no_file_path(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(full_name="owner/test_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.get_valid_file_paths.return_value = [
-            "src/file1.py",
-            "tests/test_file1.py",
-        ]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value.parsed = None
-
-        result = autofix_tools.semantic_file_search(
-            "find nonexistent file", llm_client=mock_llm_client
-        )
-        expected = "Could not figure out which file matches what you were looking for. You'll have to try yourself."
-        assert result == expected
-
-    def test_semantic_file_search_not_found_no_contents(self, autofix_tools: BaseTools):
-        dummy_repo = MagicMock(full_name="owner/test_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.get_valid_file_paths.return_value = [
-            "src/file1.py",
-            "tests/test_file1.py",
-        ]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-        autofix_tools.context.get_file_contents.return_value = None
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value.parsed = MagicMock(
-            file_path="src/file1.py", repo_name="owner/test_repo"
-        )
-
-        result = autofix_tools.semantic_file_search(
-            "find file with no contents", llm_client=mock_llm_client
-        )
-        expected = "Could not figure out which file matches what you were looking for. You'll have to try yourself."
-        assert result == expected
-
-    def test_semantic_file_search_with_repo_name(self, autofix_tools: BaseTools):
-        # Instead of passing repo_name directly as an argument,
-        # set context.repos so that _get_repo_names() returns "owner/specific_repo"
-        dummy_repo = MagicMock(full_name="owner/specific_repo")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo]
-
-        mock_repo_client = MagicMock()
-        mock_repo_client.get_valid_file_paths.return_value = ["src/file1.py"]
-        autofix_tools.context.get_repo_client.return_value = mock_repo_client
-        autofix_tools.context.get_file_contents.return_value = "test file contents"
-        autofix_tools.repo_client_type = RepoClientType.READ
-
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value.parsed = MagicMock(
-            file_path="src/file1.py", repo_name="owner/specific_repo"
-        )
-
-        autofix_tools.semantic_file_search("find file", llm_client=mock_llm_client)
-        autofix_tools.context.get_repo_client.assert_any_call(
-            repo_name="owner/specific_repo", type=RepoClientType.READ
-        )
-
-    def test_semantic_file_search_multi_repo(self, autofix_tools: BaseTools):
-        # Create two dummy repos
-        dummy_repo1 = MagicMock(full_name="owner/repo1")
-        dummy_repo2 = MagicMock(full_name="owner/repo2")
-        autofix_tools.context.state.get.return_value.readable_repos = [dummy_repo1, dummy_repo2]
-
-        # Each repo returns a different set of valid file paths.
-        client_repo1 = MagicMock()
-        client_repo1.get_valid_file_paths.return_value = ["src/main.py", "src/helper.py"]
-        client_repo2 = MagicMock()
-        client_repo2.get_valid_file_paths.return_value = ["src/main.py", "README.md"]
-
-        # Use a side effect to return the proper client for each repo.
-        def get_repo_client_side_effect(repo_name, type):
-            if repo_name == "owner/repo1":
-                return client_repo1
-            elif repo_name == "owner/repo2":
-                return client_repo2
-            return MagicMock()
-
-        autofix_tools.context.get_repo_client.side_effect = get_repo_client_side_effect
-
-        # Simulate file contents for a file in repo2.
-        autofix_tools.context.get_file_contents.return_value = "print('Hello from repo2')"
-
-        # Create a dummy LLM client which returns that for the query 'find main'
-        response = MagicMock()
-        response.parsed = MagicMock(file_path="src/main.py", repo_name="owner/repo2")
-        mock_llm_client = MagicMock()
-        mock_llm_client.generate_structured.return_value = response
-
-        result = autofix_tools.semantic_file_search("find main", llm_client=mock_llm_client)
-        expected = "This file might be what you're looking for: `src/main.py`. Contents:\n\nprint('Hello from repo2')"
-        assert result == expected
+        assert result == expected_result
 
 
 class TestViewDiff:
@@ -508,7 +366,7 @@ class TestGrepSearch:
         assert "Results from owner/repo2" in result
         assert "repo2_file.py:20:result" in result
 
-    @patch("seer.automation.autofix.tools.BaseTools._ensure_repos_downloaded")
+    @patch("seer.automation.autofix.tools.tools.BaseTools._ensure_repos_downloaded")
     def test_grep_search_specific_repo(self, mock_ensure_repos, autofix_tools: BaseTools):
         autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
 
@@ -606,7 +464,7 @@ class TestFindFiles:
         assert "Results from owner/repo2" in result
         assert "./repo2_file.py" in result
 
-    @patch("seer.automation.autofix.tools.BaseTools._ensure_repos_downloaded")
+    @patch("seer.automation.autofix.tools.tools.BaseTools._ensure_repos_downloaded")
     def test_find_files_specific_repo(self, mock_ensure_repos, autofix_tools: BaseTools):
         autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
 
@@ -623,8 +481,8 @@ class TestFindFiles:
 
 
 class TestParallelRepoDownload:
-    @patch("seer.automation.autofix.tools.copy_modules_initializer")
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.copy_modules_initializer")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_init_starts_parallel_download(self, mock_executor_class, mock_copy_initializer):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -642,7 +500,7 @@ class TestParallelRepoDownload:
         assert mock_executor.submit.called
         assert tools._download_future is not None
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_cleanup_cancels_download_future(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -653,7 +511,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = [MagicMock(full_name="owner/repo1")]
 
         # Patch _start_parallel_repo_download to avoid starting real threads
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Set a mock future
@@ -667,7 +525,7 @@ class TestParallelRepoDownload:
         mock_future.cancel.assert_called_once()
         assert tools._download_future is None
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_exit_shuts_down_executor(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -677,7 +535,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = []
 
         # Patch _start_parallel_repo_download to avoid starting real threads
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Call __exit__
@@ -692,7 +550,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = [MagicMock(full_name="owner/repo1")]
 
         # Patch _start_parallel_repo_download to avoid starting real threads
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Setup a completed future
@@ -724,8 +582,8 @@ class TestParallelRepoDownload:
         assert "owner/repo1" in tools.tmp_dir
         assert tools.tmp_dir["owner/repo1"] == ("/tmp/dir", "/tmp/dir/repo")
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
-    @patch("seer.automation.autofix.tools.as_completed")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.as_completed")
     def test_ensure_repos_downloaded_parallel(self, mock_as_completed, mock_executor_class):
         # Setup ThreadPoolExecutor context manager mock
         thread_pool_cm = MagicMock()
@@ -744,7 +602,7 @@ class TestParallelRepoDownload:
 
         # We need to patch out the _download_future because our test focuses on _ensure_repos_downloaded
         # Create tools with a pre-completed download_future to avoid extra ThreadPoolExecutor usage
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Setup a completed future to avoid triggering more ThreadPoolExecutor creation
@@ -781,7 +639,7 @@ class TestParallelRepoDownload:
         mock_executor_class.reset_mock()
 
         # Call method
-        with patch("seer.automation.autofix.tools.append_langfuse_observation_metadata"):
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
             tools._ensure_repos_downloaded()
 
         # Verify ThreadPoolExecutor was created exactly once during the test
@@ -796,7 +654,7 @@ class TestParallelRepoDownload:
         assert "owner/repo2" in tools.tmp_dir
         assert "owner/repo3" in tools.tmp_dir
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_cleanup_handles_future_cancel_exception(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -806,7 +664,7 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = []
 
         # Create tools
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Set up a future that raises an exception when cancelled
@@ -816,7 +674,7 @@ class TestParallelRepoDownload:
         tools._download_future = mock_future
 
         # Call cleanup - should handle the exception gracefully
-        with patch("seer.automation.autofix.tools.logger.exception") as mock_logger:
+        with patch("seer.automation.autofix.tools.tools.logger.exception") as mock_logger:
             tools.cleanup()
 
         # Verify exception was logged
@@ -824,7 +682,7 @@ class TestParallelRepoDownload:
         assert "Cancel failed" in str(mock_logger.call_args)
         assert tools._download_future is None
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_exit_handles_executor_shutdown_exception(self, mock_executor_class):
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
@@ -835,11 +693,11 @@ class TestParallelRepoDownload:
         context.state.get.return_value.readable_repos = []
 
         # Create tools
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Call __exit__ - should handle the exception gracefully
-        with patch("seer.automation.autofix.tools.logger.exception") as mock_logger:
+        with patch("seer.automation.autofix.tools.tools.logger.exception") as mock_logger:
             tools.__exit__(None, None, None)
 
         # Verify exception was logged
@@ -847,7 +705,7 @@ class TestParallelRepoDownload:
         assert "Shutdown failed" in str(mock_logger.call_args)
         mock_executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
 
-    @patch("seer.automation.autofix.tools.ThreadPoolExecutor")
+    @patch("seer.automation.autofix.tools.tools.ThreadPoolExecutor")
     def test_ensure_repos_downloaded_skips_already_downloaded(self, mock_executor_class):
         # Setup mocks
         mock_executor = MagicMock()
@@ -862,7 +720,7 @@ class TestParallelRepoDownload:
         ]
 
         # Create tools with some repos already in tmp_dir
-        with patch("seer.automation.autofix.tools.BaseTools._start_parallel_repo_download"):
+        with patch("seer.automation.autofix.tools.tools.BaseTools._start_parallel_repo_download"):
             tools = BaseTools(context)
 
         # Set up tmp_dir to simulate already downloaded repo
@@ -875,7 +733,7 @@ class TestParallelRepoDownload:
         context.get_repo_client.return_value = mock_repo_client
 
         # Call method
-        with patch("seer.automation.autofix.tools.append_langfuse_observation_metadata"):
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
             tools._ensure_repos_downloaded()
 
         # Verify only the second repo was downloaded

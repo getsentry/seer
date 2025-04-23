@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
 
 import anthropic
+import sentry_sdk
 from anthropic import NOT_GIVEN
 from anthropic.types import (
     MessageParam,
@@ -107,6 +108,7 @@ class OpenAiProvider:
             exception, LlmStreamTimeoutError
         )
 
+    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -184,6 +186,7 @@ class OpenAiProvider:
             ),
         )
 
+    @sentry_sdk.trace
     def generate_structured(
         self,
         *,
@@ -323,6 +326,7 @@ class OpenAiProvider:
         return message_dicts, tool_dicts
 
     @observe(as_type="generation", name="OpenAI Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -489,6 +493,7 @@ class AnthropicProvider:
         )
 
     @observe(as_type="generation", name="Anthropic Generation")
+    @sentry_sdk.trace
     @inject
     def generate_text(
         self,
@@ -685,6 +690,7 @@ class AnthropicProvider:
         return message_dicts, tool_dicts, system_prompt_block
 
     @observe(as_type="generation", name="Anthropic Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -821,10 +827,23 @@ class GeminiProvider:
         ),
     ]
 
-    @staticmethod
     @inject
-    def get_client(app_config: AppConfig = injected) -> genai.Client:
-        region = "europe-west1" if app_config.SENTRY_REGION == "de" else "global"
+    def get_client(self, app_config: AppConfig = injected) -> genai.Client:
+        supported_models_on_global_endpoint = [
+            "gemini-2.0-flash-001",
+            "gemini-2.0-flash-lite-001",
+            "gemini-2.5-pro-preview-03-25",
+        ]
+
+        region = (
+            "europe-west1"
+            if app_config.SENTRY_REGION == "de"
+            else (
+                "global"
+                if self.model_name in supported_models_on_global_endpoint
+                else "us-central1"
+            )
+        )
         client = genai.Client(
             vertexai=True,
             location=region,
@@ -852,6 +871,7 @@ class GeminiProvider:
         return None
 
     @observe(as_type="generation", name="Gemini Generation with Grounding")
+    @sentry_sdk.trace
     def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
         client = self.get_client()
         google_search_tool = GeminiTool(google_search=GoogleSearch())
@@ -896,6 +916,7 @@ class GeminiProvider:
         ) or isinstance(exception, LlmStreamTimeoutError)
 
     @observe(as_type="generation", name="Gemini Generation")
+    @sentry_sdk.trace
     def generate_structured(
         self,
         *,
@@ -950,6 +971,7 @@ class GeminiProvider:
         )
 
     @observe(as_type="generation", name="Gemini Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -1026,6 +1048,7 @@ class GeminiProvider:
             langfuse_context.update_current_observation(model=self.model_name, usage=usage)
 
     @observe(as_type="generation", name="Gemini Generation")
+    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -1250,6 +1273,7 @@ LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
 class LlmClient:
     @observe(name="Generate Text")
+    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -1268,6 +1292,8 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -1326,6 +1352,7 @@ class LlmClient:
             raise e
 
     @observe(name="Generate Structured")
+    @sentry_sdk.trace
     def generate_structured(
         self,
         *,
@@ -1346,6 +1373,8 @@ class LlmClient:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Structured"
                 )
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             messages = LlmClient.clean_message_content(messages if messages else [])
 
@@ -1390,6 +1419,7 @@ class LlmClient:
             raise e
 
     @observe(name="Generate Text Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -1411,6 +1441,8 @@ class LlmClient:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Text Stream"
                 )
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -1499,6 +1531,7 @@ class LlmClient:
             raise e
 
     @observe(name="Generate Text from Web Search")
+    @sentry_sdk.trace
     def generate_text_from_web_search(
         self,
         *,
@@ -1510,6 +1543,8 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None

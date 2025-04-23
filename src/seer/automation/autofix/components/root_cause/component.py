@@ -1,7 +1,7 @@
 import logging
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
@@ -14,7 +14,7 @@ from seer.automation.autofix.components.root_cause.models import (
 )
 from seer.automation.autofix.components.root_cause.prompts import RootCauseAnalysisPrompts
 from seer.automation.autofix.prompts import format_repo_prompt
-from seer.automation.autofix.tools import BaseTools
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.component import BaseComponent
 from seer.dependency_injection import inject, injected
 
@@ -25,7 +25,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     context: AutofixContext
 
     @observe(name="Root Cause Analysis")
-    @ai_track(description="Root Cause Analysis")
+    @sentry_sdk.trace
     @inject
     def invoke(
         self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
@@ -35,6 +35,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
             readable_repos = state.readable_repos
             unreadable_repos = state.unreadable_repos
+
+            sentry_sdk.set_tag("is_rethinking", len(request.initial_memory) > 0)
 
             agent = AutofixAgent(
                 tools=(tools.get_tools(can_access_repos=bool(readable_repos))),
@@ -51,7 +53,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             try:
                 response = agent.run(
                     run_config=RunConfig(
-                        model=GeminiProvider.model("gemini-2.5-pro-preview-03-25"),
+                        model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
@@ -69,6 +71,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
                         temperature=1.0,
+                        max_tokens=32000,
                     ),
                 )
 

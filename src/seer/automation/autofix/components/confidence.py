@@ -1,7 +1,7 @@
 import textwrap
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.models import Message
@@ -47,7 +47,7 @@ class ConfidenceComponent(BaseComponent[ConfidenceRequest, ConfidenceOutput]):
     context: AutofixContext
 
     @observe(name="Confidence")
-    @ai_track(description="Confidence")
+    @sentry_sdk.trace
     @inject
     def invoke(
         self, request: ConfidenceRequest, llm_client: LlmClient = injected

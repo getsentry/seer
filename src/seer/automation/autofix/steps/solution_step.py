@@ -1,8 +1,8 @@
 import uuid
 from typing import Any
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.agent.models import Message
@@ -27,6 +27,7 @@ class AutofixSolutionStepRequest(PipelineStepTaskRequest):
 @celery_app.task(
     time_limit=AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
+    acks_late=True,
 )
 def autofix_solution_task(*args, request: dict[str, Any]):
     AutofixSolutionStep(request).invoke()
@@ -50,8 +51,10 @@ class AutofixSolutionStep(AutofixPipelineStep):
         return autofix_solution_task
 
     @observe(name="Autofix - Solution Step")
-    @ai_track(description="Autofix - Solution Step")
-    def _invoke(self):
+    @sentry_sdk.trace
+    def _invoke(self, **kwargs):
+        super()._invoke()
+
         self.logger.info("Executing Autofix - Solution Step")
 
         self.context.event_manager.send_solution_start()
@@ -114,6 +117,11 @@ class AutofixSolutionStep(AutofixPipelineStep):
                     )
                     cur.steps[-1].proceed_confidence_score = (
                         confidence_output.proceed_confidence_score
+                    )
+                    sentry_sdk.set_tags(
+                        {
+                            "has_agent_comment": bool(confidence_output.question),
+                        }
                     )
                     if confidence_output.question:
                         cur.steps[-1].agent_comment_thread = CommentThread(

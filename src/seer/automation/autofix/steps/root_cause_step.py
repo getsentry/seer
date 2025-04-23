@@ -1,8 +1,8 @@
 import uuid
 from typing import Any
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.agent.models import Message
@@ -37,6 +37,7 @@ class RootCauseStepRequest(PipelineStepTaskRequest):
 @celery_app.task(
     time_limit=AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
+    acks_late=True,
 )
 def root_cause_task(*args, request: Any):
     return RootCauseStep(request).invoke()
@@ -61,9 +62,11 @@ class RootCauseStep(AutofixPipelineStep):
         return RootCauseStepRequest.model_validate(request)
 
     @observe(name="Autofix - Root Cause Step")
-    @ai_track(description="Autofix - Root Cause Step")
+    @sentry_sdk.trace
     @inject
-    def _invoke(self, app_config: AppConfig = injected):
+    def _invoke(self, app_config: AppConfig = injected, **kwargs):
+        super()._invoke()
+
         self.context.event_manager.send_root_cause_analysis_start()
 
         if not self.request.initial_memory:
@@ -115,6 +118,11 @@ class RootCauseStep(AutofixPipelineStep):
                     )
                     cur.steps[-1].proceed_confidence_score = (
                         confidence_output.proceed_confidence_score
+                    )
+                    sentry_sdk.set_tags(
+                        {
+                            "has_agent_comment": bool(confidence_output.question),
+                        }
                     )
                     if confidence_output.question:
                         cur.steps[-1].agent_comment_thread = CommentThread(

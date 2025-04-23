@@ -12,7 +12,7 @@ from seer.automation.autofix.components.coding.utils import (
     task_to_file_create,
     task_to_file_delete,
 )
-from seer.automation.autofix.tools import BaseTools
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import CodeUnitTestOutput, CodeUnitTestRequest
