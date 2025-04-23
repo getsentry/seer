@@ -582,7 +582,7 @@ class BaseTools:
 
     def _get_repo_name_and_path(
         self, kwargs: dict[str, Any], allow_nonexistent_paths: bool = False
-    ) -> tuple[str | None, str | None, str]:
+    ) -> tuple[str | None, str | None, str | None]:
         repos = self._get_repo_names()
 
         path_args = kwargs.get("path", None)
@@ -643,6 +643,9 @@ class BaseTools:
 
         if error:
             return error
+
+        if not path:
+            return "Error: Path could not be resolved"
 
         tool_call_id = kwargs.get("tool_call_id", None)
         current_memory_index = kwargs.get("current_memory_index", -1)
