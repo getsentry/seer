@@ -330,6 +330,7 @@ class EventDetails(BaseModel):
     breadcrumbs: list[BreadcrumbsDetails] = Field(default_factory=list, exclude=False)
     stacktraces: list[Stacktrace] = Field(default_factory=list, exclude=False)
     request: RequestDetails | None = None
+    datetime: str | None = None
 
     @classmethod
     def from_event(cls, error_event: SentryEventData):
@@ -398,6 +399,7 @@ class EventDetails(BaseModel):
             message=message,
             stacktraces=stacktraces,
             request=request,
+            datetime=error_event.get("datetime"),
         )
 
     def format_event(self):
@@ -591,6 +593,7 @@ class IssueDetails(BaseModel):
     id: Annotated[int, Examples(specialized.unsigned_ints)]
     title: Annotated[str, Examples(specialized.ascii_words)]
     short_id: Optional[str] = None
+    first_seen: str | None = None
     events: list[SentryEventData]
 
 

@@ -1,6 +1,7 @@
 import functools
 import logging
 import textwrap
+from datetime import datetime
 from typing import Mapping
 
 import sentry_sdk
@@ -168,7 +169,12 @@ class AutofixContext(PipelineContext):
         return file_contents
 
     def get_commit_history_for_file(
-        self, path: str, repo_name: str | None = None, max_commits: int = 10
+        self,
+        path: str | None = None,
+        repo_name: str | None = None,
+        max_commits: int = 10,
+        until_date: datetime | None = None,
+        skip_first_n_commits: int = 0,
     ) -> list[str]:
         repo_name = self.autocorrect_repo_name(repo_name) if repo_name else None
         if not repo_name:
@@ -177,7 +183,13 @@ class AutofixContext(PipelineContext):
             )
 
         repo_client = self.get_repo_client(repo_name)
-        return repo_client.get_commit_history(path, autocorrect=True, max_commits=max_commits)
+        return repo_client.get_commit_history(
+            path,
+            autocorrect=True,
+            max_commits=max_commits,
+            until_date=until_date,
+            skip_first_n_commits=skip_first_n_commits,
+        )
 
     def get_commit_patch_for_file(
         self, path: str, repo_name: str | None = None, commit_sha: str | None = None

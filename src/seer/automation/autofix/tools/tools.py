@@ -4,6 +4,7 @@ import shlex
 import subprocess
 import textwrap
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError, as_completed
+from datetime import datetime
 from threading import Lock
 from typing import Any, cast
 
@@ -909,6 +910,44 @@ class BaseTools:
                     return "File changes undone successfully."
             return "Error: No file changes found to undo."
 
+    @observe(name="Find Suspect Commit")
+    @sentry_sdk.trace
+    def find_suspect_commit(
+        self, what_to_look_for: str, file_paths: str | None = None, repo_name: str | None = None
+    ):
+        from seer.automation.autofix.tools.suspect_commit import search_commit_history
+
+        if not isinstance(self.context, AutofixContext):
+            raise ValueError("Suspect commit search is only available in the Autofix context.")
+
+        # Determine the repository name to search
+        repos = self._get_repo_names()
+        if not repos:
+            return "Error: No repositories found."
+
+        target_repo_name = repo_name
+        if not target_repo_name:
+            if len(repos) > 1:
+                return (
+                    "Error: Multiple repositories found. Please specify which repository to search using the `repo_name` parameter. Available repositories: "
+                    + ", ".join(repos)
+                )
+            target_repo_name = repos[0]
+
+        if target_repo_name not in repos:
+            return f"Error: Repository '{target_repo_name}' not found. Available repositories: {', '.join(repos)}"
+
+        self.context.event_manager.add_log(
+            f"Searching for suspect commit in '{target_repo_name}'..."
+        )
+
+        if file_paths:
+            query = f"{what_to_look_for}\n\nFiles to focus on: {file_paths}"
+        else:
+            query = what_to_look_for
+
+        return search_commit_history(query=query, repo_name=target_repo_name, context=self.context)
+
     def get_tools(
         self, can_access_repos: bool = True, include_claude_tools: bool = False
     ) -> list[ClaudeTool | FunctionTool]:
@@ -1079,28 +1118,31 @@ class BaseTools:
                         ],
                         required=["file_path", "repo_name", "commit_sha"],
                     ),
+                    FunctionTool(
+                        name="find_suspect_commit",
+                        fn=self.find_suspect_commit,
+                        description="Tries to search commit history within a specified repository to find a commit that introduced a change relevant to the issue.",
+                        parameters=[
+                            {
+                                "name": "what_to_look_for",
+                                "type": "string",
+                                "description": "Describe what would indicate a suspicious commit. Be as specific as possible.",
+                            },
+                            {
+                                "name": "file_paths",
+                                "type": "string",
+                                "description": "List of file paths to focus on when searching commits.",
+                            },
+                            {
+                                "name": "repo_name",
+                                "type": "string",
+                                "description": "Optional name of the repository to search in. Required if multiple repositories are available.",
+                            },
+                        ],
+                        required=["what_to_look_for", "file_paths"],
+                    ),
                 ]
             )
-
-        # if (
-        #     isinstance(self.context, AutofixContext)
-        #     and not self.context.state.get().request.options.disable_interactivity
-        # ):
-        #     tools.append(
-        #         FunctionTool(
-        #             name="ask_a_question",
-        #             fn=self.ask_user_question,
-        #             description="Ask the user a question about business logic, product requirements, past decisions, or subjective preferences. You may not ask about anything else. Only use this tool if necessary.",
-        #             parameters=[
-        #                 {
-        #                     "name": "question",
-        #                     "type": "string",
-        #                     "description": "The question you want to ask.",
-        #                 }
-        #             ],
-        #             required=["question"],
-        #         )
-        #     )
 
         run_request = self.context.state.get().request
         if (
@@ -1158,46 +1200,108 @@ class SemanticSearchTools(BaseTools):
         if not can_access_repos:
             return []
 
-        return [
-            FunctionTool(
-                name="tree",
-                fn=self.tree,
-                description="Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.",
-                parameters=[
-                    {
-                        "name": "path",
-                        "type": "string",
-                        "description": 'The path to view. For example, "src/app/components"',
-                    },
-                    {
-                        "name": "repo_name",
-                        "type": "string",
-                        "description": "Optional name of the repository to search in if you know it.",
-                    },
-                ],
-                required=["path"],
+        all_tools = super().get_tools(can_access_repos=can_access_repos, include_claude_tools=False)
+
+        allowed_tool_names = {"tree", "expand_document"}
+
+        filtered_tools = [
+            tool
+            for tool in all_tools
+            if isinstance(tool, FunctionTool) and tool.name in allowed_tool_names
+        ]
+
+        return filtered_tools
+
+
+class SuspectCommitTools(BaseTools):
+    earliest_dt: datetime | None = None
+
+    def __init__(
+        self,
+        context: AutofixContext | CodegenContext,
+        earliest_dt: datetime | None,
+        retrieval_top_k: int = 8,
+        repo_client_type: RepoClientType = RepoClientType.READ,
+    ):
+        super().__init__(context, retrieval_top_k, repo_client_type)
+        self.earliest_dt = earliest_dt
+
+    @observe(name="View Commit History for File")
+    @sentry_sdk.trace
+    def view_commit_history_for_file(
+        self, repo_name: str, file_path: str | None = None, skip_first_n_commits: int = 0
+    ) -> str:
+        """
+        Given a file path and repository name, returns the commit history for the file before a specific date.
+        Allows pagination through commit history using skip_first_n_commits.
+        """
+        if not isinstance(self.context, AutofixContext):
+            return "Commit history is only available in Autofix context."
+
+        self.context.event_manager.add_log(
+            f"Studying history for `{file_path}` in `{repo_name}`..."
+        )
+
+        max_commits = 50
+        commit_history = self.context.get_commit_history_for_file(
+            file_path,
+            repo_name,
+            max_commits=max_commits,
+            skip_first_n_commits=skip_first_n_commits,
+            until_date=self.earliest_dt,
+        )
+        if commit_history:
+            return (
+                f"COMMIT HISTORY (showing up to {max_commits} commits before {self.earliest_dt.isoformat() if self.earliest_dt else 'latest'}, skipped {skip_first_n_commits}) most recent commits:\n"
+                + "\n".join(commit_history)
+            )
+        return f"No further commit history found for the given file before {self.earliest_dt.isoformat() if self.earliest_dt else 'latest'} (skipped {skip_first_n_commits} most recent commits). Either the file path or repo name is incorrect or all relevant commits have been shown."
+
+    def get_tools(
+        self, can_access_repos: bool = True, include_claude_tools: bool = False
+    ) -> list[ClaudeTool | FunctionTool]:
+        if not can_access_repos or not isinstance(self.context, AutofixContext):
+            return []
+
+        base_tools = super().get_tools(
+            can_access_repos=can_access_repos, include_claude_tools=False
+        )
+        view_diff_tool = next(
+            (
+                tool
+                for tool in base_tools
+                if isinstance(tool, FunctionTool) and tool.name == "view_diff"
             ),
+            None,
+        )
+
+        tools: list[FunctionTool] = [
             FunctionTool(
-                name="expand_document",
-                fn=self.expand_document,
-                description=textwrap.dedent(
-                    """\
-                Given a document path, returns the entire document text.
-                - Note: To save time and money, if you're looking to expand multiple documents, call this tool multiple times in the same message.
-                - If a document has already been expanded earlier in the conversation, don't use this tool again for the same file path."""
-                ),
+                name="view_commit_history_for_file",
+                fn=self.view_commit_history_for_file,
+                description="Given a file path and repository name, returns commit history for the file *before* the issue first occurred. Use `skip_first_n_commits` to see older commits if the initial list doesn't contain the suspect.",
                 parameters=[
                     {
                         "name": "file_path",
                         "type": "string",
-                        "description": "The document path to expand.",
+                        "description": "The file to get commit history for.",
                     },
                     {
                         "name": "repo_name",
                         "type": "string",
                         "description": "Name of the repository containing the file.",
                     },
+                    {
+                        "name": "skip_first_n_commits",
+                        "type": "integer",
+                        "description": "Number of commits to skip from the beginning of the relevant history (useful for pagination). Defaults to 0.",
+                    },
                 ],
                 required=["file_path", "repo_name"],
             ),
         ]
+
+        if view_diff_tool:
+            tools.append(view_diff_tool)
+
+        return tools

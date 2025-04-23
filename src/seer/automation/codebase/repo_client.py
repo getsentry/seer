@@ -6,6 +6,7 @@ import tarfile
 import tempfile
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
@@ -20,6 +21,7 @@ from github import (
     InputGitTreeElement,
     UnknownObjectException,
 )
+from github.GithubObject import NotSet
 from github.GitRef import GitRef
 from github.GitTree import GitTree
 from github.GitTreeElement import GitTreeElement
@@ -432,18 +434,26 @@ class RepoClient:
 
     @functools.lru_cache(maxsize=16)
     def get_commit_history(
-        self, path: str, sha: str | None = None, autocorrect: bool = False, max_commits: int = 10
+        self,
+        path: str | None = None,
+        sha: str | None = None,
+        autocorrect: bool = False,
+        max_commits: int = 10,
+        until_date: datetime | None = None,
+        skip_first_n_commits: int = 0,
     ) -> list[str]:
         if sha is None:
             sha = self.base_commit_sha
 
-        if autocorrect:
+        if autocorrect and path:
             path, was_autocorrected = self._autocorrect_path(path, sha)
             if not was_autocorrected and path not in self.get_valid_file_paths(sha):
                 return []
 
-        commits = self.repo.get_commits(sha=sha, path=path)
-        commit_list = list(commits[:max_commits])
+        commits = self.repo.get_commits(sha=sha, path=path or NotSet, until=until_date or NotSet)
+        if skip_first_n_commits >= len(commits):
+            return ["No commits foundin selected range."]
+        commit_list = list(commits[skip_first_n_commits : skip_first_n_commits + max_commits])
         commit_strs = []
 
         def process_commit(commit):
