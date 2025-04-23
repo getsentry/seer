@@ -1569,7 +1569,13 @@ class LlmClient:
                     Message(role="assistant", content=message.content, tool_calls=[])
                 )
             elif message.role == "tool":
-                new_messages.append(Message(role="user", content=message.content, tool_calls=[]))
+                new_messages.append(
+                    Message(
+                        role="user",
+                        content=message.content.strip() or "[empty result]",
+                        tool_calls=[],
+                    )
+                )
             elif message.role == "tool_use":
                 new_messages.append(
                     Message(role="assistant", content=message.content, tool_calls=[])
