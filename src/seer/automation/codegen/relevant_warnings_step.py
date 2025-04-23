@@ -30,7 +30,7 @@ from seer.automation.codegen.models import (
     PrAdditionalContextRequest,
 )
 from seer.automation.codegen.pr_additional_context_component import (
-    PrAdditionalContext,
+    PrAdditionalContextComponent,
     PrAdditionalContextOutput,
 )
 from seer.automation.codegen.relevant_warnings_component import (
@@ -279,10 +279,11 @@ class RelevantWarningsStep(CodegenStep):
         )
 
         # 6. Fetch additional context for PR files.
-        additional_context_component = PrAdditionalContext(self.context)
+        additional_context_component = PrAdditionalContextComponent(self.context)
         additional_context: PrAdditionalContextOutput = additional_context_component.invoke(
             request=PrAdditionalContextRequest(
                 pr_files=pr_files,
+                filename_to_issues=fetch_issues_output.filename_to_issues,
             )
         )
 

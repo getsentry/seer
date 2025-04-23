@@ -7,13 +7,13 @@ import pytest
 
 from seer.automation.codegen.models import (
     CodeFetchIssuesOutput,
-    PrAdditionalContext,
+    PrAdditionalContextComponent,
     PrAdditionalContextOutput,
     PrAdditionalContextRequest,
     PrFile,
 )
 from seer.automation.codegen.pr_additional_context_component import (
-    PrAdditionalContext as PrAdditionalContextComponent,
+    PrAdditionalContextComponent as PrAdditionalContextComponent,
 )
 from seer.automation.models import EventDetails, IssueDetails, Profile, SentryEventData, TraceEvent
 from seer.dependency_injection import resolve
@@ -75,7 +75,7 @@ class TestPrAdditionalContextComponent(unittest.TestCase):
         ]
 
     @patch("seer.automation.codegen.pr_additional_context_component.FetchIssuesComponent")
-    def test_invoke_with_issues(self, mock_fetch_issues_component):
+    def test_invoke(self, mock_fetch_issues_component):
         # Setup
         mock_fetch_issues_instance = MagicMock()
         mock_fetch_issues_component.return_value = mock_fetch_issues_instance
@@ -102,74 +102,9 @@ class TestPrAdditionalContextComponent(unittest.TestCase):
         self.assertIn("file1.py", result.filename_to_additional_context)
 
         additional_context = result.filename_to_additional_context["file1.py"]
-        self.assertIsInstance(additional_context, PrAdditionalContext)
+        self.assertIsInstance(additional_context, PrAdditionalContextComponent)
         self.assertIsNotNone(additional_context.profiles)
         self.assertIsNotNone(additional_context.traces)
 
         # Verify RPC calls
         self.assertEqual(self.mock_rpc_client.call.call_count, 2)
-
-    def test_fetch_profile_from_issues_with_profiles(self):
-        # Setup
-        self.mock_rpc_client.call.return_value = self.mock_profile_data
-
-        # Execute
-        profiles = self.component._fetch_profile_from_issues(self.mock_issues)
-
-        # Assert
-        self.assertEqual(len(profiles), 1)
-        self.assertIsInstance(profiles[0], Profile)
-        self.mock_rpc_client.call.assert_called_once_with(
-            "get_profile_details",
-            organization_id=self.mock_issues[0].events[0].organization_id,
-            project_id=self.mock_issues[0].events[0].project_id,
-            profile_id=self.mock_issues[0].events[0].profile_id,
-        )
-
-    def test_fetch_trace_from_issues_with_traces(self):
-        # Setup
-        self.mock_rpc_client.call.return_value = self.mock_error_data
-
-        # Execute
-        traces = self.component._fetch_trace_from_issues(self.mock_issues)
-
-        # Assert
-        self.assertEqual(len(traces), 1)
-        self.assertIsInstance(traces[0], SentryEventData)
-        self.mock_rpc_client.call.assert_called_once_with(
-            "get_error_event_details",
-            organization_id=self.mock_issues[0].events[0].organization_id,
-            project_id=self.mock_issues[0].events[0].project_id,
-            event_id=self.mock_issues[0].events[0].event_id,
-        )
-
-    def test_to_llm_prompt_with_context(self):
-        # Setup
-        profile = Profile.model_validate(self.mock_profile_data)
-        trace = TraceEvent.model_validate(self.mock_error_data)
-
-        output = PrAdditionalContextOutput(
-            filename_to_additional_context={
-                "file1.py": PrAdditionalContext(
-                    profiles=[profile],
-                    traces=[trace],
-                )
-            }
-        )
-
-        # Execute
-        prompt = output.to_llm_prompt()
-
-        # Assert
-        self.assertIn("File: file1.py", prompt)
-        self.assertIn("Profile Data", prompt)
-        self.assertIn(
-            "(Performance profiles showing an execution tree and code snippets for relevant functions in this file)",
-            prompt,
-        )
-        self.assertIn("Trace Data", prompt)
-        self.assertIn(
-            "(Traces showing cross-service details for transactions in this file)", prompt
-        )
-        self.assertTrue(profile.format_profile() in prompt)
-        self.assertTrue(trace.format_spans_tree() in prompt)

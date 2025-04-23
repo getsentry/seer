@@ -10,9 +10,14 @@ from seer.automation.autofix.config import (
 )
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import CodePrReviewRequest, PrAdditionalContextRequest, PrFile
-from seer.automation.codegen.pr_additional_context_component import PrAdditionalContext
+from seer.automation.codegen.pr_additional_context_component import PrAdditionalContextComponent
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 from seer.automation.codegen.pr_review_publisher import PrReviewPublisher
+from seer.automation.codegen.relevant_warnings_component import (
+    CodeFetchIssuesOutput,
+    CodeFetchIssuesRequest,
+    FetchIssuesComponent,
+)
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -84,10 +89,18 @@ class PrReviewStep(CodegenStep):
 
         # 2. Fetch additional context for PR review
         try:
-            additional_context_component = PrAdditionalContext(self.context)
+            fetch_issues_component = FetchIssuesComponent(self.context)
+            fetch_issues_request = CodeFetchIssuesRequest(
+                organization_id=self.request.organization_id, pr_files=pr_files
+            )
+            fetch_issues_output: CodeFetchIssuesOutput = fetch_issues_component.invoke(
+                fetch_issues_request
+            )
+            additional_context_component = PrAdditionalContextComponent(self.context)
             additional_context = additional_context_component.invoke(
                 request=PrAdditionalContextRequest(
                     pr_files=pr_files,
+                    filename_to_issues=fetch_issues_output.filename_to_issues,
                 )
             )
             additional_context_prompt = additional_context.to_llm_prompt()

@@ -198,17 +198,18 @@ class CodePrReviewOutput(BaseComponentOutput):
     comments: list[Comment]
 
 
-class PrAdditionalContext(BaseModel):
+class PrAdditionalContextComponent(BaseModel):
     profiles: list[Profile] | None
     traces: list[TraceEvent] | None
 
 
 class PrAdditionalContextRequest(BaseComponentRequest):
     pr_files: list[PrFile]
+    filename_to_issues: dict[str, list[IssueDetails]]
 
 
 class PrAdditionalContextOutput(BaseComponentOutput):
-    filename_to_additional_context: dict[str, PrAdditionalContext]
+    filename_to_additional_context: dict[str, PrAdditionalContextComponent]
 
     def to_llm_prompt(self, max_chars: int = 8000) -> str:
         """
@@ -225,7 +226,7 @@ class PrAdditionalContextOutput(BaseComponentOutput):
             if additional_context.profiles:
                 result.append(
                     "Profile Data"
-                    "(Performance profiles showing an execution tree and code snippets for relevant functions in this file)"
+                    "(Performance profiles showing an execution tree for relevant functions in this file)"
                     "--------------------------------"
                 )
 
