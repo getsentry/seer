@@ -29,6 +29,15 @@ class PrReviewPublisher:
             self.publish_no_changes_required()
             return
 
+        # Add PR description as a comment if available
+        if pr_review.description:
+            try:
+                repo_client.post_issue_comment(
+                    pr_url, f"PR Description:\n\n{pr_review.description}"
+                )
+            except ValueError as e:
+                logger.warning(f"Failed to post PR description on PR {pr_url}: {e}")
+
         # handle send review comments one by one
         comments = self._format_comments(
             commit_id=self.pr.head.sha, pr_review=pr_review, owner=self.repo_client.repo_owner

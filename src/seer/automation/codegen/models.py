@@ -195,6 +195,7 @@ class CodePrReviewOutput(BaseComponentOutput):
         suggestion: str | None = None
 
     comments: list[Comment]
+    description: str | None = None
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
