@@ -684,7 +684,7 @@ sentencepiece==0.2.0
     #   transformers
 sentry-protos==0.1.68
     # via -r requirements-constraints.txt
-sentry-sdk==2.24.1
+sentry-sdk==2.27.0
     # via -r requirements-constraints.txt
 shapely==2.1.0
     # via google-cloud-aiplatform
