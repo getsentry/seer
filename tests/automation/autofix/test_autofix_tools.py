@@ -4,7 +4,7 @@ import pytest
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools.tools import BaseTools
-from seer.automation.models import FileChange
+from seer.automation.models import FileChange, FilePatch, Hunk, Line
 
 
 class TestRepo:
@@ -1042,10 +1042,11 @@ class TestClaudeTools:
         original_get_repo_name_and_path = autofix_tools._get_repo_name_and_path
 
         # Mock to ensure the multiple repos error is returned
-        def mock_get_repo_name_and_path(kwargs):
-            if len(autofix_tools.context._get_repo_names()) > 1 and ":" not in kwargs.get(
-                "path", ""
-            ):
+        def mock_get_repo_name_and_path(kwargs, allow_nonexistent_paths=False):
+            # Extract the path argument safely
+            path_arg = kwargs.get("path", "")
+            # Check if multiple repos and path doesn't specify one
+            if len(autofix_tools.context._get_repo_names()) > 1 and ":" not in path_arg:
                 return (
                     "Error: Multiple repositories found. Please provide a repository name in the format "
                     "`repo_name:path`, such as `repo_owner/repo:src/foo/bar.py`. The repositories available "
@@ -1069,6 +1070,98 @@ class TestClaudeTools:
 
         # Assert
         assert "old_str and new_str are required" in result
+
+    def test_handle_claude_tools_create_nonexistent_path(self, autofix_tools: BaseTools):
+        """Verify that the 'create' command works even if the path doesn't exist yet."""
+        # Setup
+        repo_name = "test/repo"
+        new_path = "new/path/to/create.py"
+        file_text = "This is the new file content."
+        kwargs = {"command": "create", "path": new_path, "file_text": file_text}
+
+        # Mock _get_repo_names to return a single repo
+        autofix_tools.context._get_repo_names = MagicMock(return_value=[repo_name])
+        # Mock _attempt_fix_path to return None, simulating the path not existing
+        # Note: This mock is on the context, as that's where _get_repo_name_and_path calls it
+        autofix_tools._attempt_fix_path = MagicMock(return_value=None)
+        # Mock get_file_contents to return None (as the file shouldn't exist yet)
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+        # Mock _append_file_change to simulate successful application
+        autofix_tools._append_file_change = MagicMock(return_value=True)
+        # Mock make_file_patches to return a proper FilePatch for file creation
+        with patch("seer.automation.autofix.tools.tools.make_file_patches") as mock_make_patches:
+            # Create a proper FilePatch for file creation
+            file_patch = FilePatch(
+                type="A",
+                path=new_path,
+                added=1,
+                removed=0,
+                source_file="/dev/null",
+                target_file=new_path,
+                hunks=[
+                    Hunk(
+                        source_start=0,
+                        source_length=0,
+                        target_start=1,
+                        target_length=1,
+                        section_header="@@ -0,0 +1,1 @@",
+                        lines=[
+                            Line(target_line_no=1, value=file_text, line_type="+"),
+                        ],
+                    )
+                ],
+            )
+            mock_make_patches.return_value = ([file_patch], "")
+
+            # Mock event manager's send_insight method
+            autofix_tools.context.event_manager.send_insight = MagicMock()
+            autofix_tools.context.event_manager.add_log = MagicMock()
+
+            # Test
+            result = autofix_tools.handle_claude_tools(**kwargs)
+
+            # Assert
+            # 1. Check that _attempt_fix_path was called for the new path (it should be)
+            autofix_tools._attempt_fix_path.assert_called_once_with(new_path, repo_name)
+            # 2. Check that get_file_contents was called (by _handle_create_command)
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                new_path, repo_name=repo_name
+            )
+            # 3. Check that make_file_patches was called
+            mock_make_patches.assert_called_once()
+            # 4. Check that _append_file_change was called
+            autofix_tools._append_file_change.assert_called_once()
+            # 5. Check that the result indicates success (not a path error)
+            assert "Change applied successfully" in result
+            # 6. Check event manager logs and insights were called
+            autofix_tools.context.event_manager.add_log.assert_called()
+            autofix_tools.context.event_manager.send_insight.assert_called_once()
+
+    def test_handle_claude_tools_view_nonexistent_path_fails(self, autofix_tools: BaseTools):
+        """Verify that commands other than 'create'/'undo_edit' still fail for non-existent paths."""
+        # Setup
+        repo_name = "test/repo"
+        nonexistent_path = "non/existent/path.py"
+        kwargs = {"command": "view", "path": nonexistent_path}  # Use 'view' command
+
+        # Mock _get_repo_names to return a single repo
+        autofix_tools.context._get_repo_names = MagicMock(return_value=[repo_name])
+        # Mock _attempt_fix_path to return None, simulating the path not existing
+        autofix_tools._attempt_fix_path = MagicMock(return_value=None)
+
+        # Test
+        result = autofix_tools.handle_claude_tools(**kwargs)
+
+        # Assert
+        # Check that _attempt_fix_path was called
+        autofix_tools._attempt_fix_path.assert_called_once_with(nonexistent_path, repo_name)
+        # Check that the result is the expected path error message
+        assert (
+            f"Error: The path you provided '{nonexistent_path}' does not exist in the repository '{repo_name}'."
+            in result
+        )
+        # Ensure the view handler wasn't called (it shouldn't be if the path check fails)
+        autofix_tools.context.get_file_contents.assert_not_called()
 
 
 class TestViewDirectoryTree:
