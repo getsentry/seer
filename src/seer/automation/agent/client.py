@@ -1278,7 +1278,7 @@ class GeminiProvider:
 
         Args:
             content: The content to cache.
-            cache_key: The key to be used as the display name of the cache.
+            display_name: The display name to be used as the key of the cache.
             ttl: The time to live (in seconds) for the cache. Defaults to 1 hour.
         Returns:
             Cache name as specified by Gemini.
