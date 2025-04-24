@@ -272,6 +272,10 @@ class BaseTools:
 
     @sentry_sdk.trace
     def cleanup(self):
+        # Ensure lock exists before using it
+        if not hasattr(self, "_tmp_dir_lock"):
+            self._tmp_dir_lock = Lock()
+
         # Clean up any in-progress downloads
         if self._download_future and not self._download_future.done():
             try:
@@ -280,12 +284,14 @@ class BaseTools:
                 logger.exception(f"Error cancelling downloads during cleanup: {e}")
             self._download_future = None
 
-        # Clean up any tmp dirs that were created
-        if self.tmp_dir:
-            for tmp_dir, _ in self.tmp_dir.values():
-                cleanup_dir(tmp_dir)
-        # Reset tmp_dir
-        self.tmp_dir = {}
+        # Create a thread-safe copy of the temporary directories to clean up
+        with self._tmp_dir_lock:
+            tmp_dirs_to_cleanup = list(self.tmp_dir.values())
+            self.tmp_dir = {}
+
+        # Iterate over the copied temporary directories to perform the cleanup
+        for tmp_dir, _ in tmp_dirs_to_cleanup:
+            cleanup_dir(tmp_dir)
 
     @observe(name="Search Google")
     @sentry_sdk.trace
