@@ -489,6 +489,7 @@ class AnthropicProvider:
                 and any(error in str(exception) for error in retryable_errors)
             )
             or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, LlmNoCompletionTokensError)
             or "incomplete chunked read" in str(exception)
         )
 
@@ -743,6 +744,8 @@ class AnthropicProvider:
             total_input_tokens = 0
             total_output_tokens = 0
 
+            yielded_content = False
+
             for chunk in stream:
                 if chunk.type == "message_start" and chunk.message.usage:
                     if chunk.message.usage.cache_creation_input_tokens:
@@ -758,6 +761,7 @@ class AnthropicProvider:
                     break
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
                     yield "content", chunk.delta.text
+                    yielded_content = True
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "thinking_delta":
                     yield "thinking_content", chunk.delta.thinking
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "signature_delta":
@@ -779,6 +783,10 @@ class AnthropicProvider:
                     yield ToolCall(**current_tool_call)
                     current_tool_call = None
                     current_input_json = []
+                    yielded_content = True
+
+            if not yielded_content or total_output_tokens == 0:
+                raise LlmNoCompletionTokensError("No content returned from Claude")
         finally:
             usage = Usage(
                 completion_tokens=total_output_tokens,
@@ -905,6 +913,7 @@ class GeminiProvider:
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
             "Internal error",
+            "499 CANCELLED",
         )
         return (
             isinstance(exception, ServerError)
