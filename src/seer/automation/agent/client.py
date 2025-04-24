@@ -4,6 +4,7 @@ import re
 import time
 from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
+from requests.exceptions import ChunkedEncodingError
 
 import anthropic
 import sentry_sdk
@@ -925,7 +926,9 @@ class GeminiProvider:
                 and any(error in str(exception) for error in retryable_errors)
             )
             or isinstance(exception, LlmNoCompletionTokensError)
-        ) or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, ChunkedEncodingError)
+        )
 
     @observe(as_type="generation", name="Gemini Generation")
     @sentry_sdk.trace
