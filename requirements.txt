@@ -259,7 +259,7 @@ grpcio-status==1.71.0
     # via google-api-core
 gunicorn==22.0.0
     # via -r requirements-constraints.txt
-h11==0.14.0
+h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
