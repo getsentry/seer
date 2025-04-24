@@ -4,7 +4,6 @@ import re
 import time
 from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
-from requests.exceptions import ChunkedEncodingError
 
 import anthropic
 import sentry_sdk
@@ -33,6 +32,7 @@ from google.genai.types import Tool as GeminiTool
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
+from requests.exceptions import ChunkedEncodingError
 
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
