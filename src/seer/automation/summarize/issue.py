@@ -1,7 +1,7 @@
 import textwrap
 
-import sqlalchemy.exc
 import sentry_sdk
+import sqlalchemy.exc
 from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel
 
