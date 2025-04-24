@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ "${SENTRY_REGION}" != "customer-1" ] && [ "${SENTRY_REGION}" != "customer-2" ] && [ "${SENTRY_REGION}" != "customer-4" ] && [ "${SENTRY_REGION}" != "customer-7" ]; then
+if [ "${SENTRY_REGION}" != "customer-1" ] && [ "${SENTRY_REGION}" != "customer-2" ] && [ "${SENTRY_REGION}" != "customer-7" ]; then
   echo "running flask db upgrade" \
     && eval "$(/devinfra/scripts/regions/project_env_vars.py --region="${SENTRY_REGION}")" \
     && /devinfra/scripts/k8s/k8stunnel \
