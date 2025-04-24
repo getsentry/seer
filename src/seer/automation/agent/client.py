@@ -21,6 +21,7 @@ from google import genai  # type: ignore[attr-defined]
 from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
+    CreateCachedContentConfig,
     FunctionDeclaration,
     GenerateContentConfig,
     GenerateContentResponse,
@@ -836,7 +837,9 @@ class GeminiProvider:
     ]
 
     @inject
-    def get_client(self, app_config: AppConfig = injected) -> genai.Client:
+    def get_client(
+        self, use_local_endpoint: bool = False, app_config: AppConfig = injected
+    ) -> genai.Client:
         supported_models_on_global_endpoint = [
             "gemini-2.0-flash-001",
             "gemini-2.0-flash-lite-001",
@@ -848,7 +851,7 @@ class GeminiProvider:
             if app_config.SENTRY_REGION == "de"
             else (
                 "global"
-                if self.model_name in supported_models_on_global_endpoint
+                if self.model_name in supported_models_on_global_endpoint and not use_local_endpoint
                 else "us-central1"
             )
         )
@@ -1276,6 +1279,52 @@ class GeminiProvider:
 
         return message
 
+    def create_cache(self, contents: str, display_name: str, ttl: int = 3600) -> str:
+        """
+        Create a cache for the given content and display name. We will use the display name as the key.
+        If the cache already exists, it will be updated with the new content.
+
+        Args:
+            content: The content to cache.
+            display_name: The display name to be used as the key of the cache.
+            ttl: The time to live (in seconds) for the cache. Defaults to 1 hour.
+        Returns:
+            Cache name as specified by Gemini.
+        """
+        client = self.get_client(use_local_endpoint=True)
+
+        # We cannot get the cache name from the display name, only from the generated name which we do not have betweeen sessions
+        # So we must do an O(n) search to find the cache by display name
+        caches = client.caches.list()
+        for cache in caches:
+            if cache.display_name == display_name:
+                client.caches.update(
+                    name=cache.name,
+                    config=CreateCachedContentConfig(contents=contents, ttl=f"{ttl}s"),
+                )
+                return cache.name
+
+        cache = client.caches.create(
+            model=self.model_name,
+            config=CreateCachedContentConfig(
+                display_name=display_name,
+                contents=contents,
+                ttl=f"{ttl}s",
+            ),
+        )
+        return cache.name
+
+    def get_cache(self, display_name: str) -> str | None:
+        client = self.get_client(use_local_endpoint=True)
+
+        # We cannot get the cache name from the display_name, only from the generated name which we do not have betweeen sessions
+        # So we must do an O(n) search to find the cache by display name
+        caches = client.caches.list()
+        for cache in caches:
+            if cache.display_name == display_name:
+                return cache.name
+        return None
+
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
@@ -1628,6 +1677,24 @@ class LlmClient:
             return model.construct_message_from_stream(content_chunks, tool_calls)
         else:
             raise ValueError(f"Invalid provider: {model.provider_name}")
+
+    @sentry_sdk.trace
+    def create_cache(
+        self, contents: str, display_name: str, model: LlmProvider, ttl: int = 3600
+    ) -> str:
+        if model.provider_name == LlmProviderType.GEMINI:
+            model = cast(GeminiProvider, model)
+            return model.create_cache(contents, display_name, ttl)
+        else:
+            raise ValueError("Manual cache creation is only supported for Gemini.")
+
+    @sentry_sdk.trace
+    def get_cache(self, display_name: str, model: LlmProvider) -> str | None:
+        if model.provider_name == LlmProviderType.GEMINI:
+            model = cast(GeminiProvider, model)
+            return model.get_cache(display_name)
+        else:
+            raise ValueError("Manual cache retrieval is only supported for Gemini.")
 
 
 @module.provider
