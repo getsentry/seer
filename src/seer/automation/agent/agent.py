@@ -117,8 +117,11 @@ class LlmAgent:
         elif self.name:
             langfuse_context.update_current_observation(name=self.name + " - Agent Run")
 
-        if run_config.prompt:
-            self.add_user_message(run_config.prompt)
+        prompt = run_config.prompt
+        if prompt and prompt.strip():
+            self.add_user_message(prompt)
+        elif prompt is not None:
+            raise ValueError("Provided prompt is empty")
 
         logger.debug(f"----[{self.name}] Running Agent----")
 
