@@ -449,7 +449,11 @@ class AnthropicProvider:
                 region="europe-west1",
                 max_retries=max_retries,
             )
-        elif app_config.DEV or self.model_name not in supported_models_on_global_endpoint:
+        elif (
+            app_config.DEV
+            or app_config.SENTRY_REGION != "us"
+            or self.model_name not in supported_models_on_global_endpoint
+        ):
             return anthropic.AnthropicVertex(
                 project_id=project_id,
                 region="us-east5",
