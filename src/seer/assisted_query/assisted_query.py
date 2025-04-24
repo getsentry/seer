@@ -1,7 +1,10 @@
+import sentry_sdk
+from langfuse.decorator import observe
+
+from seer.assisted_query import prompts
 from seer.assisted_query.models import (
-    Chart,
-    ModelProvider,
     ModelResponse,
+    RelevantFieldsResponse,
     TranslateRequest,
     TranslateResponse,
 )
@@ -12,7 +15,20 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
 
     natural_language_query = request.natural_language_query
 
-    sentry_query = create_query_from_natural_language(natural_language_query)
+    # Cache key will be based off the organization slug and project ids
+    cache_display_name = f"{request.organization_slug}-{'-'.join(map(str, request.project_ids))}"
+
+    cache_name = LlmClient().get_cache(
+        cache_display_name, GeminiProvider.model("gemini-2.0-flash-001")
+    )
+
+    if not cache_name:
+        # TODO: Create cache
+        raise ValueError("Cache not found")  # XXX: remove this
+
+    sentry_query = create_query_from_natural_language(
+        natural_language_query, cache_display_name, LlmClient()
+    )
 
     return TranslateResponse(
         query=sentry_query.query,
@@ -23,35 +39,34 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
     )
 
 
+@observe(name="Create query from natural language")
+@sentry_sdk.trace
 def create_query_from_natural_language(
-    natural_language_query: str, model_provider: ModelProvider = ModelProvider.GEMINI
+    natural_language_query: str,
+    cache_name: str,
+    client: LlmClient,
 ) -> ModelResponse:
 
-    if model_provider == ModelProvider.GEMINI:
-        client = LlmClient(
-            model=GeminiProvider.model("gemini-2.0-flash-001"),
-            system_prompt="",
-        )
-
-        # TODO: Step 0: Check if system prompt (field/values) is in cache
-        client.caches.list()
-
     # TODO: Step 1: Figure out relevant fields
+    relevant_fields_prompt = prompts.select_relevant_fields_prompt(natural_language_query)
+    relevant_fields_response = client.generate_structured(
+        prompt=relevant_fields_prompt,
+        model=GeminiProvider.model("gemini-2.0-flash-001"),
+        cache_name=cache_name,
+        response_format=RelevantFieldsResponse,
+    )
 
     # TODO: Step 2: Fetch values for relevant fields
-
-    # TODO: Step 2.a: Create 3-5 queries
-
-    # TODO: Step 2.b: Select best query
-
-    # TODO: Step 3: Create and return model response
-
-    return ModelResponse(
-        explanation="",
-        query="",
-        stats_period="",
-        group_by="",
-        visualization=Chart(chart_type=1, y_axes=[]),
-        sort="",
-        confidence_score=0.0,
+    # RPC stuff
+    field_values = {"field_name": ["value1", "value2", "value3"]}
+    fields_and_values_prompt = prompts.get_fields_and_values_prompt(
+        natural_language_query, relevant_fields_response.fields, field_values
     )
+    generated_query = client.generate_structured(
+        prompt=fields_and_values_prompt,
+        model=GeminiProvider.model("gemini-2.0-flash-001"),
+        cache_name=cache_name,
+        response_format=ModelResponse,
+    )
+
+    return generated_query

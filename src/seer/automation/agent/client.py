@@ -939,6 +939,7 @@ class GeminiProvider:
         temperature: float | None = None,
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
+        cache_name: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -961,6 +962,7 @@ class GeminiProvider:
                     response_mime_type="application/json",
                     max_output_tokens=max_tokens or 8192,
                     response_schema=response_format,
+                    cached_content=cache_name,
                 ),
             )
             if response.parsed is not None:
@@ -1070,6 +1072,7 @@ class GeminiProvider:
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        cache_name: str | None = None,
     ):
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -1087,6 +1090,7 @@ class GeminiProvider:
                 system_instruction=system_prompt,
                 temperature=temperature or 0.0,
                 max_output_tokens=max_tokens or 8192,
+                cached_content=cache_name,
             ),
         )
 
@@ -1346,6 +1350,7 @@ class LlmClient:
         timeout: float | None = None,
         predicted_output: str | None = None,
         reasoning_effort: str | None = None,
+        cache_name: str | None = None,
     ) -> LlmGenerateTextResponse:
         try:
             if run_name:
@@ -1402,6 +1407,7 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
                     tools=cast(list[FunctionTool], tools),
+                    cache_name=cache_name,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -1425,6 +1431,7 @@ class LlmClient:
         run_name: str | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
+        cache_name: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         try:
             if run_name:
@@ -1469,6 +1476,7 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature,
                     tools=cast(list[FunctionTool], tools),
+                    cache_name=cache_name,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")

@@ -11,7 +11,7 @@ class Chart(BaseModel):
 
 class TranslateRequest(BaseModel):
     organization_slug: str
-    project_id: int
+    project_ids: list[int]
     natural_language_query: str
 
 
@@ -31,6 +31,10 @@ class ModelResponse(BaseModel):
     visualization: Chart
     sort: str
     confidence_score: float
+
+
+class RelevantFieldsResponse(BaseModel):
+    fields: list[str]
 
 
 class ValuesResponse(BaseModel):
