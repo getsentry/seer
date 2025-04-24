@@ -249,13 +249,17 @@ class BaseTools:
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_files = repo_client.get_index_file_set()
 
+        normalized_path = path.lstrip("./").lstrip("/")
+        if not normalized_path:
+            return None
+
         for p in all_files:
-            if p.endswith(path):
+            if p.endswith(normalized_path):
                 # is a valid file path
                 return p
-            if p.startswith(path):
+            if p.startswith(normalized_path):
                 # is a valid directory path
-                return path
+                return normalized_path
 
         return None
 
@@ -268,6 +272,10 @@ class BaseTools:
 
     @sentry_sdk.trace
     def cleanup(self):
+        # Ensure lock exists before using it
+        if not hasattr(self, "_tmp_dir_lock"):
+            self._tmp_dir_lock = Lock()
+
         # Clean up any in-progress downloads
         if self._download_future and not self._download_future.done():
             try:
@@ -276,12 +284,14 @@ class BaseTools:
                 logger.exception(f"Error cancelling downloads during cleanup: {e}")
             self._download_future = None
 
-        # Clean up any tmp dirs that were created
-        if self.tmp_dir:
-            for tmp_dir, _ in self.tmp_dir.values():
-                cleanup_dir(tmp_dir)
-        # Reset tmp_dir
-        self.tmp_dir = {}
+        # Create a thread-safe copy of the temporary directories to clean up
+        with self._tmp_dir_lock:
+            tmp_dirs_to_cleanup = list(self.tmp_dir.values())
+            self.tmp_dir = {}
+
+        # Iterate over the copied temporary directories to perform the cleanup
+        for tmp_dir, _ in tmp_dirs_to_cleanup:
+            cleanup_dir(tmp_dir)
 
     @observe(name="Search Google")
     @sentry_sdk.trace
@@ -777,7 +787,7 @@ class BaseTools:
             file_diff, _ = make_file_patches([file_change], [path], [document])
 
             if not file_diff:
-                return "Error: No changes were made to the file."
+                return "Error: No changes were made to the file. Make sure old_str is exact, even including indentation."
 
             self.context.event_manager.send_insight(
                 InsightSharingOutput(
