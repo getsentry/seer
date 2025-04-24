@@ -79,7 +79,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
                         temperature=1.0,
-                        max_tokens=32000,
+                        max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
                     ),
                 )
 

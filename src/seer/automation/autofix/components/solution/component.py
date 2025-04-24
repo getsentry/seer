@@ -161,7 +161,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                             run_name="Solution Discovery",
                             max_iterations=64,
                             temperature=1.0,
-                            max_tokens=32000,
+                            max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
                         ),
                     )
 
