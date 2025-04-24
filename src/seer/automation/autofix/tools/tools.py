@@ -255,8 +255,10 @@ class BaseTools:
 
         for p in all_files:
             if p.endswith(normalized_path):
+                # is a valid file path
                 return p
             if p.startswith(normalized_path):
+                # is a valid directory path
                 return normalized_path
 
         return None
