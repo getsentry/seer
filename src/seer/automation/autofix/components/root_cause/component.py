@@ -16,6 +16,7 @@ from seer.automation.autofix.components.root_cause.prompts import RootCauseAnaly
 from seer.automation.autofix.prompts import format_repo_prompt
 from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.component import BaseComponent
+from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,10 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     @sentry_sdk.trace
     @inject
     def invoke(
-        self, request: RootCauseAnalysisRequest, llm_client: LlmClient = injected
+        self,
+        request: RootCauseAnalysisRequest,
+        llm_client: LlmClient = injected,
+        config: AppConfig = injected,
     ) -> RootCauseAnalysisOutput:
         with BaseTools(self.context) as tools:
             state = self.context.state.get()
@@ -53,7 +57,11 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             try:
                 response = agent.run(
                     run_config=RunConfig(
-                        model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
+                        model=(
+                            AnthropicProvider.model("claude-3-5-sonnet-v2@20241022")
+                            if config.SENTRY_REGION == "de"
+                            else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
+                        ),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
@@ -71,7 +79,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
                         temperature=1.0,
-                        max_tokens=32000,
+                        max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
                     ),
                 )
 
