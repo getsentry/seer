@@ -1,5 +1,6 @@
 import textwrap
 
+import sqlalchemy.exc
 import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel
@@ -216,9 +217,18 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
     summary = summarize_issue(request, **extra_kwargs)
 
     with Session() as session:
-        db_state = summary.to_db_state(request.group_id)
-        session.merge(db_state)
-        session.commit()
+        try:
+            db_state = summary.to_db_state(request.group_id)
+            session.merge(db_state)
+            session.commit()
+        except sqlalchemy.exc.IntegrityError as e:
+            if "UniqueViolation" in str(e):
+                session.rollback()
+                existing_record = session.get(DbIssueSummary, request.group_id)
+                if existing_record:
+                    summary = IssueSummaryWithScores.from_db_state(existing_record)
+                    return summary.to_summarize_issue_response(request.group_id)
+            raise
 
     return summary.to_summarize_issue_response(request.group_id)
 
