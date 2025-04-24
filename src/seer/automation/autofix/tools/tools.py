@@ -249,13 +249,17 @@ class BaseTools:
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_files = repo_client.get_index_file_set()
 
+        normalized_path = path.lstrip("./").lstrip("/")
+        if not normalized_path:
+            return None
+
         for p in all_files:
-            if p.endswith(path):
+            if p.endswith(normalized_path):
                 # is a valid file path
                 return p
-            if p.startswith(path):
+            if p.startswith(normalized_path):
                 # is a valid directory path
-                return path
+                return normalized_path
 
         return None
 
@@ -777,7 +781,7 @@ class BaseTools:
             file_diff, _ = make_file_patches([file_change], [path], [document])
 
             if not file_diff:
-                return "Error: No changes were made to the file."
+                return "Error: No changes were made to the file. Make sure old_str is exact, even including indentation."
 
             self.context.event_manager.send_insight(
                 InsightSharingOutput(
