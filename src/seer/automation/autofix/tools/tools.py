@@ -779,7 +779,7 @@ class BaseTools:
             file_diff, _ = make_file_patches([file_change], [path], [document])
 
             if not file_diff:
-                return "Error: No changes were made to the file. Make sure old_str is exact, even including whitespace."
+                return "Error: No changes were made to the file. Make sure old_str is exact, even including indentation."
 
             self.context.event_manager.send_insight(
                 InsightSharingOutput(
