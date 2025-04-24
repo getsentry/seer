@@ -1271,9 +1271,10 @@ class GeminiProvider:
 
         return message
 
-    def create_cache(self, contents: str, cache_key: str, ttl: int = 3600) -> str:
+    def create_cache(self, contents: str, display_name: str, ttl: int = 3600) -> str:
         """
-        Create a cache for the given content and cache key.
+        Create a cache for the given content and display name. We will use the display name as the key.
+        If the cache already exists, it will be updated with the new content.
 
         Args:
             content: The content to cache.
@@ -1284,15 +1285,37 @@ class GeminiProvider:
         """
         client = self.get_client(use_local_endpoint=True)
 
+        # We cannot get the cache name from the display name, only from the generated name which we do not have betweeen sessions
+        # So we must do an O(n) search to find the cache by display name
+        caches = client.caches.list()
+        for cache in caches:
+            if cache.display_name == display_name:
+                client.caches.update(
+                    name=cache.name,
+                    config=CreateCachedContentConfig(contents=contents, ttl=f"{ttl}s"),
+                )
+                return cache.name
+
         cache = client.caches.create(
             model=self.model_name,
             config=CreateCachedContentConfig(
-                display_name=cache_key,
+                display_name=display_name,
                 contents=contents,
                 ttl=f"{ttl}s",
             ),
         )
         return cache.name
+
+    def get_cache(self, display_name: str) -> str | None:
+        client = self.get_client(use_local_endpoint=True)
+
+        # We cannot get the cache name from the display_name, only from the generated name which we do not have betweeen sessions
+        # So we must do an O(n) search to find the cache by display name
+        caches = client.caches.list()
+        for cache in caches:
+            if cache.display_name == display_name:
+                return cache.name
+        return None
 
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
@@ -1649,13 +1672,21 @@ class LlmClient:
 
     @sentry_sdk.trace
     def create_cache(
-        self, contents: str, cache_key: str, model: LlmProvider, ttl: int = 3600
+        self, contents: str, display_name: str, model: LlmProvider, ttl: int = 3600
     ) -> str:
         if model.provider_name == LlmProviderType.GEMINI:
             model = cast(GeminiProvider, model)
-            return model.create_cache(contents, cache_key, ttl)
+            return model.create_cache(contents, display_name, ttl)
         else:
             raise ValueError("Manual cache creation is only supported for Gemini.")
+
+    @sentry_sdk.trace
+    def get_cache(self, display_name: str, model: LlmProvider) -> str | None:
+        if model.provider_name == LlmProviderType.GEMINI:
+            model = cast(GeminiProvider, model)
+            return model.get_cache(display_name)
+        else:
+            raise ValueError("Manual cache retrieval is only supported for Gemini.")
 
 
 @module.provider
