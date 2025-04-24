@@ -855,7 +855,6 @@ class GeminiProvider:
                 else "us-central1"
             )
         )
-        print(f"Region: {region}")
         client = genai.Client(
             vertexai=True,
             location=region,
