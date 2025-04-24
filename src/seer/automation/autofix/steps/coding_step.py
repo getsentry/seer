@@ -1,8 +1,8 @@
 import uuid
 from typing import Any
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.agent.models import Message
@@ -33,6 +33,7 @@ class AutofixCodingStepRequest(PipelineStepTaskRequest):
 @celery_app.task(
     time_limit=AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
+    acks_late=True,
 )
 def autofix_coding_task(*args, request: dict[str, Any]):
     AutofixCodingStep(request).invoke()
@@ -56,9 +57,11 @@ class AutofixCodingStep(AutofixPipelineStep):
         return autofix_coding_task
 
     @observe(name="Autofix - Coding Step")
-    @ai_track(description="Autofix - Coding Step")
+    @sentry_sdk.trace
     @inject
-    def _invoke(self, app_config: AppConfig = injected):
+    def _invoke(self, app_config: AppConfig = injected, **kwargs):
+        super()._invoke()
+
         if not self.request.initial_memory:
             # Only clear when not a rethink/continue
             self.context.event_manager.clear_file_changes()
@@ -137,6 +140,11 @@ class AutofixCodingStep(AutofixPipelineStep):
                     )
                     cur.steps[-1].proceed_confidence_score = (
                         confidence_output.proceed_confidence_score
+                    )
+                    sentry_sdk.set_tags(
+                        {
+                            "has_agent_comment": bool(confidence_output.question),
+                        }
                     )
                     if confidence_output.question:
                         cur.steps[-1].agent_comment_thread = CommentThread(

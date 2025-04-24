@@ -57,7 +57,8 @@ def autofixability_model() -> AutofixabilityModel:
 
 
 @deferred_loading("ANOMALY_DETECTION_ENABLED")
-def anomaly_detection() -> AnomalyDetection:
+@sentry_sdk.trace
+def load_anomaly_detection() -> AnomalyDetection:
     return AnomalyDetection()
 
 

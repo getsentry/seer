@@ -400,7 +400,12 @@ class RepoClient:
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
             detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-            content = contents.decoded_content.decode(detected_encoding)
+            try:
+                content = contents.decoded_content.decode(detected_encoding)
+            except UnicodeDecodeError:
+                # fallback to utf-8; may still not work
+                detected_encoding = "utf-8"
+                content = contents.decoded_content.decode(detected_encoding)
             if autocorrected_path:
                 content = f"Showing results instead for {path}\n=====\n{content}"
             return content, detected_encoding
@@ -701,6 +706,10 @@ class RepoClient:
         elif patch_type == "edit":
             patch_type = "M"
 
+        # Remove leading slash if it exists, the github api will reject paths with leading slashes.
+        if path.startswith("/"):
+            path = path[1:]
+
         to_apply = None
         detected_encoding = "utf-8"
         if patch_type != "A":
@@ -709,10 +718,6 @@ class RepoClient:
         new_contents = (
             patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
         )
-
-        # Remove leading slash if it exists, the github api will reject paths with leading slashes.
-        if path.startswith("/"):
-            path = path[1:]
 
         # don't create a blob if the file is being deleted
         blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None

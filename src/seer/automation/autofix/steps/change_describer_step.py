@@ -1,8 +1,8 @@
 import logging
 from typing import Any
 
+import sentry_sdk
 from langfuse.decorators import observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from celery_app.app import celery_app
 from seer.automation.autofix.components.change_describer import (
@@ -27,6 +27,7 @@ class AutofixChangeDescriberRequest(PipelineStepTaskRequest):
 @celery_app.task(
     time_limit=AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     soft_time_limit=AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
+    acks_late=True,
 )
 def autofix_change_describer_task(*args, request: dict[str, Any]):
     AutofixChangeDescriberStep(request).invoke()
@@ -52,8 +53,10 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
         return autofix_change_describer_task
 
     @observe(name="Autofix – Change Describer Step")
-    @ai_track(description="Autofix - Change Describer Step")
+    @sentry_sdk.trace
     def _invoke(self, **kwargs):
+        super()._invoke()
+
         self.context.event_manager.add_log("Writing a commit message, of course...")
         # Get the diff and PR details for each codebase.
         change_describer = ChangeDescriptionComponent(self.context)

@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Optional
 
+import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
 from pydantic import BaseModel, Field
 
@@ -109,14 +110,18 @@ class LlmAgent:
         return True
 
     @observe(name="Agent Run")
+    @sentry_sdk.trace
     def run(self, run_config: RunConfig):
         if run_config.run_name:
             langfuse_context.update_current_observation(name=run_config.run_name + " - Agent Run")
         elif self.name:
             langfuse_context.update_current_observation(name=self.name + " - Agent Run")
 
-        if run_config.prompt:
-            self.add_user_message(run_config.prompt)
+        prompt = run_config.prompt
+        if prompt and prompt.strip():
+            self.add_user_message(prompt)
+        elif prompt is not None:
+            raise ValueError("Provided prompt is empty")
 
         logger.debug(f"----[{self.name}] Running Agent----")
 

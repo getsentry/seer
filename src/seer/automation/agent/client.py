@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
 
 import anthropic
+import sentry_sdk
 from anthropic import NOT_GIVEN
 from anthropic.types import (
     MessageParam,
@@ -20,6 +21,7 @@ from google import genai  # type: ignore[attr-defined]
 from google.genai.errors import ClientError, ServerError
 from google.genai.types import (
     Content,
+    CreateCachedContentConfig,
     FunctionDeclaration,
     GenerateContentConfig,
     GenerateContentResponse,
@@ -30,6 +32,7 @@ from google.genai.types import Tool as GeminiTool
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
+from requests.exceptions import ChunkedEncodingError
 
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
@@ -107,6 +110,7 @@ class OpenAiProvider:
             exception, LlmStreamTimeoutError
         )
 
+    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -184,6 +188,7 @@ class OpenAiProvider:
             ),
         )
 
+    @sentry_sdk.trace
     def generate_structured(
         self,
         *,
@@ -323,6 +328,7 @@ class OpenAiProvider:
         return message_dicts, tool_dicts
 
     @observe(as_type="generation", name="OpenAI Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -443,7 +449,11 @@ class AnthropicProvider:
                 region="europe-west1",
                 max_retries=max_retries,
             )
-        elif app_config.DEV or self.model_name not in supported_models_on_global_endpoint:
+        elif (
+            app_config.DEV
+            or app_config.SENTRY_REGION != "us"
+            or self.model_name not in supported_models_on_global_endpoint
+        ):
             return anthropic.AnthropicVertex(
                 project_id=project_id,
                 region="us-east5",
@@ -485,10 +495,12 @@ class AnthropicProvider:
                 and any(error in str(exception) for error in retryable_errors)
             )
             or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, LlmNoCompletionTokensError)
             or "incomplete chunked read" in str(exception)
         )
 
     @observe(as_type="generation", name="Anthropic Generation")
+    @sentry_sdk.trace
     @inject
     def generate_text(
         self,
@@ -685,6 +697,7 @@ class AnthropicProvider:
         return message_dicts, tool_dicts, system_prompt_block
 
     @observe(as_type="generation", name="Anthropic Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -737,6 +750,8 @@ class AnthropicProvider:
             total_input_tokens = 0
             total_output_tokens = 0
 
+            yielded_content = False
+
             for chunk in stream:
                 if chunk.type == "message_start" and chunk.message.usage:
                     if chunk.message.usage.cache_creation_input_tokens:
@@ -752,6 +767,7 @@ class AnthropicProvider:
                     break
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
                     yield "content", chunk.delta.text
+                    yielded_content = True
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "thinking_delta":
                     yield "thinking_content", chunk.delta.thinking
                 elif chunk.type == "content_block_delta" and chunk.delta.type == "signature_delta":
@@ -773,6 +789,10 @@ class AnthropicProvider:
                     yield ToolCall(**current_tool_call)
                     current_tool_call = None
                     current_input_json = []
+                    yielded_content = True
+
+            if not yielded_content or total_output_tokens == 0:
+                raise LlmNoCompletionTokensError("No content returned from Claude")
         finally:
             usage = Usage(
                 completion_tokens=total_output_tokens,
@@ -822,7 +842,9 @@ class GeminiProvider:
     ]
 
     @inject
-    def get_client(self, app_config: AppConfig = injected) -> genai.Client:
+    def get_client(
+        self, use_local_endpoint: bool = False, app_config: AppConfig = injected
+    ) -> genai.Client:
         supported_models_on_global_endpoint = [
             "gemini-2.0-flash-001",
             "gemini-2.0-flash-lite-001",
@@ -834,7 +856,7 @@ class GeminiProvider:
             if app_config.SENTRY_REGION == "de"
             else (
                 "global"
-                if self.model_name in supported_models_on_global_endpoint
+                if self.model_name in supported_models_on_global_endpoint and not use_local_endpoint
                 else "us-central1"
             )
         )
@@ -865,6 +887,7 @@ class GeminiProvider:
         return None
 
     @observe(as_type="generation", name="Gemini Generation with Grounding")
+    @sentry_sdk.trace
     def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
         client = self.get_client()
         google_search_tool = GeminiTool(google_search=GoogleSearch())
@@ -898,6 +921,7 @@ class GeminiProvider:
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
             "Internal error",
+            "499 CANCELLED",
         )
         return (
             isinstance(exception, ServerError)
@@ -906,9 +930,12 @@ class GeminiProvider:
                 and any(error in str(exception) for error in retryable_errors)
             )
             or isinstance(exception, LlmNoCompletionTokensError)
-        ) or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, ChunkedEncodingError)
+        )
 
     @observe(as_type="generation", name="Gemini Generation")
+    @sentry_sdk.trace
     def generate_structured(
         self,
         *,
@@ -963,6 +990,7 @@ class GeminiProvider:
         )
 
     @observe(as_type="generation", name="Gemini Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -1039,6 +1067,7 @@ class GeminiProvider:
             langfuse_context.update_current_observation(model=self.model_name, usage=usage)
 
     @observe(as_type="generation", name="Gemini Generation")
+    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -1257,12 +1286,59 @@ class GeminiProvider:
 
         return message
 
+    def create_cache(self, contents: str, display_name: str, ttl: int = 3600) -> str:
+        """
+        Create a cache for the given content and display name. We will use the display name as the key.
+        If the cache already exists, it will be updated with the new content.
+
+        Args:
+            content: The content to cache.
+            display_name: The display name to be used as the key of the cache.
+            ttl: The time to live (in seconds) for the cache. Defaults to 1 hour.
+        Returns:
+            Cache name as specified by Gemini.
+        """
+        client = self.get_client(use_local_endpoint=True)
+
+        # We cannot get the cache name from the display name, only from the generated name which we do not have betweeen sessions
+        # So we must do an O(n) search to find the cache by display name
+        caches = client.caches.list()
+        for cache in caches:
+            if cache.display_name == display_name:
+                client.caches.update(
+                    name=cache.name,
+                    config=CreateCachedContentConfig(contents=contents, ttl=f"{ttl}s"),
+                )
+                return cache.name
+
+        cache = client.caches.create(
+            model=self.model_name,
+            config=CreateCachedContentConfig(
+                display_name=display_name,
+                contents=contents,
+                ttl=f"{ttl}s",
+            ),
+        )
+        return cache.name
+
+    def get_cache(self, display_name: str) -> str | None:
+        client = self.get_client(use_local_endpoint=True)
+
+        # We cannot get the cache name from the display_name, only from the generated name which we do not have betweeen sessions
+        # So we must do an O(n) search to find the cache by display name
+        caches = client.caches.list()
+        for cache in caches:
+            if cache.display_name == display_name:
+                return cache.name
+        return None
+
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
 
 class LlmClient:
     @observe(name="Generate Text")
+    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -1281,6 +1357,8 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -1339,6 +1417,7 @@ class LlmClient:
             raise e
 
     @observe(name="Generate Structured")
+    @sentry_sdk.trace
     def generate_structured(
         self,
         *,
@@ -1359,6 +1438,8 @@ class LlmClient:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Structured"
                 )
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             messages = LlmClient.clean_message_content(messages if messages else [])
 
@@ -1403,6 +1484,7 @@ class LlmClient:
             raise e
 
     @observe(name="Generate Text Stream")
+    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -1424,6 +1506,8 @@ class LlmClient:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Text Stream"
                 )
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -1512,6 +1596,7 @@ class LlmClient:
             raise e
 
     @observe(name="Generate Text from Web Search")
+    @sentry_sdk.trace
     def generate_text_from_web_search(
         self,
         *,
@@ -1523,6 +1608,8 @@ class LlmClient:
         try:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
+
+            sentry_sdk.set_tag("llm_provider", model.provider_name)
 
             defaults = model.defaults
             default_temperature = defaults.temperature if defaults else None
@@ -1547,7 +1634,17 @@ class LlmClient:
                     Message(role="assistant", content=message.content, tool_calls=[])
                 )
             elif message.role == "tool":
-                new_messages.append(Message(role="user", content=message.content, tool_calls=[]))
+                new_messages.append(
+                    Message(
+                        role="user",
+                        content=(
+                            message.content
+                            if message.content and message.content.strip()
+                            else "[empty result]"
+                        ),
+                        tool_calls=[],
+                    )
+                )
             elif message.role == "tool_use":
                 new_messages.append(
                     Message(role="assistant", content=message.content, tool_calls=[])
@@ -1597,6 +1694,24 @@ class LlmClient:
             return model.construct_message_from_stream(content_chunks, tool_calls)
         else:
             raise ValueError(f"Invalid provider: {model.provider_name}")
+
+    @sentry_sdk.trace
+    def create_cache(
+        self, contents: str, display_name: str, model: LlmProvider, ttl: int = 3600
+    ) -> str:
+        if model.provider_name == LlmProviderType.GEMINI:
+            model = cast(GeminiProvider, model)
+            return model.create_cache(contents, display_name, ttl)
+        else:
+            raise ValueError("Manual cache creation is only supported for Gemini.")
+
+    @sentry_sdk.trace
+    def get_cache(self, display_name: str, model: LlmProvider) -> str | None:
+        if model.provider_name == LlmProviderType.GEMINI:
+            model = cast(GeminiProvider, model)
+            return model.get_cache(display_name)
+        else:
+            raise ValueError("Manual cache retrieval is only supported for Gemini.")
 
 
 @module.provider

@@ -3,8 +3,8 @@ import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
 from typing import Callable, Optional
 
+import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
-from sentry_sdk.ai.monitoring import ai_track
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
@@ -24,6 +24,8 @@ from seer.dependency_injection import copy_modules_initializer
 from seer.utils import backoff_on_exception
 
 logger = logging.getLogger(__name__)
+
+MAX_PARALLEL_TOOL_CALLS = 3
 
 
 class AutofixAgent(LlmAgent):
@@ -248,9 +250,19 @@ class AutofixAgent(LlmAgent):
 
         # call any tools the model wants to use
         if completion.message.tool_calls:
-            for tool_call in completion.message.tool_calls:
-                tool_response = self.call_tool(tool_call)
-                self.memory.append(tool_response)
+            for i, tool_call in enumerate(completion.message.tool_calls):
+                if i < MAX_PARALLEL_TOOL_CALLS:  # only allowing up to 3 simultaneous tool calls
+                    tool_response = self.call_tool(tool_call)
+                    self.memory.append(tool_response)
+                else:
+                    self.memory.append(
+                        Message(
+                            role="tool",
+                            content=f"This tool was not called as you cannot call more than {MAX_PARALLEL_TOOL_CALLS} tools at a time.",
+                            tool_call_id=tool_call.id,
+                            tool_call_function=tool_call.function,
+                        )
+                    )
 
         self.iterations += 1
         self.usage += completion.metadata.usage
@@ -292,7 +304,7 @@ class AutofixAgent(LlmAgent):
             self.context.event_manager.add_log("Got it. Initiating deep reflection...")
 
     @observe(name="Share Insights in parallel")
-    @ai_track(description="Share Insights in parallel")
+    @sentry_sdk.trace
     def share_insights(
         self,
         text: str,
