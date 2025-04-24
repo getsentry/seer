@@ -32,6 +32,7 @@ from google.genai.types import Tool as GeminiTool
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolParam
+from requests.exceptions import ChunkedEncodingError
 
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
@@ -925,7 +926,9 @@ class GeminiProvider:
                 and any(error in str(exception) for error in retryable_errors)
             )
             or isinstance(exception, LlmNoCompletionTokensError)
-        ) or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, ChunkedEncodingError)
+        )
 
     @observe(as_type="generation", name="Gemini Generation")
     @sentry_sdk.trace
