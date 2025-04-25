@@ -31,7 +31,6 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
           - Span metrics are derived from applying a function to your span attributes (default or custom), like p50(cart.value) or sum(ai.token_use), over a granular time frame. This calculation extrapolates metrics that then populate dashboards, alerts, etc. based on that rolling time window.
           - These 'metrics' aren't stored separately from your span data. Rather, they're queried on the fly.
 
-
         Before we dive into specific guidelines, here are some practical examples of how you can use the Trace Explorer page to answer questions about your data.
 
         - See your changes in action: Search for span.domain:localhost:8080 and sort by Timestamp to see traces from your dev environment.
