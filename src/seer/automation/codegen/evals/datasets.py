@@ -1,0 +1,169 @@
+"""
+This module contains functions for creating and getting datasets from Langfuse.
+⚠️ It is created to be executed manually.
+
+TODO: Add examples of how to use the functions in this module.
+"""
+
+import os
+from dataclasses import dataclass
+from typing import NotRequired, TypedDict
+
+import httpx
+from langfuse import Langfuse
+
+from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
+from seer.automation.codebase.repo_client import RepoClient, RepoClientType
+from seer.automation.codegen.evals.models import EvalItem
+from seer.automation.codegen.models import CodegenRelevantWarningsRequest, StaticAnalysisSuggestion
+from seer.automation.models import IssueDetails, RepoDefinition
+
+langfuse = Langfuse()
+
+# INPUT STRUCTURES ------------------------------------------------------------
+
+
+@dataclass
+class OrgDetails:
+    organization_id: int
+    organization_name: str
+
+
+@dataclass
+class GitHubInfo:
+    org_details: OrgDetails
+    repo_definition: RepoDefinition
+    pr_id: int
+    commit_sha: str
+
+
+# TODO: auto-generate expected suggestions based on a commit that fixes some other PR with issues.
+# This will require an LLM to summarize the changes in the fix-commit as a list of suggestions.
+
+# CREATE DATASET FUNCTIONS -----------------------------------------------------
+
+
+def create_langfuse_dataset(dataset_name: str, metadata: dict, dataset_items: list[EvalItem]):
+    """
+    Create a new dataset in Langfuse.
+    """
+    dataset = langfuse.create_dataset(
+        name=dataset_name,
+        metadata=metadata,
+    )
+
+    for item in dataset_items:
+        dict_item = item.model_dump()
+        expected_output = dict_item.pop("suggestions")
+        langfuse.create_dataset_item(
+            dataset_name=dataset_name,
+            input=dict_item,
+            expected_output={
+                "suggestions": expected_output,
+            },
+        )
+
+    return dataset
+
+
+def create_item(
+    github_info: GitHubInfo,
+    warnings: list[StaticAnalysisWarning],
+    expected_suggestions: list[StaticAnalysisSuggestion],
+    issues: list[IssueDetails] | None = None,
+) -> EvalItem:
+    """
+    Creates an EvalItem from the given GitHub info, warnings, expected suggestions, and (optional) issues.
+
+    GitHub info is used to fetch the PR files (aka diff).
+        This is done when creating the EvalItem so we don't have to do it at evaluation time,
+        and to avoid access issues (depending on the GH token you use to create the EvalItem).
+
+    If issues are not provided, it will fetch them from Sentry (public API).
+        This means you can exactly control the issues that are used for the evaluation, and thus test
+        how impactful to the suggestion having the issue context is.
+    """
+
+    # Get the PR files from the PR definition
+    repo_client = RepoClient.from_repo_definition(
+        github_info.repo_definition, type=RepoClientType.READ
+    )
+    pr_files = repo_client.repo.get_pull(github_info.pr_id).get_files()
+    pr_files = [
+        PrFile(
+            filename=file.filename,
+            patch=file.patch,
+            status=file.status,
+            changes=file.changes,
+            sha=file.sha,
+        )
+        for file in pr_files
+        if file.patch
+    ]
+
+    if issues is None:
+        issues = []
+        sentry_token = os.getenv("SENTRY_TOKEN")
+        assert sentry_token, "SENTRY_TOKEN is not set"
+        for file in pr_files:
+            issues_in_file = list_issues(github_info.repo_definition, file.filename, sentry_token)
+            for issue in issues_in_file:
+                events_for_issue = get_issue_events(issue.id, sentry_token)
+                issue.events = [events_for_issue]
+            issues.extend(issues_in_file)
+
+    return EvalItem(
+        request=CodegenRelevantWarningsRequest(
+            repo=github_info.repo_definition,
+            pr_id=github_info.pr_id,
+            warnings=warnings,
+            callback_url="https://example.com/callback",
+            organization_id=github_info.org_details.organization_id,
+            commit_sha=github_info.commit_sha,
+        ),
+        suggestions=expected_suggestions,
+        pr_files=pr_files,
+        issues=issues,
+    )
+
+
+# HELPER FUNCTIONS ------------------------------------------------------------
+
+
+class SentryEventData(TypedDict):
+    title: str
+    entries: list[dict]
+    tags: NotRequired[list[dict[str, str | None]]]
+
+
+def list_issues(
+    repo_definition: RepoDefinition, file_to_search: str, sentry_token: str
+) -> list[IssueDetails]:
+    """
+    Uses the Sentry public API to list issues for a given file.
+    It requires that `repo_owner/repo_name` maps exactly to the sentry org and sentry project name.
+    """
+    url = f"https://sentry.io/api/0/projects/{repo_definition.owner}/{repo_definition.name}/issues/"
+    headers = {
+        "Authorization": f"Bearer {sentry_token}",
+    }
+    query = f"is:unresolved {file_to_search}"
+    response = httpx.get(url, headers=headers, params={"query": query})
+    response.raise_for_status()
+    issues = response.json()
+    return [IssueDetails.model_validate({**issue, "events": []}) for issue in issues]
+
+
+def get_issue_events(issue_id: int, sentry_token: str) -> SentryEventData:
+    url = f"https://sentry.io/api/0/issues/{issue_id}/events/"
+    headers = {
+        "Authorization": f"Bearer {sentry_token}",
+    }
+    response = httpx.get(url, headers=headers)
+    response.raise_for_status()
+    entries = response.json()
+    return SentryEventData(
+        title=entries[0]["title"],
+        entries=entries,
+        tags=entries[0]["tags"],
+    )
