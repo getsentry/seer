@@ -207,11 +207,11 @@ class RepoClient:
                         description=repo_definition.external_id,
                     ):
                         self.repo = self.github.get_repo(int(repo_definition.external_id))
-                except Exception as e:
+                except Exception as e2:
                     logger.exception(
                         f"Error getting repo via external id {repo_definition.external_id}"
                     )
-                    raise e
+                    raise e2
             else:
                 raise e
 
