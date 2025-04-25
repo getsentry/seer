@@ -414,11 +414,11 @@ class RepoClient:
             return None, "utf-8"
 
     @functools.lru_cache(maxsize=8)
-    def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
-        if sha is None:
-            sha = self.base_commit_sha
+    def get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
+        if commit_sha is None:
+            commit_sha = self.base_commit_sha
 
-        tree = self.get_git_tree(sha)
+        tree = self.get_git_tree(commit_sha=commit_sha)
         valid_file_paths: set[str] = set()
         valid_file_extensions = get_all_supported_extensions()
 
@@ -609,7 +609,7 @@ class RepoClient:
         return ref
 
     @functools.lru_cache(maxsize=8)
-    def get_git_tree(self, sha: str) -> CompleteGitTree:
+    def get_git_tree(self, commit_sha: str) -> CompleteGitTree:
         """
         Get the git tree for a specific sha, handling truncation with divide and conquer.
         Always returns a CompleteGitTree instance for consistent interface.
@@ -623,13 +623,14 @@ class RepoClient:
         Returns:
             A CompleteGitTree with all items from all subtrees
         """
-        tree = self.repo.get_git_tree(sha=sha, recursive=True)
+        commit = self.repo.get_git_commit(commit_sha)
+        tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=True)
 
         if not tree.raw_data.get("truncated", False):
             return CompleteGitTree(tree)
 
         complete_tree = CompleteGitTree()
-        root_tree = self.repo.get_git_tree(sha=sha, recursive=False)
+        root_tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=False)
 
         for key, value in root_tree.raw_data.items():
             if key != "tree" and key != "truncated":
@@ -860,12 +861,15 @@ class RepoClient:
                 raise e
 
     def get_index_file_set(
-        self, sha: str | None = None, max_file_size_bytes=2 * 1024 * 1024, skip_empty_files=False
+        self,
+        commit_sha: str | None = None,
+        max_file_size_bytes=2 * 1024 * 1024,
+        skip_empty_files=False,
     ) -> set[str]:
-        if sha is None:
-            sha = self.base_commit_sha
+        if commit_sha is None:
+            commit_sha = self.base_commit_sha
 
-        tree = self.get_git_tree(sha)
+        tree = self.get_git_tree(commit_sha=commit_sha)
         file_set = set()
         for file in tree.tree:
             if (
