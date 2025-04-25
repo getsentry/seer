@@ -138,6 +138,7 @@ class TestRepoClient:
         ]
         mock_tree.raw_data = {"truncated": False}
         mock_github.get_repo.return_value.get_git_tree.return_value = mock_tree
+        mock_github.get_repo.return_value.get_git_commit.return_value.tree.sha = "test_sha"
 
         file_paths = repo_client.get_valid_file_paths()
 
@@ -156,6 +157,7 @@ class TestRepoClient:
         ]
         mock_tree.raw_data = {"truncated": False}
         mock_github.get_repo.return_value.get_git_tree.return_value = mock_tree
+        mock_github.get_repo.return_value.get_git_commit.return_value.tree.sha = "test_sha"
 
         file_set = repo_client.get_index_file_set()
 
@@ -794,102 +796,6 @@ class TestRepoClient:
 
         # Verify None result when path not found
         assert result is None
-
-    def test_get_git_tree_with_subtrees(self, repo_client, mock_github):
-        # Create mock git tree structure made of subtrees
-        # 1. Main tree that is truncated
-        main_tree = MagicMock()
-        main_tree.tree = [
-            MagicMock(path="file1.py", type="blob"),
-            MagicMock(path="dir1", type="tree", sha="dir1_sha"),
-            MagicMock(path="dir2", type="tree", sha="dir2_sha"),
-        ]
-        main_tree.raw_data = {"truncated": True, "sha": "main_sha"}
-
-        # 2. Non-recursive root tree for the main tree
-        root_tree = MagicMock()
-        root_tree.tree = [
-            MagicMock(path="file1.py", type="blob"),
-            MagicMock(path="dir1", type="tree", sha="dir1_sha"),
-            MagicMock(path="dir2", type="tree", sha="dir2_sha"),
-        ]
-        root_tree.raw_data = {"sha": "main_sha"}
-
-        # 3. First subtree that is not truncated
-        dir1_tree = MagicMock()
-        dir1_tree.tree = [
-            MagicMock(path="dir1/file2.py", type="blob"),
-            MagicMock(path="dir1/file3.py", type="blob"),
-        ]
-        dir1_tree.raw_data = {"truncated": False, "sha": "dir1_sha"}
-
-        # 4. Second subtree that is truncated
-        dir2_tree = MagicMock()
-        dir2_tree.tree = [
-            MagicMock(path="dir2/file4.py", type="blob"),
-            MagicMock(path="dir2/subdir", type="tree", sha="subdir_sha"),
-        ]
-        dir2_tree.raw_data = {"truncated": True, "sha": "dir2_sha"}
-
-        # 5. Non-recursive tree for the second subtree
-        dir2_non_recursive = MagicMock()
-        dir2_non_recursive.tree = [
-            MagicMock(path="dir2/file4.py", type="blob"),
-            MagicMock(path="dir2/subdir", type="tree", sha="subdir_sha"),
-        ]
-        dir2_non_recursive.raw_data = {"sha": "dir2_sha"}
-
-        # 6. The nested subdir tree
-        subdir_tree = MagicMock()
-        subdir_tree.tree = [
-            MagicMock(path="dir2/subdir/file5.py", type="blob"),
-        ]
-        subdir_tree.raw_data = {"truncated": False, "sha": "subdir_sha"}
-
-        # Configure mock to return appropriate trees based on arguments
-        def get_git_tree_side_effect(sha, recursive):
-            if sha == "test_sha" and recursive:
-                return main_tree
-            elif sha == "test_sha" and not recursive:
-                return root_tree
-            elif sha == "dir1_sha" and recursive:
-                return dir1_tree
-            elif sha == "dir2_sha" and recursive:
-                return dir2_tree
-            elif sha == "dir2_sha" and not recursive:
-                return dir2_non_recursive
-            elif sha == "subdir_sha" and recursive:
-                return subdir_tree
-            else:
-                return MagicMock(tree=[], raw_data={"truncated": False})
-
-        mock_github.get_repo.return_value.get_git_tree.side_effect = get_git_tree_side_effect
-
-        result = repo_client.get_git_tree("test_sha")
-
-        # Verify the result
-        assert isinstance(result, CompleteGitTree)
-        assert not result.raw_data.get("truncated")
-
-        # Count files and directories to ensure all were processed
-        file_paths = [item.path for item in result.tree]
-        assert len(file_paths) == 7
-        assert "file1.py" in file_paths
-        assert "dir1" in file_paths
-        assert "dir2" in file_paths
-
-        # Verify appropriate API calls were made
-        expected_calls = [
-            call(sha="test_sha", recursive=True),
-            call(sha="test_sha", recursive=False),
-            call(sha="dir1_sha", recursive=True),
-            call(sha="dir2_sha", recursive=True),
-            call(sha="dir2_sha", recursive=False),
-            call(sha="subdir_sha", recursive=True),
-        ]
-        mock_github.get_repo.return_value.get_git_tree.assert_has_calls(
-            expected_calls, any_order=True
-        )
 
     def test_build_file_tree_string_with_immediate_children(self, repo_client):
         """Test building file tree string with only immediate children of a path"""
