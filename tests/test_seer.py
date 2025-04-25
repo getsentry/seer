@@ -806,6 +806,20 @@ class TestSeer(unittest.TestCase):
                 content_type="application/json",
             )
 
+    @mock.patch("seer.app.create_cache")
+    def test_create_cache_endpoint_client_error(self, mock_create_cache):
+        """Test that create_cache endpoint handles client errors correctly"""
+        mock_create_cache.side_effect = ClientError("Test error")
+        test_data = next(generate(CreateCacheRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+
 
 @parametrize(count=1)
 def test_prepared_statements_disabled(
