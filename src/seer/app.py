@@ -21,6 +21,8 @@ from seer.anomaly_detection.models.external import (
     StoreDataRequest,
     StoreDataResponse,
 )
+from seer.assisted_query.assisted_query import translate_query
+from seer.assisted_query.models import TranslateRequest, TranslateResponse
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixEvaluationRequest,
@@ -488,6 +490,20 @@ def compare_cohorts_endpoint(
     data: CompareCohortsRequest,
 ) -> CompareCohortsResponse:
     return compare_cohort(data)
+
+
+@json_api(blueprint, "/v1/ai-assisted-query/translate")
+def translate_endpoint(data: TranslateRequest) -> TranslateResponse:
+    try:
+        with statsd.timed("seer.ai_assisted_query.translate.duration"):
+            response = translate_query(data)
+            statsd.increment("seer.ai_assisted_query.translate.success")
+    except Exception as e:
+        statsd.increment("seer.ai_assisted_query.translate.error")
+        logger.exception("Error translating query")
+        raise InternalServerError from e
+
+    return response
 
 
 @blueprint.route("/health/live", methods=["GET"])
