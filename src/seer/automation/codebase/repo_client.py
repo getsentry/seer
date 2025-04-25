@@ -192,11 +192,28 @@ class RepoClient:
         else:
             self.github = Github(auth=get_github_token_auth())
 
-        self.repo = self.github.get_repo(
-            int(repo_definition.external_id)
-            if repo_definition.external_id.isdigit()
-            else repo_definition.full_name
-        )
+        try:
+            with sentry_sdk.start_span(
+                op="repo_client.repo.get_repo.full_name", description=repo_definition.full_name
+            ):
+                self.repo = self.github.get_repo(repo_definition.full_name)
+        except Exception as e:
+            logger.exception(f"Error getting repo via full name {repo_definition.full_name}")
+
+            if repo_definition.external_id.isdigit():
+                try:
+                    with sentry_sdk.start_span(
+                        op="repo_client.repo.get_repo.external_id",
+                        description=repo_definition.external_id,
+                    ):
+                        self.repo = self.github.get_repo(int(repo_definition.external_id))
+                except Exception as e:
+                    logger.exception(
+                        f"Error getting repo via external id {repo_definition.external_id}"
+                    )
+                    raise e
+            else:
+                raise e
 
         self.provider = repo_definition.provider
         self.repo_owner = repo_definition.owner
@@ -274,6 +291,7 @@ class RepoClient:
     def compare(self, base: str, head: str):
         return self.repo.compare(base, head)
 
+    @sentry_sdk.trace
     def load_repo_to_tmp_dir(self, sha: str | None = None) -> tuple[str, str]:
         sha = sha or self.base_commit_sha
 
