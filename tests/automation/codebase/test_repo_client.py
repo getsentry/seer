@@ -1,10 +1,10 @@
-from unittest.mock import ANY, MagicMock, call, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pytest
 from github import GithubException, UnknownObjectException
 from johen import generate
 
-from seer.automation.codebase.repo_client import CompleteGitTree, RepoClient
+from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import FileChange, RepoDefinition
 from seer.configuration import AppConfig
 from seer.dependency_injection import resolve
