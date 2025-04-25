@@ -374,24 +374,11 @@ class GroupingLookup:
 
         similarity_response = SimilarityResponse(responses=[])
         for record, distance in results:
-            should_group = distance <= issue.threshold
-
-            if should_group:
-                logger.info(
-                    "should_group",
-                    extra={
-                        "input_hash": issue.hash,
-                        "stacktrace_length": len(issue.stacktrace),
-                        "parent_hash": record.hash,
-                        "project_id": issue.project_id,
-                    },
-                )
-
             similarity_response.responses.append(
                 GroupingResponse(
                     parent_hash=record.hash,
                     stacktrace_distance=distance,
-                    should_group=should_group,
+                    should_group=distance <= issue.threshold,
                 )
             )
 
