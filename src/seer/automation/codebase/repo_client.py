@@ -20,6 +20,7 @@ from github import (
     InputGitTreeElement,
     UnknownObjectException,
 )
+from github.GithubRetry import GithubRetry
 from github.GitRef import GitRef
 from github.GitTree import GitTree
 from github.GitTreeElement import GitTreeElement
@@ -183,14 +184,19 @@ class RepoClient:
                 f"Unsupported repo provider: {repo_definition.provider}, only {', '.join(self.supported_providers)} are supported."
             )
 
+        retry = GithubRetry(total=5)
+        # Default total=10 exceeds autofix's soft time limit anyway
+        retry.DEFAULT_BACKOFF_MAX = 30
+
         if app_id and private_key:
             self.github = Github(
                 auth=get_github_app_auth_and_installation(
                     app_id, private_key, repo_definition.owner, repo_definition.name
-                )[0]
+                )[0],
+                retry=retry,
             )
         else:
-            self.github = Github(auth=get_github_token_auth())
+            self.github = Github(auth=get_github_token_auth(), retry=retry)
 
         try:
             with sentry_sdk.start_span(
