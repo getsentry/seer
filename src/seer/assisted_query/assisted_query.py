@@ -64,6 +64,7 @@ def create_query_from_natural_language(
         cache_name=cache_name,
         response_format=RelevantFieldsResponse,
     )
+    print("relevant_fields_response", relevant_fields_response)
 
     relevant_fields = relevant_fields_response.parsed.fields
 
