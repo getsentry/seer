@@ -9,6 +9,7 @@ from seer.assisted_query.models import (
     TranslateResponse,
 )
 from seer.automation.agent.client import GeminiProvider, LlmClient
+from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
 
@@ -32,8 +33,6 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
         cache_display_name,
         request.organization_slug,
         request.project_ids,
-        LlmClient(),
-        RpcClient(),
     )
 
     return TranslateResponse(
@@ -45,6 +44,7 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
     )
 
 
+@inject
 @observe(name="Create query from natural language")
 @sentry_sdk.trace
 def create_query_from_natural_language(
@@ -52,8 +52,8 @@ def create_query_from_natural_language(
     cache_name: str,
     organization_slug: str,
     project_ids: list[int],
-    llm_client: LlmClient,
-    rpc_client: RpcClient,
+    llm_client: LlmClient = injected,
+    rpc_client: RpcClient = injected,
 ) -> ModelResponse:
 
     # Step 1: Figure out relevant fields
