@@ -57,13 +57,13 @@ class BaseTools:
         self._executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
         self._start_parallel_repo_download()
 
-    @sentry_sdk.trace
     def _start_parallel_repo_download(self):
         """Start downloading all repositories in parallel in the background."""
         repo_names = self._get_repo_names()
         if not repo_names:
             return
 
+        @sentry_sdk.trace
         def download_all_repos():
             """Download all repositories and update self.tmp_dir directly."""
             # Create a lock for thread-safe updates to self.tmp_dir
