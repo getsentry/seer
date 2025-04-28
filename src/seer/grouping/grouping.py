@@ -35,26 +35,53 @@ class GroupingRequest(BaseModel):
     hnsw_candidates: int = NN_GROUPING_HNSW_CANDIDATES
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
     use_reranking: bool = False
+    min_stacktrace_length: int = 10  # Minimum reasonable length for a stacktrace
 
     @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
         if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
+            raise ValueError(
+                f"{info.field_name} must be provided and cannot be empty. "
+                f"This field is required for similarity comparison."
+            )
+            
+        # Normalize whitespace
+        v = " ".join(v.split())
+        
+        # Check minimum length
+        if len(v) < cls.min_stacktrace_length:
+            raise ValueError(
+                f"{info.field_name} is too short to be a valid stacktrace. "
+                f"Please provide the complete error trace information."
+            )
+            
         return v
 
+    class Config:
+        arbitrary_types_allowed = True
+        json_encoders = {
+            np.ndarray: lambda x: x.tolist()  # Convert ndarray to list for serialization
+        }
+        validate_assignment = True  # Ensure validators run on assignment too
 
-class GroupingResponse(BaseModel):
-    parent_hash: str
-    stacktrace_distance: float
-    should_group: bool
+    @staticmethod
+    def preprocess_stacktrace(stacktrace: str) -> str:
+        """Preprocesses a stacktrace for consistency.
+        
+        Args:
+            stacktrace: The raw stacktrace string
+            
+        Returns:
+            The processed stacktrace string
+        """
+        if not isinstance(stacktrace, str):
+            raise TypeError(f"Stacktrace must be a string, got {type(stacktrace)}")
+        
+        return " ".join(stacktrace.split())
 
-
-class SimilarityResponse(BaseModel):
-    responses: List[GroupingResponse]
-
-
-class CreateGroupingRecordData(BaseModel):
+lass GroupingResponse(BaseModel):
+   parent_hash: str
     group_id: int
     hash: str
     project_id: int
@@ -172,7 +199,16 @@ class GroupingLookup:
         :param stacktrace: The stacktrace to encode.
         :return: The embedding of the stacktrace.
         """
-        return self.model.encode(stacktrace)
+        if not stacktrace:
+            raise ValueError("Cannot encode empty stacktrace")
+            
+        try:
+            processed_stacktrace = GroupingRequest.preprocess_stacktrace(stacktrace)
+        except (TypeError, ValueError) as e:
+            logger.error(f"Stacktrace preprocessing failed: {e}")
+            raise
+        
+        return self.model.encode(processed_stacktrace)
 
     @sentry_sdk.tracing.trace
     @handle_out_of_memory
@@ -183,8 +219,18 @@ class GroupingLookup:
         :param batch_size: The batch size used for the computation.
         :return: The embeddings of the stacktraces.
         """
-
-        return self.model.encode(sentences=stacktraces, batch_size=batch_size)
+        if not stacktraces:
+            raise ValueError("Cannot encode empty stacktrace list")
+            
+        processed_stacktraces = []
+        for stacktrace in stacktraces:
+            try:
+                processed_stacktraces.append(GroupingRequest.preprocess_stacktrace(stacktrace))
+            except (TypeError, ValueError) as e:
+                logger.error(f"Stacktrace preprocessing failed: {e}")
+                raise
+        
+        return self.model.encode(sentences=processed_stacktraces, batch_size=batch_size)
 
     @sentry_sdk.tracing.trace
     def query_nearest_k_neighbors(

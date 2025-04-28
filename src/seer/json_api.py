@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from flask import Blueprint, request
 from google.cloud import secretmanager
 from pydantic import BaseModel, ValidationError
-from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized
+from werkzeug.exceptions import BadRequest, InternalServerError, Unauthorized, HTTPException
 
 from seer.bootup import module, stub_module
 from seer.configuration import AppConfig
@@ -20,11 +20,21 @@ from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
+class APIErrorDetail(BaseModel):
+    code: str
+    message: str
+    details: dict | None = None
 
-_F = TypeVar("_F", bound=Callable[..., Any])
+class APIValidationError(BadRequest):
+    def __init__(self, error: APIErrorDetail):
+        self.error = error
+        super().__init__(response={"error": error.model_dump()})
 
+    def get_description(self) -> str:
+        return self.error.message
 
-def access_secret(project_id: str, secret_id: str, version_id: str = "latest"):
+def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
+    @inject
     client = secretmanager.SecretManagerServiceClient()
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     response = client.access_secret_version(request={"name": name})
@@ -123,16 +133,38 @@ def json_api(blueprint: Blueprint, url_rule: str) -> Callable[[_F], _F]:
             # Cached from ^^, this won't result in double read.
             data = request.get_json()
 
+
             if not isinstance(data, dict):
                 sentry_sdk.capture_message(f"Data is not an object: {type(data)}")
-                raise BadRequest("Data is not an object")
+                raise APIValidationError(APIErrorDetail(
+                    code="INVALID_DATA_FORMAT",
+                    message="Request data must be a JSON object",
+                    details={"received_type": str(type(data))}
+                ))
 
             try:
                 result: BaseModel = implementation(request_annotation.model_validate(data))
             except ValidationError as e:
                 capture_alert(data)
                 sentry_sdk.capture_exception(e)
-                raise BadRequest(str(e))
+                
+                # Extract field-specific validation errors
+                validation_details = {}
+                for error in e.errors():
+                    field = ".".join(str(loc) for loc in error["loc"])
+                    validation_details[field] = error["msg"]
+                
+                # Determine if stacktrace is the issue
+                if "stacktrace" in validation_details:
+                    error_msg = "Stacktrace field is required and must contain valid error trace data"
+                else:
+                    error_msg = "Request validation failed"
+                
+                raise APIValidationError(APIErrorDetail(
+                    code="VALIDATION_ERROR",
+                    message=error_msg,
+                    details={"validation_errors": validation_details}
+                ))
 
             return result.model_dump()
 
