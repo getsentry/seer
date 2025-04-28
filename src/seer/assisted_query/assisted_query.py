@@ -1,5 +1,5 @@
 import sentry_sdk
-from langfuse.decorator import observe
+from langfuse.decorators import observe
 
 from seer.assisted_query import prompts
 from seer.assisted_query.models import (
