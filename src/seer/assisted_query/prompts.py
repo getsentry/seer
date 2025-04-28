@@ -238,10 +238,11 @@ def _get_fields_with_definitions(fields: list[str]) -> str:
     all_properties_map = get_searchable_properties()
     available_blocks: dict[str, str] = {}
     for field in fields:
-        if field not in available_blocks and field in all_properties_map:
-            available_blocks[field] = all_properties_map[field]
-        else:
-            available_blocks[field] = "..."
+        if field not in available_blocks:
+            if field in all_properties_map:
+                available_blocks[field] = all_properties_map[field]
+            else:
+                available_blocks[field] = "..."
 
     # XXX: Commented out for now, will include functions once we have them formalized
     # for function in available_functions:

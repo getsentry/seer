@@ -799,17 +799,22 @@ class TestSeer(unittest.TestCase):
         mock_create_cache.side_effect = Exception("Test error")
         test_data = next(generate(CreateCacheRequest))
 
-        with pytest.raises(Exception, match="Test error"):
-            app.test_client().post(
-                "/v1/assisted-query/create-cache",
-                data=test_data.model_dump_json(),
-                content_type="application/json",
-            )
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 500
 
     @mock.patch("seer.app.create_cache")
     def test_create_cache_endpoint_client_error(self, mock_create_cache):
         """Test that create_cache endpoint handles client errors correctly"""
-        mock_create_cache.side_effect = ClientError("Test error")
+
+        mock_create_cache.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/assisted-query/create-cache"
+            ),
+        )
         test_data = next(generate(CreateCacheRequest))
 
         response = app.test_client().post(
@@ -817,8 +822,7 @@ class TestSeer(unittest.TestCase):
             data=test_data.model_dump_json(),
             content_type="application/json",
         )
-
-        assert response.status_code == 400
+        assert response.status_code == 504
 
 
 @parametrize(count=1)

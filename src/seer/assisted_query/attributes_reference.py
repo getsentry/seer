@@ -5,7 +5,7 @@ def get_searchable_properties(
     include_session_replay_properties=True,
     include_user_feedback_properties=True,
     include_release_properties=True,
-) -> dict:
+) -> dict[str, str]:
     """
     Returns a dictionary of all searchable properties in Sentry from the docs: https://docs.sentry.io/concepts/search/searchable-properties/.
 

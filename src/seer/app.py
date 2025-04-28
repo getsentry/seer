@@ -499,13 +499,13 @@ def create_cache_endpoint(data: CreateCacheRequest) -> CreateCacheResponse:
         with statsd.timed("seer.assisted_query.create_cache.duration"):
             response = create_cache(data)
             statsd.increment("seer.assisted_query.create_cache.success")
-    except ClientError as e:
-        statsd.increment("seer.assisted_query.create_cache.client_error")
-        response = CreateCacheResponse(success=False, message=str(e), cache_name=None)
-    except ServerError:
+    except APITimeoutError as e:
+        statsd.increment("seer.assisted_query.create_cache.api_timeout")
+        raise GatewayTimeout from e
+    except Exception as e:
         statsd.increment("seer.assisted_query.create_cache.server_error")
-        raise
-
+        logger.exception("Error creating cache")
+        raise InternalServerError from e
     return response
 
 
