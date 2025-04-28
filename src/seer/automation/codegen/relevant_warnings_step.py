@@ -27,6 +27,11 @@ from seer.automation.codegen.models import (
     CodePredictStaticAnalysisSuggestionsRequest,
     FilterWarningsOutput,
     FilterWarningsRequest,
+    PrAdditionalContextRequest,
+)
+from seer.automation.codegen.pr_additional_context_component import (
+    PrAdditionalContextComponent,
+    PrAdditionalContextOutput,
 )
 from seer.automation.codegen.relevant_warnings_component import (
     AreIssuesFixableComponent,
@@ -273,16 +278,26 @@ class RelevantWarningsStep(CodegenStep):
             }
         )
 
-        # 6. Suggest issues based on static analysis warnings and fixable issues.
+        # 6. Fetch additional context for PR files.
+        additional_context_component = PrAdditionalContextComponent(self.context)
+        additional_context: PrAdditionalContextOutput = additional_context_component.invoke(
+            request=PrAdditionalContextRequest(
+                pr_files=pr_files,
+                filename_to_issues=fetch_issues_output.filename_to_issues,
+            )
+        )
+
+        # 7. Suggest issues based on static analysis warnings and fixable issues.
         static_analysis_suggestions_component = StaticAnalysisSuggestionsComponent(self.context)
         static_analysis_suggestions_request = CodePredictStaticAnalysisSuggestionsRequest(
             warning_and_pr_files=warning_and_pr_files,
             fixable_issues=fixable_issues,
             pr_files=pr_files,
+            additional_context=additional_context,
         )
         static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput = (
             static_analysis_suggestions_component.invoke(static_analysis_suggestions_request)
         )
 
-        # 7. Save results.
+        # 8. Save results.
         self._complete_run(static_analysis_suggestions_output, diagnostics)
