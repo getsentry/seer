@@ -22,7 +22,13 @@ from seer.anomaly_detection.models.external import (
     StoreDataResponse,
 )
 from seer.app import app
-from seer.assisted_query.models import Chart, TranslateRequest, TranslateResponse
+from seer.assisted_query.models import (
+    Chart,
+    CreateCacheRequest,
+    CreateCacheResponse,
+    TranslateRequest,
+    TranslateResponse,
+)
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixEvaluationRequest,
@@ -771,6 +777,58 @@ class TestSeer(unittest.TestCase):
             content_type="application/json",
         )
         assert response.status_code == 500
+
+    @mock.patch("seer.app.create_cache")
+    def test_create_cache_endpoint_success(self, mock_create_cache):
+        """Test a successful run of create_cache end point"""
+        mock_create_cache.return_value = CreateCacheResponse(
+            success=True, message="Cache created", cache_name="test-cache"
+        )
+        test_data = next(generate(CreateCacheRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert response.json["message"] == "Cache created"
+        assert response.json["cache_name"] == "test-cache"
+
+        mock_create_cache.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.create_cache")
+    def test_create_cache_endpoint_error(self, mock_create_cache):
+        """Test that create_cache endpoint handles exceptions correctly"""
+        mock_create_cache.side_effect = Exception("Test error")
+        test_data = next(generate(CreateCacheRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 500
+
+    @mock.patch("seer.app.create_cache")
+    def test_create_cache_endpoint_client_error(self, mock_create_cache):
+        """Test that create_cache endpoint handles client errors correctly"""
+
+        mock_create_cache.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/assisted-query/create-cache"
+            ),
+        )
+        test_data = next(generate(CreateCacheRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 504
 
     @mock.patch("seer.app.translate_query")
     def test_translate_query_endpoint_success(self, mock_translate_query):
