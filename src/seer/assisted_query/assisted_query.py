@@ -9,6 +9,7 @@ from seer.assisted_query.models import (
     TranslateResponse,
 )
 from seer.automation.agent.client import GeminiProvider, LlmClient
+from seer.rpc import RpcClient
 
 
 def translate_query(request: TranslateRequest) -> TranslateResponse:
@@ -27,7 +28,12 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
         raise ValueError("Cache not found")
 
     sentry_query = create_query_from_natural_language(
-        natural_language_query, cache_display_name, LlmClient()
+        natural_language_query,
+        cache_display_name,
+        request.organization_slug,
+        request.project_ids,
+        LlmClient(),
+        RpcClient(),
     )
 
     return TranslateResponse(
@@ -44,30 +50,45 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
 def create_query_from_natural_language(
     natural_language_query: str,
     cache_name: str,
-    client: LlmClient,
+    organization_slug: str,
+    project_ids: list[int],
+    llm_client: LlmClient,
+    rpc_client: RpcClient,
 ) -> ModelResponse:
 
     # Step 1: Figure out relevant fields
     relevant_fields_prompt = prompts.select_relevant_fields_prompt(natural_language_query)
-    relevant_fields_response = client.generate_structured(
+    relevant_fields_response = llm_client.generate_structured(
         prompt=relevant_fields_prompt,
         model=GeminiProvider.model("gemini-2.0-flash-001"),
         cache_name=cache_name,
         response_format=RelevantFieldsResponse,
     )
 
+    relevant_fields = relevant_fields_response.parsed.fields
+
     # Step 2: Fetch values for relevant fields
-    field_values = {"field_name": ["value1", "value2", "value3"]}
-    fields_and_values_prompt = prompts.get_fields_and_values_prompt(
-        natural_language_query, relevant_fields_response.fields, field_values
+    field_values_response = rpc_client.call(
+        "get_field_values",
+        organization_slug=organization_slug,
+        fields=relevant_fields,
+        project_ids=project_ids,
+        stats_period="48h",
+        k=150,
     )
-    generated_query = client.generate_structured(
+    field_values = field_values_response.get("field_values", {}) if field_values_response else {}
+
+    # Step 3: Generate final prompt based off of relevant fields and values
+    fields_and_values_prompt = prompts.get_fields_and_values_prompt(
+        natural_language_query, relevant_fields, field_values
+    )
+    generated_query = llm_client.generate_structured(
         prompt=fields_and_values_prompt,
         model=GeminiProvider.model("gemini-2.0-flash-001"),
         cache_name=cache_name,
         response_format=ModelResponse,
     )
 
-    # XXX: Step 2a/b: Create 3-5 query options and select the best one
+    # XXX: Step 3a/b: Create 3-5 query options and select the best one
 
     return generated_query
