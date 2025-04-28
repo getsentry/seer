@@ -259,3 +259,41 @@ def _get_fields_with_definitions(fields: list[str]) -> str:
         formatted_available_blocks += f"- {key} -> {value}\n"
 
     return formatted_available_blocks
+
+
+def select_relevant_fields_prompt(natural_language_query: str) -> str:
+    return f"""
+    Based on the user's natural language query and the search guidelines provided, please identify which fields would be most relevant to use.
+    For now, return only an array of relevant field names. Include the fields you think are most relevant. DO NOT include field values in the response.
+    For example, if the user's query is "Who are the customers who have the slowest GET requests in the US", the most relevant fields could be ["customerDomain.sentryUrl", "customerDomain.subdomain", "http.request_method", "span.op", "span.action"].
+    Notice that all of the fields may not directly be used in the final query, but could be used to narrow down the search without excluding any relevant results.
+    The relevant fields MUST be from the list of available fields provided. THIS IS VERY IMPORTANT.
+    If the user's query is not clear, try your best to translate it into a valid query (while still maintaining the original meaning as much as possible), then identify the most relevant fields.
+    ## User's natural language query:
+    {natural_language_query}
+    """
+
+
+def get_fields_and_values_prompt(
+    natural_language_query: str, relevant_fields: list[str], field_values: dict[str, list[str]]
+) -> str:
+    return f"""
+        ## In a previous step, we have identified the following fields as relevant to the user's query:
+        <available_fields>
+        {relevant_fields}
+        </available_fields>
+        ## The possible values for these fields are:
+        Note: The values include the count of how many times the value occurred in the last 48 hours in order of most common to least common.
+        Use the values and the count to guide if you should use the field in the final query. '' indicates that the value has not been defined. If a field has '' as the only value or has a very high amount of '' values, then it is likely not a useful field to use since a query will likely not return any results.
+        <available_values>
+        {json.dumps(field_values, indent=2)}
+        </available_values>
+        Based on the user's natural language query and the search guidelines provided, construct 3 options for the final query using the field names and appropriate values from the possible values.
+        You should use the values from the <available_values> section to construct the query. If you are not doing a general search using wildcards, DO NOT MAKE UP YOUR OWN VALUES. Try your best to use the specific values from the <available_values> section.
+        Also, please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places. The score MUST be 3 decimal places (ie: 0.104 or 0.872).
+        You must ONLY use the fields and the values you've identified as relevant. You can also use the raw search to search for specific values if there are no relevant fields or values. DO NOT USE OR MAKE UP ANY OTHER FIELDS OR VALUES. THIS IS VERY IMPORTANT.
+        When thinking of the query options, please think about each step of the query and how confident you are that the query will return relevant results. You should show your work as you think through the query options.
+        Finally, select the best query option from the 3 options you have created. You should combine the best portions from each query you have generated if applicable.
+        Here is the user's natural language query:
+        {natural_language_query}
+        """

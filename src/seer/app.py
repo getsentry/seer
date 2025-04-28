@@ -21,8 +21,14 @@ from seer.anomaly_detection.models.external import (
     StoreDataRequest,
     StoreDataResponse,
 )
+from seer.assisted_query.assisted_query import translate_query
 from seer.assisted_query.create_cache import create_cache
-from seer.assisted_query.models import CreateCacheRequest, CreateCacheResponse
+from seer.assisted_query.models import (
+    CreateCacheRequest,
+    CreateCacheResponse,
+    TranslateRequest,
+    TranslateResponse,
+)
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixEvaluationRequest,
@@ -506,6 +512,24 @@ def create_cache_endpoint(data: CreateCacheRequest) -> CreateCacheResponse:
         statsd.increment("seer.assisted_query.create_cache.server_error")
         logger.exception("Error creating cache")
         raise InternalServerError from e
+
+    return response
+
+
+@json_api(blueprint, "/v1/ai-assisted-query/translate")
+def translate_endpoint(data: TranslateRequest) -> TranslateResponse:
+    try:
+        with statsd.timed("seer.ai_assisted_query.translate.duration"):
+            response = translate_query(data)
+            statsd.increment("seer.ai_assisted_query.translate.success")
+    except APITimeoutError as e:
+        statsd.increment("seer.ai_assisted_query.translate.api_timeout")
+        raise GatewayTimeout from e
+    except Exception as e:
+        statsd.increment("seer.ai_assisted_query.translate.error")
+        logger.exception("Error translating query")
+        raise InternalServerError from e
+
     return response
 
 
