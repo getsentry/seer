@@ -29,7 +29,7 @@ class TranslateRequest(BaseModel):
 class TranslateResponse(BaseModel):
     query: str
     stats_period: str
-    group_by: str
+    group_by: list[str]
     visualization: Chart
     sort: str
 
@@ -38,7 +38,7 @@ class ModelResponse(BaseModel):
     explanation: str
     query: str
     stats_period: str
-    group_by: str
+    group_by: list[str]
     visualization: Chart
     sort: str
     confidence_score: float
