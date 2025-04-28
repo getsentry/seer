@@ -21,6 +21,8 @@ from seer.anomaly_detection.models.external import (
     StoreDataRequest,
     StoreDataResponse,
 )
+from seer.assisted_query.create_cache import create_cache
+from seer.assisted_query.models import CreateCacheRequest, CreateCacheResponse
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixEvaluationRequest,
@@ -488,6 +490,23 @@ def compare_cohorts_endpoint(
     data: CompareCohortsRequest,
 ) -> CompareCohortsResponse:
     return compare_cohort(data)
+
+
+@json_api(blueprint, "/v1/assisted-query/create-cache")
+@sentry_sdk.trace
+def create_cache_endpoint(data: CreateCacheRequest) -> CreateCacheResponse:
+    try:
+        with statsd.timed("seer.assisted_query.create_cache.duration"):
+            response = create_cache(data)
+            statsd.increment("seer.assisted_query.create_cache.success")
+    except APITimeoutError as e:
+        statsd.increment("seer.assisted_query.create_cache.api_timeout")
+        raise GatewayTimeout from e
+    except Exception as e:
+        statsd.increment("seer.assisted_query.create_cache.server_error")
+        logger.exception("Error creating cache")
+        raise InternalServerError from e
+    return response
 
 
 @blueprint.route("/health/live", methods=["GET"])
