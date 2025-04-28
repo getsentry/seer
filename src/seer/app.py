@@ -516,7 +516,7 @@ def create_cache_endpoint(data: CreateCacheRequest) -> CreateCacheResponse:
     return response
 
 
-@json_api(blueprint, "/v1/ai-assisted-query/translate")
+@json_api(blueprint, "/v1/assisted-query/translate")
 def translate_endpoint(data: TranslateRequest) -> TranslateResponse:
     try:
         with statsd.timed("seer.ai_assisted_query.translate.duration"):

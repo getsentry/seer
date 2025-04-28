@@ -846,7 +846,7 @@ class TestSeer(unittest.TestCase):
         test_data = next(generate(TranslateRequest))
 
         response = app.test_client().post(
-            "/v1/ai-assisted-query/translate",
+            "/v1/assisted-query/translate",
             data=test_data.model_dump_json(),
             content_type="application/json",
         )
@@ -870,7 +870,7 @@ class TestSeer(unittest.TestCase):
         test_data = next(generate(TranslateRequest))
 
         response = app.test_client().post(
-            "/v1/ai-assisted-query/translate",
+            "/v1/assisted-query/translate",
             data=test_data.model_dump_json(),
             content_type="application/json",
         )
@@ -879,13 +879,13 @@ class TestSeer(unittest.TestCase):
 
         mock_translate_query.side_effect = APITimeoutError(
             request=httpx.Request(
-                method="POST", url="http://localhost/v1/ai-assisted-query/translate"
+                method="POST", url="http://localhost/v1/assisted-query/translate"
             ),
         )
         test_data = next(generate(TranslateRequest))
 
         response = app.test_client().post(
-            "/v1/ai-assisted-query/translate",
+            "/v1/assisted-query/translate",
             data=test_data.model_dump_json(),
             content_type="application/json",
         )
