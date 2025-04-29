@@ -93,22 +93,23 @@ def run_relevant_warnings_evaluation_on_item(
         except Exception as e:
             logger.exception(f"Error running evaluation: {e}")
 
-    if suggestions:
-        length_score = score_suggestions_length(suggestions, dataset_item)
-        langfuse.score(
-            trace_id=dataset_item_trace_id,
-            name="length_of_solutions_score",
-            value=length_score,
-        )
+    # If suggestions is None we assume no suggestions were generated.
+    # rather than an error happening.
+    # TODO: Is this the best way to handle this?
+    suggestions = suggestions or []
 
-        suggestions_content_score = score_suggestions_content(suggestions, dataset_item)
-        langfuse.score(
-            trace_id=dataset_item_trace_id,
-            name=make_score_name(
-                model=scoring_model, n_panel=scoring_n_panel, name="suggestions_content_score"
-            ),
-            value=suggestions_content_score,
-        )
-    else:
-        # TODO: What score should we give if we don't have any suggestions?
-        pass
+    length_score = score_suggestions_length(suggestions, dataset_item)
+    langfuse.score(
+        trace_id=dataset_item_trace_id,
+        name="length_of_solutions_score",
+        value=length_score,
+    )
+
+    suggestions_content_score = score_suggestions_content(suggestions, dataset_item, scoring_model)
+    langfuse.score(
+        trace_id=dataset_item_trace_id,
+        name=make_score_name(
+            model=scoring_model, n_panel=scoring_n_panel, name="suggestions_content_score"
+        ),
+        value=suggestions_content_score,
+    )
