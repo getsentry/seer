@@ -203,7 +203,9 @@ class StaticAnalysisWarning(BaseModel):
         if self.is_first_occurrence:
             occurrence_message = "This is likely a newly introduced warning from this code change."
         else:
-            occurrence_message = "The warning at this location has been seen before prior to this code change."
+            occurrence_message = (
+                "The warning at this location has been seen before prior to this code change."
+            )
 
         return textwrap.dedent(
             """\
