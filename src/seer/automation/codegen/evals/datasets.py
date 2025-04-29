@@ -2,15 +2,31 @@
 This module contains functions for creating and getting datasets from Langfuse.
 ⚠️ It is created to be executed manually.
 
-TODO: Add examples of how to use the functions in this module.
+Running this file:
+1. Collect the dataset details in a JSON file.
+    Check `DatasetDetails` object below for the expected format.
+    You can create a `.datasets` folder under this directory and it won't be tracked by git.
+    TODO: add more guidance on the dataset optional fields.
+2. Move the dataset details to `.artifacts` folder (root of seer, accessible from the container).
+3. Run the script.
+```
+make shell
+python src/seer/automation/codegen/evals/datasets.py --details-file .artifacts/dataset_details.json
+```
+
+A new dataset will be created in Langfuse.
 """
 
 import os
-from dataclasses import dataclass
+from pathlib import Path
 from typing import NotRequired, TypedDict
 
+import click
 import httpx
+import tqdm
+from click import command, option
 from langfuse import Langfuse
+from pydantic.main import BaseModel
 
 from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
@@ -18,29 +34,95 @@ from seer.automation.codegen.evals.models import EvalItem
 from seer.automation.codegen.models import CodegenRelevantWarningsRequest, StaticAnalysisSuggestion
 from seer.automation.models import IssueDetails, RepoDefinition
 
-langfuse = Langfuse()
-
 # INPUT STRUCTURES ------------------------------------------------------------
 
+langfuse = Langfuse()
 
-@dataclass
-class OrgDetails:
+
+class OrgDetails(BaseModel):
     organization_id: int
     organization_name: str
+    repo_definitions: dict[str, RepoDefinition]
 
 
-@dataclass
-class GitHubInfo:
+class GitHubInfo(BaseModel):
     org_details: OrgDetails
     repo_definition: RepoDefinition
     pr_id: int
     commit_sha: str
 
 
+class DatasetItem(BaseModel):
+    pr_id: int
+    commit_sha: str
+    org_name: str
+    repo_name: str
+    warnings: list[StaticAnalysisWarning]
+    expected_suggestions: list[StaticAnalysisSuggestion]
+    issues: list[IssueDetails] | None = None
+
+
+class DatasetDetails(BaseModel):
+    dataset_name: str
+    metadata: dict
+    dataset_items: list[DatasetItem]
+    org_definitions: dict[str, OrgDetails]
+
+
+class ItemRawData(TypedDict):
+    github_info: GitHubInfo
+    warnings: list[StaticAnalysisWarning]
+    expected_suggestions: list[StaticAnalysisSuggestion]
+    issues: list[IssueDetails] | None
+
+
 # TODO: auto-generate expected suggestions based on a commit that fixes some other PR with issues.
 # This will require an LLM to summarize the changes in the fix-commit as a list of suggestions.
 
 # CREATE DATASET FUNCTIONS -----------------------------------------------------
+
+
+@command()
+@option(
+    "--details-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    required=True,
+    help="The path to the file containing the dataset details.",
+)
+def main(details_file: Path):
+    dataset_details = DatasetDetails.model_validate_json(details_file.read_text())
+    items_raw_data: list[EvalItem] = []
+
+    for item in tqdm.tqdm(
+        dataset_details.dataset_items,
+        total=len(dataset_details.dataset_items),
+        unit="item",
+        desc="Filling in item details",
+    ):
+        org_definition = dataset_details.org_definitions[item.org_name]
+        repo_definition = org_definition.repo_definitions[item.repo_name]
+        github_info = GitHubInfo(
+            org_details=org_definition,
+            repo_definition=repo_definition,
+            pr_id=item.pr_id,
+            commit_sha=item.commit_sha,
+        )
+        raw_item_data = ItemRawData(
+            github_info=github_info,
+            warnings=item.warnings,
+            expected_suggestions=item.expected_suggestions,
+            issues=item.issues,
+        )
+        items_raw_data.append(create_item(**raw_item_data))
+
+    # Create the dataset
+    dataset = create_langfuse_dataset(
+        dataset_name=dataset_details.dataset_name,
+        metadata=dataset_details.metadata,
+        dataset_items=items_raw_data,
+    )
+
+    click.echo(f"✓ Dataset created: {dataset.id}")
 
 
 def create_langfuse_dataset(dataset_name: str, metadata: dict, dataset_items: list[EvalItem]):
@@ -167,3 +249,7 @@ def get_issue_events(issue_id: int, sentry_token: str) -> SentryEventData:
         entries=entries,
         tags=entries[0]["tags"],
     )
+
+
+if __name__ == "__main__":
+    main()
