@@ -160,7 +160,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
                             max_iterations=64,
-                            temperature=1.0,
+                            temperature=0.0,
                             max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
                         ),
                     )
