@@ -98,7 +98,30 @@ class AutofixAgent(LlmAgent):
             )
         )
 
-    def _get_completion(self, run_config: RunConfig):
+    def _truncate_biggest_n_tool_messages(self, messages: list[Message], n: int) -> list[Message]:
+        """Creates a new list of messages with content of the n largest tool results ommitted."""
+        tool_messages_with_size = [
+            (i, len(msg.content or ""))
+            for i, msg in enumerate(messages)
+            if msg.role == "tool" and msg.content
+        ]
+        tool_messages_with_size.sort(key=lambda x: x[1], reverse=True)
+        indices_to_truncate = {idx for idx, size in tool_messages_with_size[:n]}
+
+        if indices_to_truncate:
+            new_messages = []
+            for i, msg in enumerate(messages):
+                if i in indices_to_truncate:
+                    modified_msg = msg.model_copy(deep=True)
+                    modified_msg.content = "[omitted for brevity]"
+                    new_messages.append(modified_msg)
+                else:
+                    new_messages.append(msg)
+            return new_messages
+
+        return messages
+
+    def _get_completion(self, run_config: RunConfig, messages: list[Message]):
         """
         Streams the preliminary output to the current step and only returns when output is complete
         """
@@ -112,7 +135,7 @@ class AutofixAgent(LlmAgent):
         self.accumulated_thinking_chunks = []
 
         stream = self.client.generate_text_stream(
-            messages=self.memory,
+            messages=messages,
             model=run_config.model,
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
@@ -209,6 +232,8 @@ class AutofixAgent(LlmAgent):
 
         The completion request is retried `max_tries - 1` times if a retryable exception was just
         raised, e.g, Anthropic's API is overloaded.
+
+        Additionally, if the input is too long, the tool messages are truncated and the completion is retried once.
         """
         is_exception_retryable = getattr(
             run_config.model, "is_completion_exception_retryable", lambda _: False
@@ -216,8 +241,28 @@ class AutofixAgent(LlmAgent):
         retrier = backoff_on_exception(
             is_exception_retryable, max_tries=max_tries, sleep_sec_scaler=sleep_sec_scaler
         )
-        get_completion_retryable = retrier(self._get_completion)
-        return get_completion_retryable(run_config)
+
+        def attempt_completion(messages_to_send: list[Message]):
+            return self._get_completion(run_config, messages=messages_to_send)
+
+        get_completion_retryable = retrier(lambda: attempt_completion(self.memory))
+
+        try:
+            return get_completion_retryable()
+        except Exception as e:
+            is_input_too_long_func = getattr(run_config.model, "is_input_too_long", lambda _: False)
+            if is_input_too_long_func(e):
+                logger.warning(
+                    f"Input too long for model {run_config.model.model_name} after initial attempt(s). "
+                    "Truncating all tool messages and retrying with backoff."
+                )
+                truncated_memory = self._truncate_biggest_n_tool_messages(self.memory, 3)
+                get_completion_retryable_truncated = retrier(
+                    lambda: attempt_completion(messages_to_send=truncated_memory)
+                )
+                return get_completion_retryable_truncated()
+            else:
+                raise e
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
