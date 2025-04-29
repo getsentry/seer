@@ -461,7 +461,7 @@ class RepoClient:
         commit_titles = [
             commit.commit.message.split("\n")[0] for commit in commit_list
         ]  # remove body
-        return [commit.split("(#")[0] for commit in commit_titles]  # remove PR number
+        return [commit.split("(#")[0].strip() for commit in commit_titles]  # remove PR number
 
     @functools.lru_cache(maxsize=16)
     def get_commit_history(
