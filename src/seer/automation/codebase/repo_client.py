@@ -455,6 +455,15 @@ class RepoClient:
         return valid_file_paths
 
     @functools.lru_cache(maxsize=16)
+    def get_example_commit_titles(self, max_commits: int = 5) -> list[str]:
+        commits = self.repo.get_commits(sha=self.base_commit_sha)
+        commit_list = list(commits[:max_commits])
+        commit_titles = [
+            commit.commit.message.split("\n")[0] for commit in commit_list
+        ]  # remove body
+        return [commit.split("(#")[0] for commit in commit_titles]  # remove PR number
+
+    @functools.lru_cache(maxsize=16)
     def get_commit_history(
         self, path: str, sha: str | None = None, autocorrect: bool = False, max_commits: int = 10
     ) -> list[str]:
