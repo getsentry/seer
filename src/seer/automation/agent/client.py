@@ -488,6 +488,7 @@ class AnthropicProvider:
             "overloaded_error",
             "Internal server error",
             "not_found_error",
+            "404",  # Add 404 not found errors as retryable
         )
         return (
             (
