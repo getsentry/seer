@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shlex
 import subprocess
 import textwrap
@@ -28,6 +29,7 @@ from seer.automation.models import EventDetails, FileChange, Profile, SentryEven
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
 from seer.rpc import RpcClient
+from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 
 logger = logging.getLogger(__name__)
 
@@ -404,8 +406,8 @@ class BaseTools:
         """
         Runs a grep command over the downloaded repositories.
         """
-        if not command.startswith("grep "):
-            return "Command must be a valid grep command that starts with 'grep'."
+        if not command.startswith("rg "):
+            return "Command must be a valid ripgrep command that starts with 'rg'."
 
         command = command.replace('\\"', '"')  # un-escape escaped quotes
         command = command.replace("\\'", "'")  # un-escape escaped single quotes
@@ -928,6 +930,92 @@ class BaseTools:
                     return "File changes undone successfully."
             return "Error: No file changes found to undo."
 
+    @observe(name="Validate ls")
+    def validate_ls(self, dir: str):
+        result = subprocess.run(
+            ["ls", "-la"],
+            cwd=dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+        print(result.stdout)
+        return result.stdout
+
+    @observe(name="Ripgrep Search")
+    def run_ripgrep(
+        self,
+        *,
+        query: str,
+        include_pattern: str | None = None,
+        exclude_pattern: str | None = None,
+        case_sensitive: bool = False,
+        repo_name: str | None = None,
+    ) -> str:
+        self._ensure_repos_downloaded(repo_name)
+
+        if not query:
+            return "Error: query is required for ripgrep search"
+
+        cmd = ["rg", f'"{query}"']
+
+        # We wanna ignore long lines
+        cmd.extend(["--max-columns", "1024"])
+
+        # limit threads
+        cmd.extend(["--threads", "1"])
+
+        # Add other common flags
+        if not case_sensitive:
+            cmd.append("--ignore-case")
+
+        if include_pattern:
+            cmd.extend(["--glob", f'"{include_pattern}"'])
+
+        if exclude_pattern:
+            cmd.extend(["--glob", f'"!{exclude_pattern}"'])
+
+        if repo_name:
+            # Single repository search
+            if repo_name not in self.tmp_dir:
+                return f"Error: Repository {repo_name} not found or not downloaded"
+
+            tmp_repo_dir = self.tmp_dir[repo_name][1]
+
+            cmd.append(tmp_repo_dir)
+
+            return run_ripgrep_in_repo(tmp_repo_dir, cmd)
+        else:
+            # Multiple repository search - we'll need to run separate commands for each repo
+            # and combine results, or construct a more complex command
+            repo_names = self._get_repo_names()
+
+            # Run ripgrep in parallel across repositories
+            def search_repo(repo_name: str) -> tuple[str, str] | None:
+                if repo_name not in self.tmp_dir:
+                    return None
+                repo_dir = self.tmp_dir[repo_name][1]
+                try:
+                    result = run_ripgrep_in_repo(repo_dir, cmd)
+                    return (repo_name, result)
+                except Exception as e:
+                    logger.exception(f"Error searching repo {repo_name}: {e}")
+                    return None
+
+            results = []
+            with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+                futures = {
+                    executor.submit(search_repo, repo_name): repo_name for repo_name in repo_names
+                }
+
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        results.append(result)
+
+            return "\n".join(f"Result for {rn}:\n{result}" for rn, result in results)
+
     def get_tools(
         self, can_access_repos: bool = True, include_claude_tools: bool = False
     ) -> list[ClaudeTool | FunctionTool]:
@@ -1004,13 +1092,28 @@ class BaseTools:
                     ),
                     FunctionTool(
                         name="grep_search",
-                        fn=self.grep_search,
-                        description="Runs a grep command over the codebase to find what you're looking for.",
+                        fn=self.run_ripgrep,
+                        description="Runs a ripgrep command over the codebase to find what you're looking for. Use this as your main tool for searching codebases. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
                         parameters=[
                             {
-                                "name": "command",
+                                "name": "query",
                                 "type": "string",
-                                "description": "The full grep command to execute. Do NOT include repo names in your command. Remember, you can get more context with the -C flag.",
+                                "description": "The regex pattern you're searching for.",
+                            },
+                            {
+                                "name": "include_pattern",
+                                "type": "string",
+                                "description": "Optional glob pattern for files to include. For example, '*.py' for Python files.",
+                            },
+                            {
+                                "name": "exclude_pattern",
+                                "type": "string",
+                                "description": "Optional glob pattern for files to exclude. For example, '*.test.py' for test files.",
+                            },
+                            {
+                                "name": "case_sensitive",
+                                "type": "boolean",
+                                "description": "Whether the search should be case sensitive.",
                             },
                             {
                                 "name": "repo_name",
@@ -1018,7 +1121,7 @@ class BaseTools:
                                 "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
                             },
                         ],
-                        required=["command"],
+                        required=["query"],
                     ),
                     FunctionTool(
                         name="find_files",
