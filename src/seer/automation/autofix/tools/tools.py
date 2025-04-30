@@ -19,7 +19,6 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
-from seer.automation.autofix.tools.grep_search import run_grep_search
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
