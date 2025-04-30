@@ -1,9 +1,11 @@
 import subprocess
+
 import pytest
+
 from seer.automation.autofix.tools.ripgrep_search import (
-    run_ripgrep_in_repo,
     MAX_RIPGREP_LINE_CHARACTER_LENGTH,
     TOTAL_RIPGREP_RESULTS_CHARACTER_LENGTH,
+    run_ripgrep_in_repo,
 )
 
 
