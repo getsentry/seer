@@ -12,6 +12,9 @@ on:
       - master
       - main
 
+permissions:
+  contents: read
+
 jobs:
   enforce-license-compliance:
     runs-on: ubuntu-latest
