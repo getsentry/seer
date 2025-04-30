@@ -147,6 +147,53 @@ class TestRepoClient:
             sha="test_sha", recursive=True
         )
 
+    def test_get_example_commit_titles(self, repo_client, mock_github):
+        # Setup mock commits
+        mock_commit1 = MagicMock()
+        mock_commit1.commit.message = "feat: Implement feature X"
+
+        mock_commit2 = MagicMock()
+        mock_commit2.commit.message = (
+            "fix: Correct bug Y\n\nThis commit fixes a critical bug found in production."
+        )
+
+        mock_commit3 = MagicMock()
+        mock_commit3.commit.message = "chore: Update dependencies (#123)"
+
+        mock_commit4 = MagicMock()
+        mock_commit4.commit.message = "refactor: Improve code readability (#456)  "
+
+        mock_commit5 = MagicMock()
+        mock_commit5.commit.message = "docs: Add documentation for API"
+
+        # Mock the commits list returned by get_commits
+        mock_commits = MagicMock()
+        mock_commits.__getitem__.return_value = [
+            mock_commit1,
+            mock_commit2,
+            mock_commit3,
+            mock_commit4,
+            mock_commit5,
+        ]
+        mock_github.get_repo.return_value.get_commits.return_value = mock_commits
+
+        # Test the method
+        result = repo_client.get_example_commit_titles(max_commits=5)
+
+        expected_titles = [
+            "feat: Implement feature X",
+            "fix: Correct bug Y",
+            "chore: Update dependencies",
+            "refactor: Improve code readability",
+            "docs: Add documentation for API",
+        ]
+        assert result == expected_titles
+
+        mock_github.get_repo.return_value.get_commits.assert_called_once_with(
+            sha=repo_client.base_commit_sha
+        )
+        mock_commits.__getitem__.assert_called_once_with(slice(None, 5, None))
+
     def test_get_index_file_set(self, repo_client, mock_github):
         mock_tree = MagicMock()
         mock_tree.tree = [
