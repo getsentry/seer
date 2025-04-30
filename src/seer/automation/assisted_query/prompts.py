@@ -1,7 +1,7 @@
 import json
 import textwrap
 
-from seer.assisted_query.attributes_reference import get_searchable_properties
+from seer.automation.assisted_query.attributes_reference import get_searchable_properties
 
 
 def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> str:
@@ -12,7 +12,7 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
     # - Handle generating multiple visualizations (usually for group by fields)
 
     prompt = textwrap.dedent(
-        f"""You are a principal performance engineer who is an expert in Sentry's Trace Explorer page which is a tool for analyzing hundres of thousands of traces and spans.
+        f"""You are a principal performance engineer who is the leading expert in Sentry's Trace Explorer page which is a tool for analyzing hundres of thousands of traces and spans.
         There is a lot of data on the page, so you need to be able to select the right fields and functions to visualize the data in a way that is most useful to the user so they can find the answers to their questionsas fast as possible.
 
         ## Your Overall Tasks:
@@ -63,7 +63,7 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         - user.username:"Jane Doe"
         - server:web-8
         The tokens is:resolved and user.username:"Jane Doe" are standard search tokens because both use reserved keywords.
-            The token server:web-8 is pointing to a custom tag sent by the Sentry SDK.
+        The token server:web-8 is pointing to a custom tag sent by the Sentry SDK.
 
         ### Comparison Operators
 
@@ -185,6 +185,7 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         Based on the query, you must also select the right field to sort the data by and if we need to group the data by any fields.
 
         Select one of the fields to sort the data by. You can use the "-" prefix to sort in descending order.
+        You should usually sort by descending order unless the natural language query suggests otherwise.
 
         Finally, select if you need to perform a group by on any fields. If you do, select the fields you want to group by as a list.
 
@@ -192,6 +193,8 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         - Query: "What is the p90 of span duration for requests for our customers", group by: ["customerDomain.organizationURL", "customerDomain.subdomain"]
         - Query: "Slowest GET requests in EU", group by: ["user.geo.country_code"]
         - Query: "Slowest browser requests", group by: [] (no fields)
+
+        When creating a query, do not include any escape tokens. Return it as directly as possible
 
         ## Visualization Guidelines
 
@@ -201,11 +204,31 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         - 2 represents an area chart
         - 3 represents a bar chart
 
+        You should use a line chart when visualizing by multiple functions or when visualizing a group by so it is easy to compare the values.
+        If you are visualizing just one function, then you should default to a bar chart.
+
         The y-axes are a list of strings, each representing a function to aggregate the data by.
 
         Select from the following functions: [avg, count, p50, p75, p95, p99, p100, sum, min, max] and any of the available fields.
         Return as many functions as you need to visualize the data with a field. OTHER THAN COUNT, A FUNCTION MUST HAVE A FIELD TO AGGREGATE BY.
         For example, if you want to visualize the average span duration AND the p90 of span duration, you should return it as a list: ["avg(span.duration)", "p90(span.duration)"]
+
+        If you are grouping by a field, you should return a visualization for each function you want to visualize such that each chart has each group visible.
+
+        For example, if you are grouping by "user.geo.country_code" and want to visualize both the p50 and the avg, then you should return a list of 2 visualizations:
+
+        [
+            Chart(
+                chart_type: 1
+                y_axes: ["p50(user.geo.country_code)"]
+            ),
+            Chart(
+                chart_type: 1
+                y_axes: ["avg(user.geo.country_code)"]
+            ),
+        ]
+
+        As we can see, for each group by, we are visualizing them independently on their own charts. You must only do this if you are grouping by a field and you have multiple group by fields. Otherwise, just return a single visualization.
 
         ------
 
@@ -219,8 +242,7 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         ## Available Field Values
 
-        For the string fields below, here are up to 5 possible values you can use sorted by the most common values. These are not fully exhaustive, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
-        The values also include the count of how many times the value occurred in the last 7 days. If a value is '', then that means it has no value defined. Use this information to guide if you should use the field or not. For example, if a field has '' as the only value or has a very high amount of '' values, then it is likely not a useful field to use since a query will likely not return any results.
+        For the string fields below, here are up to 5 possible values you can use. These are not fully exhaustive as some fields can have many more than 5 values, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
 
         <available_field_values>
         {json.dumps(field_values, indent=2)}
@@ -259,3 +281,41 @@ def _get_fields_with_definitions(fields: list[str]) -> str:
         formatted_available_blocks += f"- {key} -> {value}\n"
 
     return formatted_available_blocks
+
+
+def select_relevant_fields_prompt(natural_language_query: str) -> str:
+    return f"""
+    Based on the user's natural language query and the search guidelines provided, please identify which fields would be most relevant to use.
+    For now, return only an array of relevant field names. Include the fields you think are most relevant. DO NOT include field values in the response.
+    For example, if the user's query is "Who are the customers who have the slowest GET requests in the US", the most relevant fields could be ["customerDomain.sentryUrl", "customerDomain.subdomain", "http.request_method", "span.op", "span.action"].
+    Notice that all of the fields may not directly be used in the final query, but could be used to narrow down the search without excluding any relevant results.
+    The relevant fields MUST be from the list of available fields provided. THIS IS VERY IMPORTANT.
+    If the user's query is not clear, try your best to translate it into a valid query (while still maintaining the original meaning as much as possible), then identify the most relevant fields.
+    ## User's natural language query:
+    {natural_language_query}
+    """
+
+
+def get_fields_and_values_prompt(
+    natural_language_query: str, relevant_fields: list[str], field_values: dict[str, list[str]]
+) -> str:
+    return f"""
+        ## In a previous step, we have identified the following fields as relevant to the user's query:
+        <available_fields>
+        {relevant_fields}
+        </available_fields>
+        ## The possible values for these fields are:
+        Note: The values include the count of how many times the value occurred in the last 48 hours in order of most common to least common.
+        Use the values and the count to guide if you should use the field in the final query. '' indicates that the value has not been defined. If a field has '' as the only value or has a very high amount of '' values, then it is likely not a useful field to use since a query will likely not return any results.
+        <available_values>
+        {json.dumps(field_values, indent=2)}
+        </available_values>
+        Based on the user's natural language query and the search guidelines provided, construct 3 options for the final query using the field names and appropriate values from the possible values.
+        You should use the values from the <available_values> section to construct the query. If you are not doing a general search using wildcards, DO NOT MAKE UP YOUR OWN VALUES. Try your best to use the specific values from the <available_values> section.
+        Also, please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places. The score MUST be 3 decimal places (ie: 0.104 or 0.872).
+        You must ONLY use the fields and the values you've identified as relevant. You can also use the raw search to search for specific values if there are no relevant fields or values. DO NOT USE OR MAKE UP ANY OTHER FIELDS OR VALUES. THIS IS VERY IMPORTANT.
+        When thinking of the query options, please think about each step of the query and how confident you are that the query will return relevant results. You should show your work as you think through the query options.
+        Finally, select the best query option from the 3 options you have created. You should combine the best portions from each query you have generated if applicable.
+        Here is the user's natural language query:
+        {natural_language_query}
+        """
