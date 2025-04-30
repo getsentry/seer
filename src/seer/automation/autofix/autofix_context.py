@@ -156,7 +156,11 @@ class AutofixContext(PipelineContext):
             )
         repo_client = self.get_repo_client(repo_name)
 
+        # Always use autocorrect to avoid 404 errors for missing files
         file_contents, _ = repo_client.get_file_content(path, autocorrect=True)
+
+        if not file_contents:
+            return None
 
         if not ignore_local_changes:
             cur_state = self.state.get()

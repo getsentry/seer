@@ -411,11 +411,29 @@ class RepoClient:
         if sha is None:
             sha = self.base_commit_sha
 
+        # Skip commonly excluded files that are typically not in version control
+        commonly_excluded_files = [
+            ".env",
+            ".env.local",
+            ".env.development",
+            ".env.production",
+            ".DS_Store",
+            "secrets.json",
+            "credentials.json",
+        ]
+        if any(path.endswith(excluded_file) for excluded_file in commonly_excluded_files):
+            logger.debug(f"Skipping commonly excluded file: {path}")
+            return None, "utf-8"
+
         autocorrected_path = False
         if autocorrect:
             path, autocorrected_path = self._autocorrect_path(path, sha)
             if not autocorrected_path and path not in self.get_valid_file_paths(sha):
                 return None, "utf-8"
+        # Check if file exists in valid paths before attempting to fetch
+        elif path not in self.get_valid_file_paths(sha):
+            logger.debug(f"File {path} not found in repository at sha {sha}")
+            return None, "utf-8"
 
         try:
             contents = self.repo.get_contents(path, ref=sha)
