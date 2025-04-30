@@ -454,7 +454,6 @@ class RepoClient:
 
         return valid_file_paths
 
-    @functools.lru_cache(maxsize=16)
     def get_example_commit_titles(self, max_commits: int = 5) -> list[str]:
         commits = self.repo.get_commits(sha=self.base_commit_sha)
         commit_list = list(commits[:max_commits])
