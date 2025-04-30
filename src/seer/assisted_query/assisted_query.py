@@ -1,38 +1,47 @@
+import logging
+
 import sentry_sdk
 from langfuse.decorators import observe
 
 from seer.assisted_query import prompts
+from seer.assisted_query.create_cache import create_cache
 from seer.assisted_query.models import (
+    CreateCacheRequest,
     ModelResponse,
     RelevantFieldsResponse,
     TranslateRequest,
     TranslateResponse,
 )
+from seer.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
+
+logger = logging.getLogger(__name__)
 
 
 def translate_query(request: TranslateRequest) -> TranslateResponse:
 
     natural_language_query = request.natural_language_query
 
-    # Cache key will be based off the organization slug and project ids
-    cache_display_name = f"{request.organization_slug}-{'-'.join(map(str, request.project_ids))}"
+    org_id = request.organization_id
+    project_ids = request.project_ids
 
-    cache_name = LlmClient().get_cache(
-        cache_display_name, GeminiProvider.model("gemini-2.0-flash-001")
-    )
+    # Cache key will be based off the organization id and project ids
+    cache_display_name = get_cache_display_name(org_id, project_ids)
+
+    cache_name = LlmClient().get_cache(cache_display_name, get_model_provider())
 
     if not cache_name:
-        # XXX: If cache is not found, should we just cold start the query and create a new cache?
-        raise ValueError("Cache not found")
+        # Will result in cold start
+        logger.info("Creating cached prompt as not available upon translation request`.")
+        create_cache(CreateCacheRequest(organization_id=org_id, project_ids=project_ids))
 
     sentry_query = create_query_from_natural_language(
         natural_language_query,
         cache_display_name,
-        request.organization_slug,
-        request.project_ids,
+        org_id,
+        project_ids,
     )
 
     return TranslateResponse(
@@ -60,13 +69,14 @@ def create_query_from_natural_language(
     relevant_fields_prompt = prompts.select_relevant_fields_prompt(natural_language_query)
     relevant_fields_response = llm_client.generate_structured(
         prompt=relevant_fields_prompt,
-        model=GeminiProvider.model("gemini-2.0-flash-001"),
+        model=get_model_provider(),
         cache_name=cache_name,
         response_format=RelevantFieldsResponse,
     )
-    print("relevant_fields_response", relevant_fields_response)
 
-    relevant_fields = relevant_fields_response.parsed.fields
+    relevant_fields = (
+        relevant_fields_response.parsed.fields if relevant_fields_response.parsed else []
+    )
 
     # Step 2: Fetch values for relevant fields
     field_values_response = rpc_client.call(

@@ -1,11 +1,10 @@
-from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel
 
 
 class CreateCacheRequest(BaseModel):
-    organization_slug: str
+    organization_id: int
     project_ids: list[int]
 
 
@@ -21,7 +20,7 @@ class Chart(BaseModel):
 
 
 class TranslateRequest(BaseModel):
-    organization_slug: str
+    organization_id: int
     project_ids: list[int]
     natural_language_query: str
 
@@ -30,7 +29,7 @@ class TranslateResponse(BaseModel):
     query: str
     stats_period: str
     group_by: list[str]
-    visualization: Chart
+    visualization: list[Chart]
     sort: str
 
 
@@ -39,7 +38,7 @@ class ModelResponse(BaseModel):
     query: str
     stats_period: str
     group_by: list[str]
-    visualization: Chart
+    visualization: list[Chart]
     sort: str
     confidence_score: float
 
@@ -50,9 +49,3 @@ class RelevantFieldsResponse(BaseModel):
 
 class ValuesResponse(BaseModel):
     values: list[str]
-
-
-class ModelProvider(Enum):
-    GEMINI = "gemini"
-    ANTHROPIC = "anthropic"
-    OPENAI = "openai"
