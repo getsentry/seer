@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from seer.assisted_query.assisted_query import create_query_from_natural_language, translate_query
 from seer.assisted_query.models import (
     Chart,
+    CreateCacheResponse,
     ModelResponse,
     RelevantFieldsResponse,
     TranslateRequest,
@@ -32,7 +33,7 @@ class TestAssistedQuery(unittest.TestCase):
 
         request = TranslateRequest(
             natural_language_query="Show me the slowest POST requests in the last 24 hours",
-            organization_id=1,
+            org_id=1,
             project_ids=[1, 2],
         )
 
@@ -43,10 +44,12 @@ class TestAssistedQuery(unittest.TestCase):
                 query="error",
                 stats_period="24h",
                 group_by=["project"],
-                visualization=Chart(
-                    chart_type=1,
-                    y_axes=[["Test y-axis 1", "Test y-axis 2"]],
-                ),
+                visualization=[
+                    Chart(
+                        chart_type=1,
+                        y_axes=["Test y-axis 1", "Test y-axis 2"],
+                    )
+                ],
                 sort="-count",
             )
 
@@ -58,28 +61,57 @@ class TestAssistedQuery(unittest.TestCase):
             self.assertEqual(response.group_by, ["project"])
             self.assertEqual(
                 response.visualization,
-                Chart(
-                    chart_type=1,
-                    y_axes=[["Test y-axis 1", "Test y-axis 2"]],
-                ),
+                [
+                    Chart(
+                        chart_type=1,
+                        y_axes=["Test y-axis 1", "Test y-axis 2"],
+                    )
+                ],
             )
             self.assertEqual(response.sort, "-count")
 
+    @patch("seer.assisted_query.assisted_query.create_query_from_natural_language")
     @patch("seer.assisted_query.assisted_query.LlmClient")
-    def test_translate_query_cache_not_found(self, mock_llm_client_class):
+    @patch("seer.assisted_query.assisted_query.create_cache")
+    def test_translate_query_cache_not_found(
+        self, mock_create_cache_class, mock_llm_client_class, mock_create_query
+    ):
         mock_llm_client = MagicMock()
         mock_llm_client.get_cache.return_value = None
         mock_llm_client_class.return_value = mock_llm_client
 
+        mock_create_cache = MagicMock()
+        mock_create_cache.create_cache.return_value = CreateCacheResponse(
+            success=True, message="Cache created successfully", cache_name="test-cache"
+        )
+        mock_create_cache_class.return_value = mock_create_cache
+
         request = TranslateRequest(
             natural_language_query="Show me errors in the last 24 hours",
-            organization_id=1,
+            org_id=1,
             project_ids=[1, 2],
         )
 
-        with self.assertRaises(ValueError) as context:
-            translate_query(request)
-        self.assertEqual(str(context.exception), "Cache not found")
+        mock_create_query.return_value = ModelResponse(
+            explanation="This is a test explanation",
+            query="error",
+            stats_period="24h",
+            group_by=["project"],
+            visualization=[Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])],
+            sort="-count",
+            confidence_score=0.95,
+        )
+
+        response = translate_query(request)
+
+        self.assertIsInstance(response, TranslateResponse)
+        self.assertEqual(response.query, "error")
+        self.assertEqual(response.stats_period, "24h")
+        self.assertEqual(response.group_by, ["project"])
+        self.assertEqual(
+            response.visualization, [Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])]
+        )
+        self.assertEqual(response.sort, "-count")
 
     @patch("seer.assisted_query.assisted_query.RpcClient")
     @patch("seer.assisted_query.assisted_query.LlmClient")
@@ -104,10 +136,12 @@ class TestAssistedQuery(unittest.TestCase):
                 query="error",
                 stats_period="24h",
                 group_by=["project"],
-                visualization=Chart(
-                    chart_type=1,
-                    y_axes=[["Test y-axis 1", "Test y-axis 2"]],
-                ),
+                visualization=[
+                    Chart(
+                        chart_type=1,
+                        y_axes=["Test y-axis 1", "Test y-axis 2"],
+                    )
+                ],
                 sort="-count",
                 confidence_score=0.95,
             ),
@@ -122,10 +156,10 @@ class TestAssistedQuery(unittest.TestCase):
 
         mock_rpc_client.call.return_value = {
             "field_values": {
-                "span.op": [{"value": "db", "count": 100}, {"value": "function", "count": 200}],
+                "span.op": [{"value": "db"}, {"value": "function"}],
                 "span.description": [
-                    {"value": "GET /api/v1/users", "count": 100},
-                    {"value": "POST /api/v1/products", "count": 200},
+                    {"value": "GET /api/v1/users"},
+                    {"value": "POST /api/v1/products"},
                 ],
             }
         }
@@ -136,7 +170,7 @@ class TestAssistedQuery(unittest.TestCase):
         response = create_query_from_natural_language(
             natural_language_query="Show me the slowest database operations in the last 24 hours",
             cache_name="test-cache",
-            organization_id=1,
+            org_id=1,
             project_ids=[1, 2],
             rpc_client=mock_rpc_client,
             llm_client=mock_llm_client,
@@ -150,10 +184,12 @@ class TestAssistedQuery(unittest.TestCase):
                 query="error",
                 stats_period="24h",
                 group_by=["project"],
-                visualization=Chart(
-                    chart_type=1,
-                    y_axes=[["Test y-axis 1", "Test y-axis 2"]],
-                ),
+                visualization=[
+                    Chart(
+                        chart_type=1,
+                        y_axes=["Test y-axis 1", "Test y-axis 2"],
+                    )
+                ],
                 sort="-count",
                 confidence_score=0.95,
             ),
@@ -162,9 +198,9 @@ class TestAssistedQuery(unittest.TestCase):
 
         mock_rpc_client.call.assert_called_once_with(
             "get_field_values",
-            organization_id=1,
+            org_id=1,
             fields=["span.op", "span.description"],
             project_ids=[1, 2],
             stats_period="48h",
-            k=150,
+            limit=150,
         )

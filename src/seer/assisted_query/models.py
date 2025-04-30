@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 
 class CreateCacheRequest(BaseModel):
-    organization_id: int
+    org_id: int
     project_ids: list[int]
 
 
@@ -20,7 +20,7 @@ class Chart(BaseModel):
 
 
 class TranslateRequest(BaseModel):
-    organization_id: int
+    org_id: int
     project_ids: list[int]
     natural_language_query: str
 

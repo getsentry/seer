@@ -23,19 +23,18 @@ logger = logging.getLogger(__name__)
 def translate_query(request: TranslateRequest) -> TranslateResponse:
 
     natural_language_query = request.natural_language_query
-
-    org_id = request.organization_id
+    org_id = request.org_id
     project_ids = request.project_ids
 
-    # Cache key will be based off the organization id and project ids
+    # Cache key will be based off the org id and project ids
     cache_display_name = get_cache_display_name(org_id, project_ids)
 
     cache_name = LlmClient().get_cache(cache_display_name, get_model_provider())
 
     if not cache_name:
         # Will result in cold start
-        logger.info("Creating cached prompt as not available upon translation request`.")
-        create_cache(CreateCacheRequest(organization_id=org_id, project_ids=project_ids))
+        logger.info("Creating cached prompt as not available upon translation request.")
+        create_cache(CreateCacheRequest(org_id=org_id, project_ids=project_ids))
 
     sentry_query = create_query_from_natural_language(
         natural_language_query,
@@ -59,7 +58,7 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
 def create_query_from_natural_language(
     natural_language_query: str,
     cache_name: str,
-    organization_slug: str,
+    org_id: int,
     project_ids: list[int],
     llm_client: LlmClient = injected,
     rpc_client: RpcClient = injected,
@@ -81,11 +80,11 @@ def create_query_from_natural_language(
     # Step 2: Fetch values for relevant fields
     field_values_response = rpc_client.call(
         "get_field_values",
-        organization_slug=organization_slug,
+        org_id=org_id,
         fields=relevant_fields,
         project_ids=project_ids,
         stats_period="48h",
-        k=150,
+        limit=150,
     )
     field_values = field_values_response.get("field_values", {}) if field_values_response else {}
 

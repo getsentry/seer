@@ -9,10 +9,10 @@ from seer.rpc import RpcClient
 @inject
 def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> CreateCacheResponse:
 
-    organization_id = data.organization_id
+    org_id = data.org_id
     project_ids = data.project_ids
 
-    cache_diplay_name = get_cache_display_name(organization_id, project_ids)
+    cache_diplay_name = get_cache_display_name(org_id, project_ids)
 
     cache_name = LlmClient().get_cache(display_name=cache_diplay_name, model=get_model_provider())
 
@@ -22,15 +22,19 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
         )
 
     fields_response = client.call(
-        "get_fields", org_id=organization_id, project_ids=project_ids, stats_period="48h"
+        "get_fields", org_id=org_id, project_ids=project_ids, stats_period="48h"
     )
 
     fields = fields_response.get("fields", []) if fields_response else []
 
+    print("fields", fields)
+    print("org_id", org_id)
+    print("project_ids", project_ids)
+
     field_values_response = client.call(
         "get_field_values",
         fields=fields,
-        org_id=organization_id,
+        org_id=org_id,
         project_ids=project_ids,
         stats_period="48h",
         limit=5,
