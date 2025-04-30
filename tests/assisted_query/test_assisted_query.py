@@ -32,7 +32,7 @@ class TestAssistedQuery(unittest.TestCase):
 
         request = TranslateRequest(
             natural_language_query="Show me the slowest POST requests in the last 24 hours",
-            organization_slug="test-org",
+            organization_id=1,
             project_ids=[1, 2],
         )
 
@@ -73,7 +73,7 @@ class TestAssistedQuery(unittest.TestCase):
 
         request = TranslateRequest(
             natural_language_query="Show me errors in the last 24 hours",
-            organization_slug="test-org",
+            organization_id=1,
             project_ids=[1, 2],
         )
 
@@ -136,7 +136,7 @@ class TestAssistedQuery(unittest.TestCase):
         response = create_query_from_natural_language(
             natural_language_query="Show me the slowest database operations in the last 24 hours",
             cache_name="test-cache",
-            organization_slug="test-org",
+            organization_id=1,
             project_ids=[1, 2],
             rpc_client=mock_rpc_client,
             llm_client=mock_llm_client,
@@ -162,7 +162,7 @@ class TestAssistedQuery(unittest.TestCase):
 
         mock_rpc_client.call.assert_called_once_with(
             "get_field_values",
-            organization_slug="test-org",
+            organization_id=1,
             fields=["span.op", "span.description"],
             project_ids=[1, 2],
             stats_period="48h",
