@@ -401,6 +401,7 @@ class BaseTools:
             return "Cannot fetch information for this event."
 
     @observe(name="Ripgrep Search")
+    @sentry_sdk.trace
     def run_ripgrep(
         self,
         *,
