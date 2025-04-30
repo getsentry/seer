@@ -22,17 +22,13 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
         )
 
     fields_response = client.call(
-        "get_fields", org_id=org_id, project_ids=project_ids, stats_period="48h"
+        "get_attribute_names", org_id=org_id, project_ids=project_ids, stats_period="48h"
     )
 
     fields = fields_response.get("fields", []) if fields_response else []
 
-    print("fields", fields)
-    print("org_id", org_id)
-    print("project_ids", project_ids)
-
     field_values_response = client.call(
-        "get_field_values",
+        "get_attribute_values",
         fields=fields,
         org_id=org_id,
         project_ids=project_ids,

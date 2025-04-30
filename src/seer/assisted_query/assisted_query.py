@@ -79,7 +79,7 @@ def create_query_from_natural_language(
 
     # Step 2: Fetch values for relevant fields
     field_values_response = rpc_client.call(
-        "get_field_values",
+        "get_attribute_values",
         org_id=org_id,
         fields=relevant_fields,
         project_ids=project_ids,

@@ -59,13 +59,13 @@ class TestCreateCache(unittest.TestCase):
         )
 
         mock_rpc_client_call.assert_any_call(
-            "get_fields",
+            "get_attribute_names",
             org_id=self.org_id,
             project_ids=self.project_ids,
             stats_period="48h",
         )
         mock_rpc_client_call.assert_any_call(
-            "get_field_values",
+            "get_attribute_values",
             fields=[{"key": "field1"}, {"key": "field2"}],
             org_id=self.org_id,
             project_ids=self.project_ids,

@@ -197,7 +197,7 @@ class TestAssistedQuery(unittest.TestCase):
         self.assertEqual(mock_llm_client.generate_structured.call_count, 2)
 
         mock_rpc_client.call.assert_called_once_with(
-            "get_field_values",
+            "get_attribute_values",
             org_id=1,
             fields=["span.op", "span.description"],
             project_ids=[1, 2],
