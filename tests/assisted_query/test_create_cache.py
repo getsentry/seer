@@ -9,10 +9,10 @@ from seer.automation.agent.client import GeminiProvider
 @patch("seer.rpc.DummyRpcClient.call")
 class TestCreateCache(unittest.TestCase):
     def setUp(self):
-        self.organization_slug = "test-org"
+        self.organization_id = 1
         self.project_ids = [1, 2, 3]
         self.request = CreateCacheRequest(
-            organization_slug=self.organization_slug, project_ids=self.project_ids
+            organization_id=self.organization_id, project_ids=self.project_ids
         )
 
     @patch("seer.assisted_query.create_cache.LlmClient")
@@ -62,13 +62,13 @@ class TestCreateCache(unittest.TestCase):
 
         mock_rpc_client_call.assert_any_call(
             "get_fields",
-            organization_slug=self.organization_slug,
+            organization_id=self.organization_id,
             project_ids=self.project_ids,
             stats_period="48h",
         )
         mock_rpc_client_call.assert_any_call(
             "get_field_values",
-            organization_slug=self.organization_slug,
+            organization_id=self.organization_id,
             fields=["field1", "field2"],
             project_ids=self.project_ids,
             stats_period="48h",
