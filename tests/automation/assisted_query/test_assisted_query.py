@@ -1,21 +1,24 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from seer.assisted_query.assisted_query import create_query_from_natural_language, translate_query
-from seer.assisted_query.models import (
-    Chart,
-    CreateCacheResponse,
-    ModelResponse,
-    RelevantFieldsResponse,
-    TranslateRequest,
-    TranslateResponse,
-)
 from seer.automation.agent.client import LlmClient
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
     LlmProviderType,
     LlmResponseMetadata,
     Usage,
+)
+from seer.automation.assisted_query.assisted_query import (
+    create_query_from_natural_language,
+    translate_query,
+)
+from seer.automation.assisted_query.models import (
+    Chart,
+    CreateCacheResponse,
+    ModelResponse,
+    RelevantFieldsResponse,
+    TranslateRequest,
+    TranslateResponse,
 )
 from seer.rpc import RpcClient
 
@@ -25,7 +28,7 @@ class TestAssistedQuery(unittest.TestCase):
         self.mock_llm_client = MagicMock(spec=LlmClient)
         self.mock_rpc_client = MagicMock(spec=RpcClient)
 
-    @patch("seer.assisted_query.assisted_query.LlmClient")
+    @patch("seer.automation.assisted_query.assisted_query.LlmClient")
     def test_translate_query_success(self, mock_llm_client_class):
         mock_llm_client = MagicMock()
         mock_llm_client.get_cache.return_value = "test-cache"
@@ -38,7 +41,7 @@ class TestAssistedQuery(unittest.TestCase):
         )
 
         with patch(
-            "seer.assisted_query.assisted_query.create_query_from_natural_language"
+            "seer.automation.assisted_query.assisted_query.create_query_from_natural_language"
         ) as mock_create_query:
             mock_create_query.return_value = TranslateResponse(
                 query="error",
@@ -70,26 +73,28 @@ class TestAssistedQuery(unittest.TestCase):
             )
             self.assertEqual(response.sort, "-count")
 
-    @patch("seer.assisted_query.assisted_query.create_query_from_natural_language")
-    @patch("seer.assisted_query.assisted_query.LlmClient")
-    @patch("seer.assisted_query.assisted_query.create_cache")
+    @patch("seer.automation.assisted_query.assisted_query.create_query_from_natural_language")
+    @patch("seer.automation.assisted_query.assisted_query.LlmClient")
+    @patch("seer.automation.assisted_query.assisted_query.create_cache")
     def test_translate_query_cache_not_found(
-        self, mock_create_cache_class, mock_llm_client_class, mock_create_query
+        self, mock_create_cache, mock_llm_client_class, mock_create_query
     ):
         mock_llm_client = MagicMock()
         mock_llm_client.get_cache.return_value = None
         mock_llm_client_class.return_value = mock_llm_client
 
-        mock_create_cache = MagicMock()
-        mock_create_cache.create_cache.return_value = CreateCacheResponse(
-            success=True, message="Cache created successfully", cache_name="test-cache"
+        org_id = 1
+        project_ids = [1, 2]
+        cache_display_name = f"{org_id}_{'-'.join(map(str, project_ids))}"
+
+        mock_create_cache.return_value = CreateCacheResponse(
+            success=True, message="Cache created successfully", cache_name=cache_display_name
         )
-        mock_create_cache_class.return_value = mock_create_cache
 
         request = TranslateRequest(
             natural_language_query="Show me errors in the last 24 hours",
-            org_id=1,
-            project_ids=[1, 2],
+            org_id=org_id,
+            project_ids=project_ids,
         )
 
         mock_create_query.return_value = ModelResponse(
@@ -113,8 +118,8 @@ class TestAssistedQuery(unittest.TestCase):
         )
         self.assertEqual(response.sort, "-count")
 
-    @patch("seer.assisted_query.assisted_query.RpcClient")
-    @patch("seer.assisted_query.assisted_query.LlmClient")
+    @patch("seer.automation.assisted_query.assisted_query.RpcClient")
+    @patch("seer.automation.agent.client.LlmClient")
     def test_create_query_from_natural_language_success(
         self, mock_rpc_client_class, mock_llm_client_class
     ):

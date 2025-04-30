@@ -1,7 +1,7 @@
 import json
 import textwrap
 
-from seer.assisted_query.attributes_reference import get_searchable_properties
+from seer.automation.assisted_query.attributes_reference import get_searchable_properties
 
 
 def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> str:

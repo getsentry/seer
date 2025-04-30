@@ -3,17 +3,17 @@ import logging
 import sentry_sdk
 from langfuse.decorators import observe
 
-from seer.assisted_query import prompts
-from seer.assisted_query.create_cache import create_cache
-from seer.assisted_query.models import (
+from seer.automation.agent.client import GeminiProvider, LlmClient
+from seer.automation.assisted_query import prompts
+from seer.automation.assisted_query.create_cache import create_cache
+from seer.automation.assisted_query.models import (
     CreateCacheRequest,
     ModelResponse,
     RelevantFieldsResponse,
     TranslateRequest,
     TranslateResponse,
 )
-from seer.assisted_query.utils import get_cache_display_name, get_model_provider
-from seer.automation.agent.client import GeminiProvider, LlmClient
+from seer.automation.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 

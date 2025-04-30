@@ -1,7 +1,7 @@
-from seer.assisted_query.models import CreateCacheRequest, CreateCacheResponse
-from seer.assisted_query.prompts import get_cache_prompt
-from seer.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.automation.agent.client import LlmClient
+from seer.automation.assisted_query.models import CreateCacheRequest, CreateCacheResponse
+from seer.automation.assisted_query.prompts import get_cache_prompt
+from seer.automation.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 

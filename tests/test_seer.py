@@ -22,7 +22,7 @@ from seer.anomaly_detection.models.external import (
     StoreDataResponse,
 )
 from seer.app import app
-from seer.assisted_query.models import (
+from seer.automation.assisted_query.models import (
     Chart,
     CreateCacheRequest,
     CreateCacheResponse,
@@ -837,10 +837,12 @@ class TestSeer(unittest.TestCase):
             query="Test query",
             stats_period="Test stats period",
             group_by=["Test group by"],
-            visualization=Chart(
-                chart_type=1,
-                y_axes=[["Test y-axis 1", "Test y-axis 2"]],
-            ),
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
             sort="Test sort",
         )
         test_data = next(generate(TranslateRequest))
@@ -855,10 +857,12 @@ class TestSeer(unittest.TestCase):
         assert response.json["query"] == "Test query"
         assert response.json["stats_period"] == "Test stats period"
         assert response.json["group_by"] == ["Test group by"]
-        assert response.json["visualization"] == {
-            "chart_type": 1,
-            "y_axes": [["Test y-axis 1", "Test y-axis 2"]],
-        }
+        assert response.json["visualization"] == [
+            {
+                "chart_type": 1,
+                "y_axes": ["Test y-axis 1", "Test y-axis 2"],
+            }
+        ]
         assert response.json["sort"] == "Test sort"
 
         mock_translate_query.assert_called_once_with(test_data)
