@@ -16,7 +16,7 @@ class CreateCacheResponse(BaseModel):
 
 class Chart(BaseModel):
     chart_type: Literal[1, 2, 3]
-    y_axes: list[list[str]]
+    y_axes: list[str]
 
 
 class TranslateRequest(BaseModel):
