@@ -6,15 +6,20 @@ from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
+from seer.automation.summarize.models import (
+    SpanInsight,
+    SummarizeTraceRequest,
+    SummarizeTraceResponse,
+)
 from seer.dependency_injection import inject, injected
 
 
 class TraceSummaryForLlmToGenerate(BaseModel):
     summary: str
+    anomalous_spans: list[SpanInsight]
     key_observations: str
     performance_characteristics: str
-    suggested_investigations: str
+    suggested_investigations: list[SpanInsight]
 
 
 @observe(name="Summarize Trace")
@@ -41,12 +46,12 @@ def summarize_trace(
     try:
         completion = llm_client.generate_structured(
             model=GeminiProvider.model(
-                "gemini-2.0-flash-001",
+                "gemini-2.5-flash-preview-04-17",
             ),
             prompt=prompt,
             response_format=TraceSummaryForLlmToGenerate,
             temperature=0.0,
-            max_tokens=1024,
+            max_tokens=4096,
         )
     except ClientError as e:
         if "token count" in str(e) and "exceeds the maximum number of tokens allowed" in str(e):
@@ -64,6 +69,7 @@ def summarize_trace(
     return SummarizeTraceResponse(
         trace_id=request.trace_id,
         summary=trace_summary.summary,
+        anomalous_spans=trace_summary.anomalous_spans,
         key_observations=trace_summary.key_observations,
         performance_characteristics=trace_summary.performance_characteristics,
         suggested_investigations=trace_summary.suggested_investigations,
@@ -108,8 +114,9 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
     else:
         prompt = textwrap.dedent(
             f"""
-            You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please summarize the trace below so our engineers can immediately understand what's going on.
-            Please not that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans. The trace includes nested transactions and spans which have more granular information and represents the overall hierarchy of the spans.
+            You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please provide key insights about the trace below so our engineers can immediately understand what's going on.
+            Please not that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans. The trace is made up of nested spans which have more granular information and represents the overall hierarchy of the trace.
+
             Here is the trace:
 
             <trace>
@@ -118,13 +125,22 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
 
             Your #1 goal is to help our engineers immediately understand what's going on in the trace.
 
-            Write a concise summary that includes the flow of events in the trace, key spans and transactions, and the performance characteristics of the trace in the following 3 sections:
+            Provide conscise insights about the trace and its spans in the following sections:
 
-            1. **Summary**: A high-level summary of the trace.
-            - Summarize the flow of events in the trace in a list in chronological order. ONLY INCLUDE THE MOST IMPORTANT INFORMATION.
-            - Do this in as few bullet points as possible
+            1. **Summary**:
+            - Provide a 1-3 sentence high-level summary of what is going on in the trace in the spans that make it up. Make sure to only include the most important information such that a developer can understand the trace at a glance.
+            - DO NOT EXCEED MORE THAN 3 SENTENCES. THIS IS NOT OPTIONAL.
 
-            2. **Key Observations**: Key observations about the trace.
+            2. **Anomalous Spans**:
+            - Identify up to 3 spans that are anomalous or stand out from the rest of the trace.
+            - These can be spans that are slow, have an odd grouping of spans above or below it, missing instrumentation, or anything else that very clearly sticks out. These should be things that a developer can immediately act on.
+            - You will respond with a list of objects with the following fields:
+              - "Explanation": Provide a brief 1 sentence explanation for why these spans are anomalous. The sentence must be extremely concise with no more than 15 words.
+              - "Span Id": span id of the anomalous span
+              - "Span Op": op of the anomalous span
+            - If there are no anomalous spans, you must return an empty list.
+
+            3. **Key Observations**: Key observations about the trace.
             - Summarize the key observations about the trace in a bulleted list with 3 bullets MAX. DO NOT include any information about the trace structure, just the key observations.
             - When making observations, comment on groupings of spans -- not just individual spans.
             - Are there any seemingly uninteresting transactions, spans, or other events that provide context about the trace? Some issues in a span may be due to adjacent spans.
@@ -134,17 +150,20 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
             - Summarize the performance characteristics of the trace in a bulleted list.
             - Are there any slow transactions, slow spans, or any other performance characteristics that stand out?
             - Explain why the spans may be slow.
-            - Do not just say "the trace is slow" or "the trace is fast". Explain briefly why.
+            - Do not comment on the the overall trace duration as this is already provided to the user.
+            - Do not just say "the trace is slow" or "the trace is fast". Explain why extremely concisely.
 
             4. **Suggested Investigations**: Suggested investigations to improve the performance of the trace. BE SPECIFIC WHEN SUGGESTING THESE INVESTIGATIONS.
             - Suggest specific span event ids to investigate. Also include the span's op and description. THIS IS NOT OPTIONAL.
             - Are there any bottlenecks in the trace?
             - Are there any areas for improvement in the trace?
+            - You will respond with a list of objects with the following fields:
+              - "Explanation": Provide a brief 1 sentence explanation for why you should investigate this span. The sentence must be extremely concise with no more than 15 words.
+              - "Span Id": span id of the anomalous span
+              - "Span Op": op of the anomalous span
             - DO NOT GIVE ANY GENERIC INVESTIGATIONS. YOU MUST BE SPECIFIC.
 
-            You must limit your summary to 100 words maximum while cramming as much detail as possible, to make the summary super easy to skim. Please bold important insights and unique terms by surrounding them with double asterisks (**like this**).
-
-            You must also include a title for the trace.
+            Please use markdown formatting for the trace to make it easier to read. You should bold important insights or key words and use other markdown formatting to make these insights easy to skim.
 
             IMPORTANT: Do not repeat the same information in the summary, key observations, or performance characteristics. Each section should be unique and contain distinct information.
             """
