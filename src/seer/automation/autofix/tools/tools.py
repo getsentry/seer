@@ -408,6 +408,7 @@ class BaseTools:
         exclude_pattern: str | None = None,
         case_sensitive: bool = False,
         repo_name: str | None = None,
+        fixed_strings: bool = True,
     ) -> str:
         self._ensure_repos_downloaded(repo_name)
 
@@ -423,6 +424,9 @@ class BaseTools:
         cmd.extend(["--threads", "1"])
 
         # Add other common flags
+        if fixed_strings:
+            cmd.append("--fixed-strings")
+            
         if not case_sensitive:
             cmd.append("--ignore-case")
 
@@ -1057,7 +1061,7 @@ class BaseTools:
                             {
                                 "name": "query",
                                 "type": "string",
-                                "description": "The regex pattern you're searching for.",
+                                "description": "The text pattern you're searching for.",
                             },
                             {
                                 "name": "include_pattern",
@@ -1073,6 +1077,11 @@ class BaseTools:
                                 "name": "case_sensitive",
                                 "type": "boolean",
                                 "description": "Whether the search should be case sensitive.",
+                            },
+                            {
+                                "name": "fixed_strings",
+                                "type": "boolean",
+                                "description": "If true (default), search for the literal text. If false, interpret the query as a regex pattern.",
                             },
                             {
                                 "name": "repo_name",
