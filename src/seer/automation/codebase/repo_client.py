@@ -230,6 +230,13 @@ class RepoClient:
             self.base_branch
         )
 
+        self.get_valid_file_paths = functools.lru_cache(maxsize=8)(self._get_valid_file_paths)
+        self.get_commit_history = functools.lru_cache(maxsize=16)(self._get_commit_history)
+        self.get_commit_patch_for_file = functools.lru_cache(maxsize=16)(
+            self._get_commit_patch_for_file
+        )
+        self.get_git_tree = functools.lru_cache(maxsize=8)(self._get_git_tree)
+
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
         app_id, pk = get_write_app_credentials()
@@ -437,8 +444,7 @@ class RepoClient:
             logger.exception(f"Error getting file contents: {e}")
             return None, "utf-8"
 
-    @functools.lru_cache(maxsize=8)
-    def get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
+    def _get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
         if commit_sha is None:
             commit_sha = self.base_commit_sha
 
@@ -462,8 +468,7 @@ class RepoClient:
         ]  # remove body
         return [commit.split("(#")[0].strip() for commit in commit_titles]  # remove PR number
 
-    @functools.lru_cache(maxsize=16)
-    def get_commit_history(
+    def _get_commit_history(
         self, path: str, sha: str | None = None, autocorrect: bool = False, max_commits: int = 10
     ) -> list[str]:
         if sha is None:
@@ -613,8 +618,7 @@ class RepoClient:
 
         return "\n".join(lines)
 
-    @functools.lru_cache(maxsize=16)
-    def get_commit_patch_for_file(
+    def _get_commit_patch_for_file(
         self, path: str, commit_sha: str, autocorrect: bool = False
     ) -> str | None:
         if autocorrect:
@@ -640,8 +644,7 @@ class RepoClient:
         )
         return ref
 
-    @functools.lru_cache(maxsize=8)
-    def get_git_tree(self, commit_sha: str) -> CompleteGitTree:
+    def _get_git_tree(self, commit_sha: str) -> CompleteGitTree:
         """
         Get the git tree for a specific sha, handling truncation with divide and conquer.
         Always returns a CompleteGitTree instance for consistent interface.
