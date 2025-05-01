@@ -54,7 +54,7 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                 model=GeminiProvider(model_name="gemini-2.0-flash-001"),
                 response_format=CodePrReviewOutput.PrDescription,
                 run_name="Generate PR description",
-                max_tokens=2048,
+                max_tokens=4096,
             )
 
             formatted_response = llm_client.generate_structured(
