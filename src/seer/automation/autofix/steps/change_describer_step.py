@@ -79,9 +79,15 @@ class AutofixChangeDescriberStep(AutofixPipelineStep):
                 )
 
                 if diff:
+                    repo_client = self.context.get_repo_client(
+                        repo_external_id=codebase_state.repo_external_id
+                    )
+                    previous_commits = repo_client.get_example_commit_titles()
+
                     change_description = change_describer.invoke(
                         ChangeDescriptionRequest(
                             change_dump=diff_str,
+                            previous_commits=previous_commits,
                         )
                     )
 

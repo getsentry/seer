@@ -12,6 +12,7 @@ from seer.dependency_injection import inject, injected
 class ChangeDescriptionRequest(BaseComponentRequest):
     change_dump: str
     hint: str | None = None
+    previous_commits: list[str] | None = None
 
 
 class ChangeDescriptionOutput(BaseComponentOutput):
@@ -25,7 +26,13 @@ class ChangeDescriptionPrompts:
     def format_default_msg(
         change_dump: str,
         hint: str | None = None,
+        previous_commits: list[str] | None = None,
     ):
+        formatting_instructions = "The title should be all lowercase except for symbol/variable names, prefixed with a 'fix:' prefix, and describe the change in a way that is easy to understand."
+        if previous_commits:
+            joined_commits = ", ".join(f'"{commit}"' for commit in previous_commits)
+            formatting_instructions = f"Describe the change in a way that is easy to understand, closely following the formatting of previous commit titles in the repo, such as: {joined_commits}"
+
         return textwrap.dedent(
             """\
             Describe the following changes:
@@ -35,12 +42,13 @@ class ChangeDescriptionPrompts:
             {hint}
             You must output a title and description of the changes that are quickly readable for other engineers. Follow the format of:
 
-            - Title: The most important specific change that is being made. The title should be all lowercase except for symbol/variable names, prefixed with a "fix:" prefix, and describe the change in a way that is easy to understand.
+            - Title: The most important specific change that is being made. {formatting_instructions}
             - Description: A brief bulleted list of the changes.
             - Branch Name: A short name for the branch that will be created to make the changes"""
         ).format(
             change_dump=change_dump,
             hint=f"In the style of: {hint}\n" if hint else "",
+            formatting_instructions=formatting_instructions,
         )
 
 
@@ -57,6 +65,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
             prompt=ChangeDescriptionPrompts.format_default_msg(
                 change_dump=request.change_dump,
                 hint=request.hint,
+                previous_commits=request.previous_commits,
             ),
             model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=ChangeDescriptionOutput,
