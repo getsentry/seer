@@ -127,7 +127,7 @@ class TestPrReviewCodingComponent(unittest.TestCase):
             pr_description_call[1]["response_format"], CodePrReviewOutput.PrDescription
         )
         self.assertEqual(pr_description_call[1]["run_name"], "Generate PR description")
-        self.assertEqual(pr_description_call[1]["max_tokens"], 2048)
+        self.assertEqual(pr_description_call[1]["max_tokens"], 4096)
 
         # Verify LlmClient.generate_structured was called correctly for formatted comments
         formatted_response_call = mock_llm_client_class.generate_structured.call_args_list[1]
