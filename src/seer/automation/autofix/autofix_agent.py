@@ -21,7 +21,7 @@ from seer.automation.autofix.components.insight_sharing.component import create_
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
 from seer.dependency_injection import copy_modules_initializer
-from seer.utils import backoff_on_exception
+from seer.utils import backoff_on_exception, retry_once_with_modified_input
 
 logger = logging.getLogger(__name__)
 
@@ -242,27 +242,19 @@ class AutofixAgent(LlmAgent):
             is_exception_retryable, max_tries=max_tries, sleep_sec_scaler=sleep_sec_scaler
         )
 
+        is_input_too_long_func = getattr(run_config.model, "is_input_too_long", lambda _: False)
+        retry_input_too_long_decorator = retry_once_with_modified_input(
+            in_input_bad=is_input_too_long_func,
+            modify_input_func=lambda msgs: self._omit_biggest_n_tool_messages(msgs, 3),
+            target_kwarg_name="messages_to_send",
+        )
+
         def attempt_completion(messages_to_send: list[Message]):
             return self._get_completion(run_config, messages=messages_to_send)
 
-        get_completion_retryable = retrier(lambda: attempt_completion(self.memory))
+        final_attempt_func = retry_input_too_long_decorator(retrier(attempt_completion))
 
-        try:
-            return get_completion_retryable()
-        except Exception as e:
-            is_input_too_long_func = getattr(run_config.model, "is_input_too_long", lambda _: False)
-            if is_input_too_long_func(e):
-                logger.warning(
-                    f"Input too long for model {run_config.model.model_name} after initial attempt(s). "
-                    "Truncating all tool messages and retrying with backoff."
-                )
-                truncated_memory = self._omit_biggest_n_tool_messages(self.memory, 3)
-                get_completion_retryable_truncated = retrier(
-                    lambda: attempt_completion(messages_to_send=truncated_memory)
-                )
-                return get_completion_retryable_truncated()
-            else:
-                raise e
+        return final_attempt_func(messages_to_send=self.memory)
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
