@@ -7,7 +7,7 @@ import time
 import weakref
 from enum import Enum
 from queue import Empty, Full, Queue
-from typing import Callable, Iterable, Sequence, TypeVar
+from typing import Any, Callable, Iterable, Sequence, TypeVar
 
 from sqlalchemy.orm import DeclarativeBase, Session
 from tqdm.auto import tqdm
@@ -128,6 +128,56 @@ def backoff_on_exception(
                 f"Max tries ({max_tries}) exceeded. "
                 f"Last exception: {exception_formatter(last_exception)}"
             ) from last_exception
+
+        return wrapped_func
+
+    return decorator
+
+
+def retry_once_with_modified_input(
+    in_input_bad: Callable[[Exception], bool],
+    modify_input_func: Callable[[Any], Any],
+    target_kwarg_name: str,
+):
+    """
+    Returns a decorator that retries a function once if `is_input_too_long_func(exception)` is true.
+    On retry, it calls `truncate_func` on the value of the keyword argument specified by
+    `target_kwarg_name` and calls the decorated function again with the truncated value.
+
+    Requires the target argument to be passed as a keyword argument.
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapped_func(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if in_input_bad(e):
+                    logger.warning(
+                        f"Encountered {exception_formatter(e)}. Attempting to modify input and retry."
+                    )
+
+                    if target_kwarg_name not in kwargs:
+                        raise ValueError(
+                            f"Argument '{target_kwarg_name}' must be passed as a keyword argument "
+                            f"to use retry_once_with_modified_input for {func.__name__}."
+                        )
+
+                    original_value = kwargs[target_kwarg_name]
+                    try:
+                        modified_value = modify_input_func(original_value)
+                    except Exception as modify_err:
+                        logger.error(f"Modification function failed: {modify_err}", exc_info=True)
+                        raise e from modify_err
+
+                    new_kwargs = kwargs.copy()
+                    new_kwargs[target_kwarg_name] = modified_value
+
+                    logger.info(f"Retrying {func.__name__} with modified '{target_kwarg_name}'.")
+                    return func(*args, **new_kwargs)
+                else:
+                    raise e
 
         return wrapped_func
 

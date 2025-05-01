@@ -4,8 +4,14 @@ import pytest
 from johen import generate
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
-from seer.automation.agent.client import OpenAiProvider
-from seer.automation.agent.models import LlmGenerateTextResponse, LlmResponseMetadata, Message
+from seer.automation.agent.client import AnthropicProvider, OpenAiProvider
+from seer.automation.agent.models import (
+    LlmGenerateTextResponse,
+    LlmResponseMetadata,
+    Message,
+    ToolCall,
+    Usage,
+)
 from seer.automation.agent.tools import FunctionTool
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
@@ -298,3 +304,75 @@ def test_get_completion_does_not_retry_for_non_retryable_errors(
 
     # Verify get_completion was called only once (no retries)
     assert mock_get_completion.call_count == 1
+
+
+@patch("seer.automation.autofix.autofix_agent.AutofixAgent._get_completion")
+def test_get_completion_retries_truncates_anthropic_input_too_long(
+    mock_get_completion,
+    autofix_agent,
+    run_config,
+):
+    """Test get_completion retries, truncates messages, and calls again for Anthropic input too long error using real helper methods."""
+    run_config.model = AnthropicProvider.model("claude-3-7-sonnet@20250219")
+    input_too_long_exception = Exception(
+        "Error message: Prompt is too long and exceeds the context window limit."
+    )
+    mock_success_response = LlmGenerateTextResponse(
+        message=Message(role="assistant", content="Success after truncation"),
+        metadata=LlmResponseMetadata(
+            model=run_config.model.model_name,
+            provider_name=run_config.model.provider_name,
+            usage=Usage(completion_tokens=10, prompt_tokens=5, total_tokens=15),
+        ),
+    )
+
+    mock_get_completion.side_effect = [input_too_long_exception, mock_success_response]
+
+    initial_memory = [
+        Message(role="user", content="initial prompt"),
+        Message(
+            role="assistant",
+            content="thinking...",
+            tool_calls=[ToolCall(id="t1", function="foo", args="{}")],
+        ),
+        Message(role="tool", content="Result of tool 1 - short", tool_call_id="t1"),
+        Message(
+            role="tool",
+            content="Result of tool 2 - this one is very long and should be considered for truncation",
+            tool_call_id="t2",
+        ),
+        Message(role="tool", content="Result of tool 3 - medium length content", tool_call_id="t3"),
+        Message(role="tool", content="Result of tool 4 - another short one", tool_call_id="t4"),
+    ]
+    autofix_agent.memory = initial_memory
+
+    # Calculate the expected memory after truncation (truncates largest 3 tool messages)
+    expected_truncated_memory = [
+        Message(role="user", content="initial prompt"),
+        Message(
+            role="assistant",
+            content="thinking...",
+            tool_calls=[ToolCall(id="t1", function="foo", args="{}")],
+        ),
+        Message(role="tool", content="Result of tool 1 - short", tool_call_id="t1"),
+        Message(role="tool", content="[omitted for brevity]", tool_call_id="t2"),
+        Message(role="tool", content="[omitted for brevity]", tool_call_id="t3"),
+        Message(role="tool", content="[omitted for brevity]", tool_call_id="t4"),
+    ]
+
+    result = autofix_agent.get_completion(run_config)
+
+    assert mock_get_completion.call_count == 2, "_get_completion should be called twice"
+
+    first_call_args = mock_get_completion.call_args_list[0]
+    second_call_args = mock_get_completion.call_args_list[1]
+
+    assert first_call_args.args[0] == run_config
+    assert first_call_args.kwargs["messages"] == initial_memory, "First call used original memory"
+
+    assert second_call_args.args[0] == run_config
+    assert (
+        second_call_args.kwargs["messages"] == expected_truncated_memory
+    ), "Second call did not use the correctly truncated memory"
+
+    assert result == mock_success_response, "Final result should be the success response"
