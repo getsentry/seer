@@ -20,6 +20,7 @@ from github import (
     InputGitTreeElement,
     UnknownObjectException,
 )
+from github.GithubRetry import GithubRetry
 from github.GitRef import GitRef
 from github.GitTree import GitTree
 from github.GitTreeElement import GitTreeElement
@@ -183,20 +184,42 @@ class RepoClient:
                 f"Unsupported repo provider: {repo_definition.provider}, only {', '.join(self.supported_providers)} are supported."
             )
 
+        retry = GithubRetry(total=5)
+        # Default total=10 exceeds autofix's soft time limit anyway
+        retry.DEFAULT_BACKOFF_MAX = 30
+
         if app_id and private_key:
             self.github = Github(
                 auth=get_github_app_auth_and_installation(
                     app_id, private_key, repo_definition.owner, repo_definition.name
-                )[0]
+                )[0],
+                retry=retry,
             )
         else:
-            self.github = Github(auth=get_github_token_auth())
+            self.github = Github(auth=get_github_token_auth(), retry=retry)
 
-        self.repo = self.github.get_repo(
-            int(repo_definition.external_id)
-            if repo_definition.external_id.isdigit()
-            else repo_definition.full_name
-        )
+        try:
+            with sentry_sdk.start_span(
+                op="repo_client.repo.get_repo.full_name", description=repo_definition.full_name
+            ):
+                self.repo = self.github.get_repo(repo_definition.full_name)
+        except Exception as e:
+            logger.exception(f"Error getting repo via full name {repo_definition.full_name}")
+
+            if repo_definition.external_id.isdigit():
+                try:
+                    with sentry_sdk.start_span(
+                        op="repo_client.repo.get_repo.external_id",
+                        description=repo_definition.external_id,
+                    ):
+                        self.repo = self.github.get_repo(int(repo_definition.external_id))
+                except Exception as e2:
+                    logger.exception(
+                        f"Error getting repo via external id {repo_definition.external_id}"
+                    )
+                    raise e2
+            else:
+                raise e
 
         self.provider = repo_definition.provider
         self.repo_owner = repo_definition.owner
@@ -274,6 +297,7 @@ class RepoClient:
     def compare(self, base: str, head: str):
         return self.repo.compare(base, head)
 
+    @sentry_sdk.trace
     def load_repo_to_tmp_dir(self, sha: str | None = None) -> tuple[str, str]:
         sha = sha or self.base_commit_sha
 
@@ -414,11 +438,11 @@ class RepoClient:
             return None, "utf-8"
 
     @functools.lru_cache(maxsize=8)
-    def get_valid_file_paths(self, sha: str | None = None) -> set[str]:
-        if sha is None:
-            sha = self.base_commit_sha
+    def get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
+        if commit_sha is None:
+            commit_sha = self.base_commit_sha
 
-        tree = self.get_git_tree(sha)
+        tree = self.get_git_tree(commit_sha=commit_sha)
         valid_file_paths: set[str] = set()
         valid_file_extensions = get_all_supported_extensions()
 
@@ -429,6 +453,14 @@ class RepoClient:
                 valid_file_paths.add(file.path)
 
         return valid_file_paths
+
+    def get_example_commit_titles(self, max_commits: int = 5) -> list[str]:
+        commits = self.repo.get_commits(sha=self.base_commit_sha)
+        commit_list = list(commits[:max_commits])
+        commit_titles = [
+            commit.commit.message.split("\n")[0] for commit in commit_list
+        ]  # remove body
+        return [commit.split("(#")[0].strip() for commit in commit_titles]  # remove PR number
 
     @functools.lru_cache(maxsize=16)
     def get_commit_history(
@@ -609,7 +641,7 @@ class RepoClient:
         return ref
 
     @functools.lru_cache(maxsize=8)
-    def get_git_tree(self, sha: str) -> CompleteGitTree:
+    def get_git_tree(self, commit_sha: str) -> CompleteGitTree:
         """
         Get the git tree for a specific sha, handling truncation with divide and conquer.
         Always returns a CompleteGitTree instance for consistent interface.
@@ -623,13 +655,14 @@ class RepoClient:
         Returns:
             A CompleteGitTree with all items from all subtrees
         """
-        tree = self.repo.get_git_tree(sha=sha, recursive=True)
+        commit = self.repo.get_git_commit(commit_sha)
+        tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=True)
 
         if not tree.raw_data.get("truncated", False):
             return CompleteGitTree(tree)
 
         complete_tree = CompleteGitTree()
-        root_tree = self.repo.get_git_tree(sha=sha, recursive=False)
+        root_tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=False)
 
         for key, value in root_tree.raw_data.items():
             if key != "tree" and key != "truncated":
@@ -706,6 +739,10 @@ class RepoClient:
         elif patch_type == "edit":
             patch_type = "M"
 
+        # Remove leading slash if it exists, the github api will reject paths with leading slashes.
+        if path.startswith("/"):
+            path = path[1:]
+
         to_apply = None
         detected_encoding = "utf-8"
         if patch_type != "A":
@@ -714,10 +751,6 @@ class RepoClient:
         new_contents = (
             patch.apply(to_apply) if patch else (change.apply(to_apply) if change else None)
         )
-
-        # Remove leading slash if it exists, the github api will reject paths with leading slashes.
-        if path.startswith("/"):
-            path = path[1:]
 
         # don't create a blob if the file is being deleted
         blob = self.repo.create_git_blob(new_contents, detected_encoding) if new_contents else None
@@ -860,12 +893,15 @@ class RepoClient:
                 raise e
 
     def get_index_file_set(
-        self, sha: str | None = None, max_file_size_bytes=2 * 1024 * 1024, skip_empty_files=False
+        self,
+        commit_sha: str | None = None,
+        max_file_size_bytes=2 * 1024 * 1024,
+        skip_empty_files=False,
     ) -> set[str]:
-        if sha is None:
-            sha = self.base_commit_sha
+        if commit_sha is None:
+            commit_sha = self.base_commit_sha
 
-        tree = self.get_git_tree(sha)
+        tree = self.get_git_tree(commit_sha=commit_sha)
         file_set = set()
         for file in tree.tree:
             if (

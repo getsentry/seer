@@ -21,9 +21,11 @@ from seer.automation.autofix.components.insight_sharing.component import create_
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
 from seer.dependency_injection import copy_modules_initializer
-from seer.utils import backoff_on_exception
+from seer.utils import backoff_on_exception, retry_once_with_modified_input
 
 logger = logging.getLogger(__name__)
+
+MAX_PARALLEL_TOOL_CALLS = 3
 
 
 class AutofixAgent(LlmAgent):
@@ -96,7 +98,30 @@ class AutofixAgent(LlmAgent):
             )
         )
 
-    def _get_completion(self, run_config: RunConfig):
+    def _omit_biggest_n_tool_messages(self, messages: list[Message], n: int) -> list[Message]:
+        """Creates a new list of messages with content of the n largest tool results ommitted."""
+        tool_messages_with_size = [
+            (i, len(msg.content or ""))
+            for i, msg in enumerate(messages)
+            if msg.role == "tool" and msg.content
+        ]
+        tool_messages_with_size.sort(key=lambda x: x[1], reverse=True)
+        indices_to_truncate = {idx for idx, size in tool_messages_with_size[:n]}
+
+        if indices_to_truncate:
+            new_messages = []
+            for i, msg in enumerate(messages):
+                if i in indices_to_truncate:
+                    modified_msg = msg.model_copy(deep=True)
+                    modified_msg.content = "[omitted for brevity]"
+                    new_messages.append(modified_msg)
+                else:
+                    new_messages.append(msg)
+            return new_messages
+
+        return messages
+
+    def _get_completion(self, run_config: RunConfig, messages: list[Message]):
         """
         Streams the preliminary output to the current step and only returns when output is complete
         """
@@ -110,7 +135,7 @@ class AutofixAgent(LlmAgent):
         self.accumulated_thinking_chunks = []
 
         stream = self.client.generate_text_stream(
-            messages=self.memory,
+            messages=messages,
             model=run_config.model,
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
@@ -207,6 +232,8 @@ class AutofixAgent(LlmAgent):
 
         The completion request is retried `max_tries - 1` times if a retryable exception was just
         raised, e.g, Anthropic's API is overloaded.
+
+        Additionally, if the input is too long, the tool messages are truncated and the completion is retried once.
         """
         is_exception_retryable = getattr(
             run_config.model, "is_completion_exception_retryable", lambda _: False
@@ -214,8 +241,20 @@ class AutofixAgent(LlmAgent):
         retrier = backoff_on_exception(
             is_exception_retryable, max_tries=max_tries, sleep_sec_scaler=sleep_sec_scaler
         )
-        get_completion_retryable = retrier(self._get_completion)
-        return get_completion_retryable(run_config)
+
+        is_input_too_long_func = getattr(run_config.model, "is_input_too_long", lambda _: False)
+        retry_input_too_long_decorator = retry_once_with_modified_input(
+            in_input_bad=is_input_too_long_func,
+            modify_input_func=lambda msgs: self._omit_biggest_n_tool_messages(msgs, 3),
+            target_kwarg_name="messages_to_send",
+        )
+
+        def attempt_completion(messages_to_send: list[Message]):
+            return self._get_completion(run_config, messages=messages_to_send)
+
+        final_attempt_func = retry_input_too_long_decorator(retrier(attempt_completion))
+
+        return final_attempt_func(messages_to_send=self.memory)
 
     def run_iteration(self, run_config: RunConfig):
         logger.debug(f"----[{self.name}] Running Iteration {self.iterations}----")
@@ -248,9 +287,19 @@ class AutofixAgent(LlmAgent):
 
         # call any tools the model wants to use
         if completion.message.tool_calls:
-            for tool_call in completion.message.tool_calls:
-                tool_response = self.call_tool(tool_call)
-                self.memory.append(tool_response)
+            for i, tool_call in enumerate(completion.message.tool_calls):
+                if i < MAX_PARALLEL_TOOL_CALLS:  # only allowing up to 3 simultaneous tool calls
+                    tool_response = self.call_tool(tool_call)
+                    self.memory.append(tool_response)
+                else:
+                    self.memory.append(
+                        Message(
+                            role="tool",
+                            content=f"This tool was not called as you cannot call more than {MAX_PARALLEL_TOOL_CALLS} tools at a time.",
+                            tool_call_id=tool_call.id,
+                            tool_call_function=tool_call.function,
+                        )
+                    )
 
         self.iterations += 1
         self.usage += completion.metadata.usage

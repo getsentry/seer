@@ -144,14 +144,24 @@ class GroupingLookup:
     Manages the grouping of similar stack traces using sentence embeddings and pgvector for similarity search.
     """
 
-    def __init__(self, model_path: str, data_path: str):
+    def __init__(self, model_path: str):
         """
         Initializes the GroupingLookup with the sentence transformer model.
 
         :param model_path: Path to the sentence transformer model.
         """
         self.model = _load_model(model_path)
-        self.encode_text("IndexError: list index out of range")  # Ensure warm start
+
+    @sentry_sdk.tracing.trace
+    @handle_out_of_memory
+    def warm_up(self):
+        """
+        Warms up the model by encoding a simple string.
+        """
+        logger.info("Warming up grouping model...")
+        self.encode_text("IndexError: list index out of range")
+        logger.info("Grouping model warm-up complete")
+        return True
 
     @sentry_sdk.tracing.trace
     @handle_out_of_memory
@@ -364,24 +374,11 @@ class GroupingLookup:
 
         similarity_response = SimilarityResponse(responses=[])
         for record, distance in results:
-            should_group = distance <= issue.threshold
-
-            if should_group:
-                logger.info(
-                    "should_group",
-                    extra={
-                        "input_hash": issue.hash,
-                        "stacktrace_length": len(issue.stacktrace),
-                        "parent_hash": record.hash,
-                        "project_id": issue.project_id,
-                    },
-                )
-
             similarity_response.responses.append(
                 GroupingResponse(
                     parent_hash=record.hash,
                     stacktrace_distance=distance,
-                    should_group=should_group,
+                    should_group=distance <= issue.threshold,
                 )
             )
 

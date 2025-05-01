@@ -48,10 +48,7 @@ def embeddings_model() -> SeverityInference:
 
 @deferred_loading("GROUPING_ENABLED")
 def grouping_lookup() -> GroupingLookup:
-    return GroupingLookup(
-        model_path=model_path("issue_grouping_v0/embeddings"),
-        data_path=model_path("issue_grouping_v0/data.pkl"),
-    )
+    return GroupingLookup(model_path=model_path("issue_grouping_v0/embeddings"))
 
 
 @deferred_loading("AUTOFIXABILITY_SCORING_ENABLED")
@@ -88,8 +85,21 @@ def start_loading() -> threading.Thread:
     def load():
         global _loading_result
         try:
+            loaded_models = []
             for item in _deferred:
-                item()
+                model_instance = item()
+                loaded_models.append(model_instance)
+
+            # Warm up models that support it
+            for model in loaded_models:
+                if hasattr(model, "warm_up") and callable(getattr(model, "warm_up")):
+                    try:
+                        model.warm_up()
+                    except Exception as e:
+                        logger = logging.getLogger(__name__)
+                        logger.exception(f"Error warming up model {model.__class__.__name__}: {e}")
+                        raise
+
             with _loading_lock:
                 _loading_result = LoadingResult.DONE
         except Exception:

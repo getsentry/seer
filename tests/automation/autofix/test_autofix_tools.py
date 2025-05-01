@@ -4,7 +4,7 @@ import pytest
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools.tools import BaseTools
-from seer.automation.models import FileChange
+from seer.automation.models import FileChange, FilePatch, Hunk, Line
 
 
 class TestRepo:
@@ -244,142 +244,127 @@ class TestExplainFile:
         assert result is None
 
 
-class TestGrepSearch:
-    def test_grep_search_validation(self, autofix_tools: BaseTools):
-        result = autofix_tools.grep_search("invalid command")
-        assert result == "Command must be a valid grep command that starts with 'grep'."
+class TestRipgrep:
+    def test_missing_query_returns_error(self, autofix_tools: BaseTools):
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
 
-    @patch("subprocess.run")
-    def test_grep_search_success(self, mock_run, autofix_tools: BaseTools):
-        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
-        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
+        result = autofix_tools.run_ripgrep(query="")
+        assert result == "Error: query is required for ripgrep search"
+        # Should still attempt download for empty query
+        autofix_tools._ensure_repos_downloaded.assert_called_once_with(None)
 
-        mock_process = MagicMock()
-        mock_process.returncode = 0
-        mock_process.stdout = (
-            "file1.py:10:def example_function():\nfile2.py:20:    example_function()"
-        )
-        mock_run.return_value = mock_process
+    def test_single_repo_not_downloaded_returns_error(self, autofix_tools: BaseTools):
+        # Setup repo name but don't add to tmp_dir to simulate not downloaded
+        repo_name = "test/repo"
+        autofix_tools._get_repo_names = MagicMock(return_value=[repo_name])
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+        autofix_tools.tmp_dir = {}
 
-        result = autofix_tools.grep_search("grep -r 'example_function' .")
+        result = autofix_tools.run_ripgrep(query="foo", repo_name=repo_name)
 
-        mock_run.assert_called_once()
-        assert mock_run.call_args[1]["shell"] is False
-        assert mock_run.call_args[1]["cwd"] == "/tmp/test_dir/repo"
-        assert "Results from owner/test_repo:" in result
-        assert "file1.py:10:def example_function()" in result
+        assert result == f"Error: Repository {repo_name} not found or not downloaded"
+        autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
 
-    @patch("subprocess.run")
-    def test_grep_search_directory_error_adds_recursive_flag(
-        self, mock_run, autofix_tools: BaseTools
-    ):
-        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
-        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
-
-        # First call returns directory error
-        first_process = MagicMock()
-        first_process.returncode = 2
-        first_process.stderr = "grep: src/dir: Is a directory"
-        first_process.stdout = ""
-
-        # Second call (with -r flag) succeeds
-        second_process = MagicMock()
-        second_process.returncode = 0
-        second_process.stdout = "src/dir/file.py:10:def example_function():"
-
-        # Set up mock_run to return different responses on consecutive calls
-        mock_run.side_effect = [first_process, second_process]
-
-        result = autofix_tools.grep_search("grep 'example_function' src/dir")
-
-        # Verify subprocess.run was called twice
-        assert mock_run.call_count == 2
-
-        # First call should be with original arguments
-        first_call_args = mock_run.call_args_list[0][0][0]
-        assert first_call_args == ["grep", "example_function", "src/dir"]
-
-        # Second call should include the -r flag
-        second_call_args = mock_run.call_args_list[1][0][0]
-        assert second_call_args == ["grep", "-r", "example_function", "src/dir"]
-
-        # Result should contain the successful output
-        assert "Results from owner/test_repo:" in result
-        assert "src/dir/file.py:10:def example_function():" in result
-
-    @patch("subprocess.run")
-    def test_grep_search_no_results(self, mock_run, autofix_tools: BaseTools):
-        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
-        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
-
-        mock_process = MagicMock()
-        mock_process.returncode = 1
-        mock_process.stdout = ""
-        mock_run.return_value = mock_process
-
-        result = autofix_tools.grep_search("grep -r 'nonexistent' .")
-
-        assert "Results from owner/test_repo: no results found." in result
-
-    @patch("subprocess.run")
-    def test_grep_search_error(self, mock_run, autofix_tools: BaseTools):
-        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
-        autofix_tools._get_repo_names = MagicMock(return_value=["owner/test_repo"])
-
-        mock_process = MagicMock()
-        mock_process.returncode = 2
-        mock_process.stderr = "grep: invalid option -- z"
-        mock_run.return_value = mock_process
-
-        result = autofix_tools.grep_search("grep -z 'pattern' .")
-
-        assert "Results from owner/test_repo: grep: invalid option -- z" in result
-
-    @patch("subprocess.run")
-    def test_grep_search_multipl_repos(self, mock_run, autofix_tools: BaseTools):
-        autofix_tools.tmp_dir = {
-            "owner/repo1": ("/tmp/test_dir1", "/tmp/test_dir1/repo"),
-            "owner/repo2": ("/tmp/test_dir2", "/tmp/test_dir2/repo"),
-        }
-        autofix_tools._get_repo_names = MagicMock(return_value=["owner/repo1", "owner/repo2"])
-
-        def side_effect(cmd, **kwargs):
-            cwd = kwargs.get("cwd")
-            mock_process = MagicMock()
-
-            if cwd == "/tmp/test_dir1/repo":
-                mock_process.returncode = 0
-                mock_process.stdout = "repo1_file.py:10:result"
-            else:  # repo2
-                mock_process.returncode = 0
-                mock_process.stdout = "repo2_file.py:20:result"
-
-            return mock_process
-
-        mock_run.side_effect = side_effect
+    @patch("seer.automation.autofix.tools.tools.run_ripgrep_in_repo")
+    def test_single_repo_success(self, mock_run_ripgrep, autofix_tools: BaseTools):
+        # Setup
+        repo_name = "test/repo"
+        autofix_tools._get_repo_names = MagicMock(return_value=[repo_name])
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+        autofix_tools.tmp_dir = {repo_name: ("/tmp/foo", "/tmp/foo")}
+        mock_run_ripgrep.return_value = "OK"
 
         # Run test
-        result = autofix_tools.grep_search("grep -r 'pattern' .")
+        result = autofix_tools.run_ripgrep(
+            query="bar",
+            include_pattern="*.py",
+            exclude_pattern="test_*.py",
+            case_sensitive=True,
+            repo_name=repo_name,
+        )
 
-        assert "Results from owner/repo1" in result
-        assert "repo1_file.py:10:result" in result
-        assert "Results from owner/repo2" in result
-        assert "repo2_file.py:20:result" in result
+        # Verify ensure_repos_downloaded was called
+        autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
 
-    @patch("seer.automation.autofix.tools.tools.BaseTools._ensure_repos_downloaded")
-    def test_grep_search_specific_repo(self, mock_ensure_repos, autofix_tools: BaseTools):
-        autofix_tools.tmp_dir = {"owner/test_repo": ("/tmp/test_dir", "/tmp/test_dir/repo")}
+        # Verify ripgrep was called with correct args
+        mock_run_ripgrep.assert_called_once()
+        actual_repo_dir = mock_run_ripgrep.call_args[0][0]
+        actual_cmd = mock_run_ripgrep.call_args[0][1]
+        assert actual_repo_dir == "/tmp/foo"
+        assert actual_cmd[0] == "rg"
+        assert '"bar"' in actual_cmd
+        assert "--max-columns" in actual_cmd
+        assert "--threads" in actual_cmd
+        assert "--ignore-case" not in actual_cmd  # case_sensitive=True
+        assert "--glob" in actual_cmd
+        assert '"*.py"' in actual_cmd
+        assert '"!test_*.py"' in actual_cmd
+        assert actual_cmd[-1] == "/tmp/foo"
+        assert result == "OK"
 
-        with patch("subprocess.run") as mock_run:
-            mock_process = MagicMock()
-            mock_process.returncode = 0
-            mock_process.stdout = "file.py:10:result"
-            mock_run.return_value = mock_process
+    @patch("seer.automation.autofix.tools.tools.run_ripgrep_in_repo")
+    def test_ignore_case_flag_when_not_case_sensitive(
+        self, mock_run_ripgrep, autofix_tools: BaseTools
+    ):
+        # Setup
+        repo_name = "test/repo"
+        autofix_tools._get_repo_names = MagicMock(return_value=[repo_name])
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+        autofix_tools.tmp_dir = {repo_name: ("/tmp", "/tmp")}
+        mock_run_ripgrep.return_value = ""
 
-            autofix_tools.grep_search("grep -r 'pattern' .", repo_name="owner/test_repo")
+        # Run test with default case_sensitive=False
+        autofix_tools.run_ripgrep(query="q", repo_name=repo_name)
 
-            mock_ensure_repos.assert_called_once_with("owner/test_repo")
-            mock_run.assert_called_once()
+        # Verify --ignore-case flag was included
+        actual_cmd = mock_run_ripgrep.call_args[0][1]
+        assert "--ignore-case" in actual_cmd
+
+    @patch("seer.automation.autofix.tools.tools.run_ripgrep_in_repo")
+    def test_multiple_repos_combines_results(self, mock_run_ripgrep, autofix_tools: BaseTools):
+        # Setup two repos
+        repos = ["owner/repo1", "owner/repo2"]
+        autofix_tools._get_repo_names = MagicMock(return_value=repos)
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+        autofix_tools.tmp_dir = {"owner/repo1": ("x", "/d1"), "owner/repo2": ("y", "/d2")}
+
+        # Mock different results for each repo
+        def fake_run(repo_dir, cmd):
+            if repo_dir == "/d1":
+                return "A"
+            elif repo_dir == "/d2":
+                return "B"
+            return None
+
+        mock_run_ripgrep.side_effect = fake_run
+
+        # Run test
+        result = autofix_tools.run_ripgrep(query="xyz")
+
+        # Verify single download call for all repos
+        autofix_tools._ensure_repos_downloaded.assert_called_once_with(None)
+
+        # Verify results were combined correctly
+        expected = "Result for owner/repo1:\nA\nResult for owner/repo2:\nB"
+        assert result == expected
+
+    @patch("seer.automation.autofix.tools.tools.run_ripgrep_in_repo")
+    def test_no_results_found(self, mock_run_ripgrep, autofix_tools: BaseTools):
+        # Setup
+        repo_name = "test/repo"
+        autofix_tools._get_repo_names = MagicMock(return_value=[repo_name])
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+        autofix_tools.tmp_dir = {repo_name: ("/tmp/foo", "/tmp/foo")}
+        mock_run_ripgrep.return_value = "ripgrep returned: No results found."
+
+        # Run test
+        result = autofix_tools.run_ripgrep(query="nonexistent")
+
+        # Verify ripgrep was called
+        mock_run_ripgrep.assert_called_once()
+        # Verify empty result is handled correctly
+        assert result == f"Result for {repo_name}:\nripgrep returned: No results found."
 
 
 class TestFindFiles:
@@ -1042,10 +1027,11 @@ class TestClaudeTools:
         original_get_repo_name_and_path = autofix_tools._get_repo_name_and_path
 
         # Mock to ensure the multiple repos error is returned
-        def mock_get_repo_name_and_path(kwargs):
-            if len(autofix_tools.context._get_repo_names()) > 1 and ":" not in kwargs.get(
-                "path", ""
-            ):
+        def mock_get_repo_name_and_path(kwargs, allow_nonexistent_paths=False):
+            # Extract the path argument safely
+            path_arg = kwargs.get("path", "")
+            # Check if multiple repos and path doesn't specify one
+            if len(autofix_tools.context._get_repo_names()) > 1 and ":" not in path_arg:
                 return (
                     "Error: Multiple repositories found. Please provide a repository name in the format "
                     "`repo_name:path`, such as `repo_owner/repo:src/foo/bar.py`. The repositories available "
@@ -1069,6 +1055,98 @@ class TestClaudeTools:
 
         # Assert
         assert "old_str and new_str are required" in result
+
+    def test_handle_claude_tools_create_nonexistent_path(self, autofix_tools: BaseTools):
+        """Verify that the 'create' command works even if the path doesn't exist yet."""
+        # Setup
+        repo_name = "test/repo"
+        new_path = "new/path/to/create.py"
+        file_text = "This is the new file content."
+        kwargs = {"command": "create", "path": new_path, "file_text": file_text}
+
+        # Mock _get_repo_names to return a single repo
+        autofix_tools.context._get_repo_names = MagicMock(return_value=[repo_name])
+        # Mock _attempt_fix_path to return None, simulating the path not existing
+        # Note: This mock is on the context, as that's where _get_repo_name_and_path calls it
+        autofix_tools._attempt_fix_path = MagicMock(return_value=None)
+        # Mock get_file_contents to return None (as the file shouldn't exist yet)
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+        # Mock _append_file_change to simulate successful application
+        autofix_tools._append_file_change = MagicMock(return_value=True)
+        # Mock make_file_patches to return a proper FilePatch for file creation
+        with patch("seer.automation.autofix.tools.tools.make_file_patches") as mock_make_patches:
+            # Create a proper FilePatch for file creation
+            file_patch = FilePatch(
+                type="A",
+                path=new_path,
+                added=1,
+                removed=0,
+                source_file="/dev/null",
+                target_file=new_path,
+                hunks=[
+                    Hunk(
+                        source_start=0,
+                        source_length=0,
+                        target_start=1,
+                        target_length=1,
+                        section_header="@@ -0,0 +1,1 @@",
+                        lines=[
+                            Line(target_line_no=1, value=file_text, line_type="+"),
+                        ],
+                    )
+                ],
+            )
+            mock_make_patches.return_value = ([file_patch], "")
+
+            # Mock event manager's send_insight method
+            autofix_tools.context.event_manager.send_insight = MagicMock()
+            autofix_tools.context.event_manager.add_log = MagicMock()
+
+            # Test
+            result = autofix_tools.handle_claude_tools(**kwargs)
+
+            # Assert
+            # 1. Check that _attempt_fix_path was called for the new path (it should be)
+            autofix_tools._attempt_fix_path.assert_called_once_with(new_path, repo_name)
+            # 2. Check that get_file_contents was called (by _handle_create_command)
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                new_path, repo_name=repo_name
+            )
+            # 3. Check that make_file_patches was called
+            mock_make_patches.assert_called_once()
+            # 4. Check that _append_file_change was called
+            autofix_tools._append_file_change.assert_called_once()
+            # 5. Check that the result indicates success (not a path error)
+            assert "Change applied successfully" in result
+            # 6. Check event manager logs and insights were called
+            autofix_tools.context.event_manager.add_log.assert_called()
+            autofix_tools.context.event_manager.send_insight.assert_called_once()
+
+    def test_handle_claude_tools_view_nonexistent_path_fails(self, autofix_tools: BaseTools):
+        """Verify that commands other than 'create'/'undo_edit' still fail for non-existent paths."""
+        # Setup
+        repo_name = "test/repo"
+        nonexistent_path = "non/existent/path.py"
+        kwargs = {"command": "view", "path": nonexistent_path}  # Use 'view' command
+
+        # Mock _get_repo_names to return a single repo
+        autofix_tools.context._get_repo_names = MagicMock(return_value=[repo_name])
+        # Mock _attempt_fix_path to return None, simulating the path not existing
+        autofix_tools._attempt_fix_path = MagicMock(return_value=None)
+
+        # Test
+        result = autofix_tools.handle_claude_tools(**kwargs)
+
+        # Assert
+        # Check that _attempt_fix_path was called
+        autofix_tools._attempt_fix_path.assert_called_once_with(nonexistent_path, repo_name)
+        # Check that the result is the expected path error message
+        assert (
+            f"Error: The path you provided '{nonexistent_path}' does not exist in the repository '{repo_name}'."
+            in result
+        )
+        # Ensure the view handler wasn't called (it shouldn't be if the path check fails)
+        autofix_tools.context.get_file_contents.assert_not_called()
 
 
 class TestViewDirectoryTree:

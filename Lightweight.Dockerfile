@@ -17,6 +17,7 @@ RUN apt-get update && \
     supervisor \
     curl \
     libpq-dev \
+    ripgrep \
     git && \
     rm -rf /var/lib/apt/lists/*
 

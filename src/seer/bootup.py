@@ -64,6 +64,7 @@ def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = i
         before_send=before_send,
         _experiments={
             "continuous_profiling_auto_start": True,
+            "enable_logs": True,
         },
     )
 

@@ -22,6 +22,13 @@ from seer.anomaly_detection.models.external import (
     StoreDataResponse,
 )
 from seer.app import app
+from seer.automation.assisted_query.models import (
+    Chart,
+    CreateCacheRequest,
+    CreateCacheResponse,
+    TranslateRequest,
+    TranslateResponse,
+)
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixEvaluationRequest,
@@ -770,6 +777,123 @@ class TestSeer(unittest.TestCase):
             content_type="application/json",
         )
         assert response.status_code == 500
+
+    @mock.patch("seer.app.create_cache")
+    def test_create_cache_endpoint_success(self, mock_create_cache):
+        """Test a successful run of create_cache end point"""
+        mock_create_cache.return_value = CreateCacheResponse(
+            success=True, message="Cache created", cache_name="test-cache"
+        )
+        test_data = next(generate(CreateCacheRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        assert response.json["message"] == "Cache created"
+        assert response.json["cache_name"] == "test-cache"
+
+        mock_create_cache.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.create_cache")
+    def test_create_cache_endpoint_error(self, mock_create_cache):
+        """Test that create_cache endpoint handles exceptions correctly"""
+        mock_create_cache.side_effect = Exception("Test error")
+        test_data = next(generate(CreateCacheRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 500
+
+    @mock.patch("seer.app.create_cache")
+    def test_create_cache_endpoint_client_error(self, mock_create_cache):
+        """Test that create_cache endpoint handles client errors correctly"""
+
+        mock_create_cache.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/assisted-query/create-cache"
+            ),
+        )
+        test_data = next(generate(CreateCacheRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 504
+
+    @mock.patch("seer.app.translate_query")
+    def test_translate_query_endpoint_success(self, mock_translate_query):
+        """Test a successful run of translate_query end point"""
+        mock_translate_query.return_value = TranslateResponse(
+            query="Test query",
+            stats_period="Test stats period",
+            group_by=["Test group by"],
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
+            sort="Test sort",
+        )
+        test_data = next(generate(TranslateRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/translate",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json["query"] == "Test query"
+        assert response.json["stats_period"] == "Test stats period"
+        assert response.json["group_by"] == ["Test group by"]
+        assert response.json["visualization"] == [
+            {
+                "chart_type": 1,
+                "y_axes": ["Test y-axis 1", "Test y-axis 2"],
+            }
+        ]
+        assert response.json["sort"] == "Test sort"
+
+        mock_translate_query.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.translate_query")
+    def test_translate_query_endpoint_error(self, mock_translate_query):
+        """Test that translate_query endpoint handles exceptions correctly"""
+        mock_translate_query.side_effect = Exception("Test error")
+        test_data = next(generate(TranslateRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/translate",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 500
+        mock_translate_query.assert_called_once_with(test_data)
+
+        mock_translate_query.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/assisted-query/translate"
+            ),
+        )
+        test_data = next(generate(TranslateRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/translate",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 504
 
 
 @parametrize(count=1)
