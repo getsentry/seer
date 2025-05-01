@@ -98,7 +98,7 @@ class AutofixAgent(LlmAgent):
             )
         )
 
-    def _truncate_biggest_n_tool_messages(self, messages: list[Message], n: int) -> list[Message]:
+    def _omit_biggest_n_tool_messages(self, messages: list[Message], n: int) -> list[Message]:
         """Creates a new list of messages with content of the n largest tool results ommitted."""
         tool_messages_with_size = [
             (i, len(msg.content or ""))
@@ -256,7 +256,7 @@ class AutofixAgent(LlmAgent):
                     f"Input too long for model {run_config.model.model_name} after initial attempt(s). "
                     "Truncating all tool messages and retrying with backoff."
                 )
-                truncated_memory = self._truncate_biggest_n_tool_messages(self.memory, 3)
+                truncated_memory = self._omit_biggest_n_tool_messages(self.memory, 3)
                 get_completion_retryable_truncated = retrier(
                     lambda: attempt_completion(messages_to_send=truncated_memory)
                 )
