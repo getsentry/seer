@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 
 import pytest
@@ -97,3 +98,7 @@ def test_total_output_truncation(monkeypatch):
 
     result = run_ripgrep_in_repo("/repo", ["rg", '"w"'])
     assert "...[RESULT TRUNCATED TO" in result
+
+
+def test_ripgrep_installed():
+    assert shutil.which("rg") is not None
