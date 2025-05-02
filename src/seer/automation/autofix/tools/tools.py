@@ -421,7 +421,7 @@ class BaseTools:
         cmd.extend(["--max-columns", "1024"])
 
         # limit threads
-        cmd.extend(["--threads", "1"])
+        cmd.extend(["--threads", "2"])
 
         # Add other common flags
         if fixed_strings:
