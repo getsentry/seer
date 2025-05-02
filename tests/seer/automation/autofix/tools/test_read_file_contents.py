@@ -1,7 +1,4 @@
-import os
-from unittest.mock import mock_open, patch
-
-import pytest
+from unittest.mock import patch
 
 from seer.automation.autofix.tools.read_file_contents import read_file_contents
 
