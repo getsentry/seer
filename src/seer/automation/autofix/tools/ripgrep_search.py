@@ -1,5 +1,5 @@
-import subprocess
 import logging
+import subprocess
 from pathlib import Path
 
 from langfuse.decorators import observe
