@@ -4,7 +4,7 @@ from unittest import mock
 from langfuse.client import DatasetItemClient
 from langfuse.decorators import observe
 
-from seer.automation.agent.client import LlmClient, OpenAiProvider
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.codebase.models import PrFile
 from seer.automation.codegen.models import (
     CodeFetchIssuesOutput,
@@ -12,6 +12,8 @@ from seer.automation.codegen.models import (
     StaticAnalysisSuggestion,
 )
 from seer.automation.codegen.relevant_warnings_step import RelevantWarningsStep
+from seer.automation.codegen.tasks import create_initial_relevant_warnings_run
+from seer.automation.state import DbStateRunTypes
 from seer.automation.utils import extract_text_inside_tags
 
 logger = logging.getLogger(__name__)
@@ -35,8 +37,13 @@ def sync_run_evaluation_on_item(
     pr_files = [PrFile.model_validate(file) for file in item.input["pr_files"]]
     raw_issues = item.input["issues"]
 
+    # Create a proper state for the evaluation run
+    state = create_initial_relevant_warnings_run(request)
+    run_id = state.get().run_id
+
     relevant_warnings_step = RelevantWarningsStep(
-        request=request.model_dump(),
+        request={"run_id": run_id, **request.model_dump()},
+        type=DbStateRunTypes.RELEVANT_WARNINGS,
     )
     # Mock the repo client to return the pr_files
     mock_repo_client = mock.Mock()
@@ -44,18 +51,18 @@ def sync_run_evaluation_on_item(
     relevant_warnings_step.context.get_repo_client = mock.Mock(return_value=mock_repo_client)
     # Mock FilterIssuesComponent to return the issues
     # Ignoring the filename_to_issues part of the output.
-    mock_filter_issues = mock.patch(
-        "seer.automation.codegen.relevant_warnings_step.FilterIssuesComponent.invoke",
+    mock_fetch_issues = mock.patch(
+        "seer.automation.codegen.relevant_warnings_step.FetchIssuesComponent.invoke",
         return_value=CodeFetchIssuesOutput(filename_to_issues={"all_issues": raw_issues}),
     )
-    relevant_warnings_step.context.filter_issues_component = mock_filter_issues.start()
+    relevant_warnings_step.context.filter_issues_component = mock_fetch_issues.start()
 
     # Invoke the step.
     relevant_warnings_step.invoke()
 
     # Grab the suggestions from the state.
     state = relevant_warnings_step.context.state
-    return state.static_analysis_suggestions
+    return state.get().static_analysis_suggestions
 
 
 def score_suggestions_length(
@@ -205,7 +212,7 @@ def evaluate_semantic_similarity(received_text: str, expected_text: str, model: 
     """
 
     response = LlmClient().generate_text(
-        model=OpenAiProvider.model(model),
+        model=GeminiProvider.model(model),
         prompt=prompt,
     )
 

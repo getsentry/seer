@@ -38,3 +38,9 @@ class CodegenRelevantWarningsEvaluationRequest(BaseModel):
     run_on_item_id: str | None = None
     random_for_test: bool = False
     n_runs_per_item: int = 1
+
+
+class CodegenRelevantWarningsEvaluationSummary(BaseModel):
+    started: bool
+    item_count: int
+    task_ids: list[str]

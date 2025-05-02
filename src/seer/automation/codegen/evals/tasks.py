@@ -10,7 +10,10 @@ from seer.automation.codegen.evals.evaluations import (
     score_suggestions_length,
     sync_run_evaluation_on_item,
 )
-from seer.automation.codegen.evals.models import CodegenRelevantWarningsEvaluationRequest
+from seer.automation.codegen.evals.models import (
+    CodegenRelevantWarningsEvaluationRequest,
+    CodegenRelevantWarningsEvaluationSummary,
+)
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
@@ -41,22 +44,32 @@ def run_relevant_warnings_evaluation(
     logger.info(f"Number of items: {len(items)}")
     logger.info(f"Total number of runs: {len(items) * request.n_runs_per_item}")
 
+    task_ids = []
+
     for i, item in enumerate(items):
         # Note: This will add ALL the dataset item runs into the CPU queue.
         # As we are not going to be running this in prod yet, it's fine to leave as is.
         # If we do decide to run in prod, should find a way to not overwhelm the CPU queue.
-        for _ in range(request.n_runs_per_item):
-            run_relevant_warnings_evaluation_on_item.apply_async(
-                (),
-                dict(
-                    item_id=item.id,
-                    run_name=request.run_name,
-                    run_description=request.run_description,
-                    item_index=i,
-                    item_count=len(items),
-                ),
-                queue=app_config.CELERY_WORKER_QUEUE,
-            )
+        with item.observe(run_name=request.run_name, run_description=request.run_description):
+            for _ in range(request.n_runs_per_item):
+                async_result = run_relevant_warnings_evaluation_on_item.apply_async(
+                    (),
+                    dict(
+                        item_id=item.id,
+                        run_name=request.run_name,
+                        run_description=request.run_description,
+                        item_index=i,
+                        item_count=len(items),
+                    ),
+                    queue=app_config.CELERY_WORKER_QUEUE,
+                )
+                task_ids.append(async_result.id)
+
+    return CodegenRelevantWarningsEvaluationSummary(
+        started=True,
+        item_count=len(items),
+        task_ids=task_ids,
+    )
 
 
 @celery_app.task()
@@ -83,15 +96,26 @@ def run_relevant_warnings_evaluation_on_item(
     )
 
     scoring_n_panel = 5  # do we even need this?
-    scoring_model = "o3-mini-2025-01-31"
+    scoring_model = "gemini-2.5-pro-preview-03-25"
 
     dataset_item_trace_id = None
     with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
         dataset_item_trace_id = trace_id
         try:
             suggestions = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
+            langfuse.score(
+                trace_id=dataset_item_trace_id,
+                name="error_running_evaluation",
+                value=0,
+            )
         except Exception as e:
             logger.exception(f"Error running evaluation: {e}")
+            langfuse.score(
+                trace_id=dataset_item_trace_id,
+                name="error_running_evaluation",
+                value=1,
+            )
+            suggestions = None
 
     # If suggestions is None we assume no suggestions were generated.
     # rather than an error happening.
