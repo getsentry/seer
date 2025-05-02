@@ -1201,3 +1201,122 @@ class TestViewDirectoryTree:
         assert "mock tree string" in result
         assert "Notice: There are a total of 150 files in the tree" in result
         assert "provide a more specific path to view a full tree" in result
+
+
+class TestExpandDocument:
+    def test_expand_document_fallback_to_read_file_contents(self, autofix_tools: BaseTools):
+        """Test that expand_document falls back to read_file_contents when get_file_contents returns None"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+        expected_content = "test file content"
+
+        # Mock get_file_contents to return None to trigger fallback
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Setup tmp_dir to simulate downloaded repo
+        autofix_tools.tmp_dir = {repo_name: ("/tmp/test", "/tmp/test/repo")}
+
+        # Mock read_file_contents to return content
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            mock_read.return_value = (expected_content, None)
+
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify fallback behavior
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
+            mock_read.assert_called_once_with("/tmp/test/repo", file_path)
+            assert result == expected_content
+
+    def test_expand_document_fallback_with_read_error(self, autofix_tools: BaseTools):
+        """Test that expand_document handles errors from read_file_contents properly"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+        error_msg = "File does not exist"
+
+        # Mock get_file_contents to return None to trigger fallback
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Setup tmp_dir to simulate downloaded repo
+        autofix_tools.tmp_dir = {repo_name: ("/tmp/test", "/tmp/test/repo")}
+
+        # Mock read_file_contents to return error
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            mock_read.return_value = (None, error_msg)
+
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify error handling
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
+            mock_read.assert_called_once_with("/tmp/test/repo", file_path)
+            assert "<document with the provided path not found/>" in result
+            assert error_msg in result
+
+    def test_expand_document_fallback_repo_not_downloaded(self, autofix_tools: BaseTools):
+        """Test that expand_document handles case where repo is not in tmp_dir"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+
+        # Mock get_file_contents to return None to trigger fallback
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Empty tmp_dir to simulate repo not downloaded
+        autofix_tools.tmp_dir = {}
+
+        # Mock read_file_contents (should not be called)
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify behavior
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
+            mock_read.assert_not_called()
+            assert "<document with the provided path not found/>" in result
+
+    def test_expand_document_success_without_fallback(self, autofix_tools: BaseTools):
+        """Test that expand_document returns content from get_file_contents when available"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+        expected_content = "test file content"
+
+        # Mock get_file_contents to return content
+        autofix_tools.context.get_file_contents = MagicMock(return_value=expected_content)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Mock read_file_contents (should not be called)
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify no fallback was needed
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_not_called()
+            mock_read.assert_not_called()
+            assert result == expected_content
