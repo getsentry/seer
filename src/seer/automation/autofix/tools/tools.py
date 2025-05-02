@@ -78,10 +78,20 @@ class BaseTools:
                         continue
 
                 try:
+                    # Create a progress tracking callback for this repo
+                    def progress_callback(percent, status_msg):
+                        if self.is_waiting_for_download:
+                            self.context.event_manager.add_log(
+                                f"Downloading {repo_name}: {percent}%"
+                                + (f" - {status_msg}" if status_msg else "")
+                            )
+
                     repo_client = self.context.get_repo_client(
                         repo_name=repo_name, type=self.repo_client_type
                     )
-                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(
+                        progress_callback=progress_callback
+                    )
 
                     # Update self.tmp_dir in a thread-safe way
                     with self._tmp_dir_lock:
@@ -512,16 +522,23 @@ class BaseTools:
                 # Download in progress - wait for it to complete with a timeout
                 with sentry_sdk.start_span(name="Waiting for parallel repo download to complete"):
                     try:
+                        self.context.event_manager.add_log("Downloading your repos...")
+                        self.is_waiting_for_download = True
                         self._download_future.result(timeout=60)
                         self._download_future = None
                     except TimeoutError:
                         logger.warning(
                             "Parallel repo download taking too long, proceeding with individual downloads"
                         )
+                        self.context.event_manager.add_log(
+                            "Download taking too long, proceeding with individual downloads"
+                        )
                         self._download_future = None
                     except Exception as e:
                         logger.exception(f"Error waiting for parallel repo download: {e}")
                         self._download_future = None
+
+        self.is_waiting_for_download = False
 
         if repo_name:
             repo_names_to_download = [repo_name] if repo_name not in self.tmp_dir else []
@@ -541,23 +558,45 @@ class BaseTools:
                 # Single repo - download synchronously
                 try:
                     repo_name = repo_names_to_download[0]
+
+                    # Create a progress tracking callback for this repo
+                    def progress_callback(percent, status_msg):
+                        self.context.event_manager.add_log(
+                            f"Downloading {repo_name}: {percent}% - {status_msg}"
+                        )
+
                     repo_client = self.context.get_repo_client(
                         repo_name=repo_name, type=self.repo_client_type
                     )
-                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(
+                        progress_callback=progress_callback
+                    )
 
                     with self._tmp_dir_lock:
                         self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+
                 except Exception as e:
                     logger.exception(f"Error downloading repo {repo_name}: {e}")
             else:
                 # Multiple repos - download in parallel
+                total_repos = len(repo_names_to_download)
+
                 def download_repo(repo_name):
                     try:
+                        # Create a progress tracking callback for this repo
+                        def progress_callback(percent, status_msg):
+                            # Use a lock to prevent log message garbling
+                            with self._tmp_dir_lock:
+                                self.context.event_manager.add_log(
+                                    f"Downloading {repo_name}: {percent}% - {status_msg}"
+                                )
+
                         repo_client = self.context.get_repo_client(
                             repo_name=repo_name, type=self.repo_client_type
                         )
-                        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
+                        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir(
+                            progress_callback=progress_callback
+                        )
                         return repo_name, (tmp_dir, tmp_repo_dir)
                     except Exception as e:
                         logger.exception(f"Error downloading repo {repo_name}: {e}")
@@ -569,13 +608,22 @@ class BaseTools:
                         for repo_name in repo_names_to_download
                     }
 
+                    completed_repos = 0
                     for future in as_completed(futures):
                         result = future.result()
+                        completed_repos += 1
+                        progress_pct = int((completed_repos / total_repos) * 100)
+                        self.context.event_manager.add_log(
+                            f"Repository download progress: {progress_pct}% ({completed_repos}/{total_repos})"
+                        )
+
                         if result:
                             repo_name, repo_dirs = result
                             with self._tmp_dir_lock:
                                 if repo_name is not None:
                                     self.tmp_dir[repo_name] = repo_dirs
+
+                self.context.event_manager.add_log("All repositories downloaded successfully")
 
     @observe(name="Find Files")
     @sentry_sdk.trace

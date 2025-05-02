@@ -305,7 +305,9 @@ class RepoClient:
         return self.repo.compare(base, head)
 
     @sentry_sdk.trace
-    def load_repo_to_tmp_dir(self, sha: str | None = None) -> tuple[str, str]:
+    def load_repo_to_tmp_dir(
+        self, sha: str | None = None, progress_callback=None
+    ) -> tuple[str, str]:
         sha = sha or self.base_commit_sha
 
         # Check if output directory exists, if not create it
@@ -327,10 +329,26 @@ class RepoClient:
         tarball_url = self.repo.get_archive_link("tarball", ref=sha)
         tarfile_path = os.path.join(tmp_dir, f"{sha}.tar.gz")
 
+        # Report start of download
+        if progress_callback:
+            progress_callback(0, f"Starting download")
+
         response = requests.get(tarball_url, stream=True)
         if response.status_code == 200:
+            total_size = int(response.headers.get("content-length", 0))
+            downloaded_size = 0
+
             with open(tarfile_path, "wb") as f:
-                f.write(response.content)
+                # Download in chunks to track progress
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+
+                        # Report download progress
+                        if progress_callback and total_size > 0:
+                            progress_percent = min(50, int((downloaded_size / total_size) * 50))
+                            progress_callback(progress_percent, f"Downloading...")
         else:
             logger.error(
                 f"Failed to get tarball url for {tarball_url}. Please check if the repository exists and the provided token is valid."
@@ -342,9 +360,22 @@ class RepoClient:
                 f"Failed to get tarball url for {tarball_url}. Please check if the repository exists and the provided token is valid."
             )
 
+        # Report extraction start
+        if progress_callback:
+            progress_callback(50, f"Extracting...")
+
         # Extract tarball into the output directory
         with tarfile.open(tarfile_path, "r:gz") as tar:
-            tar.extractall(path=tmp_repo_dir)  # extract all members normally
+            # Get total member count for progress tracking
+            total_members = len(tar.getmembers())
+
+            # Extract with progress tracking
+            for i, member in enumerate(tar.getmembers()):
+                tar.extract(member, path=tmp_repo_dir)
+                if progress_callback and i % max(1, total_members // 10) == 0:
+                    extract_progress = min(100, 50 + int((i / total_members) * 50))
+                    progress_callback(extract_progress, f"Extracting...")
+
             extracted_folders = [
                 name
                 for name in os.listdir(tmp_repo_dir)
@@ -369,6 +400,10 @@ class RepoClient:
                             )  # copy all files from the root folder to the output directory
 
                 shutil.rmtree(root_folder_path)  # remove the root folder
+
+        # Report completion
+        if progress_callback:
+            progress_callback(100)
 
         return tmp_dir, tmp_repo_dir
 
