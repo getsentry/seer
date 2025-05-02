@@ -2,8 +2,7 @@ import logging
 import os
 
 import sentry_sdk
-
-from seer.automation.autofix.tools.tools import observe
+from langfuse.decorators import observe
 
 logger = logging.getLogger(__name__)
 
