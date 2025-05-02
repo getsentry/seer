@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 
 from langfuse.decorators import observe
+import sentry_sdk
 
 MAX_RIPGREP_TIMEOUT_SECONDS = 20
 MAX_RIPGREP_LINE_CHARACTER_LENGTH = 1024
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @observe(name="Run ripgrep in repo")
+@sentry_sdk.trace
 def run_ripgrep_in_repo(
     repo_dir: str, cmd: list[str], timeout: float = MAX_RIPGREP_TIMEOUT_SECONDS
 ) -> str:
