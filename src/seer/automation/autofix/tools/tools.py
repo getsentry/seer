@@ -18,6 +18,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
@@ -137,9 +138,20 @@ class BaseTools:
         if file_contents:
             return file_contents
 
+        self._ensure_repos_downloaded(repo_name)
+
+        local_read_error = None
+        if repo_name in self.tmp_dir:
+            repo_dir = self.tmp_dir[repo_name][1]
+
+            # try reading the actual file from file system
+            file_contents, local_read_error = read_file_contents(repo_dir, file_path)
+            if file_contents:
+                return file_contents
+
         # show potential corrected paths if nothing was found here
         other_paths = self._get_potential_abs_paths(file_path, repo_name)
-        return f"<document with the provided path not found/>\n{other_paths}".strip()
+        return f"<document with the provided path not found/>\n{local_read_error if local_read_error else ''}\n{other_paths}".strip()
 
     @observe(name="View Diff")
     @sentry_sdk.trace
