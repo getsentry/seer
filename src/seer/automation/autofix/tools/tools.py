@@ -408,7 +408,7 @@ class BaseTools:
         exclude_pattern: str | None = None,
         case_sensitive: bool = False,
         repo_name: str | None = None,
-        fixed_strings: bool = True,
+        fixed_strings: bool = False,
     ) -> str:
         self._ensure_repos_downloaded(repo_name)
 
@@ -426,7 +426,7 @@ class BaseTools:
         # Add other common flags
         if fixed_strings:
             cmd.append("--fixed-strings")
-            
+
         if not case_sensitive:
             cmd.append("--ignore-case")
 
@@ -1059,11 +1059,6 @@ class BaseTools:
                         description="Runs a ripgrep command over the codebase to find what you're looking for. Use this as your main tool for searching codebases. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
                         parameters=[
                             {
-                                "name": "query",
-                                "type": "string",
-                                "description": "The text pattern you're searching for.",
-                            },
-                            {
                                 "name": "include_pattern",
                                 "type": "string",
                                 "description": "Optional glob pattern for files to include. For example, '*.py' for Python files.",
@@ -1081,12 +1076,17 @@ class BaseTools:
                             {
                                 "name": "fixed_strings",
                                 "type": "boolean",
-                                "description": "If true (default), search for the literal text. If false, interpret the query as a regex pattern.",
+                                "description": "If true, search for the literal text. If false, interpret the query as a regex pattern.",
                             },
                             {
                                 "name": "repo_name",
                                 "type": "string",
                                 "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
+                            },
+                            {
+                                "name": "query",
+                                "type": "string",
+                                "description": "The precise query you're searching for. If `fixed_strings` is true, this will be interpreted as a literal string, no escaping is needed. Otherwise, it will be interpreted as a regex pattern, and correct regex syntax must be used.",
                             },
                         ],
                         required=["query"],
