@@ -933,6 +933,7 @@ class GeminiProvider:
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
             "Internal error",
+            "Internal error encountered",
             "499 CANCELLED",
         )
         return (
