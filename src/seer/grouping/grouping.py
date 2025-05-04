@@ -36,12 +36,54 @@ class GroupingRequest(BaseModel):
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
     use_reranking: bool = False
 
+    @staticmethod
+    def preprocess_stacktrace(stacktrace: str) -> str:
+        """Clean and validate stacktrace input."""
+        if not isinstance(v, str):
+            raise ValueError(
+                "stacktrace must be a string containing the error trace information"
+            )
+
+        # Basic preprocessing
+        v = v.strip()
+
+        if not stacktrace:
+            raise ValueError(
+                "stacktrace must be provided and not empty for similarity comparison"
+            )
+            
+        if len(v) < 10:  # Minimum reasonable length for a stacktrace
+            raise ValueError(
+                "stacktrace appears too short - please provide complete error trace information"
+            )
+        return stacktrace.strip()
+    @staticmethod
+    def preprocess_stacktrace(stacktrace: str) -> str:
+        """Clean and validate stacktrace input."""
+        # Preprocess the stacktrace first
+        v = cls.preprocess_stacktrace(v)
+        
+        if not stacktrace:
+            raise ValueError(
+                f"{info.field_name} must be provided and not empty. This field is required for "
+                "issue grouping. Please ensure you are providing the complete error stacktrace."
+            )
+            
+        return v.strip()
+
     @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
+        # Preprocess the stacktrace first
+        v = cls.preprocess_stacktrace(v)
+        
         if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
-        return v
+            raise ValueError(
+                f"{info.field_name} must be provided and not empty. This field is required for "
+                "issue grouping. Please ensure you are providing the complete error stacktrace."
+            )
+            
+        return v.strip()
 
 
 class GroupingResponse(BaseModel):
