@@ -420,7 +420,7 @@ class BaseTools:
         exclude_pattern: str | None = None,
         case_sensitive: bool = False,
         repo_name: str | None = None,
-        fixed_strings: bool = False,
+        fixed_strings: bool = True,
     ) -> str:
         self._ensure_repos_downloaded(repo_name)
 
@@ -1088,7 +1088,7 @@ class BaseTools:
                             {
                                 "name": "fixed_strings",
                                 "type": "boolean",
-                                "description": "If true, search for the literal text. If false, interpret the query as a regex pattern.",
+                                "description": "If true, search for the literal text. If false, interpret the query as a regex pattern. By default set to true.",
                             },
                             {
                                 "name": "repo_name",
@@ -1098,7 +1098,7 @@ class BaseTools:
                             {
                                 "name": "query",
                                 "type": "string",
-                                "description": "The precise query you're searching for. If `fixed_strings` is true, this will be interpreted as a literal string, no escaping is needed. Otherwise, it will be interpreted as a regex pattern, and correct regex syntax must be used.",
+                                "description": "The precise query you're searching for. By default interpreted as a literal string, so no escaping is needed. Set fixed_strings=false to use regex pattern matching.",
                             },
                         ],
                         required=["query"],
