@@ -1352,7 +1352,6 @@ class TestExpandDocument:
         # Setup
         repo_name = "test/repo"
         file_path = "src/test.py"
-        error_msg = "File does not exist"
 
         # Mock autocorrect_repo_name to return the repo name
         autofix_tools.context.autocorrect_repo_name.return_value = None

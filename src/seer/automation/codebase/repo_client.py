@@ -29,7 +29,7 @@ from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.models import GithubPrReviewComment
-from seer.automation.codebase.utils import get_all_supported_extensions, get_language_from_path
+from seer.automation.codebase.utils import get_all_supported_extensions
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
