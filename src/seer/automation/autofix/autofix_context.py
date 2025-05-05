@@ -149,13 +149,19 @@ class AutofixContext(PipelineContext):
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        if repo_name not in self.repos_by_key():
-            raise AgentError() from ValueError(
-                f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
-            )
+        if len(self.repos) > 1:
+            if not repo_name:
+                raise AgentError() from ValueError(
+                    "Repo name is required when there are multiple repos."
+                )
+
+            if repo_name not in [repo.full_name for repo in self.repos]:
+                raise AgentError() from ValueError(
+                    f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
+                )
 
         repo_client = self.get_repo_client(repo_name)
-        file_contents, _ = repo_client.get_file_content(path, autocorrect=True)
+        file_contents, _ = repo_client.get_file_content(path)
 
         if not ignore_local_changes:
             cur_state = self.state.get()
