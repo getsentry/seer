@@ -69,7 +69,6 @@ def summarize_trace(
     return SummarizeTraceResponse(
         trace_id=request.trace_id,
         summary=trace_summary.summary,
-        # anomalous_spans=trace_summary.anomalous_spans,
         key_observations=trace_summary.key_observations,
         performance_characteristics=trace_summary.performance_characteristics,
         suggested_investigations=trace_summary.suggested_investigations,
@@ -83,7 +82,7 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
         prompt = textwrap.dedent(
             f"""
             You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please provide key insights about the trace below so our engineers can immediately understand what's going on.
-            Please not that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans.
+            Please note that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans.
 
             Here are some key concepts:
             - Trace:
@@ -94,6 +93,8 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
               - Each span has:
                 - Attributes: Key-value pairs like http.method, db.query, span.description, or custom attributes like cart.value, provide additional context that can be useful for debugging and investigating patterns. These are either numbers or strings. Note: numeric span attributes can be used to calculate span metrics, shown below.
                   - Duration (span.duration): The time the operation took, used to measure performance.
+
+            NOTE: In this trace, we are only providing you the transaction spans. These are high level spans that do not have the most granular information about the trace.
 
             Your #1 goal is to help our engineers immediately understand what's going on in the trace.
 
@@ -141,7 +142,7 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
         prompt = textwrap.dedent(
             f"""
             You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please provide key insights about the trace below so our engineers can immediately understand what's going on.
-            Please not that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans.
+            Please note that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans.
 
             Here are some key concepts:
             - Trace:
