@@ -750,9 +750,13 @@ class TestSeer(unittest.TestCase):
         assert response.json["summary"] == "Test summary"
         assert response.json["key_observations"] == "Test key observations"
         assert response.json["performance_characteristics"] == "Test performance characteristics"
-        assert response.json["suggested_investigations"] == SpanInsight(
-            explanation="test suggested investigation 1", span_id="1", span_op="1"
-        )
+        assert response.json["suggested_investigations"] == [
+            {
+                "explanation": "test suggested investigation 1",
+                "span_id": "1",
+                "span_op": "1",
+            }
+        ]
 
         mock_summarize_trace.assert_called_once_with(test_data)
 
