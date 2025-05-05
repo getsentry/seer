@@ -224,6 +224,10 @@ class TestRepoClient:
         assert result is False
 
     @patch(
+        "seer.automation.codebase.repo_client.Github",
+        return_value=MagicMock(get_repo=MagicMock(return_value=MagicMock(size=50000))),
+    )
+    @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
         return_value=(
             MagicMock(),
@@ -238,7 +242,7 @@ class TestRepoClient:
             ),
         ),
     )
-    def test_write_repo_access_check_success(self, mock_get_app_installation):
+    def test_write_repo_access_check_success(self, mock_get_app_installation, mock_github):
         result = RepoClient.check_repo_write_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
@@ -289,6 +293,10 @@ class TestRepoClient:
         assert result is False
 
     @patch(
+        "seer.automation.codebase.repo_client.Github",
+        return_value=MagicMock(get_repo=MagicMock(return_value=MagicMock(size=50000))),
+    )
+    @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
         return_value=(
             MagicMock(),
@@ -301,7 +309,7 @@ class TestRepoClient:
             ),
         ),
     )
-    def test_read_repo_access_check_success(self, mock_get_app_installation):
+    def test_read_repo_access_check_success(self, mock_get_app_installation, mock_github):
         result = RepoClient.check_repo_read_access(
             RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123")
         )
