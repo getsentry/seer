@@ -134,9 +134,10 @@ class BaseTools:
     @observe(name="Expand Document")
     @sentry_sdk.trace
     def expand_document(self, file_path: str, repo_name: str):
-        repo_name = self.context.autocorrect_repo_name(repo_name) if repo_name else None
-        if not repo_name:
+        fixed_repo_name = self.context.autocorrect_repo_name(repo_name)
+        if not fixed_repo_name:
             return self._make_repo_not_found_error_message(repo_name)
+        repo_name = fixed_repo_name
 
         valid_file_path = self._attempt_fix_path(file_path, repo_name)
         if valid_file_path is None:
