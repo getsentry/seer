@@ -114,7 +114,11 @@ class BaseTools:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
 
     def _make_repo_not_found_error_message(self, repo_name: str) -> str:
-        return f"Error: Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.context.repos])}"
+        return f"Error: Repo '{repo_name}' not found." + (
+            f" Available repos: {', '.join([repo.full_name for repo in self.context.repos if isinstance(self.context, AutofixContext)])}"
+            if isinstance(self.context, AutofixContext)
+            else ""
+        )
 
     @observe(name="Semantic File Search")
     @sentry_sdk.trace
@@ -134,7 +138,11 @@ class BaseTools:
     @observe(name="Expand Document")
     @sentry_sdk.trace
     def expand_document(self, file_path: str, repo_name: str):
-        fixed_repo_name = self.context.autocorrect_repo_name(repo_name)
+        fixed_repo_name = (
+            self.context.autocorrect_repo_name(repo_name)
+            if isinstance(self.context, AutofixContext)
+            else repo_name
+        )
         if not fixed_repo_name:
             return self._make_repo_not_found_error_message(repo_name)
         repo_name = fixed_repo_name
@@ -731,12 +739,20 @@ class BaseTools:
         if not path:
             return "Error: Path could not be resolved"
 
+        if not repo_name:
+            return "Error: Repo could not be resolved"
+
         tool_call_id = kwargs.get("tool_call_id", None)
         current_memory_index = kwargs.get("current_memory_index", -1)
 
-        repo_name = self.context.autocorrect_repo_name(repo_name)
-        if not repo_name:
+        fixed_repo_name = (
+            self.context.autocorrect_repo_name(repo_name)
+            if isinstance(self.context, AutofixContext)
+            else repo_name
+        )
+        if not fixed_repo_name:
             return self._make_repo_not_found_error_message(repo_name)
+        repo_name = fixed_repo_name
 
         command_handlers = {
             "view": self._handle_view_command,

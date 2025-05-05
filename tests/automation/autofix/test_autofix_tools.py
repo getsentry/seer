@@ -1064,6 +1064,8 @@ class TestClaudeTools:
         file_text = "This is the new file content."
         kwargs = {"command": "create", "path": new_path, "file_text": file_text}
 
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
         # Mock _get_repo_names to return a single repo
         autofix_tools.context._get_repo_names = MagicMock(return_value=[repo_name])
         # Mock _attempt_fix_path to return None, simulating the path not existing
