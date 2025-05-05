@@ -10,7 +10,11 @@ from google.genai.errors import ClientError
 from requests import Response
 
 from seer.automation.models import EAPTrace
-from seer.automation.summarize.models import SummarizeTraceRequest, SummarizeTraceResponse
+from seer.automation.summarize.models import (
+    SpanInsight,
+    SummarizeTraceRequest,
+    SummarizeTraceResponse,
+)
 from seer.automation.summarize.traces import summarize_trace
 
 
@@ -45,7 +49,8 @@ class TestSummarizeTrace:
             summary="**Trace: SentryApp Installation Retrieval**\n\n- A `db` transaction named `/api/0/organizations/{organization_id_or_slug}/repos/` initiates a database query.\n- The query retrieves `sentry_sentryappinstallation` data based on `api_token_id` and `status`.\n- The database operation is nested within another identical transaction.\n- The nested transaction contains a span that executes the same database query.\n",
             key_observations="- The trace involves **duplicate nested transactions** performing the same database query, which is unusual.\n- The database query targets the `sentry_sentryappinstallation` table, suggesting a focus on application installations.\n- The query filters by `api_token_id` and `status`, indicating a search for specific installations.",
             performance_characteristics="- The overall trace duration is **1.236ms**, which is relatively fast.\n- The database query itself takes **1.236ms**, indicating it's the primary operation.\n- The speed suggests the database query is efficient, but the duplicate execution may be unnecessary.",
-            suggested_investigations='- Investigate why the `db` transaction `89239f27c64d1ac7` with description `SELECT "sentry_sentryappinstallation"."id", "sentry_sentryappinstallation"."date_deleted", "sentry_sentryappinstallation"."sentry_app_id", "sentry_sentryappinstallation"."organization_id", "sentry_sentryappinstallation"."api_grant_id", "sentry_sentryappinstallation"."api_token_id", "sentry_sentryappinstallation"."uuid", "sentry_sentryappinstallation"."status", "sentry_sentryappinstallation"."date_added", "sentry_sentryappinstallation"."date_updated" FROM "sentry_sentryappinstallation" WHERE ("sentry_sentryappinstallation"."date_deleted" IS NULL AND "sentry_sentryappinstallation"."api_token_id" = %s AND "sentry_sentryappinstallation"."status" = %s) LIMIT 21` is nested and duplicated. This could be an area for optimization.\n',
+            suggested_investigations=SpanInsight(explanation="", span_id="", span_op=""),
+            anomalous_spans=SpanInsight(explanation="", span_id="", span_op=""),
         )
 
         assert isinstance(res, SummarizeTraceResponse)
@@ -59,6 +64,7 @@ class TestSummarizeTrace:
         assert (
             res.suggested_investigations == expected_result.suggested_investigations
         ), "suggested_investigations mismatch"
+        assert res.anomalous_spans == expected_result.anomalous_spans, "anomalous_spans mismatch"
 
         assert res.model_dump() == expected_result.model_dump()
 
