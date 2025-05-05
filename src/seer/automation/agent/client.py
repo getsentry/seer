@@ -110,6 +110,12 @@ class OpenAiProvider:
             exception, LlmStreamTimeoutError
         )
 
+    @staticmethod
+    def is_input_too_long(exception: Exception) -> bool:
+        return isinstance(exception, openai.BadRequestError) and "context_length_exceeded" in str(
+            exception
+        )
+
     @sentry_sdk.trace
     def generate_text(
         self,
@@ -499,6 +505,10 @@ class AnthropicProvider:
             or isinstance(exception, LlmNoCompletionTokensError)
             or "incomplete chunked read" in str(exception)
         )
+
+    @staticmethod
+    def is_input_too_long(exception: Exception) -> bool:
+        return "Prompt is too long" in str(exception)
 
     @observe(as_type="generation", name="Anthropic Generation")
     @sentry_sdk.trace
@@ -935,6 +945,10 @@ class GeminiProvider:
             or isinstance(exception, LlmStreamTimeoutError)
             or isinstance(exception, ChunkedEncodingError)
         )
+
+    @staticmethod
+    def is_input_too_long(exception: Exception) -> bool:
+        return isinstance(exception, ClientError) and "input token count" in str(exception)
 
     @observe(as_type="generation", name="Gemini Generation")
     @sentry_sdk.trace

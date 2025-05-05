@@ -194,7 +194,16 @@ class CodePrReviewOutput(BaseComponentOutput):
         start_line: int
         suggestion: str | None = None
 
+    class PrDescription(BaseModel):
+        purpose: str
+        key_technical_changes: str
+        architecture_decisions: str
+        dependencies_and_interactions: str
+        risk_considerations: str
+        notable_implementation_details: str
+
     comments: list[Comment]
+    description: PrDescription | None = None
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):

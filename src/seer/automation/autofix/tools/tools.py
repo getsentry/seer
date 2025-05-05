@@ -18,7 +18,8 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
-from seer.automation.autofix.tools.grep_search import run_grep_search
+from seer.automation.autofix.tools.read_file_contents import read_file_contents
+from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
@@ -137,9 +138,20 @@ class BaseTools:
         if file_contents:
             return file_contents
 
+        self._ensure_repos_downloaded(repo_name)
+
+        local_read_error = None
+        if repo_name in self.tmp_dir:
+            repo_dir = self.tmp_dir[repo_name][1]
+
+            # try reading the actual file from file system
+            file_contents, local_read_error = read_file_contents(repo_dir, file_path)
+            if file_contents:
+                return file_contents
+
         # show potential corrected paths if nothing was found here
         other_paths = self._get_potential_abs_paths(file_path, repo_name)
-        return f"<document with the provided path not found/>\n{other_paths}".strip()
+        return f"<document with the provided path not found/>\n{local_read_error if local_read_error else ''}\n{other_paths}".strip()
 
     @observe(name="View Diff")
     @sentry_sdk.trace
@@ -398,32 +410,83 @@ class BaseTools:
         else:
             return "Cannot fetch information for this event."
 
-    @observe(name="Grep Search")
+    @observe(name="Ripgrep Search")
     @sentry_sdk.trace
-    def grep_search(self, command: str, repo_name: str | None = None):
-        """
-        Runs a grep command over the downloaded repositories.
-        """
-        if not command.startswith("grep "):
-            return "Command must be a valid grep command that starts with 'grep'."
-
-        command = command.replace('\\"', '"')  # un-escape escaped quotes
-        command = command.replace("\\'", "'")  # un-escape escaped single quotes
-        command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
-
-        self.context.event_manager.add_log(f"Grepping codebase with `{command}`...")
-
+    def run_ripgrep(
+        self,
+        *,
+        query: str,
+        include_pattern: str | None = None,
+        exclude_pattern: str | None = None,
+        case_sensitive: bool = False,
+        repo_name: str | None = None,
+        fixed_strings: bool = False,
+    ) -> str:
         self._ensure_repos_downloaded(repo_name)
 
-        repo_names = [repo_name] if repo_name else self._get_repo_names()
+        if not query:
+            return "Error: query is required for ripgrep search"
 
-        # Parse the command into a list of arguments
-        try:
-            cmd_args = shlex.split(command)
-        except Exception as e:
-            return f"Error parsing grep command: {str(e)}"
+        cmd = ["rg", f'"{query}"']
 
-        return run_grep_search(cmd_args, repo_names, self.tmp_dir)
+        # We wanna ignore long lines
+        cmd.extend(["--max-columns", "1024"])
+
+        # limit threads
+        cmd.extend(["--threads", "2"])
+
+        # Add other common flags
+        if fixed_strings:
+            cmd.append("--fixed-strings")
+
+        if not case_sensitive:
+            cmd.append("--ignore-case")
+
+        if include_pattern:
+            cmd.extend(["--glob", f'"{include_pattern}"'])
+
+        if exclude_pattern:
+            cmd.extend(["--glob", f'"!{exclude_pattern}"'])
+
+        if repo_name:
+            # Single repository search
+            if repo_name not in self.tmp_dir:
+                return f"Error: Repository {repo_name} not found or not downloaded"
+
+            tmp_repo_dir = self.tmp_dir[repo_name][1]
+
+            cmd.append(tmp_repo_dir)
+
+            return run_ripgrep_in_repo(tmp_repo_dir, cmd)
+        else:
+            # Multiple repository search - we'll need to run separate commands for each repo
+            # and combine results
+            repo_names = self._get_repo_names()
+
+            # Run ripgrep in parallel across repositories
+            def search_repo(repo_name: str) -> tuple[str, str] | None:
+                if repo_name not in self.tmp_dir:
+                    return None
+                repo_dir = self.tmp_dir[repo_name][1]
+                try:
+                    result = run_ripgrep_in_repo(repo_dir, cmd)
+                    return (repo_name, result)
+                except Exception as e:
+                    logger.exception(f"Error searching repo {repo_name}: {e}")
+                    return None
+
+            results = []
+            with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+                futures = {
+                    executor.submit(search_repo, repo_name): repo_name for repo_name in repo_names
+                }
+
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        results.append(result)
+
+            return "\n".join(f"Result for {rn}:\n{result}" for rn, result in results)
 
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
@@ -1004,21 +1067,41 @@ class BaseTools:
                     ),
                     FunctionTool(
                         name="grep_search",
-                        fn=self.grep_search,
-                        description="Runs a grep command over the codebase to find what you're looking for.",
+                        fn=self.run_ripgrep,
+                        description="Runs a ripgrep command over the codebase to find what you're looking for. Use this as your main tool for searching codebases. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
                         parameters=[
                             {
-                                "name": "command",
+                                "name": "include_pattern",
                                 "type": "string",
-                                "description": "The full grep command to execute. Do NOT include repo names in your command. Remember, you can get more context with the -C flag.",
+                                "description": "Optional glob pattern for files to include. For example, '*.py' for Python files.",
+                            },
+                            {
+                                "name": "exclude_pattern",
+                                "type": "string",
+                                "description": "Optional glob pattern for files to exclude. For example, '*.test.py' for test files.",
+                            },
+                            {
+                                "name": "case_sensitive",
+                                "type": "boolean",
+                                "description": "Whether the search should be case sensitive.",
+                            },
+                            {
+                                "name": "fixed_strings",
+                                "type": "boolean",
+                                "description": "If true, search for the literal text. If false, interpret the query as a regex pattern.",
                             },
                             {
                                 "name": "repo_name",
                                 "type": "string",
                                 "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
                             },
+                            {
+                                "name": "query",
+                                "type": "string",
+                                "description": "The precise query you're searching for. If `fixed_strings` is true, this will be interpreted as a literal string, no escaping is needed. Otherwise, it will be interpreted as a regex pattern, and correct regex syntax must be used.",
+                            },
                         ],
-                        required=["command"],
+                        required=["query"],
                     ),
                     FunctionTool(
                         name="find_files",

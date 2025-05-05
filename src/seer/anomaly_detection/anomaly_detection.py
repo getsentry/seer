@@ -459,10 +459,9 @@ class AnomalyDetection(BaseModel):
             )
             historic.values = historic.values[trim_historic_by:]
             historic.timestamps = historic.timestamps[trim_historic_by:]
-        # Adjust time budget based on the number of rows in the current time series
-        time_budget_ms = (
-            time_budget_ms // 2 if time_budget_ms else None
-        )  # Splitting between batch and stream detection
+
+        time_allocated = datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
+        time_start = datetime.datetime.now(datetime.timezone.utc)
 
         agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=[],
@@ -483,6 +482,16 @@ class AnomalyDetection(BaseModel):
             algo_config=algo_config,
             prophet_forecast_len_days=max_stream_detection_len,  # This ensures that the there is only prophet detection run always
         )
+        if time_budget_ms is not None:
+            time_elapsed = datetime.datetime.now(datetime.timezone.utc) - time_start
+            time_budget_ms = time_budget_ms - (time_elapsed.microseconds // 1000)
+            if time_budget_ms < 100:  # need atleast 100 milliseconds for stream detection
+                logger.error(
+                    "batch_detection_took_too_long",
+                    extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
+                )
+                raise ServerError("Batch detection took too long")
+
         agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=historic_anomalies.flags[-trim_current_by:],
             scores=historic_anomalies.scores[-trim_current_by:],
@@ -563,7 +572,7 @@ class AnomalyDetection(BaseModel):
 
     @sentry_sdk.trace
     def detect_anomalies(
-        self, request: DetectAnomaliesRequest, time_budget_ms: int = 4500
+        self, request: DetectAnomaliesRequest, time_budget_ms: int = 9500
     ) -> DetectAnomaliesResponse:
         """
         Main entry point for anomaly detection.

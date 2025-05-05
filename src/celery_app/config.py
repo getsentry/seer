@@ -25,5 +25,5 @@ def celery_config(app_config: AppConfig = injected) -> CeleryConfig:
             }
         },
         result_backend="rpc://",
-        worker_max_tasks_per_child=3,
+        worker_max_tasks_per_child=8,
     )
