@@ -5,7 +5,21 @@ from langfuse.decorators import observe
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.agent.models import Message, Usage
-from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
+from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.components.insight_sharing.models import (
+    BreadcrumbsSource,
+    CodeSource,
+    ConnectedErrorSource,
+    DiffSource,
+    HttpRequestSource,
+    InsightSharingOutput,
+    InsightSources,
+    JustificationOutput,
+    ProfileSource,
+    StacktraceSource,
+    TraceEventSource,
+)
+from seer.automation.autofix.utils import find_original_snippet
 from seer.dependency_injection import inject, injected
 
 
@@ -69,20 +83,109 @@ class InsightSharingPrompts:
         )
 
     @staticmethod
-    def format_step_two(*, insight: str, latest_thought: str):
+    def format_step_two(*, insight: str, latest_thought: str, past_insights: list[str]):
         return textwrap.dedent(
             """\
+            We have already proven these past insights:
+            {past_insights}
+
             We had this thought:
             {latest_thought}
 
             And we concluded this:
             {insight}
 
-            Now write one sentence of evidence backing the conclusion. And add any code, stacktraces, variable values, logs, or other evidence in Markdown code blocks using ```triple backticks``` when relevant to the conclusion."""
+            Now write the evidence. One sentence of evidence backing the conclusion. Then the snippets of evidence, extremely brief and concise: add any code, stacktraces, variable values, logs, or other evidence in Markdown code blocks using ```triple backticks``` when relevant to the conclusion and explain how they support the conclusion. This should all be in the "evidence" field.
+            Afterwards, mark which sources you DIRECTLY used, specifically for this thought/conclusion. All context is helpful in general, so only include the sources very specific to THIS insight, assuming all the past insights are already proven. e.g. a stacktrace may generally be useful, but if it's not specific to this insight, don't include it. This should all be in the "sources" field."""
         ).format(
             insight=insight,
             latest_thought=latest_thought,
+            past_insights="\n".join(past_insights),
         )
+
+
+def process_sources(sources: list, context: AutofixContext, trace_tree):
+    """
+    Process the list of sources and consolidate them into the InsightSources structure.
+
+    Args:
+        sources: List of source objects from the LLM response
+        context: The AutofixContext object
+        trace_tree: The trace tree from the context state
+
+    Returns:
+        InsightSources object with all relevant sources populated
+    """
+    final_sources = InsightSources(
+        stacktrace_used=False,
+        breadcrumbs_used=False,
+        http_request_used=False,
+        trace_event_ids_used=[],
+        connected_error_ids_used=[],
+        diff_urls=[],
+        profile_ids_used=[],
+        code_used_urls=[],
+        thoughts="",
+        event_trace_id=trace_tree.trace_id if trace_tree else None,
+    )
+
+    for source in sources:
+        if isinstance(source, StacktraceSource) and source.stacktrace_used:
+            final_sources.stacktrace_used = True
+        elif isinstance(source, BreadcrumbsSource) and source.breadcrumbs_used:
+            final_sources.breadcrumbs_used = True
+        elif isinstance(source, HttpRequestSource) and source.http_request_used:
+            final_sources.http_request_used = True
+        elif isinstance(source, TraceEventSource) and trace_tree:
+            short_event_id = source.trace_event_id
+            full_event = trace_tree.get_event_by_id(short_event_id)
+            if full_event:
+                final_sources.trace_event_ids_used.append(full_event.id)
+        elif isinstance(source, ConnectedErrorSource) and trace_tree:
+            short_event_id = source.connected_error_id
+            full_event = trace_tree.get_event_by_id(short_event_id)
+            if full_event:
+                final_sources.connected_error_ids_used.append(full_event.id)
+        elif isinstance(source, ProfileSource) and trace_tree:
+            short_event_id = source.trace_event_id
+            full_event = trace_tree.get_event_by_id(short_event_id)
+            if full_event and full_event.profile_id:
+                final_sources.profile_ids_used.append(
+                    f"{full_event.project_slug}/{full_event.profile_id}"
+                )
+        elif isinstance(source, CodeSource):
+            repo_name = context.autocorrect_repo_name(source.repo_name)
+            repo_client = context.get_repo_client(repo_name)
+            file_name = source.file_name
+            snippet_to_find = source.code_snippet
+
+            file_content = context.get_file_contents(file_name, repo_name)
+            result = find_original_snippet(
+                snippet_to_find, file_content, initial_line_threshold=0.8, threshold=0.8
+            )
+            if result:
+                start_line = result[1]
+                end_line = result[2]
+                if repo_client.provider == "github":
+                    code_url = f"https://github.com/{repo_name}/blob/{repo_client.base_branch}/{file_name}#L{start_line}-L{end_line}"
+                    if code_url not in final_sources.code_used_urls:
+                        final_sources.code_used_urls.append(code_url)
+            else:
+                if repo_client.provider == "github":
+                    code_url = (
+                        f"https://github.com/{repo_name}/blob/{repo_client.base_branch}/{file_name}"
+                    )
+                    if code_url not in final_sources.code_used_urls:
+                        final_sources.code_used_urls.append(code_url)
+        elif isinstance(source, DiffSource):
+            repo_name = context.autocorrect_repo_name(source.repo_name)
+            repo_client = context.get_repo_client(repo_name)
+            if repo_client.provider == "github":
+                diff_url = f"https://github.com/{repo_name}/commit/{source.commit_sha}"
+                if diff_url not in final_sources.diff_urls:
+                    final_sources.diff_urls.append(diff_url)
+
+    return final_sources
 
 
 @observe(name="Sharing Insights")
@@ -95,6 +198,7 @@ def create_insight_output(
     step_type: str,
     memory: list[Message],
     generated_at_memory_index: int = -1,
+    context: AutofixContext,
     llm_client: LlmClient = injected,
 ) -> tuple[InsightSharingOutput | None, Usage]:
     usage = Usage()
@@ -126,24 +230,35 @@ def create_insight_output(
     prompt_two = InsightSharingPrompts.format_step_two(
         insight=insight,
         latest_thought=latest_thought,
+        past_insights=past_insights,
     )
 
     memory = [msg for msg in memory if msg.role != "system"]
 
-    completion = llm_client.generate_text(
+    completion = llm_client.generate_structured(
         messages=memory,
         prompt=prompt_two,
         model=GeminiProvider.model("gemini-2.0-flash-001"),
         temperature=0.0,
         max_tokens=4096,
+        response_format=JustificationOutput,
     )
-    justification = completion.message.content
-
     usage += completion.metadata.usage
+    justification = completion.parsed
+
+    answer = justification and justification.evidence or ""
+    markdown_snippets = justification and justification.markdown_snippets or ""
+    sources = justification and justification.sources or []
+
+    trace_tree = context.state.get().request.trace_tree
+    final_sources = process_sources(sources, context, trace_tree)
+    final_sources.thoughts = latest_thought
 
     response = InsightSharingOutput(
         insight=insight,
-        justification=justification or "",
+        justification=answer,
+        markdown_snippets=markdown_snippets,
+        sources=final_sources,
         generated_at_memory_index=generated_at_memory_index,
     )
     return response, usage

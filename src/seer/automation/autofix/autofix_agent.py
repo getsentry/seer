@@ -363,6 +363,7 @@ class AutofixAgent(LlmAgent):
             step_type=step.key,
             memory=self.memory,
             generated_at_memory_index=generated_at_memory_index,
+            context=self.context,
         )
 
         if insight_card:
