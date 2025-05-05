@@ -1175,7 +1175,7 @@ class TestViewDirectoryTree:
             "src/utils/__init__.py",
             "tests/test_main.py",
         }
-        mock_repo_client.get_index_file_set.return_value = files
+        mock_repo_client.get_valid_file_paths.return_value = files
         mock_repo_client._build_file_tree_string.return_value = "mock tree string"
 
         result = autofix_tools.tree("src")
@@ -1193,7 +1193,7 @@ class TestViewDirectoryTree:
 
         # Create a large set of files (more than MAX_FILES_IN_TREE)
         files = {f"src/file{i}.py" for i in range(150)}  # 150 files > MAX_FILES_IN_TREE (100)
-        mock_repo_client.get_index_file_set.return_value = files
+        mock_repo_client.get_valid_file_paths.return_value = files
         mock_repo_client._build_file_tree_string.return_value = "mock tree string"
 
         result = autofix_tools.tree("src")
