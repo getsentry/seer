@@ -895,30 +895,6 @@ class RepoClient:
                 logger.exception("Error creating PR")
                 raise e
 
-    def get_index_file_set(
-        self,
-        commit_sha: str | None = None,
-        max_file_size_bytes=2 * 1024 * 1024,
-        skip_empty_files=False,
-    ) -> set[str]:
-        if commit_sha is None:
-            commit_sha = self.base_commit_sha
-
-        tree = self.get_git_tree(commit_sha=commit_sha)
-        file_set = set()
-        for file in tree.tree:
-            if (
-                file.type == "blob"
-                and file.size < max_file_size_bytes
-                and file.mode
-                in ["100644", "100755"]  # 100644 is a regular file, 100755 is an executable file
-                and get_language_from_path(file.path) is not None
-                and (not skip_empty_files or file.size > 0)
-            ):
-                file_set.add(file.path)
-
-        return file_set
-
     def get_pr_diff_content(self, pr_url: str) -> str:
         data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="diff"))
 
