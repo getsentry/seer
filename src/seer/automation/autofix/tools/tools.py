@@ -53,6 +53,7 @@ class BaseTools:
         self.retrieval_top_k = retrieval_top_k
         self.repo_client_type = repo_client_type
         self.tmp_dir = {}
+        self.is_waiting_for_download = False
 
         # Start downloading repos in parallel immediately
         self._executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
