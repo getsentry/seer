@@ -18,6 +18,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
@@ -137,9 +138,20 @@ class BaseTools:
         if file_contents:
             return file_contents
 
+        self._ensure_repos_downloaded(repo_name)
+
+        local_read_error = None
+        if repo_name in self.tmp_dir:
+            repo_dir = self.tmp_dir[repo_name][1]
+
+            # try reading the actual file from file system
+            file_contents, local_read_error = read_file_contents(repo_dir, file_path)
+            if file_contents:
+                return file_contents
+
         # show potential corrected paths if nothing was found here
         other_paths = self._get_potential_abs_paths(file_path, repo_name)
-        return f"<document with the provided path not found/>\n{other_paths}".strip()
+        return f"<document with the provided path not found/>\n{local_read_error if local_read_error else ''}\n{other_paths}".strip()
 
     @observe(name="View Diff")
     @sentry_sdk.trace
@@ -408,6 +420,7 @@ class BaseTools:
         exclude_pattern: str | None = None,
         case_sensitive: bool = False,
         repo_name: str | None = None,
+        fixed_strings: bool = False,
     ) -> str:
         self._ensure_repos_downloaded(repo_name)
 
@@ -420,9 +433,12 @@ class BaseTools:
         cmd.extend(["--max-columns", "1024"])
 
         # limit threads
-        cmd.extend(["--threads", "1"])
+        cmd.extend(["--threads", "2"])
 
         # Add other common flags
+        if fixed_strings:
+            cmd.append("--fixed-strings")
+
         if not case_sensitive:
             cmd.append("--ignore-case")
 
@@ -1055,11 +1071,6 @@ class BaseTools:
                         description="Runs a ripgrep command over the codebase to find what you're looking for. Use this as your main tool for searching codebases. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
                         parameters=[
                             {
-                                "name": "query",
-                                "type": "string",
-                                "description": "The regex pattern you're searching for.",
-                            },
-                            {
                                 "name": "include_pattern",
                                 "type": "string",
                                 "description": "Optional glob pattern for files to include. For example, '*.py' for Python files.",
@@ -1075,9 +1086,19 @@ class BaseTools:
                                 "description": "Whether the search should be case sensitive.",
                             },
                             {
+                                "name": "fixed_strings",
+                                "type": "boolean",
+                                "description": "If true, search for the literal text. If false, interpret the query as a regex pattern.",
+                            },
+                            {
                                 "name": "repo_name",
                                 "type": "string",
                                 "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
+                            },
+                            {
+                                "name": "query",
+                                "type": "string",
+                                "description": "The precise query you're searching for. If `fixed_strings` is true, this will be interpreted as a literal string, no escaping is needed. Otherwise, it will be interpreted as a regex pattern, and correct regex syntax must be used.",
                             },
                         ],
                         required=["query"],
