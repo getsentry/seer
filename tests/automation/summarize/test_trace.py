@@ -46,25 +46,29 @@ class TestSummarizeTrace:
 
         expected_result = SummarizeTraceResponse(
             trace_id="123",
-            summary="**Trace: SentryApp Installation Retrieval**\n\n- A `db` transaction named `/api/0/organizations/{organization_id_or_slug}/repos/` initiates a database query.\n- The query retrieves `sentry_sentryappinstallation` data based on `api_token_id` and `status`.\n- The database operation is nested within another identical transaction.\n- The nested transaction contains a span that executes the same database query.\n",
-            key_observations="- The trace involves **duplicate nested transactions** performing the same database query, which is unusual.\n- The database query targets the `sentry_sentryappinstallation` table, suggesting a focus on application installations.\n- The query filters by `api_token_id` and `status`, indicating a search for specific installations.",
-            performance_characteristics="- The overall trace duration is **1.236ms**, which is relatively fast.\n- The database query itself takes **1.236ms**, indicating it's the primary operation.\n- The speed suggests the database query is efficient, but the duplicate execution may be unnecessary.",
-            suggested_investigations=SpanInsight(explanation="", span_id="", span_op=""),
-            anomalous_spans=SpanInsight(explanation="", span_id="", span_op=""),
+            summary="This trace represents an API transaction dominated by a single database query. The trace exhibits an unusual structure with deeply nested spans that appear identical, suggesting a potential instrumentation issue.",
+            key_observations="The trace consists solely of a single database SELECT query repeated across multiple nested spans. The nested db spans have identical descriptions, durations, timestamps, and even span IDs, which is highly irregular. The depth of nesting (3 levels) for a single, fast database operation is unexpected.",
+            performance_characteristics="The trace is extremely fast (1.236 ms), indicating the database query itself is performant. The unusual nested structure doesn't appear to cause significant performance degradation in this instance, but it represents inefficient span creation.",
+            suggested_investigations=[
+                SpanInsight(
+                    explanation="Investigate instrumentation for db spans as identical nesting suggests a configuration error.",
+                    span_id="9c39a42585c71c3d",
+                    span_op="db",
+                )
+            ],
         )
 
         assert isinstance(res, SummarizeTraceResponse)
 
         assert res.trace_id == expected_result.trace_id
-        assert res.summary == expected_result.summary, "summary mismatch"
-        assert res.key_observations == expected_result.key_observations, "key_observations mismatch"
+        assert res.summary == expected_result.summary
+        assert res.key_observations == expected_result.key_observations
         assert (
             res.performance_characteristics == expected_result.performance_characteristics
         ), "performance_characteristics mismatch"
         assert (
             res.suggested_investigations == expected_result.suggested_investigations
         ), "suggested_investigations mismatch"
-        assert res.anomalous_spans == expected_result.anomalous_spans, "anomalous_spans mismatch"
 
         assert res.model_dump() == expected_result.model_dump()
 

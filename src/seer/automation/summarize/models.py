@@ -50,7 +50,6 @@ class SpanInsight(BaseModel):
 class SummarizeTraceResponse(BaseModel):
     trace_id: str
     summary: str
-    anomalous_spans: list[SpanInsight]
     key_observations: str
     performance_characteristics: str
     suggested_investigations: list[SpanInsight]

@@ -69,7 +69,7 @@ def summarize_trace(
     return SummarizeTraceResponse(
         trace_id=request.trace_id,
         summary=trace_summary.summary,
-        anomalous_spans=trace_summary.anomalous_spans,
+        # anomalous_spans=trace_summary.anomalous_spans,
         key_observations=trace_summary.key_observations,
         performance_characteristics=trace_summary.performance_characteristics,
         suggested_investigations=trace_summary.suggested_investigations,
@@ -82,46 +82,18 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
     if only_transactions:
         prompt = textwrap.dedent(
             f"""
-            You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please summarize the trace below so our engineers can immediately understand what's going on.
-
-            This trace tree is made up only spans (<span>) that are transactions (<txn>). Each transaction represents a single instance of a service being called, and the trace is made up of all the transactions in a tree like structure.
-            Here is the trace:
-
-            <trace>
-            {trace_str}
-            </trace>
-
-            Your #1 goal is to help our engineers immediately understand what's going on in the trace.
-
-            Write a concise summary that includes the flow of events in the trace, key transactions, and the performance characteristics of the trace:
-
-            1. **Overall Summary**: A 1 sentence high-level summary of what this trace represents (e.g., "This trace represents a user login flow that authenticates with multiple services").
-
-            2. **Flow Overview**: Summarize the entire trace flow in 3-5 bullet points, focusing on the main sequence of operations from start to finish.
-
-            3. **Performance Characteristics**:
-            - Identify critical path operations that contribute most to the total duration
-            - Highlight relationships between spans where one span is blocking another
-            - Point out potential parallelization opportunities
-            - Focus only on optimizations that would make a significant impact (e.g., >5% of total trace time)
-
-            4. **Technical Insights**:
-            - Distinguish between blocking and non-blocking operations
-            - Identify any unusual patterns or anomalies (only if they impact performance significantly)
-            - Consider whether operations are sequential by necessity or could be reorganized
-            """
-        )
-    else:
-        prompt = textwrap.dedent(
-            f"""
             You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please provide key insights about the trace below so our engineers can immediately understand what's going on.
-            Please not that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans. The trace is made up of nested spans which have more granular information and represents the overall hierarchy of the trace.
+            Please not that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans.
 
-            Here is the trace:
-
-            <trace>
-            {trace_str}
-            </trace>
+            Here are some key concepts:
+            - Trace:
+              - A trace represents a single transaction or request through your system. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
+              - It captures a series of operations (spans) that show how different parts of your application interacted during that transaction.
+            - Span
+              - A span represents an individual operation within a trace. This could be a database query, HTTP request, or UI rendering task.
+              - Each span has:
+                - Attributes: Key-value pairs like http.method, db.query, span.description, or custom attributes like cart.value, provide additional context that can be useful for debugging and investigating patterns. These are either numbers or strings. Note: numeric span attributes can be used to calculate span metrics, shown below.
+                  - Duration (span.duration): The time the operation took, used to measure performance.
 
             Your #1 goal is to help our engineers immediately understand what's going on in the trace.
 
@@ -131,41 +103,96 @@ def _get_prompt(trace_str: str, only_transactions: bool) -> str:
             - Provide a 1-3 sentence high-level summary of what is going on in the trace in the spans that make it up. Make sure to only include the most important information such that a developer can understand the trace at a glance.
             - DO NOT EXCEED MORE THAN 3 SENTENCES. THIS IS NOT OPTIONAL.
 
-            2. **Anomalous Spans**:
-            - Identify up to 3 spans that are anomalous or stand out from the rest of the trace.
-            - These can be spans that are slow, have an odd grouping of spans above or below it, missing instrumentation, or anything else that very clearly sticks out. These should be things that a developer can immediately act on.
-            - You will respond with a list of objects with the following fields:
-              - "Explanation": Provide a brief 1 sentence explanation for why these spans are anomalous. The sentence must be extremely concise with no more than 15 words.
-              - "Span Id": span id of the anomalous span
-              - "Span Op": op of the anomalous span
-            - If there are no anomalous spans, you must return an empty list.
-
-            3. **Key Observations**: Key observations about the trace.
+            2. **Key Observations**:
             - Summarize the key observations about the trace in a bulleted list with 3 bullets MAX. DO NOT include any information about the trace structure, just the key observations.
             - When making observations, comment on groupings of spans -- not just individual spans.
             - Are there any seemingly uninteresting transactions, spans, or other events that provide context about the trace? Some issues in a span may be due to adjacent spans.
             - If you make a statement, be extremely specific about why you made that statement. DO NOT STATE THE OBVIOUS.
 
-            3. **Performance Characteristics**: The performance characteristics of the trace.
-            - Summarize the performance characteristics of the trace in a bulleted list.
-            - Are there any slow transactions, slow spans, or any other performance characteristics that stand out?
+            3. **Performance Characteristics**:
+            - Summarize the performance characteristics of the trace in 1-3 bullet points.
+            - Are there any slow transactions, slow spans, bottlenecks, or any other performance characteristics that stand out?
             - Explain why the spans may be slow.
             - Do not comment on the the overall trace duration as this is already provided to the user.
-            - Do not just say "the trace is slow" or "the trace is fast". Explain why extremely concisely.
+            - Do not just say "the trace is slow". Explain why extremely concisely.
+            - Avoid commenting on fast operations since they are not actionable for the user.
 
-            4. **Suggested Investigations**: Suggested investigations to improve the performance of the trace. BE SPECIFIC WHEN SUGGESTING THESE INVESTIGATIONS.
-            - Suggest specific span event ids to investigate. Also include the span's op and description. THIS IS NOT OPTIONAL.
-            - Are there any bottlenecks in the trace?
-            - Are there any areas for improvement in the trace?
+            4. **Suggested Investigations**:
+            - Identify up to 3 spans that are anomalous or stand out from the rest of the trace that the user should investigate. If there are none, you must return an empty list.
+            - These can be spans that are slow, have an odd grouping of spans around it, missing instrumentation, bottlenecks, or anything else that very clearly sticks out. These should be things that a developer can immediately act on.
+            - Do not call out spans just because the are slow or have a high duration. Be specific about why you are calling out the span and have a good reason for it.
             - You will respond with a list of objects with the following fields:
-              - "Explanation": Provide a brief 1 sentence explanation for why you should investigate this span. The sentence must be extremely concise with no more than 15 words.
+              - "Explanation": Provide a brief 1 sentence explanation for why a user should investigate this span AND a suggested action to investigate the span. The sentence must be extremely concise with no more than 20 words.
               - "Span Id": span id of the anomalous span
               - "Span Op": op of the anomalous span
-            - DO NOT GIVE ANY GENERIC INVESTIGATIONS. YOU MUST BE SPECIFIC.
 
             Please use markdown formatting for the trace to make it easier to read. You should bold important insights or key words and use other markdown formatting to make these insights easy to skim.
 
             IMPORTANT: Do not repeat the same information in the summary, key observations, or performance characteristics. Each section should be unique and contain distinct information.
+
+            Here is the trace:
+
+            <trace>
+            {trace_str}
+            </trace>
+            """
+        )
+    else:
+        prompt = textwrap.dedent(
+            f"""
+            You are a principal performance engineer who is excellent at explaining concepts simply to engineers of all levels. Our traces have a lot of dense information that is hard to understand quickly. Please provide key insights about the trace below so our engineers can immediately understand what's going on.
+            Please not that the engineers have access to the same information as you do, so please do not state any obvious high level information about the trace and its spans.
+
+            Here are some key concepts:
+            - Trace:
+              - A trace represents a single transaction or request through your system. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
+              - It captures a series of operations (spans) that show how different parts of your application interacted during that transaction.
+            - Span
+              - A span represents an individual operation within a trace. This could be a database query, HTTP request, or UI rendering task.
+              - Each span has:
+                - Attributes: Key-value pairs like http.method, db.query, span.description, or custom attributes like cart.value, provide additional context that can be useful for debugging and investigating patterns. These are either numbers or strings. Note: numeric span attributes can be used to calculate span metrics, shown below.
+                  - Duration (span.duration): The time the operation took, used to measure performance.
+
+            Your #1 goal is to help our engineers immediately understand what's going on in the trace.
+
+            Provide conscise insights about the trace and its spans in the following sections:
+
+            1. **Summary**:
+            - Provide a 1-3 sentence high-level summary of what is going on in the trace in the spans that make it up. Make sure to only include the most important information such that a developer can understand the trace at a glance.
+            - DO NOT EXCEED MORE THAN 3 SENTENCES. THIS IS NOT OPTIONAL.
+
+            2. **Key Observations**:
+            - Summarize the key observations about the trace in a bulleted list with 3 bullets MAX. DO NOT include any information about the trace structure, just the key observations.
+            - When making observations, comment on groupings of spans -- not just individual spans.
+            - Are there any seemingly uninteresting transactions, spans, or other events that provide context about the trace? Some issues in a span may be due to adjacent spans.
+            - If you make a statement, be extremely specific about why you made that statement. DO NOT STATE THE OBVIOUS.
+
+            3. **Performance Characteristics**:
+            - Summarize the performance characteristics of the trace in 1-3 bullet points.
+            - Are there any slow transactions, slow spans, bottlenecks, or any other performance characteristics that stand out?
+            - Explain why the spans may be slow.
+            - Do not comment on the the overall trace duration as this is already provided to the user.
+            - Do not just say "the trace is slow". Explain why extremely concisely.
+            - Avoid commenting on fast operations since they are not actionable for the user.
+
+            4. **Suggested Investigations**:
+            - Identify up to 3 spans that are anomalous or stand out from the rest of the trace that the user should investigate. If there are none, you must return an empty list.
+            - These can be spans that are slow, have an odd grouping of spans around it, missing instrumentation, bottlenecks, or anything else that very clearly sticks out. These should be things that a developer can immediately act on.
+            - Do not call out spans just because the are slow or have a high duration. Be specific about why you are calling out the span and have a good reason for it.
+            - You will respond with a list of objects with the following fields:
+              - "Explanation": Provide a brief 1 sentence explanation for why a user should investigate this span AND a suggested action to investigate the span. The sentence must be extremely concise with no more than 20 words.
+              - "Span Id": span id of the anomalous span
+              - "Span Op": op of the anomalous span
+
+            Please use markdown formatting for the trace to make it easier to read. You should bold important insights or key words and use other markdown formatting to make these insights easy to skim.
+
+            IMPORTANT: Do not repeat the same information in the summary, key observations, or performance characteristics. Each section should be unique and contain distinct information.
+
+            Here is the trace:
+
+            <trace>
+            {trace_str}
+            </trace>
             """
         )
 
