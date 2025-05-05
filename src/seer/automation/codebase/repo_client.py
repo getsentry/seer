@@ -37,8 +37,6 @@ from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
-MAX_REPO_SIZE_KB = 1500000  # 1.5 GB
-
 
 def get_github_app_auth_and_installation(
     app_id: int | str, private_key: str, repo_owner: str, repo_name: str
@@ -253,21 +251,6 @@ class RepoClient:
             and permissions.get("contents") == "write"
             and permissions.get("pull_requests") == "write"
         ):
-            github = Github(
-                auth=get_github_app_auth_and_installation(app_id, pk, repo.owner, repo.name)[0]
-            )
-            gh_repo = github.get_repo(repo.full_name)
-            if gh_repo.size > MAX_REPO_SIZE_KB:
-                logger.error(
-                    f"Repo size is greater than {MAX_REPO_SIZE_KB}KB",
-                    extra={"repo_name": repo.full_name, "repo_size_kb": gh_repo.size},
-                )
-
-                # We don't mark this repo as not writeable yet, because we need to do a graceful warning message on the UI for it.
-                # Right now we just want to debug to make sure that this is actually a problem.
-
-                # return False
-
             return True
 
         return False
@@ -284,22 +267,6 @@ class RepoClient:
         if permissions and (
             permissions.get("contents") == "read" or permissions.get("contents") == "write"
         ):
-            github = Github(
-                auth=get_github_app_auth_and_installation(app_id, pk, repo.owner, repo.name)[0]
-            )
-            gh_repo = github.get_repo(repo.full_name)
-
-            if gh_repo.size > MAX_REPO_SIZE_KB:
-                logger.error(
-                    f"Repo size is greater than {MAX_REPO_SIZE_KB}KB",
-                    extra={"repo_name": repo.full_name, "repo_size_kb": gh_repo.size},
-                )
-
-                # We don't mark this repo as unreadable yet, because we need to do a graceful warning message on the UI for it.
-                # Right now we just want to debug to make sure that this is actually a problem.
-
-                # return False
-
             return True
 
         return False
