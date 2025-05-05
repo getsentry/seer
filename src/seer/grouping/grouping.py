@@ -36,11 +36,34 @@ class GroupingRequest(BaseModel):
     hnsw_distance: float = NN_GROUPING_HNSW_DISTANCE
     use_reranking: bool = False
 
+    @staticmethod
+    def preprocess_stacktrace(v: str) -> str:
+        """Clean and validate stacktrace input"""
+        if not isinstance(v, str):
+            raise ValueError("Stacktrace must be a string")
+        # Clean whitespace while preserving newlines
+        return '\n'.join(line.strip() for line in v.splitlines())
+
     @field_validator("stacktrace")
     @classmethod
     def check_field_is_not_empty(cls, v, info: ValidationInfo):
         if not v:
-            raise ValueError(f"{info.field_name} must be provided and not empty.")
+            raise ValueError(
+                f"{info.field_name} must be provided and not empty. This field is required for "
+                "stacktrace similarity comparison."
+            )
+        
+        # Preprocess and validate the stacktrace
+        try:
+            v = cls.preprocess_stacktrace(v)
+        except ValueError as e:
+            raise ValueError(f"Invalid stacktrace format: {str(e)}")
+            
+        if len(v.strip()) < 10:  # Basic minimum length check
+            raise ValueError(
+                f"{info.field_name} appears to be too short to be valid. "
+                "Please provide complete stacktrace information."
+            )
         return v
 
 
