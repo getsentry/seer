@@ -5,7 +5,7 @@ import subprocess
 import textwrap
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError, as_completed
 from threading import Lock
-from typing import Any, cast
+from typing import Any, cast, Dict
 
 import sentry_sdk
 from langfuse.decorators import observe
@@ -21,6 +21,7 @@ from seer.automation.autofix.models import AutofixRequest
 from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
+from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
@@ -38,10 +39,8 @@ MAX_FILES_IN_TREE = 100
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
-    tmp_dir: dict[str, tuple[str, str]] = {}  # Maps repo_name to (tmp_dir, tmp_repo_dir)
-    tmp_repo_dir: str | None = None
+    repo_managers: Dict[str, RepoManager] = {}  # Maps repo_name to RepoManager
     repo_client_type: RepoClientType = RepoClientType.READ
-    _download_future: Future | None = None
 
     def __init__(
         self,
@@ -52,47 +51,27 @@ class BaseTools:
         self.context = context
         self.retrieval_top_k = retrieval_top_k
         self.repo_client_type = repo_client_type
-        self.tmp_dir = {}
+        self.repo_managers = {}
 
-        # Start downloading repos in parallel immediately
-        self._executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
-        self._start_parallel_repo_download()
+        # Download repos synchronously at initialization
+        self._download_repos()
 
-    def _start_parallel_repo_download(self):
-        """Start downloading all repositories in parallel in the background."""
+    def _download_repos(self):
+        """Download all repositories synchronously during initialization."""
         repo_names = self._get_repo_names()
         if not repo_names:
             return
 
-        @sentry_sdk.trace
-        def download_all_repos():
-            """Download all repositories and update self.tmp_dir directly."""
-            # Create a lock for thread-safe updates to self.tmp_dir
-            if not hasattr(self, "_tmp_dir_lock"):
-                self._tmp_dir_lock = Lock()
-
-            for repo_name in repo_names:
-                # Skip if already downloaded or in progress
-                with self._tmp_dir_lock:
-                    if repo_name in self.tmp_dir:
-                        continue
-
-                try:
-                    repo_client = self.context.get_repo_client(
-                        repo_name=repo_name, type=self.repo_client_type
-                    )
-                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-
-                    # Update self.tmp_dir in a thread-safe way
-                    with self._tmp_dir_lock:
-                        self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
-
-                except Exception as e:
-                    logger.exception(f"Error pre-downloading repo {repo_name}: {e}")
-
-            return True  # Signal completion
-
-        self._download_future = self._executor.submit(download_all_repos)
+        for repo_name in repo_names:
+            try:
+                repo_client = self.context.get_repo_client(
+                    repo_name=repo_name, type=self.repo_client_type
+                )
+                local_client = RepoManager(repo_client)
+                self.repo_managers[repo_name] = local_client
+                logger.info(f"Downloaded repository {repo_name} to {local_client.repo_path}")
+            except Exception as e:
+                logger.exception(f"Error downloading repo {repo_name}: {e}")
 
     def __enter__(self):
         return self
@@ -163,8 +142,8 @@ class BaseTools:
         self._ensure_repos_downloaded(repo_name)
 
         local_read_error = None
-        if repo_name in self.tmp_dir:
-            repo_dir = self.tmp_dir[repo_name][1]
+        if repo_name in self.repo_managers:
+            repo_dir = self.repo_managers[repo_name].repo_path
 
             # try reading the actual file from file system
             file_contents, local_read_error = read_file_contents(repo_dir, file_path)
@@ -304,26 +283,14 @@ class BaseTools:
 
     @sentry_sdk.trace
     def cleanup(self):
-        # Ensure lock exists before using it
-        if not hasattr(self, "_tmp_dir_lock"):
-            self._tmp_dir_lock = Lock()
-
-        # Clean up any in-progress downloads
-        if self._download_future and not self._download_future.done():
+        """Clean up all repository clients."""
+        for repo_name, local_client in list(self.repo_managers.items()):
             try:
-                self._download_future.cancel()
+                local_client.cleanup()
             except Exception as e:
-                logger.exception(f"Error cancelling downloads during cleanup: {e}")
-            self._download_future = None
+                logger.exception(f"Error cleaning up repo {repo_name}: {e}")
 
-        # Create a thread-safe copy of the temporary directories to clean up
-        with self._tmp_dir_lock:
-            tmp_dirs_to_cleanup = list(self.tmp_dir.values())
-            self.tmp_dir = {}
-
-        # Iterate over the copied temporary directories to perform the cleanup
-        for tmp_dir, _ in tmp_dirs_to_cleanup:
-            cleanup_dir(tmp_dir)
+        self.repo_managers = {}
 
     @observe(name="Search Google")
     @sentry_sdk.trace
@@ -469,10 +436,10 @@ class BaseTools:
 
         if repo_name:
             # Single repository search
-            if repo_name not in self.tmp_dir:
+            if repo_name not in self.repo_managers:
                 return f"Error: Repository {repo_name} not found or not downloaded"
 
-            tmp_repo_dir = self.tmp_dir[repo_name][1]
+            tmp_repo_dir = self.repo_managers[repo_name].repo_path
 
             cmd.append(tmp_repo_dir)
 
@@ -484,9 +451,9 @@ class BaseTools:
 
             # Run ripgrep in parallel across repositories
             def search_repo(repo_name: str) -> tuple[str, str] | None:
-                if repo_name not in self.tmp_dir:
+                if repo_name not in self.repo_managers:
                     return None
-                repo_dir = self.tmp_dir[repo_name][1]
+                repo_dir = self.repo_managers[repo_name].repo_path
                 try:
                     result = run_ripgrep_in_repo(repo_dir, cmd)
                     return (repo_name, result)
@@ -509,92 +476,37 @@ class BaseTools:
 
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
-        Helper method to ensure repositories are downloaded to temporary directories.
-        Checks if downloads are in progress and waits for them if necessary,
-        or triggers downloads for missing repositories.
+        Helper method to ensure repositories are downloaded.
+        Simplified version that just checks if repos are already downloaded
+        and downloads them synchronously if needed.
 
         Args:
             repo_name: If provided, only ensures this specific repo is downloaded.
                       If None, ensures all repos are downloaded.
         """
-        # Check if parallel download is in progress
-        if self._download_future is not None:
-            if self._download_future.done():
-                # Download completed - process results
-                try:
-                    self._download_future.result()
-                except Exception as e:
-                    logger.exception(f"Error in parallel repo download: {e}")
-                finally:
-                    self._download_future = None
-            else:
-                # Download in progress - wait for it to complete with a timeout
-                with sentry_sdk.start_span(name="Waiting for parallel repo download to complete"):
-                    try:
-                        self._download_future.result(timeout=60)
-                        self._download_future = None
-                    except TimeoutError:
-                        logger.warning(
-                            "Parallel repo download taking too long, proceeding with individual downloads"
-                        )
-                        self._download_future = None
-                    except Exception as e:
-                        logger.exception(f"Error waiting for parallel repo download: {e}")
-                        self._download_future = None
-
         if repo_name:
-            repo_names_to_download = [repo_name] if repo_name not in self.tmp_dir else []
+            repo_names_to_download = [repo_name] if repo_name not in self.repo_managers else []
         else:
-            repo_names_to_download = [rn for rn in self._get_repo_names() if rn not in self.tmp_dir]
+            repo_names_to_download = [
+                rn for rn in self._get_repo_names() if rn not in self.repo_managers
+            ]
 
         if not repo_names_to_download:
             return
 
         append_langfuse_observation_metadata({"repo_download": True})
 
-        if not hasattr(self, "_tmp_dir_lock"):
-            self._tmp_dir_lock = Lock()
-
-        with sentry_sdk.start_span(name="Downloading repos individually"):
-            if len(repo_names_to_download) == 1:
-                # Single repo - download synchronously
+        with sentry_sdk.start_span(name="Downloading repos"):
+            for repo_name in repo_names_to_download:
                 try:
-                    repo_name = repo_names_to_download[0]
                     repo_client = self.context.get_repo_client(
                         repo_name=repo_name, type=self.repo_client_type
                     )
-                    tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-
-                    with self._tmp_dir_lock:
-                        self.tmp_dir[repo_name] = (tmp_dir, tmp_repo_dir)
+                    local_client = RepoManager(repo_client)
+                    self.repo_managers[repo_name] = local_client
+                    logger.info(f"Downloaded repository {repo_name} to {local_client.repo_path}")
                 except Exception as e:
                     logger.exception(f"Error downloading repo {repo_name}: {e}")
-            else:
-                # Multiple repos - download in parallel
-                def download_repo(repo_name):
-                    try:
-                        repo_client = self.context.get_repo_client(
-                            repo_name=repo_name, type=self.repo_client_type
-                        )
-                        tmp_dir, tmp_repo_dir = repo_client.load_repo_to_tmp_dir()
-                        return repo_name, (tmp_dir, tmp_repo_dir)
-                    except Exception as e:
-                        logger.exception(f"Error downloading repo {repo_name}: {e}")
-                        return None
-
-                with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
-                    futures = {
-                        executor.submit(download_repo, repo_name): repo_name
-                        for repo_name in repo_names_to_download
-                    }
-
-                    for future in as_completed(futures):
-                        result = future.result()
-                        if result:
-                            repo_name, repo_dirs = result
-                            with self._tmp_dir_lock:
-                                if repo_name is not None:
-                                    self.tmp_dir[repo_name] = repo_dirs
 
     @observe(name="Find Files")
     @sentry_sdk.trace
@@ -623,9 +535,9 @@ class BaseTools:
             return f"Error parsing find command: {str(e)}"
 
         for repo_name in repo_names:
-            if repo_name not in self.tmp_dir:
+            if repo_name not in self.repo_managers:
                 continue
-            tmp_dir, tmp_repo_dir = self.tmp_dir[repo_name]
+            tmp_repo_dir = self.repo_managers[repo_name].repo_path
             if not tmp_repo_dir:
                 continue
 
