@@ -167,14 +167,12 @@ def process_sources(sources: list, context: AutofixContext, trace_tree):
                 start_line = result[1]
                 end_line = result[2]
                 if repo_client.provider == "github":
-                    code_url = f"https://github.com/{repo_name}/blob/{repo_client.base_branch}/{file_name}#L{start_line}-L{end_line}"
+                    code_url = f"https://github.com/{repo_name}/blob/{repo_client.base_commit_sha}/{file_name}#L{start_line}-L{end_line}"
                     if code_url not in final_sources.code_used_urls:
                         final_sources.code_used_urls.append(code_url)
             else:
                 if repo_client.provider == "github":
-                    code_url = (
-                        f"https://github.com/{repo_name}/blob/{repo_client.base_branch}/{file_name}"
-                    )
+                    code_url = f"https://github.com/{repo_name}/blob/{repo_client.base_commit_sha}/{file_name}"
                     if code_url not in final_sources.code_used_urls:
                         final_sources.code_used_urls.append(code_url)
         elif isinstance(source, DiffSource):

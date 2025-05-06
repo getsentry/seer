@@ -24,6 +24,7 @@ def mock_context():
     repo_client = MagicMock()
     repo_client.provider = "github"
     repo_client.base_branch = "main"
+    repo_client.base_commit_sha = "abcd1234"
 
     context.get_repo_client.return_value = repo_client
     context.get_file_contents.return_value = "sample file content"
@@ -84,7 +85,10 @@ def test_process_sources(mock_find_snippet, mock_context, mock_trace_tree):
     assert result.connected_error_ids_used == ["full-error-id"]
     assert result.profile_ids_used == ["test-project/profile-123"]
     assert len(result.code_used_urls) == 1
-    assert result.code_used_urls[0] == "https://github.com/test-repo/blob/main/test-file.py#L10-L20"
+    assert (
+        result.code_used_urls[0]
+        == "https://github.com/test-repo/blob/abcd1234/test-file.py#L10-L20"
+    )
     assert len(result.diff_urls) == 1
     assert "https://github.com/test-repo/commit/abcd1234" in result.diff_urls
     assert result.event_trace_id == "test-trace-id"
@@ -123,5 +127,5 @@ def test_process_sources_without_trace_tree(mock_context):
     assert result.stacktrace_used is True
     assert result.trace_event_ids_used == []
     assert len(result.code_used_urls) == 1
-    assert "https://github.com/test-repo/blob/main/test-file.py" in result.code_used_urls
+    assert "https://github.com/test-repo/blob/abcd1234/test-file.py" in result.code_used_urls
     assert result.event_trace_id is None
