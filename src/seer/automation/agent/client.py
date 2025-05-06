@@ -944,6 +944,7 @@ class GeminiProvider:
             or isinstance(exception, LlmNoCompletionTokensError)
             or isinstance(exception, LlmStreamTimeoutError)
             or isinstance(exception, ChunkedEncodingError)
+            or isinstance(exception, json.JSONDecodeError)
         )
 
     @staticmethod
