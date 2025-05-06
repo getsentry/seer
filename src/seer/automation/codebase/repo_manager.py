@@ -1,7 +1,7 @@
 import logging
 import os
-import tempfile
 import tarfile
+import tempfile
 import time
 
 import git

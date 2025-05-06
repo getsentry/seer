@@ -5,7 +5,7 @@ import subprocess
 import textwrap
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError, as_completed
 from threading import Lock
-from typing import Any, cast, Dict
+from typing import Any, Dict, cast
 
 import sentry_sdk
 from langfuse.decorators import observe
@@ -21,9 +21,9 @@ from seer.automation.autofix.models import AutofixRequest
 from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
-from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
+from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
@@ -92,6 +92,13 @@ class BaseTools:
         else:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
 
+    def _make_repo_not_found_error_message(self, repo_name: str) -> str:
+        return f"Error: Repo '{repo_name}' not found." + (
+            f" Available repos: {', '.join([repo.full_name for repo in self.context.repos if isinstance(self.context, AutofixContext)])}"
+            if isinstance(self.context, AutofixContext)
+            else ""
+        )
+
     @observe(name="Semantic File Search")
     @sentry_sdk.trace
     @inject
@@ -110,6 +117,21 @@ class BaseTools:
     @observe(name="Expand Document")
     @sentry_sdk.trace
     def expand_document(self, file_path: str, repo_name: str):
+        fixed_repo_name = (
+            self.context.autocorrect_repo_name(repo_name)
+            if isinstance(self.context, AutofixContext)
+            else repo_name
+        )
+        if not fixed_repo_name:
+            return self._make_repo_not_found_error_message(repo_name)
+        repo_name = fixed_repo_name
+
+        valid_file_path = self._attempt_fix_path(file_path, repo_name)
+        if valid_file_path is None:
+            other_paths = self._get_potential_abs_paths(file_path, repo_name)
+            return f"Error: The file path `{file_path}` doesn't exist in `{repo_name}`.\n{other_paths}".strip()
+
+        # At this point we have ensured the file path and the repo name are valid.
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
@@ -128,9 +150,7 @@ class BaseTools:
             if file_contents:
                 return file_contents
 
-        # show potential corrected paths if nothing was found here
-        other_paths = self._get_potential_abs_paths(file_path, repo_name)
-        return f"<document with the provided path not found/>\n{local_read_error if local_read_error else ''}\n{other_paths}".strip()
+        return f"Error: Could not read the file at path `{file_path}`.\n{local_read_error if local_read_error else ''}".strip()
 
     @observe(name="View Diff")
     @sentry_sdk.trace
@@ -173,7 +193,7 @@ class BaseTools:
         Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_paths = repo_client.get_index_file_set()
+        all_paths = repo_client.get_valid_file_paths()
         normalized_path = self._normalize_path(path)
 
         # Filter paths to include all files under the specified path
@@ -215,7 +235,7 @@ class BaseTools:
         This is useful in the case that the model is using an incomplete path.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_paths = repo_client.get_index_file_set()
+        all_paths = repo_client.get_valid_file_paths()
         normalized_path = self._normalize_path(path)
 
         # Filter paths to include parents + remove duplicates and sort
@@ -238,7 +258,7 @@ class BaseTools:
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_files = repo_client.get_index_file_set()
+        all_files = repo_client.get_valid_file_paths()
 
         normalized_path = path.lstrip("./").lstrip("/")
         if not normalized_path:
@@ -631,8 +651,20 @@ class BaseTools:
         if not path:
             return "Error: Path could not be resolved"
 
+        if not repo_name:
+            return "Error: Repo could not be resolved"
+
         tool_call_id = kwargs.get("tool_call_id", None)
         current_memory_index = kwargs.get("current_memory_index", -1)
+
+        fixed_repo_name = (
+            self.context.autocorrect_repo_name(repo_name)
+            if isinstance(self.context, AutofixContext)
+            else repo_name
+        )
+        if not fixed_repo_name:
+            return self._make_repo_not_found_error_message(repo_name)
+        repo_name = fixed_repo_name
 
         command_handlers = {
             "view": self._handle_view_command,
