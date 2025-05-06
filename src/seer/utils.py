@@ -89,6 +89,8 @@ def backoff_on_exception(
     max_tries: int = 2,
     sleep_sec_scaler: Callable[[int], float] | None = None,
     jitterer: Callable[[], float] = lambda: random.uniform(0, 0.5),
+    long_wait_threshold_sec: float | None = None,
+    long_wait_callback: Callable[[], None] | None = None,
 ):
     """
     Returns a decorator which retries a function on exception iff `is_exception_retryable(exception)`.
@@ -112,6 +114,12 @@ def backoff_on_exception(
                     last_exception = exception
                     if is_exception_retryable(exception):
                         sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
+                        if (
+                            long_wait_threshold_sec is not None
+                            and long_wait_callback is not None
+                            and sleep_sec > long_wait_threshold_sec
+                        ):
+                            long_wait_callback()
                         logger.info(
                             f"Encountered {exception_formatter(exception)}. Sleeping for "
                             f"{sleep_sec} seconds before try {num_tries + 1}/{max_tries}."

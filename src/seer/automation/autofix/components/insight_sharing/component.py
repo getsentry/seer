@@ -20,6 +20,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     TraceEventSource,
 )
 from seer.automation.autofix.utils import find_original_snippet
+from seer.automation.models import TraceTree
 from seer.dependency_injection import inject, injected
 
 
@@ -104,7 +105,7 @@ class InsightSharingPrompts:
         )
 
 
-def process_sources(sources: list, context: AutofixContext, trace_tree):
+def process_sources(sources: list, context: AutofixContext, trace_tree: TraceTree | None):
     """
     Process the list of sources and consolidate them into the InsightSources structure.
 
@@ -139,13 +140,13 @@ def process_sources(sources: list, context: AutofixContext, trace_tree):
         elif isinstance(source, TraceEventSource) and trace_tree:
             short_event_id = source.trace_event_id
             full_event = trace_tree.get_event_by_id(short_event_id)
-            if full_event:
-                final_sources.trace_event_ids_used.append(full_event.id)
+            if full_event and full_event.event_id:
+                final_sources.trace_event_ids_used.append(full_event.event_id)
         elif isinstance(source, ConnectedErrorSource) and trace_tree:
             short_event_id = source.connected_error_id
             full_event = trace_tree.get_event_by_id(short_event_id)
-            if full_event:
-                final_sources.connected_error_ids_used.append(full_event.id)
+            if full_event and full_event.event_id:
+                final_sources.connected_error_ids_used.append(full_event.event_id)
         elif isinstance(source, ProfileSource) and trace_tree:
             short_event_id = source.trace_event_id
             full_event = trace_tree.get_event_by_id(short_event_id)
@@ -249,7 +250,7 @@ def create_insight_output(
     sources = justification and justification.sources or []
 
     trace_tree = context.state.get().request.trace_tree
-    final_sources = process_sources(sources, context, trace_tree)
+    final_sources = process_sources(sources=sources, context=context, trace_tree=trace_tree)
     final_sources.thoughts = latest_thought
 
     response = InsightSharingOutput(
