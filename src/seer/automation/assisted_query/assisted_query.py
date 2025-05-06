@@ -4,6 +4,7 @@ import sentry_sdk
 from langfuse.decorators import observe
 
 from seer.automation.agent.client import LlmClient
+from seer.automation.agent.models import LlmGenerateStructuredResponse
 from seer.automation.assisted_query import prompts
 from seer.automation.assisted_query.create_cache import create_cache
 from seer.automation.assisted_query.models import (
@@ -43,6 +44,8 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
         project_ids,
     )
 
+    sentry_query = sentry_query.parsed
+
     return TranslateResponse(
         query=sentry_query.query,
         stats_period=sentry_query.stats_period,
@@ -62,7 +65,7 @@ def create_query_from_natural_language(
     project_ids: list[int],
     llm_client: LlmClient = injected,
     rpc_client: RpcClient = injected,
-) -> ModelResponse:
+) -> LlmGenerateStructuredResponse:
 
     model = get_model_provider()
 
