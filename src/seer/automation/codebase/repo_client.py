@@ -736,6 +736,8 @@ class RepoClient:
         # Remove leading slash if it exists, the github api will reject paths with leading slashes.
         if path.startswith("/"):
             path = path[1:]
+        if path.startswith("./"):
+            path = path[2:]
 
         to_apply = None
         detected_encoding = "utf-8"
