@@ -1367,7 +1367,8 @@ class TestExpandDocument:
         autofix_tools._attempt_fix_path.assert_called_once_with(invalid_path, repo_name)
 
         # Assert that an error message is returned
-        assert "Error: Could not find file" in result
+        assert "Error: The file path" in result
+        assert "doesn't exist" in result
         assert invalid_path in result
 
     def test_incorrect_repo_name_returns_error(self, autofix_tools: BaseTools):
