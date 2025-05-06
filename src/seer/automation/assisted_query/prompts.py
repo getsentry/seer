@@ -200,12 +200,14 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         You must also select the right chart type and y-axes for the query.
         The chart type is an integer:
+        - 0 represents a bar chart
         - 1 represents a line chart
         - 2 represents an area chart
-        - 3 represents a bar chart
 
         You should use a line chart when visualizing by multiple functions or when visualizing a group by so it is easy to compare the values.
         If you are visualizing just one function, then you should default to a bar chart.
+
+        YOU MUST ONLY RETURN THE CHART TYPE AS AN INTEGER AND MUST BE 0, 1, OR 2.
 
         The y-axes are a list of strings, each representing a function to aggregate the data by.
 

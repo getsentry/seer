@@ -42,7 +42,7 @@ class TestCreateCache(unittest.TestCase):
         mock_llm_instance.create_cache.return_value = "new-cache-name"
 
         mock_rpc_client_call.return_value = {
-            "fields": [{"key": "field1"}, {"key": "field2"}],
+            "fields": ["field1", "field2"],
             "field_values": {"field1": ["value1"], "field2": ["value2"]},
         }
 
@@ -66,7 +66,7 @@ class TestCreateCache(unittest.TestCase):
         )
         mock_rpc_client_call.assert_any_call(
             "get_attribute_values",
-            fields=[{"key": "field1"}, {"key": "field2"}],
+            fields=["field1", "field2"],
             org_id=self.org_id,
             project_ids=self.project_ids,
             stats_period="48h",
