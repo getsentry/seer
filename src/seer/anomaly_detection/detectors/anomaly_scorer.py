@@ -277,7 +277,7 @@ class CombinedAnomalyScorer(AnomalyScorer):
                     flags.append(mp_flag)
                 previous_flag = flags[-1]
                 algo_types.append(algo_type)
-            if missing > 0:
+            if found == 0:
                 logger.warning(
                     "Some of the MP flags did not have corresponding prophet flags",
                     extra={
@@ -302,7 +302,6 @@ class CombinedAnomalyScorer(AnomalyScorer):
             ["flag", "score", "y", "yhat", "yhat_lower", "yhat_upper"]
         ].to_dict()
         flags, algo_types = merge(timestamps, mp_flags_and_scores, prophet_predictions_map)
-
         return FlagsAndScores(
             flags=flags,
             scores=mp_flags_and_scores.scores,
