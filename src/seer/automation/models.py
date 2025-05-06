@@ -1159,6 +1159,8 @@ def annotate_hunks(hunks: list[Hunk]) -> list[str]:
     Hunks annotated with line numbers for the source and target, like you see in GitHub.
     Join via `"\\n\\n"` to get the full annotated patch.
     """
+    if not hunks:
+        return []
     max_digits_source = max(len(str(hunk.lines[-1].source_line_no)) for hunk in hunks)
     max_digits_target = max(len(str(hunk.lines[-1].target_line_no)) for hunk in hunks)
     return [
