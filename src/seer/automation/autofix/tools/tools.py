@@ -420,7 +420,7 @@ class BaseTools:
         exclude_pattern: str | None = None,
         case_sensitive: bool = False,
         repo_name: str | None = None,
-        fixed_strings: bool = False,
+        use_regex: bool = False,
     ) -> str:
         self._ensure_repos_downloaded(repo_name)
 
@@ -435,8 +435,7 @@ class BaseTools:
         # limit threads
         cmd.extend(["--threads", "2"])
 
-        # Add other common flags
-        if fixed_strings:
+        if not use_regex:
             cmd.append("--fixed-strings")
 
         if not case_sensitive:
@@ -1086,9 +1085,9 @@ class BaseTools:
                                 "description": "Whether the search should be case sensitive.",
                             },
                             {
-                                "name": "fixed_strings",
+                                "name": "use_regex",
                                 "type": "boolean",
-                                "description": "If true, search for the literal text. If false, interpret the query as a regex pattern.",
+                                "description": "Set this to true to search for a regex pattern. By default set to false.",
                             },
                             {
                                 "name": "repo_name",
@@ -1098,7 +1097,7 @@ class BaseTools:
                             {
                                 "name": "query",
                                 "type": "string",
-                                "description": "The precise query you're searching for. If `fixed_strings` is true, this will be interpreted as a literal string, no escaping is needed. Otherwise, it will be interpreted as a regex pattern, and correct regex syntax must be used.",
+                                "description": "The precise query you're searching for. By default interpreted as a literal string, so no escaping is needed. Set use_regex=true to use regex pattern matching.",
                             },
                         ],
                         required=["query"],
