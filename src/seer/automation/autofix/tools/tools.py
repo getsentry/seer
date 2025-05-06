@@ -5,7 +5,7 @@ import subprocess
 import textwrap
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError, as_completed
 from threading import Lock
-from typing import Any, cast, Dict
+from typing import Any, Dict, cast
 
 import sentry_sdk
 from langfuse.decorators import observe
@@ -21,9 +21,9 @@ from seer.automation.autofix.models import AutofixRequest
 from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
-from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
+from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
