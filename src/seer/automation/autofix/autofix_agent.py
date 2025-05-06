@@ -235,11 +235,21 @@ class AutofixAgent(LlmAgent):
 
         Additionally, if the input is too long, the tool messages are truncated and the completion is retried once.
         """
+
+        def _long_wait_logger():
+            self.context.event_manager.add_log(
+                "Our LLM provider is overloaded. Now retrying desperately..."
+            )
+
         is_exception_retryable = getattr(
             run_config.model, "is_completion_exception_retryable", lambda _: False
         )
         retrier = backoff_on_exception(
-            is_exception_retryable, max_tries=max_tries, sleep_sec_scaler=sleep_sec_scaler
+            is_exception_retryable,
+            max_tries=max_tries,
+            sleep_sec_scaler=sleep_sec_scaler,
+            long_wait_callback=_long_wait_logger,
+            long_wait_threshold_sec=10,
         )
 
         is_input_too_long_func = getattr(run_config.model, "is_input_too_long", lambda _: False)
