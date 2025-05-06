@@ -40,15 +40,15 @@ def mock_trace_tree():
     def get_event_by_id(event_id):
         if event_id == "trace-event-id":
             event = MagicMock()
-            event.id = "full-trace-event-id"
+            event.event_id = "full-trace-event-id"
             return event
         elif event_id == "error-id":
             event = MagicMock()
-            event.id = "full-error-id"
+            event.event_id = "full-error-id"
             return event
         elif event_id == "profile-event-id":
             event = MagicMock()
-            event.id = "full-profile-event-id"
+            event.event_id = "full-profile-event-id"
             event.profile_id = "profile-123"
             event.project_slug = "test-project"
             return event
