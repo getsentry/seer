@@ -550,5 +550,251 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         self.assertEqual(changes_step.changes[0].pull_request.pr_id, 123)
 
 
+class TestGetFileContents(unittest.TestCase):
+    def setUp(self):
+        error_event = next(generate(SentryEventData))
+        self.state = ContinuationState.new(
+            AutofixContinuation(
+                request=AutofixRequest(
+                    organization_id=1,
+                    project_id=1,
+                    repos=[],
+                    issue=IssueDetails(id=0, title="", events=[error_event]),
+                )
+            ),
+            t=DbStateRunTypes.AUTOFIX,
+        )
+        self.autofix_context = AutofixContext(
+            self.state,
+            MagicMock(),
+        )
+        self.mock_repo_client = MagicMock()
+        self.mock_repo_client.repo_external_id = "123"
+        self.mock_repo_client.get_file_content.return_value = ("file content", None)
+
+        # Initialize the state with empty codebases for each test
+        with self.state.update() as cur:
+            cur.codebases = {
+                "123": CodebaseState(
+                    repo_external_id="123",
+                    file_changes=[],
+                ),
+                "456": CodebaseState(
+                    repo_external_id="456",
+                    file_changes=[],
+                ),
+            }
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_single_repo(self, mock_RepoClient):
+        # Setup
+        mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+
+        # Test with single repo
+        result = self.autofix_context.get_file_contents("test.py")
+
+        # Assert
+        self.assertEqual(result, "file content")
+        self.mock_repo_client.get_file_content.assert_called_once_with("test.py")
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_multiple_repos_with_name(self, mock_RepoClient):
+        # Setup
+        mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
+        self.autofix_context.repos = [
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo1",
+                external_id="123",
+                full_name="test/repo1",
+            ),
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo2",
+                external_id="456",
+                full_name="test/repo2",
+            ),
+        ]
+
+        # Test with multiple repos and providing repo_name
+        result = self.autofix_context.get_file_contents("test.py", repo_name="test/repo1")
+
+        # Assert
+        self.assertEqual(result, "file content")
+        self.mock_repo_client.get_file_content.assert_called_once_with("test.py")
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_multiple_repos_no_name(self, mock_RepoClient):
+        # Setup
+        mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
+        self.autofix_context.repos = [
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo1",
+                external_id="123",
+                full_name="test/repo1",
+            ),
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo2",
+                external_id="456",
+                full_name="test/repo2",
+            ),
+        ]
+
+        # Test error case: multiple repos but no repo_name provided
+        with self.assertRaises(ValueError) as context:
+            self.autofix_context.get_file_contents("test.py")
+
+        self.assertEqual(
+            str(context.exception), "Repo name is required when there are multiple repos."
+        )
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_repo_not_found(self, mock_RepoClient):
+        # Setup
+        mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
+        self.autofix_context.repos = [
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo1",
+                external_id="123",
+                full_name="test/repo1",
+            ),
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo2",
+                external_id="456",
+                full_name="test/repo2",
+            ),
+        ]
+
+        # Test error case: repo_name not found in repos list
+        with self.assertRaises(ValueError) as context:
+            self.autofix_context.get_file_contents("test.py", repo_name="nonexistent/repo")
+
+        self.assertEqual(
+            str(context.exception), "Repo 'nonexistent/repo' not found in the list of repos."
+        )
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_with_local_changes(self, mock_RepoClient):
+        # Setup
+        mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+
+        # Setup local changes in the state
+        with self.state.update() as cur:
+            cur.codebases = {
+                "123": CodebaseState(
+                    repo_external_id="123",
+                    file_changes=[
+                        FileChange(
+                            path="test.py",
+                            reference_snippet="content",
+                            change_type="edit",
+                            new_snippet="modified content",
+                            description="test",
+                        )
+                    ],
+                )
+            }
+
+        # Mock the apply method on FileChange
+        with patch.object(FileChange, "apply", return_value="modified file content"):
+            result = self.autofix_context.get_file_contents("test.py")
+            self.assertEqual(result, "modified file content")
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_ignore_local_changes(self, mock_RepoClient):
+        # Setup
+        mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+
+        # Setup local changes in the state
+        with self.state.update() as cur:
+            cur.codebases = {
+                "123": CodebaseState(
+                    repo_external_id="123",
+                    file_changes=[
+                        FileChange(
+                            path="test.py",
+                            reference_snippet="content",
+                            change_type="edit",
+                            new_snippet="modified content",
+                            description="test",
+                        )
+                    ],
+                )
+            }
+
+        # Test with ignore_local_changes=True
+        result = self.autofix_context.get_file_contents("test.py", ignore_local_changes=True)
+
+        # FileChange.apply should not be called, and original content should be returned
+        self.assertEqual(result, "file content")
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_file_not_found(self, mock_RepoClient):
+        # Setup
+        mock_client = MagicMock()
+        mock_client.repo_external_id = "123"
+        # Simulate file not found
+        mock_client.get_file_content.return_value = (None, None)
+        mock_RepoClient.from_repo_definition.return_value = mock_client
+
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+
+        # Test when file is not found
+        result = self.autofix_context.get_file_contents("non_existent_file.py")
+
+        # Should return None when file content is None
+        self.assertIsNone(result)
+        mock_client.get_file_content.assert_called_once_with("non_existent_file.py")
+
+    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    def test_get_file_contents_missing_repo_changes(self, mock_RepoClient):
+        # Setup
+        mock_client = MagicMock()
+        mock_client.repo_external_id = "456"  # Different from what's in the state
+        mock_client.get_file_content.return_value = ("file content", None)
+        mock_RepoClient.from_repo_definition.return_value = mock_client
+
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="456")
+        ]
+
+        # The setUp method only initialized codebase for repo "123"
+        # This will test the case where the repo exists but no changes are stored for it
+
+        # We need to update the state to not include the "456" repo
+        with self.state.update() as cur:
+            cur.codebases = {
+                "123": CodebaseState(
+                    repo_external_id="123",
+                    file_changes=[],
+                )
+            }
+
+        # This should raise a KeyError when trying to access a non-existent repo in the state
+        with self.assertRaises(KeyError):
+            self.autofix_context.get_file_contents("test.py")
+
+
 if __name__ == "__main__":
     unittest.main()
