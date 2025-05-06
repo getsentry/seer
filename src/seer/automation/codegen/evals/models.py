@@ -1,4 +1,5 @@
 from pydantic import BaseModel, field_validator
+from pydantic.fields import Field
 
 from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
 from seer.automation.codegen.models import CodegenRelevantWarningsRequest
@@ -46,6 +47,23 @@ class EvalItemOutput(BaseModel):
     repos: list[str]
     description: str
     encoded_location: str
+
+
+class ModelEvaluationOutput(BaseModel):
+    suggestion_match_idx: int = Field(
+        description="The index of the suggestion that matches the bug"
+    )
+    actual_bug_idx: int = Field(
+        description="The index of the actual bug in the list of expected issues"
+    )
+    match_score: float = Field(
+        description="The score for the match between the suggestion and the actual bug, from 0 to 1"
+    )
+    reasoning: str = Field(description="A short explanation of the match score")
+
+
+class ModelEvaluationOutputList(BaseModel):
+    evaluations: list[ModelEvaluationOutput]
 
 
 class CodegenRelevantWarningsEvaluationRequest(BaseModel):

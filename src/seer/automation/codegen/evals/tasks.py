@@ -6,13 +6,14 @@ from langfuse import Langfuse
 from celery_app.app import celery_app
 from seer.automation.autofix.evaluations import make_score_name
 from seer.automation.codegen.evals.evaluations import (
-    score_suggestions_content,
-    score_suggestions_length,
+    evaluate_if_bug_is_in_suggestions,
+    evaluate_location_match,
     sync_run_evaluation_on_item,
 )
 from seer.automation.codegen.evals.models import (
     CodegenRelevantWarningsEvaluationRequest,
     CodegenRelevantWarningsEvaluationSummary,
+    EvalItemOutput,
 )
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -122,18 +123,34 @@ def run_relevant_warnings_evaluation_on_item(
     # TODO: Is this the best way to handle this?
     suggestions = suggestions or []
 
-    length_score = score_suggestions_length(suggestions, dataset_item)
-    langfuse.score(
-        trace_id=dataset_item_trace_id,
-        name="length_of_solutions_score",
-        value=length_score,
-    )
+    if isinstance(dataset_item.expected_output, list):
+        list_of_issues = dataset_item.expected_output
+    else:
+        list_of_issues = [dataset_item.expected_output]
+    list_of_issues = [EvalItemOutput.model_validate(issue) for issue in list_of_issues]
 
-    suggestions_content_score = score_suggestions_content(suggestions, dataset_item, scoring_model)
+    scores = evaluate_if_bug_is_in_suggestions(suggestions, list_of_issues, scoring_model)
+    bugs_found = [score.bugs_found for score in scores]
+    scores_content = [score.score for score in scores]
+    location_match = [
+        evaluate_location_match(score.actual_bug_idx, suggestions[score.suggestion_match_idx])
+        for score in scores
+    ]
     langfuse.score(
+        comment=f"Expected number of bugs: {len(list_of_issues)}; Actual bugs found: {bugs_found}",
         trace_id=dataset_item_trace_id,
-        name=make_score_name(
-            model=scoring_model, n_panel=scoring_n_panel, name="suggestions_content_score"
-        ),
-        value=suggestions_content_score,
+        name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="bugs_found_count"),
+        value=sum(bugs_found),
+    )
+    langfuse.score(
+        comment=f"Individual bug location matches: {location_match}",
+        trace_id=dataset_item_trace_id,
+        name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="location_match"),
+        value=sum(location_match),
+    )
+    langfuse.score(
+        comment=f"Individual bug content matches: {scores_content}",
+        trace_id=dataset_item_trace_id,
+        name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="content_match"),
+        value=sum(scores_content),
     )

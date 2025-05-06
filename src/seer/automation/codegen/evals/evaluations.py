@@ -5,12 +5,16 @@ from langfuse.client import DatasetItemClient
 from langfuse.decorators import observe
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.codegen.evals.models import EvalItemInput
+from seer.automation.codegen.evals.models import (
+    EvalItemInput,
+    EvalItemOutput,
+    ModelEvaluationOutput,
+    ModelEvaluationOutputList,
+)
 from seer.automation.codegen.models import CodeFetchIssuesOutput, StaticAnalysisSuggestion
 from seer.automation.codegen.relevant_warnings_step import RelevantWarningsStep
 from seer.automation.codegen.tasks import create_initial_relevant_warnings_run
 from seer.automation.state import DbStateRunTypes
-from seer.automation.utils import extract_text_inside_tags
 
 logger = logging.getLogger(__name__)
 
@@ -65,159 +69,76 @@ def sync_run_evaluation_on_item(
     return state.get().static_analysis_suggestions
 
 
-def score_suggestions_length(
-    suggestions: list[StaticAnalysisSuggestion],
-    item: DatasetItemClient,
-) -> float:
+@observe(name="[Relevant Warnings Eval] Evaluate semantic similarity")
+def evaluate_if_bug_is_in_suggestions(
+    received_suggestions: list[StaticAnalysisSuggestion],
+    expected_issues: list[EvalItemOutput],
+    model: str,
+) -> list[ModelEvaluationOutput]:
     """
-    Scores that the number of suggestions we got is close to the number of expected suggestions.
-
+    Uses an LLM to evaluate if the actual bugs are in the suggestions.
     """
-    expected_suggestions = item.expected_output["suggestions"]
-    return abs(len(suggestions) - len(expected_suggestions))
 
-
-@observe(name="[Relevant Warnings Eval] Score suggestions content")
-def score_suggestions_content(
-    suggestions: list[StaticAnalysisSuggestion],
-    item: DatasetItemClient,
-    scoring_model: str,
-) -> float:
-    """
-    Scores the content of static analysis suggestions by comparing them with expected suggestions.
-
-    Evaluation criteria:
-    - path and line must match (exact match)
-    - short description is similar to expected (LLM evaluation)
-    - justification is similar (LLM evaluation)
-    - related_warning_id, related_issue_id match (exact match)
-    - severity_score and confidence_score are similar (within a threshold)
-
-    Returns a float score from 0 to 1, where 1 means perfect match.
-    """
-    if not suggestions:
-        return 0.0
-
-    expected_suggestions = item.expected_output["suggestions"] or []
-
-    # Convert expected suggestions to StaticAnalysisSuggestion objects
-    expected_suggestions_objects = [
-        StaticAnalysisSuggestion.model_validate(suggestion) for suggestion in expected_suggestions
+    bugs = [
+        f"<bug idx={i}>\n{bug.description}\n<location>{bug.encoded_location}</location></bug>"
+        for i, bug in enumerate(expected_issues)
     ]
 
-    # Calculate scores for each suggestion
-    total_score = 0.0
-    matched_suggestions = 0
-
-    for suggestion in suggestions:
-        # Find the best matching expected suggestion
-        best_match_score = 0.0
-        best_match = None
-
-        for expected in expected_suggestions_objects:
-            # Check path and line match (exact match)
-            if suggestion.path != expected.path or suggestion.line != expected.line:
-                continue
-
-            # Check related IDs match
-            ids_score = 0.0
-            if suggestion.related_warning_id == expected.related_warning_id:
-                ids_score += 0.5
-            if suggestion.related_issue_id == expected.related_issue_id:
-                ids_score += 0.5
-
-            # Check severity and confidence scores are similar (within 0.2 threshold)
-            score_diff = abs(suggestion.severity_score - expected.severity_score)
-            confidence_diff = abs(suggestion.confidence_score - expected.confidence_score)
-            scores_score = (int(score_diff <= 0.2) + int(confidence_diff <= 0.2)) / 2
-
-            # Use LLM to evaluate semantic similarity of descriptions and justifications
-            description_score = evaluate_semantic_similarity(
-                suggestion.short_description, expected.short_description, scoring_model
-            )
-
-            justification_score = evaluate_semantic_similarity(
-                suggestion.justification, expected.justification, scoring_model
-            )
-
-            # Calculate total score for this match
-            match_score = (
-                +ids_score * 0.2  # 20% weight
-                + scores_score * 0.2  # 20% weight
-                + description_score * 0.3  # 30% weight
-                + justification_score * 0.3  # 30% weight
-            )
-
-            if match_score > best_match_score:
-                best_match_score = match_score
-                best_match = expected
-
-        # Add the best match score to the total
-        if best_match:
-            total_score += best_match_score
-            matched_suggestions += 1
-
-    # Calculate final score
-    if matched_suggestions == 0:
-        return 0.0
-
-    # Average score across all matched suggestions
-    avg_score = total_score / matched_suggestions
-
-    # Penalize for unmatched suggestions
-    match_ratio = matched_suggestions / max(len(suggestions), len(expected_suggestions_objects))
-
-    # Final score is a combination of average match quality and match ratio
-    final_score = avg_score * 0.7 + match_ratio * 0.3
-
-    return final_score
-
-
-@observe(name="[Relevant Warnings Eval] Evaluate semantic similarity")
-def evaluate_semantic_similarity(received_text: str, expected_text: str, model: str) -> float:
-    """
-    Uses an LLM to evaluate the semantic similarity between two texts.
-    Returns a score from 0 to 1, where 1 means perfect semantic match.
-    """
+    suggestions = [
+        f"<suggestion idx={i}>\n{suggestion.to_text_format()}</suggestion>"
+        for i, suggestion in enumerate(received_suggestions)
+    ]
 
     prompt = f"""
+    You are an expert at judging code changes and code quality.
+    You are given a list of actual bugs in the codebase, and a list of suggestions made by an AI model.
+
     <goal>
-    Evaluate the semantic similarity between two texts. Score from 0 to 1, where 1 means perfect semantic match.
-    Make sure to use granular scoring up to 3 decimal places (i.e. 0.45, 0.125, etc).
+    Score how well an AI model predicts bugs in the codebase, given we know the actual bugs.
+    Follow the reasoning rules below to score the model.
     </goal>
 
     <reasoning_rules>
-    When evaluating semantic similarity, consider:
-    1. Core meaning and concepts
-    2. Key technical terms
-    3. Context and implications
-    4. Ignore minor wording differences
+    When evaluating the actual bugs in the suggestions, consider:
+    1. WHAT the bug is, and what the suggestion says it is should be similar and clear for a developer reading the suggestion.
+    2. Focus on the core concepts that cause the bug
     </reasoning_rules>
 
     <output_format>
-    1. Provide your reasoning inside a <reasoning> tag.
-    2. Provide the similarity score inside a <score> tag as a float between 0 and 1.
+    For each actual bug, pair the bug idx with the suggestion idx that best matches the bug.
+    If no suggestion is a good match, pair the bug idx with -1.
+
+    Include a short reasoning for each pair.
+    Add your score based on the reasoning rules above to each pair.
     </output_format>
 
-    <received_text>
-    {received_text}
-    </received_text>
+    <actual_bugs>
+    {bugs}
+    </actual_bugs>
 
-    <expected_text>
-    {expected_text}
-    </expected_text>
+    <suggested_bugs>
+    {suggestions}
+    </suggested_bugs>
     """
 
-    response = LlmClient().generate_text(
+    response = LlmClient().generate_structured(
         model=GeminiProvider.model(model),
         prompt=prompt,
+        response_format=ModelEvaluationOutputList,
     )
 
-    if not response.message.content:
-        return 0.0
+    if response.parsed is None:
+        raise ValueError("Failed to parse response")
 
-    score_str = extract_text_inside_tags(response.message.content, "score")
-    score = float(score_str) if score_str else 0.0
+    return response.parsed.evaluations
 
-    # Ensure score is between 0 and 1
-    return max(0.0, min(1.0, score))
+
+def evaluate_location_match(
+    actual_bug: EvalItemOutput,
+    matched_suggestion: StaticAnalysisSuggestion,
+) -> bool:
+    """
+    Evaluates if the actual bug is in the suggestion.
+    """
+    suggestion_location = f"{matched_suggestion.path}:{matched_suggestion.line}"
+    return actual_bug.encoded_location == suggestion_location
