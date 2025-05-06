@@ -616,13 +616,3 @@ def start_app(app: Flask = injected) -> Flask:
         ],
     )
     return app
-    bootup(
-        start_model_loading=True,
-        integrations=[
-            FlaskIntegration(),
-            LoggingIntegration(
-                level=logging.DEBUG,  # Capture debug and above as breadcrumbs
-            ),
-        ],
-    )
-    return app
