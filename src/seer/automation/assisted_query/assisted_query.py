@@ -3,7 +3,7 @@ import logging
 import sentry_sdk
 from langfuse.decorators import observe
 
-from seer.automation.agent.client import GeminiProvider, LlmClient
+from seer.automation.agent.client import LlmClient
 from seer.automation.assisted_query import prompts
 from seer.automation.assisted_query.create_cache import create_cache
 from seer.automation.assisted_query.models import (
@@ -28,17 +28,17 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
 
     # Cache key will be based off the org id and project ids
     cache_display_name = get_cache_display_name(org_id, project_ids)
-
-    cache_name = LlmClient().get_cache(cache_display_name, get_model_provider())
+    cache_name = LlmClient().get_cache(display_name=cache_display_name, model=get_model_provider())
 
     if not cache_name:
         # Will result in cold start
         logger.info("Creating cached prompt as not available upon translation request.")
-        create_cache(CreateCacheRequest(org_id=org_id, project_ids=project_ids))
+        res = create_cache(CreateCacheRequest(org_id=org_id, project_ids=project_ids))
+        cache_name = res.cache_name
 
     sentry_query = create_query_from_natural_language(
         natural_language_query,
-        cache_display_name,
+        cache_name,
         org_id,
         project_ids,
     )
@@ -64,13 +64,16 @@ def create_query_from_natural_language(
     rpc_client: RpcClient = injected,
 ) -> ModelResponse:
 
+    model = get_model_provider()
+
     # Step 1: Figure out relevant fields
     relevant_fields_prompt = prompts.select_relevant_fields_prompt(natural_language_query)
     relevant_fields_response = llm_client.generate_structured(
         prompt=relevant_fields_prompt,
-        model=get_model_provider(),
+        model=model,
         cache_name=cache_name,
         response_format=RelevantFieldsResponse,
+        use_local_endpoint=True,
     )
 
     relevant_fields = (
@@ -94,11 +97,12 @@ def create_query_from_natural_language(
     )
     generated_query = llm_client.generate_structured(
         prompt=fields_and_values_prompt,
-        model=GeminiProvider.model("gemini-2.0-flash-001"),
+        model=model,
         cache_name=cache_name,
         response_format=ModelResponse,
+        use_local_endpoint=True,
     )
 
     # XXX: Step 3a/b: Create 3-5 query options and select the best one
 
-    return generated_query
+    return generated_query.parsed
