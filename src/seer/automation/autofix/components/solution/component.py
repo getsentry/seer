@@ -54,10 +54,9 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 corrected_repo_name = self.context.autocorrect_repo_name(file["repo_name"])
                 if corrected_repo_name is None:
                     continue
-                
+
                 file_content = self.context.get_file_contents(
-                    path=file["file_path"], 
-                    repo_name=corrected_repo_name
+                    path=file["file_path"], repo_name=corrected_repo_name
                 )
             except Exception as e:
                 logger.exception(f"Error getting file contents in memory prefill: {e}")
