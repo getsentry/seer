@@ -1347,6 +1347,29 @@ class TestExpandDocument:
             mock_read.assert_not_called()
             assert result == expected_content
 
+    def test_expand_document_with_invalid_path(self, autofix_tools: BaseTools):
+        """Test that expand_document returns an error when the path is invalid"""
+        # Setup
+        repo_name = "test/repo"
+        invalid_path = "invalid/path.py"
+
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
+
+        # Mock attempt_fix_path to return None (indicating invalid path)
+        autofix_tools._attempt_fix_path = MagicMock(return_value=None)
+
+        # Call expand_document
+        result = autofix_tools.expand_document(invalid_path, repo_name)
+
+        # Verify behavior
+        autofix_tools.context.autocorrect_repo_name.assert_called_once_with(repo_name)
+        autofix_tools._attempt_fix_path.assert_called_once_with(invalid_path, repo_name)
+
+        # Assert that an error message is returned
+        assert "Error: Could not find file" in result
+        assert invalid_path in result
+
     def test_incorrect_repo_name_returns_error(self, autofix_tools: BaseTools):
         """Test that expand_document returns an error when the repo name is incorrect"""
         # Setup

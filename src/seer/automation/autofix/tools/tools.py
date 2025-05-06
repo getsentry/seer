@@ -152,6 +152,7 @@ class BaseTools:
             other_paths = self._get_potential_abs_paths(file_path, repo_name)
             return f"Error: The file path `{file_path}` doesn't exist in `{repo_name}`.\n{other_paths}".strip()
 
+        # At this point we have ensured the file path and the repo name are valid.
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")

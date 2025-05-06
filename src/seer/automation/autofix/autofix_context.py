@@ -131,6 +131,15 @@ class AutofixContext(PipelineContext):
         return RepoClient.from_repo_definition(repo, type)
 
     def autocorrect_repo_name(self, repo_name: str) -> str | None:
+        """
+        Attempts to autocorrect a repository name by finding the closest match among available repositories.
+
+        Args:
+            repo_name: The repository name to autocorrect
+
+        Returns:
+            The corrected repository name if a match is found, or None if no match is found
+        """
         readable_repos = self.state.get().readable_repos
         repo_names = [
             repo.full_name
@@ -151,14 +160,10 @@ class AutofixContext(PipelineContext):
     ) -> str | None:
         if len(self.repos) > 1:
             if not repo_name:
-                raise AgentError() from ValueError(
-                    "Repo name is required when there are multiple repos."
-                )
+                raise ValueError("Repo name is required when there are multiple repos.")
 
             if repo_name not in [repo.full_name for repo in self.repos]:
-                raise AgentError() from ValueError(
-                    f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
-                )
+                raise ValueError(f"Repo '{repo_name}' not found in the list of repos.")
 
         repo_client = self.get_repo_client(repo_name)
         file_contents, _ = repo_client.get_file_content(path)
