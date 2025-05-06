@@ -161,9 +161,13 @@ def process_sources(sources: list, context: AutofixContext, trace_tree: TraceTre
             snippet_to_find = source.code_snippet
 
             file_content = context.get_file_contents(file_name, repo_name)
-            result = find_original_snippet(
-                snippet_to_find, file_content, initial_line_threshold=0.8, threshold=0.8
-            ) if file_content else None
+            result = (
+                find_original_snippet(
+                    snippet_to_find, file_content, initial_line_threshold=0.8, threshold=0.8
+                )
+                if file_content
+                else None
+            )
             if result:
                 start_line = result[1]
                 end_line = result[2]
