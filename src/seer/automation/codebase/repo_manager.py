@@ -3,6 +3,8 @@ import os
 import tarfile
 import tempfile
 import time
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 import git
 from google.cloud import storage
@@ -34,11 +36,12 @@ class RepoManager:
         else:
             self._clone_repo()
 
+            # Only upload to GCS if this is a fresh new clone of the repo.
+            self.upload_to_gcs()
+
         logger.info(f"Repo {self.repo_client.repo_full_name} ready at {self.repo_path}")
 
         self._sync_repo()
-
-        # self.upload_to_gcs()
 
     @property
     def blob_name(self):
@@ -125,22 +128,31 @@ class RepoManager:
     def upload_to_gcs(self):
         """
         Upload the repository from the cloned tmp directory to GCS.
+        This method is a synchronous wrapper around the async _upload_to_gcs_async method.
         """
         self._prune_repo()
 
+        # Run the async upload in the asyncio event loop
+        asyncio.run(self._upload_to_gcs_async())
+
+    async def _upload_to_gcs_async(self):
+        """
+        Asynchronous implementation of the repository upload to GCS.
+        """
         # Create a temporary tar.gz file of the repository
         temp_tarfile = os.path.join(self.tmp_dir, "repo_archive.tar.gz")
         try:
             logger.info(f"Creating tar archive of repository at {self.repo_path}")
+            # Create tarfile synchronously since it's IO-bound and doesn't benefit much from async
             with tarfile.open(temp_tarfile, "w:gz") as tar:
                 tar.add(self.repo_path, arcname=os.path.basename(self.repo_path))
 
-            # Upload the tar file to GCS
+            # Upload the tar file to GCS asynchronously
             logger.info(f"Uploading repository archive to GCS: {self.bucket_name}/{self.blob_name}")
-            storage_client = storage.Client()
-            bucket = storage_client.bucket(self.bucket_name)
-            blob = bucket.blob(self.blob_name)
-            blob.upload_from_filename(temp_tarfile)
+
+            # Run the GCS upload in a thread pool to avoid blocking
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._do_gcs_upload, temp_tarfile)
 
             logger.info(
                 f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
@@ -152,6 +164,19 @@ class RepoManager:
             # Clean up the temporary tar file
             if os.path.exists(temp_tarfile):
                 os.unlink(temp_tarfile)
+
+    def _do_gcs_upload(self, temp_tarfile):
+        """
+        Perform the actual GCS upload operation.
+        This method is designed to be run in a separate thread.
+
+        Args:
+            temp_tarfile: Path to the temporary tarfile to upload
+        """
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(self.bucket_name)
+        blob = bucket.blob(self.blob_name)
+        blob.upload_from_filename(temp_tarfile)
 
     def gcs_archive_exists(self):
         """
