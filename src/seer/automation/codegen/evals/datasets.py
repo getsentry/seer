@@ -11,7 +11,7 @@ Running this file:
 3. Run the script.
 ```
 make shell
-python src/seer/automation/codegen/evals/datasets.py --details-file .artifacts/dataset_details.json
+python src/seer/automation/codegen/evals/datasets.py create-dataset --details-file .artifacts/dataset_details.json
 ```
 
 A new dataset will be created in Langfuse.
@@ -24,21 +24,17 @@ from typing import NotRequired, TypedDict
 import click
 import httpx
 import tqdm
-from click import command, option
+from click import option
 from langfuse import Langfuse
 from pydantic.main import BaseModel
 
 from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
-from seer.automation.codegen.evals.models import EvalItem
-from seer.automation.codegen.models import CodegenRelevantWarningsRequest, StaticAnalysisSuggestion
+from seer.automation.codegen.evals.models import EvalItemInput, EvalItemOutput, RepoInfo
 from seer.automation.models import IssueDetails, RepoDefinition
 
+
 # INPUT STRUCTURES ------------------------------------------------------------
-
-langfuse = Langfuse()
-
-
 class OrgDetails(BaseModel):
     organization_id: int
     organization_name: str
@@ -52,68 +48,71 @@ class GitHubInfo(BaseModel):
     commit_sha: str
 
 
-class DatasetItem(BaseModel):
-    pr_id: int
-    commit_sha: str
-    org_name: str
-    repo_name: str
-    warnings: list[StaticAnalysisWarning]
-    expected_suggestions: list[StaticAnalysisSuggestion]
-    issues: list[IssueDetails] | None = None
-
-
 class DatasetDetails(BaseModel):
     dataset_name: str
     metadata: dict
-    dataset_items: list[DatasetItem]
+    dataset_items: list[tuple[EvalItemInput, EvalItemOutput | list[EvalItemOutput]]]
     org_definitions: dict[str, OrgDetails]
 
 
 class ItemRawData(TypedDict):
     github_info: GitHubInfo
     warnings: list[StaticAnalysisWarning]
-    expected_suggestions: list[StaticAnalysisSuggestion]
     issues: list[IssueDetails] | None
 
 
 # TODO: auto-generate expected suggestions based on a commit that fixes some other PR with issues.
 # This will require an LLM to summarize the changes in the fix-commit as a list of suggestions.
 
+# TODO: add function to collect warnings from a repo in a given commit.
+
 # CREATE DATASET FUNCTIONS -----------------------------------------------------
 
 
-@command()
+@click.group()
+def main():
+    pass
+
+
+@main.command()
 @option(
     "--details-file",
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     required=True,
     help="The path to the file containing the dataset details.",
 )
-def main(details_file: Path):
+@option(
+    "--collect-diff",
+    is_flag=True,
+    help="Whether to collect the diffs of the PRs.",
+    default=True,
+)
+def create_dataset(details_file: Path, collect_diff: bool):
     dataset_details = DatasetDetails.model_validate_json(details_file.read_text())
-    items_raw_data: list[EvalItem] = []
+    items_raw_data: list[tuple[EvalItemInput, EvalItemOutput | list[EvalItemOutput]]] = []
 
-    for item in tqdm.tqdm(
+    for item_input, item_output in tqdm.tqdm(
         dataset_details.dataset_items,
         total=len(dataset_details.dataset_items),
         unit="item",
         desc="Filling in item details",
     ):
-        org_definition = dataset_details.org_definitions[item.org_name]
-        repo_definition = org_definition.repo_definitions[item.repo_name]
+        org_definition = dataset_details.org_definitions[item_input.repo.owner]
+        repo_definition = org_definition.repo_definitions[item_input.repo.name]
         github_info = GitHubInfo(
             org_details=org_definition,
             repo_definition=repo_definition,
-            pr_id=item.pr_id,
-            commit_sha=item.commit_sha,
+            pr_id=item_input.pr_id,
+            commit_sha=item_input.commit_sha,
         )
         raw_item_data = ItemRawData(
             github_info=github_info,
-            warnings=item.warnings,
-            expected_suggestions=item.expected_suggestions,
-            issues=item.issues,
+            warnings=item_input.warnings,
+            issues=item_input.issues,
         )
-        items_raw_data.append(create_item(**raw_item_data))
+        items_raw_data.append(
+            (enrich_item(**raw_item_data, should_collect_diff=collect_diff), item_output)
+        )
 
     # Create the dataset
     dataset = create_langfuse_dataset(
@@ -125,35 +124,57 @@ def main(details_file: Path):
     click.echo(f"✓ Dataset created: {dataset.id}")
 
 
-def create_langfuse_dataset(dataset_name: str, metadata: dict, dataset_items: list[EvalItem]):
+def create_langfuse_dataset(
+    dataset_name: str,
+    metadata: dict,
+    dataset_items: list[tuple[EvalItemInput, EvalItemOutput | list[EvalItemOutput]]],
+):
     """
     Create a new dataset in Langfuse.
     """
+    langfuse = Langfuse()
     dataset = langfuse.create_dataset(
         name=dataset_name,
         metadata=metadata,
     )
 
-    for item in dataset_items:
-        dict_item = item.model_dump()
-        expected_output = dict_item.pop("suggestions")
+    for item_input, item_output in dataset_items:
         langfuse.create_dataset_item(
             dataset_name=dataset_name,
-            input=dict_item,
-            expected_output={
-                "suggestions": expected_output,
-            },
+            input=item_input.model_dump(),
+            expected_output=item_output,
         )
 
     return dataset
 
 
-def create_item(
+def collect_diff(github_info: GitHubInfo) -> list[PrFile]:
+    """
+    Collect the diffs of the PRs.
+    """
+    repo_client = RepoClient.from_repo_definition(
+        github_info.repo_definition, type=RepoClientType.READ
+    )
+    pr_files = repo_client.repo.get_pull(github_info.pr_id).get_files()
+    return [
+        PrFile(
+            filename=file.filename,
+            patch=file.patch,
+            status=file.status,
+            changes=file.changes,
+            sha=file.sha,
+        )
+        for file in pr_files
+        if file.patch
+    ]
+
+
+def enrich_item(
     github_info: GitHubInfo,
     warnings: list[StaticAnalysisWarning],
-    expected_suggestions: list[StaticAnalysisSuggestion],
     issues: list[IssueDetails] | None = None,
-) -> EvalItem:
+    should_collect_diff: bool = False,
+) -> EvalItemInput:
     """
     Creates an EvalItem from the given GitHub info, warnings, expected suggestions, and (optional) issues.
 
@@ -167,23 +188,12 @@ def create_item(
     """
 
     # Get the PR files from the PR definition
-    repo_client = RepoClient.from_repo_definition(
-        github_info.repo_definition, type=RepoClientType.READ
-    )
-    pr_files = repo_client.repo.get_pull(github_info.pr_id).get_files()
-    pr_files = [
-        PrFile(
-            filename=file.filename,
-            patch=file.patch,
-            status=file.status,
-            changes=file.changes,
-            sha=file.sha,
-        )
-        for file in pr_files
-        if file.patch
-    ]
+    if should_collect_diff:
+        pr_files = collect_diff(github_info)
+    else:
+        pr_files = None
 
-    if issues is None:
+    if pr_files and issues is None:
         issues = []
         sentry_token = os.getenv("SENTRY_TOKEN")
         assert sentry_token, "SENTRY_TOKEN is not set"
@@ -194,16 +204,17 @@ def create_item(
                 issue.events = [events_for_issue]
             issues.extend(issues_in_file)
 
-    return EvalItem(
-        request=CodegenRelevantWarningsRequest(
-            repo=github_info.repo_definition,
-            pr_id=github_info.pr_id,
-            warnings=warnings,
-            callback_url="https://example.com/callback",
-            organization_id=github_info.org_details.organization_id,
-            commit_sha=github_info.commit_sha,
+    return EvalItemInput(
+        repo=RepoInfo(
+            provider=github_info.repo_definition.provider,
+            owner=github_info.repo_definition.owner,
+            name=github_info.repo_definition.name,
+            external_id=github_info.repo_definition.external_id,
         ),
-        suggestions=expected_suggestions,
+        pr_id=github_info.pr_id,
+        organization_id=github_info.org_details.organization_id,
+        commit_sha=github_info.commit_sha,
+        warnings=warnings,
         pr_files=pr_files,
         issues=issues,
     )

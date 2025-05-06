@@ -5,12 +5,8 @@ from langfuse.client import DatasetItemClient
 from langfuse.decorators import observe
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
-from seer.automation.codebase.models import PrFile
-from seer.automation.codegen.models import (
-    CodeFetchIssuesOutput,
-    CodegenRelevantWarningsRequest,
-    StaticAnalysisSuggestion,
-)
+from seer.automation.codegen.evals.models import EvalItemInput
+from seer.automation.codegen.models import CodeFetchIssuesOutput, StaticAnalysisSuggestion
 from seer.automation.codegen.relevant_warnings_step import RelevantWarningsStep
 from seer.automation.codegen.tasks import create_initial_relevant_warnings_run
 from seer.automation.state import DbStateRunTypes
@@ -30,12 +26,12 @@ def sync_run_evaluation_on_item(
       - Fetching the Sentry issues
     """
 
-    # Build the input data for the evaluation. This is part of the EvalItem.
-    request = CodegenRelevantWarningsRequest.model_validate(item.input["request"])
+    item = EvalItemInput.model_validate(item)
+
+    # Build the request from the item.
+    request = item.get_request()
     # Make sure we don't post to Overwatch.
     request.should_post_to_overwatch = False
-    pr_files = [PrFile.model_validate(file) for file in item.input["pr_files"]]
-    raw_issues = item.input["issues"]
 
     # Create a proper state for the evaluation run
     state = create_initial_relevant_warnings_run(request)
@@ -45,17 +41,21 @@ def sync_run_evaluation_on_item(
         request={"run_id": run_id, **request.model_dump()},
         type=DbStateRunTypes.RELEVANT_WARNINGS,
     )
-    # Mock the repo client to return the pr_files
-    mock_repo_client = mock.Mock()
-    mock_repo_client.repo.get_pull.return_value.get_files.return_value = pr_files
-    relevant_warnings_step.context.get_repo_client = mock.Mock(return_value=mock_repo_client)
+
+    # Mock parts of the pipeline depending on the extra info saved in the EvalItem.
+    # If it's not mocked we will reach out to GitHub at evaluation time.
+    if item.pr_files:
+        # Mock the repo client to return the pr_files
+        mock_repo_client = mock.Mock()
+        mock_repo_client.repo.get_pull.return_value.get_files.return_value = item.pr_files
+        relevant_warnings_step.context.get_repo_client = mock.Mock(return_value=mock_repo_client)  # type: ignore [method-assign]
+
     # Mock FilterIssuesComponent to return the issues
     # Ignoring the filename_to_issues part of the output.
-    mock_fetch_issues = mock.patch(
+    mock.patch(
         "seer.automation.codegen.relevant_warnings_step.FetchIssuesComponent.invoke",
-        return_value=CodeFetchIssuesOutput(filename_to_issues={"all_issues": raw_issues}),
+        return_value=CodeFetchIssuesOutput(filename_to_issues={"all_issues": item.issues}),
     )
-    relevant_warnings_step.context.filter_issues_component = mock_fetch_issues.start()
 
     # Invoke the step.
     relevant_warnings_step.invoke()
@@ -173,9 +173,6 @@ def score_suggestions_content(
     return final_score
 
 
-# Should we just use embeddings similarity here, instead of a full LLM?
-# The embeddings might be enough to encode the semantic similarity (what we want)
-# and it would be faster and cheaper.
 @observe(name="[Relevant Warnings Eval] Evaluate semantic similarity")
 def evaluate_semantic_similarity(received_text: str, expected_text: str, model: str) -> float:
     """
