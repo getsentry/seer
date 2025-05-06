@@ -147,24 +147,52 @@ class TestRepoClient:
             sha="test_sha", recursive=True
         )
 
-    def test_get_index_file_set(self, repo_client, mock_github):
-        mock_tree = MagicMock()
-        mock_tree.tree = [
-            MagicMock(path="file1.py", type="blob", size=1000, mode="100644"),
-            MagicMock(path="file2.py", type="blob", size=1000, mode="100644"),
-            MagicMock(path="large_file.py", type="blob", size=3 * 1024 * 1024, mode="100644"),
-            MagicMock(path="dir", type="tree"),
-        ]
-        mock_tree.raw_data = {"truncated": False}
-        mock_github.get_repo.return_value.get_git_tree.return_value = mock_tree
-        mock_github.get_repo.return_value.get_git_commit.return_value.tree.sha = "test_sha"
+    def test_get_example_commit_titles(self, repo_client, mock_github):
+        # Setup mock commits
+        mock_commit1 = MagicMock()
+        mock_commit1.commit.message = "feat: Implement feature X"
 
-        file_set = repo_client.get_index_file_set()
-
-        assert file_set == {"file1.py", "file2.py"}
-        mock_github.get_repo.return_value.get_git_tree.assert_called_with(
-            sha="test_sha", recursive=True
+        mock_commit2 = MagicMock()
+        mock_commit2.commit.message = (
+            "fix: Correct bug Y\n\nThis commit fixes a critical bug found in production."
         )
+
+        mock_commit3 = MagicMock()
+        mock_commit3.commit.message = "chore: Update dependencies (#123)"
+
+        mock_commit4 = MagicMock()
+        mock_commit4.commit.message = "refactor: Improve code readability (#456)  "
+
+        mock_commit5 = MagicMock()
+        mock_commit5.commit.message = "docs: Add documentation for API"
+
+        # Mock the commits list returned by get_commits
+        mock_commits = MagicMock()
+        mock_commits.__getitem__.return_value = [
+            mock_commit1,
+            mock_commit2,
+            mock_commit3,
+            mock_commit4,
+            mock_commit5,
+        ]
+        mock_github.get_repo.return_value.get_commits.return_value = mock_commits
+
+        # Test the method
+        result = repo_client.get_example_commit_titles(max_commits=5)
+
+        expected_titles = [
+            "feat: Implement feature X",
+            "fix: Correct bug Y",
+            "chore: Update dependencies",
+            "refactor: Improve code readability",
+            "docs: Add documentation for API",
+        ]
+        assert result == expected_titles
+
+        mock_github.get_repo.return_value.get_commits.assert_called_once_with(
+            sha=repo_client.base_commit_sha
+        )
+        mock_commits.__getitem__.assert_called_once_with(slice(None, 5, None))
 
     @patch(
         "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
@@ -602,34 +630,15 @@ class TestRepoClient:
         assert result == "https://github.com/sentry/sentry/pull/12345#issuecomment-1"
 
     @patch("seer.automation.codebase.repo_client.requests.get")
-    def test_get_file_content_with_autocorrect(self, mock_requests, repo_client, mock_github):
-        # Mock get_valid_file_paths to return lowercase version
-        repo_client.get_valid_file_paths = MagicMock(return_value={"src/test_file.py"})
-
-        # Mock the content retrieval
-        mock_content = MagicMock(decoded_content=b"test content")
-        mock_github.get_repo.return_value.get_contents.return_value = mock_content
-
-        # Test with a path that needs correction (wrong case)
-        content, _ = repo_client.get_file_content("SRC/test_file.py", autocorrect=True)
-
-        assert content == "Showing results instead for src/test_file.py\n=====\ntest content"
-
-        # Verify get_contents was called with corrected path
-        mock_github.get_repo.return_value.get_contents.assert_called_once_with(
-            "src/test_file.py", ref="test_sha"
-        )
-
-    @patch("seer.automation.codebase.repo_client.requests.get")
-    def test_get_file_content_without_autocorrect(self, mock_requests, repo_client, mock_github):
+    def test_get_file_content_with_invalid_path(self, mock_requests, repo_client, mock_github):
         # Mock get_valid_file_paths to return lowercase version
         repo_client.get_valid_file_paths = MagicMock(return_value={"src/test_file.py"})
 
         # Mock failure with original path
         mock_github.get_repo.return_value.get_contents.return_value = None
 
-        # Test with a path that would need correction but autocorrect is False
-        content, _ = repo_client.get_file_content("SRC/test_file.py", autocorrect=False)
+        # Test with an invalid path
+        content, _ = repo_client.get_file_content("SRC/test_file.py")
 
         assert content is None
 
@@ -637,19 +646,6 @@ class TestRepoClient:
         mock_github.get_repo.return_value.get_contents.assert_called_once_with(
             "SRC/test_file.py", ref="test_sha"
         )
-
-    @patch("seer.automation.codebase.repo_client.requests.get")
-    def test_get_file_content_path_not_found(self, mock_requests, repo_client, mock_github):
-        # Mock get_valid_file_paths to return empty set (no matching files)
-        repo_client.get_valid_file_paths = MagicMock(return_value=set())
-
-        # Test with a non-existent path with autocorrect
-        content, _ = repo_client.get_file_content("nonexistent/path.py", autocorrect=True)
-
-        assert content is None
-
-        # Verify get_contents was never called
-        mock_github.get_repo.return_value.get_contents.assert_not_called()
 
     def test_get_commit_history(self, repo_client, mock_github):
         # Setup mock commits
@@ -851,128 +847,6 @@ class TestRepoClient:
         files = [{"path": "main.py", "status": "M"}]
         result = repo_client._build_file_tree_string(files)
         assert result == "main.py (M)"
-
-
-class TestRepoClientIndexFileSet:
-    @patch("seer.automation.codebase.repo_client.Github")
-    @patch(
-        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
-        return_value=[MagicMock(), MagicMock()],
-    )
-    def test_all_files_included(self, get_github_app_auth_and_installation, mock_Github):
-        mock_tree = MagicMock(
-            tree=[
-                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
-                MagicMock(path="file2.py", mode="100644", type="blob", size=1 * 1024 * 1024),
-            ],
-            raw_data={"truncated": False},
-        )
-
-        mock_github_instance = mock_Github.return_value
-        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
-        client = RepoClient(
-            1,
-            "very private heh",
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
-        )
-        result = client.get_index_file_set("main")
-        assert result == {"file1.py", "file2.py"}
-
-    @patch("seer.automation.codebase.repo_client.Github")
-    @patch(
-        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
-        return_value=[MagicMock(), MagicMock()],
-    )
-    def test_filters_out_folders(self, mock_get_github_auth, mock_Github):
-        mock_tree = MagicMock(
-            tree=[
-                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
-                MagicMock(path="folder", mode="100644", type="tree", size=1 * 1024 * 1024),
-            ],
-            raw_data={"truncated": False},
-        )
-
-        mock_github_instance = mock_Github.return_value
-        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
-        client = RepoClient(
-            1,
-            "very private heh",
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
-        )
-        result = client.get_index_file_set("main")
-        assert result == {"file1.py"}
-
-    @patch("seer.automation.codebase.repo_client.Github")
-    @patch(
-        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
-        return_value=[MagicMock(), MagicMock()],
-    )
-    def test_filters_out_symlinks(self, mock_get_github_auth, mock_Github):
-        mock_tree = MagicMock(
-            tree=[
-                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
-                MagicMock(path="symlink", mode="120000", type="blob", size=1 * 1024 * 1024),
-            ],
-            raw_data={"truncated": False},
-        )
-
-        mock_github_instance = mock_Github.return_value
-        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
-        client = RepoClient(
-            1,
-            "very private heh",
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
-        )
-        result = client.get_index_file_set("main")
-        assert result == {"file1.py"}
-
-    @patch("seer.automation.codebase.repo_client.Github")
-    @patch(
-        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
-        return_value=[MagicMock(), MagicMock()],
-    )
-    def test_filters_out_unknown_file_types(self, mock_get_github_auth, mock_Github):
-        mock_tree = MagicMock(
-            tree=[
-                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
-                MagicMock(path="file2.hjk", mode="100644", type="blob", size=1 * 1024 * 1024),
-            ],
-            raw_data={"truncated": False},
-        )
-
-        mock_github_instance = mock_Github.return_value
-        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
-        client = RepoClient(
-            1,
-            "very private heh",
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
-        )
-        result = client.get_index_file_set("main")
-        assert result == {"file1.py"}
-
-    @patch("seer.automation.codebase.repo_client.Github")
-    @patch(
-        "seer.automation.codebase.repo_client.get_github_app_auth_and_installation",
-        return_value=[MagicMock(), MagicMock()],
-    )
-    def test_filters_out_large_files(self, mock_get_github_auth, mock_Github):
-        mock_tree = MagicMock(
-            tree=[
-                MagicMock(path="file1.py", mode="100644", type="blob", size=1 * 1024 * 1024),
-                MagicMock(path="file2.py", mode="100644", type="blob", size=4 * 1024 * 1024),
-            ],
-            raw_data={"truncated": False},
-        )
-
-        mock_github_instance = mock_Github.return_value
-        mock_github_instance.get_repo.return_value.get_git_tree.return_value = mock_tree
-        client = RepoClient(
-            1,
-            "very private heh",
-            RepoDefinition(provider="github", owner="getsentry", name="seer", external_id="123"),
-        )
-        result = client.get_index_file_set("main")
-        assert result == {"file1.py"}
 
     @patch("seer.automation.codebase.repo_client.requests.post")
     def test_post_unit_test_reference_to_original_pr(self, mock_post, repo_client):

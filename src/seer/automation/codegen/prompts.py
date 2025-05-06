@@ -223,6 +223,30 @@ class CodingCodeReviewPrompts:
             Format the comments into a list of JSON objects, ready to be used in a GitHub pull request review. Please ensure you insert a comma between each JSON object except for the last one."""
         )
 
+    @staticmethod
+    def format_pr_description_step(diff_str: str):
+        return textwrap.dedent(
+            """\
+            You are given the below code changes as a diff:
+            {diff_str}
+
+            # Your goal:
+            Provide a detailed, high-level description of what this pull request is doing. Focus on:
+            - The main purpose and goal of the changes
+            - Key technical changes and their impact
+            - Any notable architectural decisions or patterns
+            - Dependencies or interactions with other parts of the system
+            - Any potential risks or considerations
+
+            # Guidelines:
+            - Be concise but comprehensive
+            - Use clear, technical language
+            - Focus on the "why" as much as the "what"
+            - Highlight any significant changes that reviewers should pay special attention to
+            - If there are multiple distinct changes, organize them logically
+            """
+        ).format(diff_str=diff_str)
+
 
 class _RelevantWarningsPromptPrefix:
     """

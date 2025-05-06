@@ -110,6 +110,12 @@ class OpenAiProvider:
             exception, LlmStreamTimeoutError
         )
 
+    @staticmethod
+    def is_input_too_long(exception: Exception) -> bool:
+        return isinstance(exception, openai.BadRequestError) and "context_length_exceeded" in str(
+            exception
+        )
+
     @sentry_sdk.trace
     def generate_text(
         self,
@@ -500,6 +506,10 @@ class AnthropicProvider:
             or "incomplete chunked read" in str(exception)
         )
 
+    @staticmethod
+    def is_input_too_long(exception: Exception) -> bool:
+        return "Prompt is too long" in str(exception)
+
     @observe(as_type="generation", name="Anthropic Generation")
     @sentry_sdk.trace
     @inject
@@ -849,6 +859,7 @@ class GeminiProvider:
         supported_models_on_global_endpoint = [
             "gemini-2.0-flash-001",
             "gemini-2.0-flash-lite-001",
+            "gemini-2.5-flash-preview-04-17",
             "gemini-2.5-pro-preview-03-25",
         ]
 
@@ -935,6 +946,10 @@ class GeminiProvider:
             or isinstance(exception, ChunkedEncodingError)
         )
 
+    @staticmethod
+    def is_input_too_long(exception: Exception) -> bool:
+        return isinstance(exception, ClientError) and "input token count" in str(exception)
+
     @observe(as_type="generation", name="Gemini Generation")
     @sentry_sdk.trace
     def generate_structured(
@@ -947,6 +962,7 @@ class GeminiProvider:
         temperature: float | None = None,
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
+        cache_name: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -969,6 +985,7 @@ class GeminiProvider:
                     response_mime_type="application/json",
                     max_output_tokens=max_tokens or 8192,
                     response_schema=response_format,
+                    cached_content=cache_name,
                 ),
             )
             if response.parsed is not None:
@@ -1433,6 +1450,7 @@ class LlmClient:
         run_name: str | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
+        cache_name: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         try:
             if run_name:
@@ -1477,6 +1495,7 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature,
                     tools=cast(list[FunctionTool], tools),
+                    cache_name=cache_name,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")

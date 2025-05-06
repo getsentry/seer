@@ -29,7 +29,7 @@ from github.Repository import Repository
 
 from seer.automation.autofix.utils import generate_random_string, sanitize_branch_name
 from seer.automation.codebase.models import GithubPrReviewComment
-from seer.automation.codebase.utils import get_all_supported_extensions, get_language_from_path
+from seer.automation.codebase.utils import get_all_supported_extensions
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
 from seer.automation.utils import detect_encoding
 from seer.configuration import AppConfig
@@ -230,6 +230,13 @@ class RepoClient:
             self.base_branch
         )
 
+        self.get_valid_file_paths = functools.lru_cache(maxsize=8)(self._get_valid_file_paths)
+        self.get_commit_history = functools.lru_cache(maxsize=16)(self._get_commit_history)
+        self.get_commit_patch_for_file = functools.lru_cache(maxsize=16)(
+            self._get_commit_patch_for_file
+        )
+        self.get_git_tree = functools.lru_cache(maxsize=8)(self._get_git_tree)
+
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
         app_id, pk = get_write_app_credentials()
@@ -404,18 +411,10 @@ class RepoClient:
         logger.warning("No matching file found for provided file path", extra={"path": path})
         return path, False
 
-    def get_file_content(
-        self, path: str, sha: str | None = None, autocorrect: bool = False
-    ) -> tuple[str | None, str]:
+    def get_file_content(self, path: str, sha: str | None = None) -> tuple[str | None, str]:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
-
-        autocorrected_path = False
-        if autocorrect:
-            path, autocorrected_path = self._autocorrect_path(path, sha)
-            if not autocorrected_path and path not in self.get_valid_file_paths(sha):
-                return None, "utf-8"
 
         try:
             contents = self.repo.get_contents(path, ref=sha)
@@ -430,15 +429,13 @@ class RepoClient:
                 # fallback to utf-8; may still not work
                 detected_encoding = "utf-8"
                 content = contents.decoded_content.decode(detected_encoding)
-            if autocorrected_path:
-                content = f"Showing results instead for {path}\n=====\n{content}"
+
             return content, detected_encoding
         except Exception as e:
             logger.exception(f"Error getting file contents: {e}")
             return None, "utf-8"
 
-    @functools.lru_cache(maxsize=8)
-    def get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
+    def _get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
         if commit_sha is None:
             commit_sha = self.base_commit_sha
 
@@ -454,8 +451,15 @@ class RepoClient:
 
         return valid_file_paths
 
-    @functools.lru_cache(maxsize=16)
-    def get_commit_history(
+    def get_example_commit_titles(self, max_commits: int = 5) -> list[str]:
+        commits = self.repo.get_commits(sha=self.base_commit_sha)
+        commit_list = list(commits[:max_commits])
+        commit_titles = [
+            commit.commit.message.split("\n")[0] for commit in commit_list
+        ]  # remove body
+        return [commit.split("(#")[0].strip() for commit in commit_titles]  # remove PR number
+
+    def _get_commit_history(
         self, path: str, sha: str | None = None, autocorrect: bool = False, max_commits: int = 10
     ) -> list[str]:
         if sha is None:
@@ -605,8 +609,7 @@ class RepoClient:
 
         return "\n".join(lines)
 
-    @functools.lru_cache(maxsize=16)
-    def get_commit_patch_for_file(
+    def _get_commit_patch_for_file(
         self, path: str, commit_sha: str, autocorrect: bool = False
     ) -> str | None:
         if autocorrect:
@@ -632,8 +635,7 @@ class RepoClient:
         )
         return ref
 
-    @functools.lru_cache(maxsize=8)
-    def get_git_tree(self, commit_sha: str) -> CompleteGitTree:
+    def _get_git_tree(self, commit_sha: str) -> CompleteGitTree:
         """
         Get the git tree for a specific sha, handling truncation with divide and conquer.
         Always returns a CompleteGitTree instance for consistent interface.
@@ -883,30 +885,6 @@ class RepoClient:
             else:
                 logger.exception("Error creating PR")
                 raise e
-
-    def get_index_file_set(
-        self,
-        commit_sha: str | None = None,
-        max_file_size_bytes=2 * 1024 * 1024,
-        skip_empty_files=False,
-    ) -> set[str]:
-        if commit_sha is None:
-            commit_sha = self.base_commit_sha
-
-        tree = self.get_git_tree(commit_sha=commit_sha)
-        file_set = set()
-        for file in tree.tree:
-            if (
-                file.type == "blob"
-                and file.size < max_file_size_bytes
-                and file.mode
-                in ["100644", "100755"]  # 100644 is a regular file, 100755 is an executable file
-                and get_language_from_path(file.path) is not None
-                and (not skip_empty_files or file.size > 0)
-            ):
-                file_set.add(file.path)
-
-        return file_set
 
     def get_pr_diff_content(self, pr_url: str) -> str:
         data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="diff"))

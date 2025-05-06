@@ -160,7 +160,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                             memory_storage_key="solution",
                             run_name="Solution Discovery",
                             max_iterations=64,
-                            temperature=1.0,
+                            temperature=0.0,
                             max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
                         ),
                     )
@@ -218,7 +218,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
                     prompt=SolutionPrompts.solution_formatter_msg(),
-                    model=GeminiProvider.model("gemini-2.0-flash-001"),
+                    model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
                     response_format=SolutionOutput,
                     run_name="Solution Extraction & Formatting",
                     max_tokens=8192,

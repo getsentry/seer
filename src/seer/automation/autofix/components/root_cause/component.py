@@ -78,7 +78,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         max_iterations=64,
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
-                        temperature=1.0,
+                        temperature=0.0,
                         max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
                     ),
                 )
@@ -127,7 +127,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
                     prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                    model=GeminiProvider.model("gemini-2.0-flash-001"),
+                    model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
                     response_format=MultipleRootCauseAnalysisOutputPrompt,
                     run_name="Root Cause Extraction & Formatting",
                     max_tokens=8192,

@@ -22,7 +22,13 @@ from seer.anomaly_detection.models.external import (
     StoreDataResponse,
 )
 from seer.app import app
-from seer.assisted_query.models import CreateCacheRequest, CreateCacheResponse
+from seer.automation.assisted_query.models import (
+    Chart,
+    CreateCacheRequest,
+    CreateCacheResponse,
+    TranslateRequest,
+    TranslateResponse,
+)
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixEvaluationRequest,
@@ -33,6 +39,7 @@ from seer.automation.autofixability import AutofixabilityModel
 from seer.automation.state import LocalMemoryState
 from seer.automation.summarize.models import (
     GetFixabilityScoreRequest,
+    SpanInsight,
     SummarizeIssueRequest,
     SummarizeIssueResponse,
     SummarizeIssueScores,
@@ -726,7 +733,9 @@ class TestSeer(unittest.TestCase):
             summary="Test summary",
             key_observations="Test key observations",
             performance_characteristics="Test performance characteristics",
-            suggested_investigations="Test suggested investigations",
+            suggested_investigations=[
+                SpanInsight(explanation="test suggested investigation 1", span_id="1", span_op="1")
+            ],
         )
         test_data = next(generate(SummarizeTraceRequest))
 
@@ -741,7 +750,13 @@ class TestSeer(unittest.TestCase):
         assert response.json["summary"] == "Test summary"
         assert response.json["key_observations"] == "Test key observations"
         assert response.json["performance_characteristics"] == "Test performance characteristics"
-        assert response.json["suggested_investigations"] == "Test suggested investigations"
+        assert response.json["suggested_investigations"] == [
+            {
+                "explanation": "test suggested investigation 1",
+                "span_id": "1",
+                "span_op": "1",
+            }
+        ]
 
         mock_summarize_trace.assert_called_once_with(test_data)
 
@@ -819,6 +834,71 @@ class TestSeer(unittest.TestCase):
 
         response = app.test_client().post(
             "/v1/assisted-query/create-cache",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 504
+
+    @mock.patch("seer.app.translate_query")
+    def test_translate_query_endpoint_success(self, mock_translate_query):
+        """Test a successful run of translate_query end point"""
+        mock_translate_query.return_value = TranslateResponse(
+            query="Test query",
+            stats_period="Test stats period",
+            group_by=["Test group by"],
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
+            sort="Test sort",
+        )
+        test_data = next(generate(TranslateRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/translate",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json["query"] == "Test query"
+        assert response.json["stats_period"] == "Test stats period"
+        assert response.json["group_by"] == ["Test group by"]
+        assert response.json["visualization"] == [
+            {
+                "chart_type": 1,
+                "y_axes": ["Test y-axis 1", "Test y-axis 2"],
+            }
+        ]
+        assert response.json["sort"] == "Test sort"
+
+        mock_translate_query.assert_called_once_with(test_data)
+
+    @mock.patch("seer.app.translate_query")
+    def test_translate_query_endpoint_error(self, mock_translate_query):
+        """Test that translate_query endpoint handles exceptions correctly"""
+        mock_translate_query.side_effect = Exception("Test error")
+        test_data = next(generate(TranslateRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/translate",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+        assert response.status_code == 500
+        mock_translate_query.assert_called_once_with(test_data)
+
+        mock_translate_query.side_effect = APITimeoutError(
+            request=httpx.Request(
+                method="POST", url="http://localhost/v1/assisted-query/translate"
+            ),
+        )
+        test_data = next(generate(TranslateRequest))
+
+        response = app.test_client().post(
+            "/v1/assisted-query/translate",
             data=test_data.model_dump_json(),
             content_type="application/json",
         )
