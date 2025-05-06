@@ -127,7 +127,7 @@ class TestAssistedQuery(unittest.TestCase):
         mock_llm_client = MagicMock()
 
         first_call = LlmGenerateStructuredResponse(
-            parsed=RelevantFieldsResponse(fields=["span.op", "span.description"]),
+            RelevantFieldsResponse(fields=["span.op", "span.description"]),
             metadata=LlmResponseMetadata(
                 model="gemini-2.0-flash-001",
                 provider_name=LlmProviderType.GEMINI,
@@ -135,28 +135,20 @@ class TestAssistedQuery(unittest.TestCase):
             ),
         )
 
-        second_call = LlmGenerateStructuredResponse(
-            parsed=ModelResponse(
-                explanation="This is a test explanation",
-                query="error",
-                stats_period="24h",
-                group_by=["project"],
-                visualization=[
-                    Chart(
-                        chart_type=1,
-                        y_axes=["Test y-axis 1", "Test y-axis 2"],
-                    )
-                ],
-                sort="-count",
-                confidence_score=0.95,
-            ),
-            metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
-                provider_name=LlmProviderType.GEMINI,
-                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
-            ),
+        second_call = ModelResponse(
+            explanation="This is a test explanation",
+            query="error",
+            stats_period="24h",
+            group_by=["project"],
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
+            sort="-count",
+            confidence_score=0.95,
         )
-
         mock_llm_client.generate_structured.side_effect = [first_call, second_call]
 
         mock_rpc_client.call.return_value = {
@@ -181,9 +173,9 @@ class TestAssistedQuery(unittest.TestCase):
             llm_client=mock_llm_client,
         )
 
-        self.assertIsInstance(response, LlmGenerateStructuredResponse)
+        self.assertIsInstance(response, ModelResponse)
         self.assertEqual(
-            response.parsed,
+            response,
             ModelResponse(
                 explanation="This is a test explanation",
                 query="error",

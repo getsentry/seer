@@ -103,6 +103,8 @@ def create_query_from_natural_language(
         use_local_endpoint=True,
     )
 
+    print("GENERATED QUERY", generated_query)
+
     # XXX: Step 3a/b: Create 3-5 query options and select the best one
 
-    return generated_query.parsed
+    return generated_query
