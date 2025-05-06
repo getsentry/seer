@@ -1,9 +1,9 @@
+import asyncio
 import logging
 import os
 import tarfile
 import tempfile
 import time
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 import git
