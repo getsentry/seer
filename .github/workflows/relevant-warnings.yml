@@ -43,3 +43,4 @@ jobs:
             --organization-slug sentry \
             python \
             --tool ruff,mypy
+            --dry-run
