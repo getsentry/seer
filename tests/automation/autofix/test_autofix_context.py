@@ -259,6 +259,79 @@ class TestAutofixContext(unittest.TestCase):
         self.assertEqual(result2[0].role, "assistant")
         self.assertEqual(result2[0].content, "Test message 2")
 
+    def test_autocorrect_repo_name(self):
+        repos_for_part1 = [
+            RepoDefinition(
+                provider="github",
+                owner="getsentry",
+                name="seer",
+                external_id="1",
+                full_name="getsentry/seer",
+            ),
+            RepoDefinition(
+                provider="github",
+                owner="getsentry",
+                name="snuba",
+                external_id="2",
+                full_name="getsentry/snuba",
+            ),
+            RepoDefinition(
+                provider="other_provider",
+                owner="test",
+                name="other",
+                external_id="3",
+                full_name="test/other",
+            ),
+            RepoDefinition(
+                provider="github", owner="foo", name="bar", external_id="4", full_name="foo/bar"
+            ),
+        ]
+        with self.state.update() as cur:
+            cur.request.repos = repos_for_part1
+            for repo_def in repos_for_part1:
+                if repo_def.external_id not in cur.codebases:
+                    cur.codebases[repo_def.external_id] = CodebaseState(
+                        repo_external_id=repo_def.external_id
+                    )
+                cur.codebases[repo_def.external_id].is_readable = True
+
+        assert self.autofix_context.autocorrect_repo_name("getsentry/seer") == "getsentry/seer"
+        assert self.autofix_context.autocorrect_repo_name("seer") == "getsentry/seer"
+        assert self.autofix_context.autocorrect_repo_name("GETSENTRY/SEER") == "getsentry/seer"
+        assert self.autofix_context.autocorrect_repo_name("snuba") == "getsentry/snuba"
+        assert self.autofix_context.autocorrect_repo_name("/snuba") == "getsentry/snuba"
+        assert self.autofix_context.autocorrect_repo_name("getsentry") == "getsentry/seer"
+        assert self.autofix_context.autocorrect_repo_name("bar") == "foo/bar"
+        assert self.autofix_context.autocorrect_repo_name("nonexistent") is None
+        assert self.autofix_context.autocorrect_repo_name("") is None
+        assert self.autofix_context.autocorrect_repo_name(None) is None
+        assert self.autofix_context.autocorrect_repo_name("test/other") is None
+
+        repos_for_part2 = [
+            RepoDefinition(
+                provider="github", owner="org", name="short", external_id="5", full_name="org/short"
+            ),
+            RepoDefinition(
+                provider="github",
+                owner="org",
+                name="longername",
+                external_id="6",
+                full_name="org/longername",
+            ),
+        ]
+        with self.state.update() as cur:
+            cur.request.repos = repos_for_part2
+            for repo_def in repos_for_part2:
+                if repo_def.external_id not in cur.codebases:
+                    cur.codebases[repo_def.external_id] = CodebaseState(
+                        repo_external_id=repo_def.external_id
+                    )
+                cur.codebases[repo_def.external_id].is_readable = True
+
+        assert self.autofix_context.autocorrect_repo_name("long") == "org/longername"
+        assert self.autofix_context.autocorrect_repo_name("short") == "org/short"
+        assert self.autofix_context.autocorrect_repo_name("org") == "org/short"
+
     @patch("seer.automation.autofix.autofix_context.RepoClient")
     def test_process_stacktrace_paths_unknown_object_exception(self, mock_RepoClient):
         mock_RepoClient.from_repo_definition.side_effect = UnknownObjectException(status=404)

@@ -146,14 +146,31 @@ class AutofixContext(PipelineContext):
             for repo in readable_repos
             if repo.provider in RepoClient.supported_providers
         ]
-        if repo_name and repo_name not in repo_names:
-            # Try to find a repo name that contains the provided one to autocorrect
-            matching_repos = [r for r in repo_names if repo_name.lower() in r.lower()]
-            if matching_repos:
-                repo_name = min(matching_repos, key=lambda x: abs(len(x) - len(repo_name or "")))
+        if repo_name and repo_name in repo_names:
+            return repo_name
+        elif repo_name and repo_name not in repo_names:
+            # No exact match, try to autocorrect
+            matching_full_names = [r for r in repo_names if repo_name.lower() in r.lower()]
+            names_without_owner = [
+                r.split("/")[-1] for r in matching_full_names if len(r.split("/")) > 1
+            ]  # the repo name, e.g. seer in getsentry/seer
+            matching_names_without_owner = [
+                r for r in names_without_owner if repo_name.lower() == r.lower()
+            ]
+            if matching_names_without_owner:
+                repo_name_without_owner = matching_names_without_owner[0]
+                repo_name = next(
+                    (r for r in matching_full_names if f"/{repo_name_without_owner}" in r), None
+                )
+            elif matching_full_names:
+                repo_name = min(
+                    matching_full_names, key=lambda x: abs(len(x) - len(repo_name or ""))
+                )
             else:
                 return None
-        return repo_name
+            return repo_name
+        else:
+            return None
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
