@@ -37,6 +37,10 @@ class RepoManager:
         self._trigger_liveness_probe = trigger_liveness_probe
 
     @property
+    def is_available(self):
+        return self.git_repo is not None and self.initialization_future is None
+
+    @property
     def blob_name(self):
         """
         Get the blob name for the repository.
@@ -72,7 +76,6 @@ class RepoManager:
             logger.info(f"Repo {self.repo_client.repo_full_name} ready at {self.repo_path}")
 
             self._sync_repo()
-
         except Exception as e:
             logger.error(f"Failed to initialize repo {self.repo_client.repo_full_name}: {e}")
             raise
@@ -119,17 +122,22 @@ class RepoManager:
         """
         logger.info(f"Syncing repository {self.repo_client.repo_full_name}")
 
-        start_time = time.time()
-        commit_sha = self.repo_client.base_commit_sha
+        try:
+            start_time = time.time()
+            commit_sha = self.repo_client.base_commit_sha
 
-        # Fetch only the specific commit
-        self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
-        self.git_repo.git.checkout(commit_sha)
+            # Fetch only the specific commit
+            self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
+            self.git_repo.git.checkout(commit_sha)
 
-        end_time = time.time()
-        logger.info(
-            f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
-        )
+            end_time = time.time()
+            logger.info(
+                f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
+            )
+        except Exception as e:
+            logger.error(f"Failed to sync repository {self.repo_client.repo_full_name}: {e}")
+            self.git_repo = None  # clear the repo to fail the available check
+            raise
 
     def _prune_repo(self):
         """
