@@ -1005,22 +1005,25 @@ class BaseTools:
         self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
     ) -> str:
         """Handles the undo edit command to remove file changes."""
-        with self.context.state.update() as cur:
-            for repo in cur.request.repos:
-                if repo.full_name == repo_name:
-                    codebase = cur.codebases[repo.external_id]
-                    if not codebase:
-                        return "Error: No codebases found"
+        external_id = None
+        cur_state = self.context.state.get()
+        for repo in cur_state.request.repos:
+            if repo.full_name == repo_name:
+                external_id = repo.external_id
+                break
 
-                    # Remove all file changes for this path
-                    codebase.file_changes = [fc for fc in codebase.file_changes if fc.path != path]
-
-                    self.context.event_manager.add_log(
-                        f"Undoing edits to `{path}` in `{repo_name}`..."
-                    )
-
-                    return "File changes undone successfully."
+        if not external_id:
             return "Error: No file changes found to undo."
+
+        with self.context.state.update() as cur:
+            codebase = cur.codebases[external_id]
+            if not codebase:
+                return "Error: No codebases found"
+            # Remove all file changes for this path
+            codebase.file_changes = [fc for fc in codebase.file_changes if fc.path != path]
+
+        self.context.event_manager.add_log(f"Undoing edits to `{path}` in `{repo_name}`...")
+        return "File changes undone successfully."
 
     def get_tools(
         self, can_access_repos: bool = True, include_claude_tools: bool = False

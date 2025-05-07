@@ -82,28 +82,33 @@ def validate_repo_branches_exist(
     return True
 
 
-def create_missing_codebase_states(cur: AutofixContinuation) -> None:
-    for repo in cur.request.repos:
-        if repo.external_id not in cur.codebases:
-            cur.codebases[repo.external_id] = CodebaseState(
-                file_changes=[],
-                repo_external_id=repo.external_id,
-            )
+def create_missing_codebase_states(state: ContinuationState) -> None:
+    cur_state = state.get()
+    for repo in cur_state.request.repos:
+        if repo.external_id not in cur_state.codebases:
+            with state.update() as cur:
+                cur.codebases[repo.external_id] = CodebaseState(
+                    file_changes=[],
+                    repo_external_id=repo.external_id,
+                )
 
 
-def set_accessible_repos(cur: AutofixContinuation) -> None:
-    for repo in cur.request.repos:
+def set_accessible_repos(state: ContinuationState) -> None:
+    cur_state = state.get()
+    for repo in cur_state.request.repos:
         if repo.provider == "github":
             if RepoClient.check_repo_read_access(repo):
-                cur.codebases[repo.external_id].is_readable = True
+                with state.update() as cur:
+                    cur.codebases[repo.external_id].is_readable = True
             if RepoClient.check_repo_write_access(repo):
-                cur.codebases[repo.external_id].is_writeable = True
+                with state.update() as cur:
+                    cur.codebases[repo.external_id].is_writeable = True
         else:
-            cur.codebases[repo.external_id].is_readable = False
-            cur.codebases[repo.external_id].is_writeable = False
+            with state.update() as cur:
+                cur.codebases[repo.external_id].is_readable = False
+                cur.codebases[repo.external_id].is_writeable = False
 
 
 def update_repo_access(state: ContinuationState) -> None:
-    with state.update() as cur:
-        create_missing_codebase_states(cur)
-        set_accessible_repos(cur)
+    create_missing_codebase_states(state)
+    set_accessible_repos(state)
