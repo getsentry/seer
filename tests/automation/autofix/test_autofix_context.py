@@ -276,6 +276,13 @@ class TestAutofixContext(unittest.TestCase):
                 full_name="getsentry/snuba",
             ),
             RepoDefinition(
+                provider="github",
+                owner="getsentry",
+                name="getsentry",
+                external_id="3",
+                full_name="getsentry/getsentry",
+            ),
+            RepoDefinition(
                 provider="other_provider",
                 owner="test",
                 name="other",
@@ -300,7 +307,7 @@ class TestAutofixContext(unittest.TestCase):
         assert self.autofix_context.autocorrect_repo_name("GETSENTRY/SEER") == "getsentry/seer"
         assert self.autofix_context.autocorrect_repo_name("snuba") == "getsentry/snuba"
         assert self.autofix_context.autocorrect_repo_name("/snuba") == "getsentry/snuba"
-        assert self.autofix_context.autocorrect_repo_name("getsentry") == "getsentry/seer"
+        assert self.autofix_context.autocorrect_repo_name("getsentry") == "getsentry/getsentry"
         assert self.autofix_context.autocorrect_repo_name("bar") == "foo/bar"
         assert self.autofix_context.autocorrect_repo_name("nonexistent") is None
         assert self.autofix_context.autocorrect_repo_name("") is None
