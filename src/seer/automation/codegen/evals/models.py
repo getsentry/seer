@@ -3,7 +3,7 @@ from pydantic.fields import Field
 
 from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
 from seer.automation.codegen.models import CodegenRelevantWarningsRequest
-from seer.automation.models import IssueDetails
+from seer.automation.models import IssueDetails, RepoDefinition
 
 
 class RepoInfo(BaseModel):
@@ -18,7 +18,7 @@ class EvalItemInput(BaseModel):
     An item in the evaluation dataset.
     """
 
-    repo: RepoInfo
+    repo: RepoInfo | RepoDefinition
     pr_id: int
     organization_id: int
     commit_sha: str
@@ -33,13 +33,22 @@ class EvalItemInput(BaseModel):
         return v
 
     def get_request(self) -> CodegenRelevantWarningsRequest:
+        if isinstance(self.repo, RepoDefinition):
+            repo_definition = self.repo
+        else:
+            repo_definition = RepoDefinition(
+                provider=self.repo.provider,
+                owner=self.repo.owner,
+                name=self.repo.name,
+                external_id=self.repo.external_id,
+            )
         return CodegenRelevantWarningsRequest(
-            repo=self.repo,
+            repo=repo_definition,
             pr_id=self.pr_id,
             organization_id=self.organization_id,
-            commit_sha=self.commit_sha,
-            callback_url="",
             warnings=self.warnings,
+            callback_url="",
+            commit_sha=self.commit_sha,
         )
 
 
@@ -50,16 +59,17 @@ class EvalItemOutput(BaseModel):
 
 
 class ModelEvaluationOutput(BaseModel):
-    suggestion_match_idx: int = Field(
-        description="The index of the suggestion that matches the bug"
-    )
-    actual_bug_idx: int = Field(
-        description="The index of the actual bug in the list of expected issues"
+    suggestion_idx: int = Field(description="The index of the suggestion that matches the bug")
+    bug_matched_idx: int = Field(
+        description="The index of the known bug that was matched to the suggestion"
     )
     match_score: float = Field(
-        description="The score for the match between the suggestion and the actual bug, from 0 to 1"
+        description="The score for the match between the suggestion and the actual bug, from 0 to 1 (e.g. 0.512)"
     )
     reasoning: str = Field(description="A short explanation of the match score")
+    location_match: float = Field(
+        description="The score for the location match between the suggestion and the actual bug, from 0 to 1 (e.g. 0.512)"
+    )
 
 
 class ModelEvaluationOutputList(BaseModel):

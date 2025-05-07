@@ -30,7 +30,7 @@ def sync_run_evaluation_on_item(
       - Fetching the Sentry issues
     """
 
-    item = EvalItemInput.model_validate(item)
+    item = EvalItemInput.model_validate(item.input)
 
     # Build the request from the item.
     request = item.get_request()
@@ -58,7 +58,7 @@ def sync_run_evaluation_on_item(
     # Ignoring the filename_to_issues part of the output.
     mock.patch(
         "seer.automation.codegen.relevant_warnings_step.FetchIssuesComponent.invoke",
-        return_value=CodeFetchIssuesOutput(filename_to_issues={"all_issues": item.issues}),
+        return_value=CodeFetchIssuesOutput(filename_to_issues={"all_issues": item.issues or []}),
     )
 
     # Invoke the step.
@@ -70,7 +70,7 @@ def sync_run_evaluation_on_item(
 
 
 @observe(name="[Relevant Warnings Eval] Evaluate semantic similarity")
-def evaluate_if_bug_is_in_suggestions(
+def evaluate_suggestions(
     received_suggestions: list[StaticAnalysisSuggestion],
     expected_issues: list[EvalItemOutput],
     model: str,
@@ -99,14 +99,13 @@ def evaluate_if_bug_is_in_suggestions(
     </goal>
 
     <reasoning_rules>
-    When evaluating the actual bugs in the suggestions, consider:
-    1. WHAT the bug is, and what the suggestion says it is should be similar and clear for a developer reading the suggestion.
-    2. Focus on the core concepts that cause the bug
+    When evaluating the suggested bugs, consider:
+    1. is the suggestion a _good match_ for an actual bug? Focus on the core concepts that cause the bug.
+    2. is this suggestion not accurately describing the actual bug it was matched to?
     </reasoning_rules>
 
     <output_format>
-    For each actual bug, pair the bug idx with the suggestion idx that best matches the bug.
-    If no suggestion is a good match, pair the bug idx with -1.
+    For each suggestion, pair it with the bug idx that best matches the suggestion, or -1 if it doesn't match any actual bug.
 
     Include a short reasoning for each pair.
     Add your score based on the reasoning rules above to each pair.
@@ -131,14 +130,3 @@ def evaluate_if_bug_is_in_suggestions(
         raise ValueError("Failed to parse response")
 
     return response.parsed.evaluations
-
-
-def evaluate_location_match(
-    actual_bug: EvalItemOutput,
-    matched_suggestion: StaticAnalysisSuggestion,
-) -> bool:
-    """
-    Evaluates if the actual bug is in the suggestion.
-    """
-    suggestion_location = f"{matched_suggestion.path}:{matched_suggestion.line}"
-    return actual_bug.encoded_location == suggestion_location

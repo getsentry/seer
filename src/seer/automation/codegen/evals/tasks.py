@@ -2,12 +2,12 @@ import logging
 import random
 
 from langfuse import Langfuse
+from langfuse.api.resources.commons.errors import NotFoundError
 
 from celery_app.app import celery_app
 from seer.automation.autofix.evaluations import make_score_name
 from seer.automation.codegen.evals.evaluations import (
-    evaluate_if_bug_is_in_suggestions,
-    evaluate_location_match,
+    evaluate_suggestions,
     sync_run_evaluation_on_item,
 )
 from seer.automation.codegen.evals.models import (
@@ -51,20 +51,19 @@ def run_relevant_warnings_evaluation(
         # Note: This will add ALL the dataset item runs into the CPU queue.
         # As we are not going to be running this in prod yet, it's fine to leave as is.
         # If we do decide to run in prod, should find a way to not overwhelm the CPU queue.
-        with item.observe(run_name=request.run_name, run_description=request.run_description):
-            for _ in range(request.n_runs_per_item):
-                async_result = run_relevant_warnings_evaluation_on_item.apply_async(
-                    (),
-                    dict(
-                        item_id=item.id,
-                        run_name=request.run_name,
-                        run_description=request.run_description,
-                        item_index=i,
-                        item_count=len(items),
-                    ),
-                    queue=app_config.CELERY_WORKER_QUEUE,
-                )
-                task_ids.append(async_result.id)
+        for _ in range(request.n_runs_per_item):
+            async_result = run_relevant_warnings_evaluation_on_item.apply_async(
+                (),
+                dict(
+                    item_id=item.id,
+                    run_name=request.run_name,
+                    run_description=request.run_description,
+                    item_index=i,
+                    item_count=len(items),
+                ),
+                queue=app_config.CELERY_WORKER_QUEUE,
+            )
+            task_ids.append(async_result.id)
 
     return CodegenRelevantWarningsEvaluationSummary(
         started=True,
@@ -90,13 +89,18 @@ def run_relevant_warnings_evaluation_on_item(
     """
     langfuse = Langfuse()
 
-    dataset_item = langfuse.get_dataset_item(item_id)
+    # This can fail with LangfuseNotFoundError if the item is not found or if it's not active.
+    try:
+        dataset_item = langfuse.get_dataset_item(item_id)
+    except NotFoundError:
+        logger.error(f"Item {item_id} not found or not active. Skipping scoring.")
+        return
 
     logger.info(
         f"Starting relevant warnings evaluation for item {item_id}, number {item_index}/{item_count}, with run name '{run_name}'."
     )
 
-    scoring_n_panel = 5  # do we even need this?
+    scoring_n_panel = 1
     scoring_model = "gemini-2.5-pro-preview-03-25"
 
     dataset_item_trace_id = None
@@ -123,24 +127,29 @@ def run_relevant_warnings_evaluation_on_item(
     # TODO: Is this the best way to handle this?
     suggestions = suggestions or []
 
-    if isinstance(dataset_item.expected_output, list):
+    if not dataset_item.expected_output:
+        # This happens in negative test cases where we don't have any expected issues.
+        # The value is `{}` in this case.
+        list_of_issues = []
+    elif isinstance(dataset_item.expected_output, list):
         list_of_issues = dataset_item.expected_output
     else:
         list_of_issues = [dataset_item.expected_output]
     list_of_issues = [EvalItemOutput.model_validate(issue) for issue in list_of_issues]
 
-    scores = evaluate_if_bug_is_in_suggestions(suggestions, list_of_issues, scoring_model)
-    bugs_found = [score.bugs_found for score in scores]
-    scores_content = [score.score for score in scores]
-    location_match = [
-        evaluate_location_match(score.actual_bug_idx, suggestions[score.suggestion_match_idx])
-        for score in scores
-    ]
+    scores = evaluate_suggestions(suggestions, list_of_issues, scoring_model)
+    valid_scores = [score for score in scores if score.bug_matched_idx != -1]
+    suggestions_matched = [score.suggestion_idx for score in valid_scores]
+    suggestions_not_matched = [i for i in range(len(suggestions)) if i not in suggestions_matched]
+    bugs_matched = [score.bug_matched_idx for score in valid_scores]
+    bugs_not_found = [i for i in range(len(list_of_issues)) if i not in bugs_matched]
+    scores_content = [score.match_score for score in valid_scores]
+    location_match = [score.location_match for score in valid_scores]
     langfuse.score(
-        comment=f"Expected number of bugs: {len(list_of_issues)}; Actual bugs found: {bugs_found}",
+        comment=f"Expected number of bugs: {len(list_of_issues)}; Actual bugs found: {[ (suggestion_idx, bug_idx) for suggestion_idx, bug_idx in zip(suggestions_matched, bugs_matched)]}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="bugs_found_count"),
-        value=sum(bugs_found),
+        value=len(bugs_matched),
     )
     langfuse.score(
         comment=f"Individual bug location matches: {location_match}",
@@ -153,4 +162,16 @@ def run_relevant_warnings_evaluation_on_item(
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="content_match"),
         value=sum(scores_content),
+    )
+    langfuse.score(
+        comment=f"Bugs not found: {bugs_not_found}",
+        trace_id=dataset_item_trace_id,
+        name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="bugs_not_found"),
+        value=len(bugs_not_found),
+    )
+    langfuse.score(
+        comment=f"Suggestions not matched to any bug: {suggestions_not_matched}",
+        trace_id=dataset_item_trace_id,
+        name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="noise"),
+        value=len(suggestions_not_matched),
     )
