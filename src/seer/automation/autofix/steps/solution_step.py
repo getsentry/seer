@@ -59,7 +59,9 @@ class AutofixSolutionStep(AutofixPipelineStep):
 
         self.context.event_manager.send_solution_start()
 
-        if not self.request.initial_memory:
+        if self.request.is_retry:
+            self.context.event_manager.add_log("Something broke. Re-analyzing from scratch...")
+        elif not self.request.initial_memory:
             self.context.event_manager.add_log("Figuring out a solution...")
         else:
             self.context.event_manager.add_log("Going back to the drawing board...")

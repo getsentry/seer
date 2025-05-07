@@ -157,14 +157,12 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
             self.logger.info(
                 f"Retrying {self.request.step_id}, {new_retry_index}/{self.max_retries} times"
             )
-
-            # Add a log to the current running step and also error it.
-            self.context.event_manager.add_log("**Something went wrong, let me try this again...**")
             self.context.event_manager.on_error(str(exception), should_completely_error=False)
 
             with self.context.state.update() as cur:
                 cur.signals.append(make_retry_signal(self.request.step_id, new_retry_index))
 
+            self.request.is_retry = True
             self.next(self.get_signature(self.request))
         else:
             self.logger.error(
