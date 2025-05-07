@@ -4,7 +4,7 @@ import pytest
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.tools.tools import BaseTools
-from seer.automation.models import FileChange, FilePatch, Hunk, Line
+from seer.automation.models import FileChange, FilePatch, Hunk, Line, RepoDefinition
 
 
 class TestRepo:
@@ -1064,6 +1064,8 @@ class TestClaudeTools:
         file_text = "This is the new file content."
         kwargs = {"command": "create", "path": new_path, "file_text": file_text}
 
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
         # Mock _get_repo_names to return a single repo
         autofix_tools.context._get_repo_names = MagicMock(return_value=[repo_name])
         # Mock _attempt_fix_path to return None, simulating the path not existing
@@ -1175,7 +1177,7 @@ class TestViewDirectoryTree:
             "src/utils/__init__.py",
             "tests/test_main.py",
         }
-        mock_repo_client.get_index_file_set.return_value = files
+        mock_repo_client.get_valid_file_paths.return_value = files
         mock_repo_client._build_file_tree_string.return_value = "mock tree string"
 
         result = autofix_tools.tree("src")
@@ -1193,7 +1195,7 @@ class TestViewDirectoryTree:
 
         # Create a large set of files (more than MAX_FILES_IN_TREE)
         files = {f"src/file{i}.py" for i in range(150)}  # 150 files > MAX_FILES_IN_TREE (100)
-        mock_repo_client.get_index_file_set.return_value = files
+        mock_repo_client.get_valid_file_paths.return_value = files
         mock_repo_client._build_file_tree_string.return_value = "mock tree string"
 
         result = autofix_tools.tree("src")
@@ -1201,3 +1203,194 @@ class TestViewDirectoryTree:
         assert "mock tree string" in result
         assert "Notice: There are a total of 150 files in the tree" in result
         assert "provide a more specific path to view a full tree" in result
+
+
+class TestExpandDocument:
+    def test_expand_document_fallback_to_read_file_contents(self, autofix_tools: BaseTools):
+        """Test that expand_document falls back to read_file_contents when get_file_contents returns None"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+        expected_content = "test file content"
+
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
+
+        # Mock attempt_fix_path to return the file path
+        autofix_tools._attempt_fix_path = MagicMock(return_value=file_path)
+
+        # Mock get_file_contents to return None to trigger fallback
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Setup tmp_dir to simulate downloaded repo
+        autofix_tools.tmp_dir = {repo_name: ("/tmp/test", "/tmp/test/repo")}
+
+        # Mock read_file_contents to return content
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            mock_read.return_value = (expected_content, None)
+
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify fallback behavior
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
+            mock_read.assert_called_once_with("/tmp/test/repo", file_path)
+            assert result == expected_content
+
+    def test_expand_document_fallback_with_read_error(self, autofix_tools: BaseTools):
+        """Test that expand_document handles errors from read_file_contents properly"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+        error_msg = "File does not exist"
+
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
+
+        # Mock attempt_fix_path to return the file path
+        autofix_tools._attempt_fix_path = MagicMock(return_value=file_path)
+
+        # Mock get_file_contents to return None to trigger fallback
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Setup tmp_dir to simulate downloaded repo
+        autofix_tools.tmp_dir = {repo_name: ("/tmp/test", "/tmp/test/repo")}
+
+        # Mock read_file_contents to return error
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            mock_read.return_value = (None, error_msg)
+
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify error handling
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
+            mock_read.assert_called_once_with("/tmp/test/repo", file_path)
+            assert "Error: Could not read the file at path" in result
+            assert error_msg in result
+
+    def test_expand_document_fallback_repo_not_downloaded(self, autofix_tools: BaseTools):
+        """Test that expand_document handles case where repo is not in tmp_dir"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
+
+        # Mock attempt_fix_path to return the file path
+        autofix_tools._attempt_fix_path = MagicMock(return_value=file_path)
+
+        # Mock get_file_contents to return None to trigger fallback
+        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Empty tmp_dir to simulate repo not downloaded
+        autofix_tools.tmp_dir = {}
+
+        # Mock read_file_contents (should not be called)
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify behavior
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_called_once_with(repo_name)
+            mock_read.assert_not_called()
+            assert "Error: Could not read the file at path" in result
+
+    def test_expand_document_success_without_fallback(self, autofix_tools: BaseTools):
+        """Test that expand_document returns content from get_file_contents when available"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+        expected_content = "test file content"
+
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
+
+        # Mock attempt_fix_path to return the file path
+        autofix_tools._attempt_fix_path = MagicMock(return_value=file_path)
+
+        # Mock get_file_contents to return content
+        autofix_tools.context.get_file_contents = MagicMock(return_value=expected_content)
+
+        # Mock _ensure_repos_downloaded
+        autofix_tools._ensure_repos_downloaded = MagicMock()
+
+        # Mock read_file_contents (should not be called)
+        with patch("seer.automation.autofix.tools.tools.read_file_contents") as mock_read:
+            # Call expand_document
+            result = autofix_tools.expand_document(file_path, repo_name)
+
+            # Verify no fallback was needed
+            autofix_tools.context.get_file_contents.assert_called_once_with(
+                file_path, repo_name=repo_name
+            )
+            autofix_tools._ensure_repos_downloaded.assert_not_called()
+            mock_read.assert_not_called()
+            assert result == expected_content
+
+    def test_expand_document_with_invalid_path(self, autofix_tools: BaseTools):
+        """Test that expand_document returns an error when the path is invalid"""
+        # Setup
+        repo_name = "test/repo"
+        invalid_path = "invalid/path.py"
+
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = repo_name
+
+        # Mock attempt_fix_path to return None (indicating invalid path)
+        autofix_tools._attempt_fix_path = MagicMock(return_value=None)
+
+        # Call expand_document
+        result = autofix_tools.expand_document(invalid_path, repo_name)
+
+        # Verify behavior
+        autofix_tools.context.autocorrect_repo_name.assert_called_once_with(repo_name)
+        autofix_tools._attempt_fix_path.assert_called_once_with(invalid_path, repo_name)
+
+        # Assert that an error message is returned
+        assert "Error: The file path" in result
+        assert "doesn't exist" in result
+        assert invalid_path in result
+
+    def test_incorrect_repo_name_returns_error(self, autofix_tools: BaseTools):
+        """Test that expand_document returns an error when the repo name is incorrect"""
+        # Setup
+        repo_name = "test/repo"
+        file_path = "src/test.py"
+
+        # Mock autocorrect_repo_name to return the repo name
+        autofix_tools.context.autocorrect_repo_name.return_value = None
+
+        autofix_tools.context.repos = [
+            RepoDefinition(
+                provider="github",
+                owner="valid",
+                name="repo",
+                external_id="123",
+            )
+        ]
+
+        result = autofix_tools.expand_document(file_path, repo_name)
+
+        # Assert
+        assert "Error: Repo 'test/repo' not found" in result
+        assert "valid/repo" in result

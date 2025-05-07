@@ -126,7 +126,11 @@ def test_run_iteration_with_queued_user_messages(
 
 
 @pytest.mark.vcr()
-def test_run_iteration_with_insight_sharing(autofix_agent, run_config):
+@patch.object(AutofixContext, "get_repo_client", return_value=MagicMock())
+@patch.object(AutofixContext, "get_file_contents", return_value="print('mock file content')")
+def test_run_iteration_with_insight_sharing(
+    mock_get_file_contents, mock_get_repo_client, autofix_agent, run_config
+):
     autofix_agent.config.interactive = True
     autofix_agent.memory = [
         Message(

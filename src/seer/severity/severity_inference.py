@@ -1,4 +1,3 @@
-import threading
 from typing import Optional, Protocol
 
 import numpy as np
@@ -64,7 +63,6 @@ class SeverityInference:
 
     def get_embeddings(self, text) -> np.ndarray:
         """Generate embeddings for the given text using the pre-trained model."""
-        sentry_sdk.set_tag("thread-count", threading.active_count())
         return self.embeddings_model.encode(text, convert_to_numpy=True)
 
     def severity_score(self, data: SeverityRequest) -> SeverityResponse:

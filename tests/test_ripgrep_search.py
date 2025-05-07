@@ -42,7 +42,7 @@ def test_run_ripgrep_in_repo_no_results(monkeypatch):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     result = run_ripgrep_in_repo("/repo", ["rg", '"q"'])
-    assert result == "ripgrep returned: No results found."
+    assert result == 'Ran ripgrep with command: `rg "q"`\n\nripgrep returned: No results found.'
 
 
 def test_run_ripgrep_in_repo_error_exit_code(monkeypatch):
@@ -54,7 +54,7 @@ def test_run_ripgrep_in_repo_error_exit_code(monkeypatch):
     with pytest.raises(RuntimeError) as excinfo:
         run_ripgrep_in_repo("/repo", ["rg", '"x"'])
     err = str(excinfo.value)
-    assert "ripgrep error (exit 2):" in err
+    assert "ripgrep Error (exit 2):" in err
     assert "bad pattern" in err
 
 

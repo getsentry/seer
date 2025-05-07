@@ -43,17 +43,24 @@ class TestAssistedQuery(unittest.TestCase):
         with patch(
             "seer.automation.assisted_query.assisted_query.create_query_from_natural_language"
         ) as mock_create_query:
-            mock_create_query.return_value = TranslateResponse(
-                query="error",
-                stats_period="24h",
-                group_by=["project"],
-                visualization=[
-                    Chart(
-                        chart_type=1,
-                        y_axes=["Test y-axis 1", "Test y-axis 2"],
-                    )
-                ],
-                sort="-count",
+            mock_create_query.return_value = LlmGenerateStructuredResponse(
+                TranslateResponse(
+                    query="error",
+                    stats_period="24h",
+                    group_by=["project"],
+                    visualization=[
+                        Chart(
+                            chart_type=1,
+                            y_axes=["Test y-axis 1", "Test y-axis 2"],
+                        )
+                    ],
+                    sort="-count",
+                ),
+                metadata=LlmResponseMetadata(
+                    model="gemini-2.0-flash-001",
+                    provider_name=LlmProviderType.GEMINI,
+                    usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+                ),
             )
 
             response = translate_query(request)
@@ -97,14 +104,21 @@ class TestAssistedQuery(unittest.TestCase):
             project_ids=project_ids,
         )
 
-        mock_create_query.return_value = ModelResponse(
-            explanation="This is a test explanation",
-            query="error",
-            stats_period="24h",
-            group_by=["project"],
-            visualization=[Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])],
-            sort="-count",
-            confidence_score=0.95,
+        mock_create_query.return_value = LlmGenerateStructuredResponse(
+            ModelResponse(
+                explanation="This is a test explanation",
+                query="error",
+                stats_period="24h",
+                group_by=["project"],
+                visualization=[Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])],
+                sort="-count",
+                confidence_score=0.95,
+            ),
+            metadata=LlmResponseMetadata(
+                model="gemini-2.0-flash-001",
+                provider_name=LlmProviderType.GEMINI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
         )
 
         response = translate_query(request)
@@ -127,7 +141,7 @@ class TestAssistedQuery(unittest.TestCase):
         mock_llm_client = MagicMock()
 
         first_call = LlmGenerateStructuredResponse(
-            parsed=RelevantFieldsResponse(fields=["span.op", "span.description"]),
+            RelevantFieldsResponse(fields=["span.op", "span.description"]),
             metadata=LlmResponseMetadata(
                 model="gemini-2.0-flash-001",
                 provider_name=LlmProviderType.GEMINI,
@@ -136,7 +150,7 @@ class TestAssistedQuery(unittest.TestCase):
         )
 
         second_call = LlmGenerateStructuredResponse(
-            parsed=ModelResponse(
+            ModelResponse(
                 explanation="This is a test explanation",
                 query="error",
                 stats_period="24h",
@@ -156,7 +170,6 @@ class TestAssistedQuery(unittest.TestCase):
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
         )
-
         mock_llm_client.generate_structured.side_effect = [first_call, second_call]
 
         mock_rpc_client.call.return_value = {

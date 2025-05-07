@@ -19,6 +19,10 @@ def parse_int_from_env(data: str) -> int:
     return int(data)
 
 
+def parse_float_from_env(data: str) -> float:
+    return float(data)
+
+
 def parse_list_from_env(data: str) -> list[str]:
     return data.split()
 
@@ -34,6 +38,7 @@ def as_absolute_path(path: str) -> str:
 
 
 ParseInt = Annotated[int, BeforeValidator(parse_int_from_env)]
+ParseFloat = Annotated[float, BeforeValidator(parse_float_from_env)]
 ParseList = Annotated[list[str], BeforeValidator(parse_list_from_env)]
 ParseBool = Annotated[bool, BeforeValidator(parse_bool_from_env)]
 ParsePath = Annotated[str, BeforeValidator(as_absolute_path)]
@@ -45,6 +50,7 @@ class AppConfig(BaseModel):
     SENTRY_DSN: str = ""
     SENTRY_ENVIRONMENT: str = "production"
     SENTRY_REGION: str = ""
+    SENTRY_PROFILES_SAMPLE_RATE: ParseFloat = 1.0
 
     DATABASE_URL: str
     DATABASE_MIGRATIONS_URL: str | None = None

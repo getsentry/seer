@@ -84,7 +84,7 @@ class AnomalyDetection(BaseModel):
         batch_detector = MPBatchAnomalyDetector()
         prophet_detector = ProphetAnomalyDetector()
         forecast_len = (
-            prophet_forecast_len_days * 24 * 60 // config.time_period
+            prophet_forecast_len_days * 24 * (60 // config.time_period)
             if prophet_forecast_len_days
             else algo_config.prophet_forecast_len * (60 // config.time_period)
         )
@@ -415,54 +415,19 @@ class AnomalyDetection(BaseModel):
         Returns:
         Tuple with input timeseries and identified anomalies
         """
-        min_len = self._min_required_timesteps(ad_config.time_period)
-        if len(ts_with_history.history) < min_len:
-            logger.warning(
-                "insufficient_history_data",
-                extra={
-                    "num_datapoints": len(ts_with_history.history),
-                    "minimum_required": min_len,
-                },
-            )
-            raise ClientError("Insufficient history data")
+        self._check_length(ts_with_history, ad_config)
 
         orig_curr_len = len(ts_with_history.current)
         logger.info(
             f"Detecting anomalies for time series with history of {len(ts_with_history.history)} datapoints and current of {orig_curr_len} datapoints"
         )
 
-        historic = convert_external_ts_to_internal(ts_with_history.history)
-        current = convert_external_ts_to_internal(ts_with_history.current)
-
-        trim_current_by = 0
-        time_period = ad_config.time_period
-        num_rows_per_day = (24 * 60) // time_period
-        max_stream_detection_len = int(
-            algo_config.max_stream_days_for_combo_detection[time_period] * num_rows_per_day
+        historic, current, trim_current_by, max_stream_detection_len = self._fix_streaming_len(
+            ts_with_history, ad_config, algo_config, orig_curr_len
         )
-        max_batch_detection_len = int(
-            algo_config.max_batch_days_for_combo_detection[time_period] * num_rows_per_day
-        )
-        if orig_curr_len > max_stream_detection_len:
-            trim_current_by = orig_curr_len - max_stream_detection_len
-            logger.info(
-                f"Limiting stream detection to last {max_stream_detection_len} datapoints of the original {orig_curr_len} datapoints."
-            )
-            historic, current = self._shift_current_by(
-                history=historic, current=current, num_rows=trim_current_by
-            )
 
-        if len(historic.values) > max_batch_detection_len:
-            trim_historic_by = len(historic.values) - max_batch_detection_len
-            logger.info(
-                f"Limiting batch detection to last {max_batch_detection_len} datapoints of the original {len(historic.values)} datapoints."
-            )
-            historic.values = historic.values[trim_historic_by:]
-            historic.timestamps = historic.timestamps[trim_historic_by:]
-        # Adjust time budget based on the number of rows in the current time series
-        time_budget_ms = (
-            time_budget_ms // 2 if time_budget_ms else None
-        )  # Splitting between batch and stream detection
+        time_allocated = datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
+        time_start = datetime.datetime.now(datetime.timezone.utc)
 
         agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=[],
@@ -481,8 +446,20 @@ class AnomalyDetection(BaseModel):
             window_size=None,
             time_budget_ms=time_budget_ms,
             algo_config=algo_config,
-            prophet_forecast_len_days=max_stream_detection_len,  # This ensures that the there is only prophet detection run always
+            prophet_forecast_len_days=algo_config.max_stream_days_for_combo_detection[
+                ad_config.time_period
+            ],
         )
+        if time_budget_ms is not None:
+            time_elapsed = datetime.datetime.now(datetime.timezone.utc) - time_start
+            time_budget_ms = time_budget_ms - (time_elapsed.microseconds // 1000)
+            if time_budget_ms < 100:  # need atleast 100 milliseconds for stream detection
+                logger.error(
+                    "batch_detection_took_too_long",
+                    extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
+                )
+                raise ServerError("Batch detection took too long")
+
         agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
             flags=historic_anomalies.flags[-trim_current_by:],
             scores=historic_anomalies.scores[-trim_current_by:],
@@ -550,6 +527,54 @@ class AnomalyDetection(BaseModel):
         # Make sure we're not returning more points than we have anomaly data for
         return ts_with_history.current[:safe_orig_curr_len], converted_anomalies
 
+    def _fix_streaming_len(self, ts_with_history, ad_config, algo_config, orig_curr_len):
+        historic = convert_external_ts_to_internal(ts_with_history.history)
+        current = convert_external_ts_to_internal(ts_with_history.current)
+
+        trim_current_by = 0
+        time_period = ad_config.time_period
+        num_rows_per_day = (24 * 60) // time_period
+        max_stream_detection_len = int(
+            algo_config.max_stream_days_for_combo_detection[time_period] * num_rows_per_day
+        )
+        max_batch_detection_len = int(
+            algo_config.max_batch_days_for_combo_detection[time_period] * num_rows_per_day
+        )
+        if orig_curr_len > max_stream_detection_len:
+            trim_current_by = orig_curr_len - max_stream_detection_len
+            logger.info(
+                f"Limiting stream detection to last {max_stream_detection_len} datapoints of the original {orig_curr_len} datapoints."
+            )
+            historic, current = self._shift_current_by(
+                history=historic, current=current, num_rows=trim_current_by
+            )
+
+        if len(historic.values) > max_batch_detection_len:
+            trim_historic_by = len(historic.values) - max_batch_detection_len
+            logger.info(
+                f"Limiting batch detection to last {max_batch_detection_len} datapoints of the original {len(historic.values)} datapoints."
+            )
+            historic.values = historic.values[trim_historic_by:]
+            historic.timestamps = historic.timestamps[trim_historic_by:]
+        return (
+            historic,
+            current,
+            trim_current_by,
+            max_stream_detection_len,
+        )
+
+    def _check_length(self, ts_with_history, ad_config):
+        min_len = self._min_required_timesteps(ad_config.time_period)
+        if len(ts_with_history.history) < min_len:
+            logger.warning(
+                "insufficient_history_data",
+                extra={
+                    "num_datapoints": len(ts_with_history.history),
+                    "minimum_required": min_len,
+                },
+            )
+            raise ClientError("Insufficient history data")
+
     def _update_anomalies(
         self,
         ts_external: List[TimeSeriesPoint],
@@ -563,7 +588,7 @@ class AnomalyDetection(BaseModel):
 
     @sentry_sdk.trace
     def detect_anomalies(
-        self, request: DetectAnomaliesRequest, time_budget_ms: int = 4500
+        self, request: DetectAnomaliesRequest, time_budget_ms: int = 9500
     ) -> DetectAnomaliesResponse:
         """
         Main entry point for anomaly detection.

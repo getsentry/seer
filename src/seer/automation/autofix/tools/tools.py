@@ -18,6 +18,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingType,
 )
 from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
@@ -112,6 +113,13 @@ class BaseTools:
         else:
             raise ValueError(f"Unsupported context type: {type(self.context)}")
 
+    def _make_repo_not_found_error_message(self, repo_name: str) -> str:
+        return f"Error: Repo '{repo_name}' not found." + (
+            f" Available repos: {', '.join([repo.full_name for repo in self.context.repos if isinstance(self.context, AutofixContext)])}"
+            if isinstance(self.context, AutofixContext)
+            else ""
+        )
+
     @observe(name="Semantic File Search")
     @sentry_sdk.trace
     @inject
@@ -130,6 +138,21 @@ class BaseTools:
     @observe(name="Expand Document")
     @sentry_sdk.trace
     def expand_document(self, file_path: str, repo_name: str):
+        fixed_repo_name = (
+            self.context.autocorrect_repo_name(repo_name)
+            if isinstance(self.context, AutofixContext)
+            else repo_name
+        )
+        if not fixed_repo_name:
+            return self._make_repo_not_found_error_message(repo_name)
+        repo_name = fixed_repo_name
+
+        valid_file_path = self._attempt_fix_path(file_path, repo_name)
+        if valid_file_path is None:
+            other_paths = self._get_potential_abs_paths(file_path, repo_name)
+            return f"Error: The file path `{file_path}` doesn't exist in `{repo_name}`.\n{other_paths}".strip()
+
+        # At this point we have ensured the file path and the repo name are valid.
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
 
         self.context.event_manager.add_log(f"Looking at `{file_path}` in `{repo_name}`...")
@@ -137,9 +160,18 @@ class BaseTools:
         if file_contents:
             return file_contents
 
-        # show potential corrected paths if nothing was found here
-        other_paths = self._get_potential_abs_paths(file_path, repo_name)
-        return f"<document with the provided path not found/>\n{other_paths}".strip()
+        self._ensure_repos_downloaded(repo_name)
+
+        local_read_error = None
+        if repo_name in self.tmp_dir:
+            repo_dir = self.tmp_dir[repo_name][1]
+
+            # try reading the actual file from file system
+            file_contents, local_read_error = read_file_contents(repo_dir, file_path)
+            if file_contents:
+                return file_contents
+
+        return f"Error: Could not read the file at path `{file_path}`.\n{local_read_error if local_read_error else ''}".strip()
 
     @observe(name="View Diff")
     @sentry_sdk.trace
@@ -182,7 +214,7 @@ class BaseTools:
         Given the path for a directory in this codebase, returns a tree representation of the directory structure and files.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_paths = repo_client.get_index_file_set()
+        all_paths = repo_client.get_valid_file_paths()
         normalized_path = self._normalize_path(path)
 
         # Filter paths to include all files under the specified path
@@ -224,7 +256,7 @@ class BaseTools:
         This is useful in the case that the model is using an incomplete path.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_paths = repo_client.get_index_file_set()
+        all_paths = repo_client.get_valid_file_paths()
         normalized_path = self._normalize_path(path)
 
         # Filter paths to include parents + remove duplicates and sort
@@ -247,7 +279,7 @@ class BaseTools:
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_files = repo_client.get_index_file_set()
+        all_files = repo_client.get_valid_file_paths()
 
         normalized_path = path.lstrip("./").lstrip("/")
         if not normalized_path:
@@ -408,6 +440,7 @@ class BaseTools:
         exclude_pattern: str | None = None,
         case_sensitive: bool = False,
         repo_name: str | None = None,
+        use_regex: bool = False,
     ) -> str:
         self._ensure_repos_downloaded(repo_name)
 
@@ -420,9 +453,11 @@ class BaseTools:
         cmd.extend(["--max-columns", "1024"])
 
         # limit threads
-        cmd.extend(["--threads", "1"])
+        cmd.extend(["--threads", "2"])
 
-        # Add other common flags
+        if not use_regex:
+            cmd.append("--fixed-strings")
+
         if not case_sensitive:
             cmd.append("--ignore-case")
 
@@ -704,8 +739,20 @@ class BaseTools:
         if not path:
             return "Error: Path could not be resolved"
 
+        if not repo_name:
+            return "Error: Repo could not be resolved"
+
         tool_call_id = kwargs.get("tool_call_id", None)
         current_memory_index = kwargs.get("current_memory_index", -1)
+
+        fixed_repo_name = (
+            self.context.autocorrect_repo_name(repo_name)
+            if isinstance(self.context, AutofixContext)
+            else repo_name
+        )
+        if not fixed_repo_name:
+            return self._make_repo_not_found_error_message(repo_name)
+        repo_name = fixed_repo_name
 
         command_handlers = {
             "view": self._handle_view_command,
@@ -1055,11 +1102,6 @@ class BaseTools:
                         description="Runs a ripgrep command over the codebase to find what you're looking for. Use this as your main tool for searching codebases. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
                         parameters=[
                             {
-                                "name": "query",
-                                "type": "string",
-                                "description": "The regex pattern you're searching for.",
-                            },
-                            {
                                 "name": "include_pattern",
                                 "type": "string",
                                 "description": "Optional glob pattern for files to include. For example, '*.py' for Python files.",
@@ -1075,9 +1117,19 @@ class BaseTools:
                                 "description": "Whether the search should be case sensitive.",
                             },
                             {
+                                "name": "use_regex",
+                                "type": "boolean",
+                                "description": "Set this to true to search for a regex pattern. By default set to false.",
+                            },
+                            {
                                 "name": "repo_name",
                                 "type": "string",
                                 "description": "Optional name of the repository to search in. If not provided, all repositories will be searched.",
+                            },
+                            {
+                                "name": "query",
+                                "type": "string",
+                                "description": "The precise query you're searching for. By default interpreted as a literal string, so no escaping is needed. Set use_regex=true to use regex pattern matching.",
                             },
                         ],
                         required=["query"],
