@@ -153,7 +153,7 @@ class AutofixContext(PipelineContext):
             matching_full_names = [r for r in repo_names if repo_name.lower() in r.lower()]
             names_without_owner = [
                 r.split("/")[-1] for r in matching_full_names if len(r.split("/")) > 1
-            ]  # the repo name, e.g. seer in getsentry/seer
+            ]  # the repo names without the orgs, e.g. "seer", not "getsentry/seer"
             matching_names_without_owner = [
                 r for r in names_without_owner if repo_name.lower() == r.lower()
             ]
