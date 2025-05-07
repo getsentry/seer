@@ -396,7 +396,7 @@ class AutofixEventManager:
             )
 
             if (
-                not should_completely_error
+                not should_completely_error and cur.steps
             ):  # delete the last step so it's replaced with the new one upon retry
                 cur.steps = cur.steps[:-1]
 
