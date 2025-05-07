@@ -91,6 +91,9 @@ class StaticAnalysisSuggestion(BaseModel):
             ).encode(),
         )
 
+    def to_text_format(self) -> str:
+        return f"{self.short_description}\n{self.justification}\n<location>{self.path}:{self.line}</location>"
+
 
 class CodegenState(BaseModel):
     run_id: int = -1
