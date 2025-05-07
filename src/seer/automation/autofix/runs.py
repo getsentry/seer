@@ -53,8 +53,9 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
         except Exception as e:
             logger.exception(e)
 
-    create_missing_codebase_states(state)
-    set_accessible_repos(state)
+    continuation_state = ContinuationState(state.id)
+    create_missing_codebase_states(continuation_state)
+    set_accessible_repos(continuation_state)
 
     with state.update() as cur:
         cur.mark_triggered()
