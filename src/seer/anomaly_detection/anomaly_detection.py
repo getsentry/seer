@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import sentry_sdk
 import stumpy  # type: ignore # mypy throws "missing library stubs"
-from datadog.dogstatsd.base import statsd
 from pydantic import BaseModel
 from stumpy import cache
 
@@ -41,7 +40,7 @@ from seer.anomaly_detection.models.timeseries import ProphetPrediction
 from seer.db import TaskStatus
 from seer.dependency_injection import inject, injected
 from seer.exceptions import ClientError, ServerError
-from seer.tags import AnomalyDetectionModes, AnomalyDetectionTags
+from seer.tags import AnomalyDetectionTags
 
 anomaly_detection_module.enable()
 logger = logging.getLogger(__name__)
@@ -598,31 +597,16 @@ class AnomalyDetection(BaseModel):
             Anomaly detection request that has either a complete time series or an alert reference.
         """
         if isinstance(request.context, AlertInSeer):
-            mode = AnomalyDetectionModes.STREAMING_ALERT
+            sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
+            ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
-            mode = AnomalyDetectionModes.STREAMING_TS_WITH_HISTORY
+            ts, anomalies = self._combo_detect(
+                request.context, request.config, time_budget_ms=time_budget_ms
+            )
         else:
-            mode = AnomalyDetectionModes.BATCH_TS_FULL
-
-        sentry_sdk.set_tag(AnomalyDetectionTags.MODE, mode)
-
-        if isinstance(request.context, AlertInSeer):
-            with statsd.timed("seer.anomaly_detection.detect.online_detect_duration"):
-                statsd.increment("seer.anomaly_detection.detect.online_detect")
-                sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
-                ts, anomalies = self._online_detect(request.context, request.config)
-        elif isinstance(request.context, TimeSeriesWithHistory):
-            with statsd.timed("seer.anomaly_detection.detect.combo_detect_duration"):
-                statsd.increment("seer.anomaly_detection.detect.combo_detect")
-                ts, anomalies = self._combo_detect(
-                    request.context, request.config, time_budget_ms=time_budget_ms
-                )
-        else:
-            with statsd.timed("seer.anomaly_detection.detect.batch_detect_duration"):
-                statsd.increment("seer.anomaly_detection.detect.batch_detect")
-                ts, anomalies, _ = self._batch_detect(
-                    request.context, request.config, time_budget_ms=time_budget_ms
-                )
+            ts, anomalies, _ = self._batch_detect(
+                request.context, request.config, time_budget_ms=time_budget_ms
+            )
         self._update_anomalies(ts, anomalies)
         return DetectAnomaliesResponse(success=True, timeseries=ts)
 
@@ -640,6 +624,8 @@ class AnomalyDetection(BaseModel):
         request: StoreDataRequest
             Alert information along with underlying time series data
         """
+        scope = sentry_sdk.get_current_scope()
+        scope.set_transaction_name("seer.anomaly_detection.store_endpoint")
         sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.alert.id)
         # Ensure we have at least 7 days of data in the time series
         min_len = self._min_required_timesteps(request.config.time_period)
@@ -709,6 +695,8 @@ class AnomalyDetection(BaseModel):
         request: DeleteAlertDataRequest
             Alert to clear
         """
+        scope = sentry_sdk.get_current_scope()
+        scope.set_transaction_name("seer.anomaly_detection.delete_endpoint")
         sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.alert.id)
         alert_data_accessor.delete_alert_data(external_alert_id=request.alert.id)
         return DeleteAlertDataResponse(success=True)

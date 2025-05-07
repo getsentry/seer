@@ -14,12 +14,15 @@ from openai import APITimeoutError
 from sqlalchemy import text
 
 from seer.anomaly_detection.models.external import (
+    AnomalyDetectionConfig,
     DeleteAlertDataRequest,
     DeleteAlertDataResponse,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
     StoreDataResponse,
+    TimeSeriesPoint,
+    TimeSeriesWithHistory,
 )
 from seer.app import app
 from seer.automation.assisted_query.models import (
@@ -591,6 +594,35 @@ class TestSeer(unittest.TestCase):
         """Test a successful run of detect_anomalies end point"""
         mock_detect_anomalies.return_value = DetectAnomaliesResponse(success=True)
         test_data = next(generate(DetectAnomaliesRequest))
+
+        response = app.test_client().post(
+            "/v1/anomaly-detection/detect",
+            data=test_data.model_dump_json(),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 200
+        assert response.json["success"] is True
+        mock_detect_anomalies.assert_called_once_with(test_data)
+
+    @mock.patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection.detect_anomalies")
+    def test_combo_detect_anomalies_endpoint_success(self, mock_detect_anomalies):
+        """Test a successful run of detect_anomalies end point"""
+        mock_detect_anomalies.return_value = DetectAnomaliesResponse(success=True)
+        test_data = DetectAnomaliesRequest(
+            organization_id=1,
+            project_id=1,
+            config=AnomalyDetectionConfig(
+                time_period=60,
+                sensitivity="medium",
+                direction="both",
+                expected_seasonality="auto",
+            ),
+            context=TimeSeriesWithHistory(
+                history=[TimeSeriesPoint(timestamp=1, value=1)],
+                current=[TimeSeriesPoint(timestamp=2, value=2)],
+            ),
+        )
 
         response = app.test_client().post(
             "/v1/anomaly-detection/detect",
