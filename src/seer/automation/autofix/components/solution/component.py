@@ -220,7 +220,11 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
                     prompt=SolutionPrompts.solution_formatter_msg(),
-                    model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
+                    model=(
+                        GeminiProvider.model("gemini-2.0-flash-001")
+                        if config.SENTRY_REGION == "de"
+                        else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
+                    ),
                     response_format=SolutionOutput,
                     run_name="Solution Extraction & Formatting",
                     max_tokens=8192,
