@@ -5,6 +5,7 @@ import tarfile
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
 
 import git
 from google.cloud import storage
@@ -20,7 +21,9 @@ class RepoManager:
     A client for interacting with local git repositories using GitPython.
     """
 
-    def __init__(self, repo_client: RepoClient):
+    def __init__(
+        self, repo_client: RepoClient, trigger_liveness_probe: Callable[[], None] | None = None
+    ):
         """
         Initialize the local git client.
         """
@@ -30,18 +33,8 @@ class RepoManager:
             prefix=f"{self.repo_client.repo_owner}-{self.repo_client.repo_name}_{self.repo_client.base_commit_sha}"
         )
         self.repo_path = os.path.join(self.tmp_dir, "repo")
-
-        if self.gcs_archive_exists():
-            self.download_from_gcs()
-        else:
-            self._clone_repo()
-
-            # Only upload to GCS if this is a fresh new clone of the repo.
-            self.upload_to_gcs()
-
-        logger.info(f"Repo {self.repo_client.repo_full_name} ready at {self.repo_path}")
-
-        self._sync_repo()
+        self.initialization_future = None
+        self._trigger_liveness_probe = trigger_liveness_probe
 
     @property
     def blob_name(self):
@@ -56,6 +49,35 @@ class RepoManager:
         Get the bucket name for the repository.
         """
         return os.environ.get("AUTOFIX_REPOS_GCS_BUCKET", "autofix-repositories-local")
+
+    def initialize_in_background(self, gcs_enabled: bool = False):
+        logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
+        self.initialization_future = ThreadPoolExecutor(1).submit(
+            self.initialize, gcs_enabled=gcs_enabled
+        )
+
+    def initialize(self, gcs_enabled: bool = False):
+        logger.info(f"Initializing repo {self.repo_client.repo_full_name}")
+
+        try:
+            if gcs_enabled and self.gcs_archive_exists():
+                self.download_from_gcs()
+            else:
+                self._clone_repo()
+
+                if gcs_enabled:
+                    # Only upload to GCS if this is a fresh new clone of the repo.
+                    self.upload_to_gcs()
+
+            logger.info(f"Repo {self.repo_client.repo_full_name} ready at {self.repo_path}")
+
+            self._sync_repo()
+
+        except Exception as e:
+            logger.error(f"Failed to initialize repo {self.repo_client.repo_full_name}: {e}")
+            raise
+        finally:
+            self.initialization_future = None
 
     def _clone_repo(self) -> str:
         """
@@ -76,7 +98,12 @@ class RepoManager:
             cleanup_dir(self.repo_path)
 
             start_time = time.time()
-            self.git_repo = git.Repo.clone_from(repo_clone_url, self.repo_path, depth=1)
+            self.git_repo = git.Repo.clone_from(
+                repo_clone_url,
+                self.repo_path,
+                progress=lambda *args, **kwargs: self._trigger_liveness_probe(),
+                depth=1,
+            )
             end_time = time.time()
             logger.info(f"Cloned repository in {end_time - start_time} seconds")
 

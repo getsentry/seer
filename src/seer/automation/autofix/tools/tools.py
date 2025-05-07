@@ -3,9 +3,10 @@ import os
 import shlex
 import subprocess
 import textwrap
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError, as_completed
-from threading import Lock
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 from typing import Any, Dict, cast
+from concurrent.futures import wait, FIRST_EXCEPTION
 
 import sentry_sdk
 from langfuse.decorators import observe
@@ -24,7 +25,6 @@ from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.repo_manager import RepoManager
-from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
 from seer.dependency_injection import copy_modules_initializer, inject, injected
@@ -53,25 +53,89 @@ class BaseTools:
         self.repo_client_type = repo_client_type
         self.repo_managers = {}
 
-        # Download repos synchronously at initialization
         self._download_repos()
 
     def _download_repos(self):
-        """Download all repositories synchronously during initialization."""
         repo_names = self._get_repo_names()
         if not repo_names:
             return
 
+        # gcs_enabled = self.context.organization_id == 1
+        gcs_enabled = False
+
+        # Create repo managers for all repos first
         for repo_name in repo_names:
-            try:
-                repo_client = self.context.get_repo_client(
-                    repo_name=repo_name, type=self.repo_client_type
+            repo_client = self.context.get_repo_client(
+                repo_name=repo_name, type=self.repo_client_type
+            )
+            repo_manager = RepoManager(
+                repo_client, trigger_liveness_probe=self._trigger_liveness_probe
+            )
+            repo_manager.initialize_in_background(gcs_enabled=gcs_enabled)
+            self.repo_managers[repo_name] = repo_manager
+
+    def _trigger_liveness_probe(self):
+        with self.context.state.update() as state:
+            # Do nothing, the state should self toggle updated_at
+            pass
+
+    def _ensure_repos_downloaded(self, repo_name: str | None = None):
+        """
+        Helper method to ensure repositories are downloaded.
+        Simplified version that just checks if repos are already downloaded
+        and downloads them synchronously if needed.
+
+        Args:
+            repo_name: If provided, only ensures this specific repo is downloaded.
+                      If None, ensures all repos are downloaded.
+        """
+        if repo_name:
+            repo_names_to_download = [repo_name] if repo_name not in self.repo_managers else []
+        else:
+            repo_names_to_download = [
+                rn for rn in self._get_repo_names() if rn not in self.repo_managers
+            ]
+
+        if not repo_names_to_download:
+            return
+
+        append_langfuse_observation_metadata({"repo_download": True})
+
+        # Wait for all initialization tasks to complete with a timeout
+        timeout_secs = 90.0
+        start_time = time.time()
+
+        # Collect all futures that need to be waited on
+        futures_to_wait = [
+            repo_manager.initialization_future
+            for repo_manager in self.repo_managers.values()
+            if repo_manager.initialization_future
+        ]
+
+        self.context.event_manager.add_log(f"Waiting for your repositories to download...")
+
+        # Use concurrent.futures.wait with a single timeout for all futures
+        done, not_done = wait(futures_to_wait, timeout=timeout_secs, return_when=FIRST_EXCEPTION)
+
+        # Process results and handle errors
+        for repo_manager in self.repo_managers.values():
+            if not repo_manager.initialization_future:
+                continue
+
+            future = repo_manager.initialization_future
+            if future in not_done:
+                logger.warning(
+                    f"Repository {repo_manager.repo_client.repo_full_name} timed out after {timeout_secs} seconds"
                 )
-                local_client = RepoManager(repo_client)
-                self.repo_managers[repo_name] = local_client
-                logger.info(f"Downloaded repository {repo_name} to {local_client.repo_path}")
-            except Exception as e:
-                logger.exception(f"Error downloading repo {repo_name}: {e}")
+            elif future.exception():
+                logger.exception(
+                    f"Error initializing repository {repo_manager.repo_client.repo_full_name}: {future.exception()}"
+                )
+
+        end_time = time.time()
+        logger.info(
+            f"Repositories became ready in {end_time - start_time} seconds for {len(self.repo_managers)} repositories"
+        )
 
     def __enter__(self):
         return self
@@ -473,40 +537,6 @@ class BaseTools:
                         results.append(result)
 
             return "\n".join(f"Result for {rn}:\n{result}" for rn, result in results)
-
-    def _ensure_repos_downloaded(self, repo_name: str | None = None):
-        """
-        Helper method to ensure repositories are downloaded.
-        Simplified version that just checks if repos are already downloaded
-        and downloads them synchronously if needed.
-
-        Args:
-            repo_name: If provided, only ensures this specific repo is downloaded.
-                      If None, ensures all repos are downloaded.
-        """
-        if repo_name:
-            repo_names_to_download = [repo_name] if repo_name not in self.repo_managers else []
-        else:
-            repo_names_to_download = [
-                rn for rn in self._get_repo_names() if rn not in self.repo_managers
-            ]
-
-        if not repo_names_to_download:
-            return
-
-        append_langfuse_observation_metadata({"repo_download": True})
-
-        with sentry_sdk.start_span(name="Downloading repos"):
-            for repo_name in repo_names_to_download:
-                try:
-                    repo_client = self.context.get_repo_client(
-                        repo_name=repo_name, type=self.repo_client_type
-                    )
-                    local_client = RepoManager(repo_client)
-                    self.repo_managers[repo_name] = local_client
-                    logger.info(f"Downloaded repository {repo_name} to {local_client.repo_path}")
-                except Exception as e:
-                    logger.exception(f"Error downloading repo {repo_name}: {e}")
 
     @observe(name="Find Files")
     @sentry_sdk.trace
