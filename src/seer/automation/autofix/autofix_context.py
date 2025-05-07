@@ -160,8 +160,10 @@ class AutofixContext(PipelineContext):
             if matching_names_without_owner:
                 repo_name_without_owner = matching_names_without_owner[0]
                 repo_name = next(
-                    (r for r in matching_full_names if f"/{repo_name_without_owner}" in r), None
+                    (r for r in matching_full_names if f"/{repo_name_without_owner}" in r), ""
                 )
+                if not repo_name:
+                    return None
             elif matching_full_names:
                 repo_name = min(
                     matching_full_names, key=lambda x: abs(len(x) - len(repo_name or ""))
