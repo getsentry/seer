@@ -25,6 +25,7 @@ from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.utils import cleanup_dir
 from seer.automation.codegen.codegen_context import CodegenContext
+from seer.automation.codegen.models import CodegenBaseRequest
 from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
@@ -1007,7 +1008,14 @@ class BaseTools:
         """Handles the undo edit command to remove file changes."""
         external_id = None
         cur_state = self.context.state.get()
-        for repo in cur_state.request.repos:
+        if isinstance(cur_state.request, AutofixRequest):
+            repos = cur_state.request.repos
+        elif isinstance(cur_state.request, CodegenBaseRequest):
+            repos = [cur_state.request.repo]
+        else:
+            raise ValueError("Invalid request type")
+
+        for repo in repos:
             if repo.full_name == repo_name:
                 external_id = repo.external_id
                 break

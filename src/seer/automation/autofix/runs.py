@@ -53,9 +53,10 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
         except Exception as e:
             logger.exception(e)
 
-        create_missing_codebase_states(cur)
-        set_accessible_repos(cur)
+    create_missing_codebase_states(state)
+    set_accessible_repos(state)
 
+    with state.update() as cur:
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
