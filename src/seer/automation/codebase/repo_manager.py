@@ -31,7 +31,9 @@ class RepoManager:
         )
         self.repo_path = os.path.join(self.tmp_dir, "repo")
         self.initialization_future = None
+
         self._trigger_liveness_probe = trigger_liveness_probe
+        self._has_timed_out = False
 
     @property
     def is_available(self):
@@ -39,6 +41,11 @@ class RepoManager:
 
     def initialize_in_background(self):
         logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
+        if self.initialization_future is not None:
+            raise RuntimeError(
+                f"Repo {self.repo_client.repo_full_name} is already being initialized"
+            )
+
         self.initialization_future = ThreadPoolExecutor(1).submit(self.initialize)
 
     def initialize(self):
@@ -46,15 +53,18 @@ class RepoManager:
 
         try:
             self._clone_repo()
-
-            logger.info(f"Repo {self.repo_client.repo_full_name} ready at {self.repo_path}")
-
+            if self._has_timed_out:
+                return
             self._sync_repo()
         except Exception as e:
             logger.error(f"Failed to initialize repo {self.repo_client.repo_full_name}: {e}")
+            self.cleanup()
             raise
         finally:
             self.initialization_future = None
+
+            if self._has_timed_out:
+                self.cleanup()
 
     def _clone_repo(self) -> str:
         """
@@ -81,8 +91,8 @@ class RepoManager:
 
             return self.repo_path
         except git.GitCommandError as e:
-            self.cleanup()
             logger.error(f"Failed to clone repository: {e}")
+            self.git_repo = None  # clear the repo to fail the available check
             raise
 
     def _sync_repo(self):
@@ -93,6 +103,7 @@ class RepoManager:
 
         try:
             start_time = time.time()
+
             commit_sha = self.repo_client.base_commit_sha
 
             # Fetch only the specific commit
@@ -107,6 +118,14 @@ class RepoManager:
             logger.error(f"Failed to sync repository {self.repo_client.repo_full_name}: {e}")
             self.git_repo = None  # clear the repo to fail the available check
 
+    def mark_as_timed_out(self):
+        if self.initialization_future:
+            # Have the thread deal with cleanup
+            self._has_timed_out = True
+        else:
+            # Do it now
+            self.cleanup()
+
     def cleanup(self):
         """
         Clean up the temporary directory if it exists.
@@ -116,7 +135,9 @@ class RepoManager:
             self.repo_path = None
             self.git_repo = None
 
-        logger.info(f"Cleaned up local repo client for {self.repo_client.repo_full_name}")
+        self._has_timed_out = False
+
+        logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
 
     def __del__(self):
         """

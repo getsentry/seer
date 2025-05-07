@@ -119,10 +119,12 @@ class BaseTools:
 
             future = repo_manager.initialization_future
             if future in not_done:
+                repo_manager.mark_as_timed_out()
                 logger.warning(
                     f"Repository {repo_manager.repo_client.repo_full_name} timed out after {REPO_WAIT_TIMEOUT_SECS} seconds"
                 )
             elif future.exception():
+                repo_manager.mark_as_timed_out()
                 logger.exception(
                     f"Error initializing repository {repo_manager.repo_client.repo_full_name}: {future.exception()}"
                 )
@@ -206,7 +208,7 @@ class BaseTools:
         local_read_error = None
         if repo_name in self.repo_managers:
             if not self.repo_managers[repo_name].is_available:
-                return f"Error: We had an issue loading the repository {repo_name}."
+                return self._make_repo_unavailable_error_message(repo_name)
 
             repo_dir = self.repo_managers[repo_name].repo_path
 
