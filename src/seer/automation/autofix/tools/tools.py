@@ -39,7 +39,7 @@ REPO_WAIT_TIMEOUT_SECS = 120.0
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
-    repo_managers: Dict[str, RepoManager] = {}  # Maps repo_name to RepoManager
+    repo_managers: Dict[str, RepoManager] = {}
     repo_client_type: RepoClientType = RepoClientType.READ
 
     def __init__(
@@ -60,7 +60,6 @@ class BaseTools:
         if not repo_names:
             return
 
-        # Create repo managers for all repos first
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
@@ -78,13 +77,11 @@ class BaseTools:
 
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
-        Helper method to ensure repositories are downloaded.
-        Simplified version that just checks if repos are already downloaded
-        and downloads them synchronously if needed.
+        Helper method to wait for repos to be downloaded.
 
         Args:
-            repo_name: If provided, only ensures this specific repo is downloaded.
-                      If None, ensures all repos are downloaded.
+            repo_name: If provided, only waits for this specific repo to be downloaded.
+                      If None, waits for all repos to be downloaded.
         """
         if repo_name:
             repo_names_to_download = [repo_name] if repo_name not in self.repo_managers else []
