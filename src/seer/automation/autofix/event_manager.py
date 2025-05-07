@@ -254,14 +254,14 @@ class AutofixEventManager:
 
             run_id = cur.run_id
             new_solution = solution_step.solution
-            original_solution = original_solution
+            old_solution = original_solution
 
         # This is here so we can get the original and updated solution for the event.
         # set_selected_solution is called at coding start anyways.
         self._log_coding_start(
             run_id=run_id,
             new_solution=new_solution,
-            original_solution=original_solution,
+            original_solution=old_solution,
         )
 
     def send_coding_start(self):
