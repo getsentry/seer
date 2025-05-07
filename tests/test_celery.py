@@ -24,6 +24,7 @@ def test_detected_celery_jobs():
                 "seer.automation.autofix.tasks.check_and_mark_recent_autofix_runs",
                 "seer.automation.autofix.tasks.commit_changes_task",
                 "seer.automation.autofix.tasks.run_autofix_evaluation_on_item",
+                "seer.automation.codegen.evals.tasks.run_relevant_warnings_evaluation_on_item",
                 "seer.automation.codegen.unittest_step.unittest_task",
                 "seer.automation.codegen.pr_review_step.pr_review_task",
                 "seer.automation.codegen.relevant_warnings_step.relevant_warnings_task",

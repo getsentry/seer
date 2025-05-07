@@ -156,6 +156,8 @@ def process_sources(sources: list, context: AutofixContext, trace_tree: TraceTre
                 )
         elif isinstance(source, CodeSource):
             repo_name = context.autocorrect_repo_name(source.repo_name)
+            if not repo_name:
+                continue
             repo_client = context.get_repo_client(repo_name)
             file_name = source.file_name
             snippet_to_find = source.code_snippet
@@ -182,6 +184,8 @@ def process_sources(sources: list, context: AutofixContext, trace_tree: TraceTre
                         final_sources.code_used_urls.append(code_url)
         elif isinstance(source, DiffSource):
             repo_name = context.autocorrect_repo_name(source.repo_name)
+            if not repo_name:
+                continue
             repo_client = context.get_repo_client(repo_name)
             if repo_client.provider == "github":
                 diff_url = f"https://github.com/{repo_name}/commit/{source.commit_sha}"

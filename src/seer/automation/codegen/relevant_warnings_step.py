@@ -58,7 +58,7 @@ class RelevantWarningsStepRequest(PipelineStepTaskRequest, CodegenRelevantWarnin
 
 class RelevantWarningsStep(CodegenStep):
     """
-    Predicts which static analysis warnings in a pull request are relevant to a past Sentry issue.
+    Predicts which static analysis warnings in a pull request are relevant to a past Sentry issue
     """
 
     name = "RelevantWarningsStep"

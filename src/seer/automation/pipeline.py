@@ -46,6 +46,7 @@ class PipelineContext(abc.ABC):
 class PipelineStepTaskRequest(BaseModel):
     run_id: int
     step_id: int = Field(default_factory=lambda: uuid.uuid4().int)
+    is_retry: bool = False
 
 
 def make_step_request_fields(context: PipelineContext):

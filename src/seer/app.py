@@ -14,12 +14,14 @@ from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
 from integrations.codecov.codecov_auth import CodecovAuthentication
 from seer.anomaly_detection.models.external import (
+    AlertInSeer,
     DeleteAlertDataRequest,
     DeleteAlertDataResponse,
     DetectAnomaliesRequest,
     DetectAnomaliesResponse,
     StoreDataRequest,
     StoreDataResponse,
+    TimeSeriesWithHistory,
 )
 from seer.automation.assisted_query.assisted_query import translate_query
 from seer.automation.assisted_query.create_cache import create_cache
@@ -59,6 +61,11 @@ from seer.automation.autofix.tasks import (
 )
 from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codegen.evals.models import (
+    CodegenRelevantWarningsEvaluationRequest,
+    CodegenRelevantWarningsEvaluationSummary,
+)
+from seer.automation.codegen.evals.tasks import run_relevant_warnings_evaluation
 from seer.automation.codegen.models import (
     CodecovTaskRequest,
     CodegenBaseRequest,
@@ -122,7 +129,7 @@ from seer.json_api import json_api
 from seer.loading import LoadingResult
 from seer.severity.severity_inference import SeverityRequest, SeverityResponse
 from seer.smoke_test import check_smoke_test
-from seer.tags import AnomalyDetectionTags
+from seer.tags import AnomalyDetectionModes, AnomalyDetectionTags
 from seer.trend_detection.trend_detector import BreakpointRequest, BreakpointResponse, find_trends
 from seer.workflows.compare.models import CompareCohortsRequest, CompareCohortsResponse
 from seer.workflows.compare.service import compare_cohort
@@ -339,6 +346,19 @@ def codegen_relevant_warnings_endpoint(
     return codegen_relevant_warnings(data)
 
 
+@json_api(blueprint, "/v1/automation/codegen/relevant-warnings/evaluation/start")
+def codegen_relevant_warnings_evaluation_start_endpoint(
+    data: CodegenRelevantWarningsEvaluationRequest,
+) -> CodegenRelevantWarningsEvaluationSummary:
+    config = resolve(AppConfig)
+    if not config.DEV:
+        raise RuntimeError("The evaluation endpoint is only available in development mode")
+
+    result = run_relevant_warnings_evaluation(data)
+
+    return result
+
+
 @json_api(blueprint, "/v1/automation/codegen/pr-review")
 def codegen_pr_review_endpoint(data: CodegenBaseRequest) -> CodegenPrReviewResponse:
     return codegen_pr_review(data)
@@ -432,15 +452,31 @@ def detect_anomalies_endpoint(data: DetectAnomaliesRequest) -> DetectAnomaliesRe
     sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
+
+    BASE_TRANSACTION_NAME = "seer.anomaly_detection.detect_endpoint"
+    if isinstance(data.context, AlertInSeer):
+        mode = AnomalyDetectionModes.STREAMING_ALERT
+        transaction_name = f"{BASE_TRANSACTION_NAME}.streaming"
+    elif isinstance(data.context, TimeSeriesWithHistory):
+        mode = AnomalyDetectionModes.STREAMING_TS_WITH_HISTORY
+        transaction_name = f"{BASE_TRANSACTION_NAME}.combo"
+    else:
+        mode = AnomalyDetectionModes.BATCH_TS_FULL
+        transaction_name = f"{BASE_TRANSACTION_NAME}.batch"
+
+    sentry_sdk.set_tag(AnomalyDetectionTags.MODE, mode)
+    scope = sentry_sdk.get_current_scope()
+    scope.set_transaction_name(transaction_name)
+
     try:
-        with statsd.timed("seer.anomaly_detection.detect.duration"):
+        with statsd.timed(f"{transaction_name}.duration"):
             response = load_anomaly_detection().detect_anomalies(data)
-            statsd.increment("seer.anomaly_detection.detect.success")
+            statsd.increment(f"{transaction_name}.success")
     except ClientError as e:
-        statsd.increment("seer.anomaly_detection.detect.client_error")
+        statsd.increment(f"{transaction_name}.client_error")
         response = DetectAnomaliesResponse(success=False, message=str(e))
     except ServerError:
-        statsd.increment("seer.anomaly_detection.detect.server_error")
+        statsd.increment(f"{transaction_name}.server_error")
         raise
 
     return response
