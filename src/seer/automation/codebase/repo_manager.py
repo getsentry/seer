@@ -59,18 +59,13 @@ class RepoManager:
     def _clone_repo(self) -> str:
         """
         Clone a repository to a local temporary directory.
-
-        Args:
-            repo_clone_url: The URL of the repository to clone
-
-        Returns:
-            The path to the cloned repository
         """
-
         repo_clone_url = self.repo_client.get_clone_url_with_auth()
 
         try:
-            logger.info(f"Cloning repository {repo_clone_url} to {self.repo_path} with depth=1")
+            logger.info(
+                f"Cloning repository {self.repo_client.repo_full_name} to {self.repo_path} with depth=1"
+            )
 
             cleanup_dir(self.repo_path)
 
