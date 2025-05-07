@@ -33,6 +33,7 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
+REPO_WAIT_TIMEOUT_SECS = 120.0
 
 
 class BaseTools:
@@ -59,9 +60,6 @@ class BaseTools:
         if not repo_names:
             return
 
-        # gcs_enabled = self.context.organization_id == 1
-        gcs_enabled = False
-
         # Create repo managers for all repos first
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
@@ -70,7 +68,7 @@ class BaseTools:
             repo_manager = RepoManager(
                 repo_client, trigger_liveness_probe=self._trigger_liveness_probe
             )
-            repo_manager.initialize_in_background(gcs_enabled=gcs_enabled)
+            repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
 
     def _trigger_liveness_probe(self):
@@ -101,7 +99,6 @@ class BaseTools:
         append_langfuse_observation_metadata({"repo_download": True})
 
         # Wait for all initialization tasks to complete with a timeout
-        timeout_secs = 90.0
         start_time = time.time()
 
         # Collect all futures that need to be waited on
@@ -114,7 +111,9 @@ class BaseTools:
         self.context.event_manager.add_log(f"Waiting for your repositories to download...")
 
         # Use concurrent.futures.wait with a single timeout for all futures
-        done, not_done = wait(futures_to_wait, timeout=timeout_secs, return_when=FIRST_EXCEPTION)
+        done, not_done = wait(
+            futures_to_wait, timeout=REPO_WAIT_TIMEOUT_SECS, return_when=FIRST_EXCEPTION
+        )
 
         # Process results and handle errors
         for repo_manager in self.repo_managers.values():
@@ -124,7 +123,7 @@ class BaseTools:
             future = repo_manager.initialization_future
             if future in not_done:
                 logger.warning(
-                    f"Repository {repo_manager.repo_client.repo_full_name} timed out after {timeout_secs} seconds"
+                    f"Repository {repo_manager.repo_client.repo_full_name} timed out after {REPO_WAIT_TIMEOUT_SECS} seconds"
                 )
             elif future.exception():
                 logger.exception(
@@ -161,6 +160,9 @@ class BaseTools:
             if isinstance(self.context, AutofixContext)
             else ""
         )
+
+    def _make_repo_unavailable_error_message(self, repo_name: str) -> str:
+        return f"Error: We had an issue loading the repository `{repo_name}`. This tool is unavailable for this repository, you must stop using it for this repository `{repo_name}`."
 
     @observe(name="Semantic File Search")
     @sentry_sdk.trace
@@ -503,9 +505,9 @@ class BaseTools:
         if repo_name:
             # Single repository search
             if repo_name not in self.repo_managers:
-                return f"Error: Repository {repo_name} not found or not downloaded"
+                return f"Error: Repository {repo_name} not found."
             if not self.repo_managers[repo_name].is_available:
-                return f"Error: We had an issue loading the repository {repo_name}."
+                return self._make_repo_unavailable_error_message(repo_name)
 
             tmp_repo_dir = self.repo_managers[repo_name].repo_path
 
@@ -520,9 +522,9 @@ class BaseTools:
             # Run ripgrep in parallel across repositories
             def search_repo(repo_name: str) -> tuple[str, str] | None:
                 if repo_name not in self.repo_managers:
-                    return None
+                    return (repo_name, f"Error: Repository {repo_name} not found or not downloaded")
                 if not self.repo_managers[repo_name].is_available:
-                    return f"Error: We had an issue loading the repository {repo_name}.."
+                    return (repo_name, self._make_repo_unavailable_error_message(repo_name))
 
                 repo_dir = self.repo_managers[repo_name].repo_path
                 try:
@@ -530,7 +532,7 @@ class BaseTools:
                     return (repo_name, result)
                 except Exception as e:
                     logger.exception(f"Error searching repo {repo_name}: {e}")
-                    return None
+                    return (repo_name, f"Error: {e}")
 
             results = []
             with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
@@ -575,7 +577,7 @@ class BaseTools:
             if repo_name not in self.repo_managers:
                 continue
             if not self.repo_managers[repo_name].is_available:
-                all_results.append(f"Error: We had an issue loading the repository {repo_name}.")
+                all_results.append(self._make_repo_unavailable_error_message(repo_name))
                 continue
 
             tmp_repo_dir = self.repo_managers[repo_name].repo_path
