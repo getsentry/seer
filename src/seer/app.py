@@ -59,6 +59,11 @@ from seer.automation.autofix.tasks import (
 )
 from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codegen.evals.models import (
+    CodegenRelevantWarningsEvaluationRequest,
+    CodegenRelevantWarningsEvaluationSummary,
+)
+from seer.automation.codegen.evals.tasks import run_relevant_warnings_evaluation
 from seer.automation.codegen.models import (
     CodecovTaskRequest,
     CodegenBaseRequest,
@@ -337,6 +342,19 @@ def codegen_relevant_warnings_endpoint(
     data: CodegenRelevantWarningsRequest,
 ) -> CodegenRelevantWarningsResponse:
     return codegen_relevant_warnings(data)
+
+
+@json_api(blueprint, "/v1/automation/codegen/relevant-warnings/evaluation/start")
+def codegen_relevant_warnings_evaluation_start_endpoint(
+    data: CodegenRelevantWarningsEvaluationRequest,
+) -> CodegenRelevantWarningsEvaluationSummary:
+    config = resolve(AppConfig)
+    if not config.DEV:
+        raise RuntimeError("The evaluation endpoint is only available in development mode")
+
+    result = run_relevant_warnings_evaluation(data)
+
+    return result
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")

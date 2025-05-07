@@ -944,6 +944,7 @@ class GeminiProvider:
             or isinstance(exception, LlmNoCompletionTokensError)
             or isinstance(exception, LlmStreamTimeoutError)
             or isinstance(exception, ChunkedEncodingError)
+            or isinstance(exception, json.JSONDecodeError)
         )
 
     @staticmethod
@@ -963,6 +964,7 @@ class GeminiProvider:
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
         cache_name: str | None = None,
+        use_local_endpoint: bool = False,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -971,7 +973,7 @@ class GeminiProvider:
             tools=tools,
         )
 
-        client = self.get_client()
+        client = self.get_client(use_local_endpoint)
 
         max_retries = 2  # Gemini sometimes doesn't fill in response.parsed
         for _ in range(max_retries + 1):
@@ -1030,6 +1032,7 @@ class GeminiProvider:
 
         total_prompt_tokens = 0
         total_completion_tokens = 0
+        output_yielded = False
 
         try:
             stream = client.models.generate_content_stream(
@@ -1060,10 +1063,12 @@ class GeminiProvider:
                             "args": json.dumps(function_call.args),
                         }
                         yield ToolCall(**current_tool_call)
+                        output_yielded = True
                         current_tool_call = None
                 # Handle text chunks
                 elif chunk.text is not None:
                     yield "content", str(chunk.text)  # type: ignore[misc]
+                    output_yielded = True
 
                 # Update token counts if available
                 if chunk.usage_metadata:
@@ -1072,8 +1077,8 @@ class GeminiProvider:
                     if chunk.usage_metadata.candidates_token_count:
                         total_completion_tokens = chunk.usage_metadata.candidates_token_count
 
-            if total_completion_tokens == 0:
-                raise LlmNoCompletionTokensError("No completion tokens returned from Gemini")
+            if not output_yielded:
+                raise LlmNoCompletionTokensError("No output returned from Gemini")
         finally:
             # Yield final usage statistics
             usage = Usage(
@@ -1451,6 +1456,7 @@ class LlmClient:
         timeout: float | None = None,
         reasoning_effort: str | None = None,
         cache_name: str | None = None,
+        use_local_endpoint: bool = False,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         try:
             if run_name:
@@ -1496,6 +1502,7 @@ class LlmClient:
                     temperature=temperature,
                     tools=cast(list[FunctionTool], tools),
                     cache_name=cache_name,
+                    use_local_endpoint=use_local_endpoint,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")

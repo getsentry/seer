@@ -38,9 +38,7 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
 
     field_values = field_values_response.get("field_values", {}) if field_values_response else {}
 
-    fields_parsed = [field["key"] for field in fields]
-
-    cache_prompt = get_cache_prompt(fields=fields_parsed, field_values=field_values)
+    cache_prompt = get_cache_prompt(fields=fields, field_values=field_values)
 
     cache_name = LlmClient().create_cache(
         display_name=cache_diplay_name, contents=cache_prompt, model=get_model_provider()

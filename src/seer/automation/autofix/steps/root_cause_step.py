@@ -69,7 +69,9 @@ class RootCauseStep(AutofixPipelineStep):
 
         self.context.event_manager.send_root_cause_analysis_start()
 
-        if not self.request.initial_memory:
+        if self.request.is_retry:
+            self.context.event_manager.add_log("Something broke. Re-analyzing from scratch...")
+        elif not self.request.initial_memory:
             self.context.event_manager.add_log("Figuring out the root cause...")
         else:
             self.context.event_manager.add_log("Going back to the drawing board...")

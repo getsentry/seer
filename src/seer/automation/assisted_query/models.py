@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import BaseModel
 
 
@@ -15,7 +13,7 @@ class CreateCacheResponse(BaseModel):
 
 
 class Chart(BaseModel):
-    chart_type: Literal[1, 2, 3]
+    chart_type: int
     y_axes: list[str]
 
 
