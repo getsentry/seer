@@ -37,6 +37,7 @@ def algoconfig_provider() -> AlgoConfig:
     return AlgoConfig(
         mp_ignore_trivial=True,
         mp_normalize=False,
+        mp_use_approx=True,
         prophet_uncertainty_samples=5,
         prophet_mcmc_samples=0,
         mp_fixed_window_size=10,

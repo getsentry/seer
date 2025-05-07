@@ -89,6 +89,33 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         )
 
     @sentry_sdk.trace
+    def _stumpy_approx_mp(
+        self,
+        ts_values: npt.NDArray[np.float64],
+        window_size: int,
+        algo_config: AlgoConfig,
+        mp_utils: MPUtils,
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        mp = stumpy.scrump(
+            ts_values,
+            m=max(3, window_size),
+            percentage=0.01,
+            pre_scrump=True,
+            s=None,
+            normalize=False,
+            ignore_trivial=algo_config.mp_ignore_trivial,
+        )
+        mp.update()
+        mp = stumpy.mparray.mparray(
+            list(zip(mp.P_, mp.I_, mp.left_I_, mp.right_I_)),
+            k=1,
+            m=max(3, window_size),
+            excl_zone_denom=stumpy.config.STUMPY_EXCL_ZONE_DENOM,
+        )
+        mp_dist = mp_utils.get_mp_dist_from_mp(mp, pad_to_len=len(ts_values))
+        return mp, mp_dist
+
+    @sentry_sdk.trace
     def _stumpy_mp(
         self,
         ts_values: npt.NDArray[np.float64],
@@ -144,7 +171,10 @@ class MPBatchAnomalyDetector(AnomalyDetector):
         if window_size <= 0:
             raise ServerError("Invalid window size")
         # Get the matrix profile for the time series
-        mp, mp_dist = self._stumpy_mp(ts_values, window_size, algo_config, mp_utils)
+        if algo_config.mp_use_approx:
+            mp, mp_dist = self._stumpy_approx_mp(ts_values, window_size, algo_config, mp_utils)
+        else:
+            mp, mp_dist = self._stumpy_mp(ts_values, window_size, algo_config, mp_utils)
 
         flags_and_scores = scorer.batch_score(
             values=ts_values,

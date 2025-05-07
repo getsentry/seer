@@ -56,16 +56,16 @@ class AnomalyDetection(BaseModel):
             future call with different values for one or more parameter will still trigger a recompilation.
         """
         cache._enable()  # This ensures that the compiled version of stumpy is cached on disk for future use.
-        data = np.arange(10.0)
-        mp = stumpy.stump(data, m=3, ignore_trivial=True, normalize=False)
-        stream = stumpy.stumpi(
-            data,
+        dummy_data = np.arange(10.0)
+        dummy_mp = stumpy.stump(dummy_data, m=3, ignore_trivial=True, normalize=False)
+        dummy_stream = stumpy.stumpi(
+            dummy_data,
             m=3,
-            mp=mp,
+            mp=dummy_mp,
             normalize=False,
             egress=False,
         )
-        stream.update(6.0)
+        dummy_stream.update(6.0)
 
     @sentry_sdk.trace
     def _batch_detect_internal(
