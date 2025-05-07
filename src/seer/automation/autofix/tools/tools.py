@@ -75,7 +75,7 @@ class BaseTools:
 
     def _trigger_liveness_probe(self):
         with self.context.state.update() as state:
-            # Do nothing, the state should self toggle updated_at
+            # Do nothing, the state should self update updated_at
             pass
 
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
@@ -206,6 +206,9 @@ class BaseTools:
 
         local_read_error = None
         if repo_name in self.repo_managers:
+            if not self.repo_managers[repo_name].is_available:
+                return f"Error: We had an issue loading the repository {repo_name}."
+
             repo_dir = self.repo_managers[repo_name].repo_path
 
             # try reading the actual file from file system
@@ -501,6 +504,8 @@ class BaseTools:
             # Single repository search
             if repo_name not in self.repo_managers:
                 return f"Error: Repository {repo_name} not found or not downloaded"
+            if not self.repo_managers[repo_name].is_available:
+                return f"Error: We had an issue loading the repository {repo_name}."
 
             tmp_repo_dir = self.repo_managers[repo_name].repo_path
 
@@ -516,6 +521,9 @@ class BaseTools:
             def search_repo(repo_name: str) -> tuple[str, str] | None:
                 if repo_name not in self.repo_managers:
                     return None
+                if not self.repo_managers[repo_name].is_available:
+                    return f"Error: We had an issue loading the repository {repo_name}.."
+
                 repo_dir = self.repo_managers[repo_name].repo_path
                 try:
                     result = run_ripgrep_in_repo(repo_dir, cmd)
@@ -566,6 +574,10 @@ class BaseTools:
         for repo_name in repo_names:
             if repo_name not in self.repo_managers:
                 continue
+            if not self.repo_managers[repo_name].is_available:
+                all_results.append(f"Error: We had an issue loading the repository {repo_name}.")
+                continue
+
             tmp_repo_dir = self.repo_managers[repo_name].repo_path
             if not tmp_repo_dir:
                 continue
