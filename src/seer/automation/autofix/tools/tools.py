@@ -3,10 +3,9 @@ import os
 import shlex
 import subprocess
 import textwrap
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, as_completed, wait
 from typing import Any, Dict, cast
-from concurrent.futures import wait, FIRST_EXCEPTION
 
 import sentry_sdk
 from langfuse.decorators import observe
