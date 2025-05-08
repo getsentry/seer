@@ -1,11 +1,11 @@
+from concurrent.futures import Future
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-from concurrent.futures import Future
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import AutofixRequest
-from seer.automation.autofix.tools.tools import BaseTools, FIRST_EXCEPTION, RepoClientType
+from seer.automation.autofix.tools.tools import FIRST_EXCEPTION, BaseTools, RepoClientType
 from seer.automation.models import FileChange, FilePatch, Hunk, Line, RepoDefinition
 
 
