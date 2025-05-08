@@ -8,13 +8,14 @@ from typing import Callable
 import git
 import sentry_sdk
 
-# Minimum seconds between consecutive liveness probe updates
-LIVENESS_UPDATE_INTERVAL = 5.0
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir
 
 logger = logging.getLogger(__name__)
+
+# Minimum seconds between consecutive liveness probe updates
+LIVENESS_UPDATE_INTERVAL = 5.0
 
 
 class RepoManager:
@@ -28,6 +29,7 @@ class RepoManager:
     repo_path: str
     initialization_future: Future | None
 
+    _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
     _has_timed_out: bool
 
