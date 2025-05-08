@@ -68,7 +68,7 @@ class RepoManager:
     @property
     @inject
     def bucket_name(self, config: AppConfig = injected):
-        return config.get("GCS_BUCKET_NAME")
+        return config.CODEBASE_GCS_STORAGE_BUCKET
 
     @property
     def blob_name(self):
