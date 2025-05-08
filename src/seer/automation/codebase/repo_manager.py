@@ -8,7 +8,6 @@ from typing import Callable
 import git
 import sentry_sdk
 
-
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir
 
