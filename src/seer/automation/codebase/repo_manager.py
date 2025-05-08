@@ -67,8 +67,10 @@ class RepoManager:
             if self._has_timed_out:
                 return
             self._sync_repo()
-        except Exception as e:
-            logger.error(f"Failed to initialize repo {self.repo_client.repo_full_name}: {e}")
+        except Exception:
+            logger.exception(
+                f"Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
+            )
             self.cleanup()
             raise
         finally:
@@ -104,8 +106,10 @@ class RepoManager:
             logger.info(f"Cloned repository in {end_time - start_time} seconds")
 
             return self.repo_path
-        except git.GitCommandError as e:
-            logger.error(f"Failed to clone repository: {e}")
+        except Exception:
+            logger.exception(
+                f"Failed to clone repository", extra={"repo": self.repo_client.repo_full_name}
+            )
             self.git_repo = None  # clear the repo to fail the available check
             raise
 
@@ -129,8 +133,10 @@ class RepoManager:
             logger.info(
                 f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
             )
-        except Exception as e:
-            logger.error(f"Failed to sync repository {self.repo_client.repo_full_name}: {e}")
+        except Exception:
+            logger.exception(
+                f"Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
+            )
             self.git_repo = None  # clear the repo to fail the available check
 
     def mark_as_timed_out(self):
