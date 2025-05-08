@@ -39,7 +39,7 @@ REPO_WAIT_TIMEOUT_SECS = 120.0
 class BaseTools:
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
-    repo_managers: Dict[str, RepoManager] = {}
+    repo_managers: dict[str, RepoManager] = {}
     repo_client_type: RepoClientType = RepoClientType.READ
 
     def __init__(
@@ -75,6 +75,7 @@ class BaseTools:
             # Do nothing, the state should self update updated_at
             pass
 
+    @sentry_sdk.trace
     def _ensure_repos_downloaded(self, repo_name: str | None = None):
         """
         Helper method to wait for repos to be downloaded.

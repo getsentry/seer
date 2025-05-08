@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
 import git
+import sentry_sdk
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir
@@ -48,6 +49,7 @@ class RepoManager:
 
         self.initialization_future = ThreadPoolExecutor(1).submit(self.initialize)
 
+    @sentry_sdk.trace
     def initialize(self):
         logger.info(f"Initializing repo {self.repo_client.repo_full_name}")
 
@@ -66,6 +68,7 @@ class RepoManager:
             if self._has_timed_out:
                 self.cleanup()
 
+    @sentry_sdk.trace
     def _clone_repo(self) -> str:
         """
         Clone a repository to a local temporary directory.
@@ -95,6 +98,7 @@ class RepoManager:
             self.git_repo = None  # clear the repo to fail the available check
             raise
 
+    @sentry_sdk.trace
     def _sync_repo(self):
         """
         Ensure the repository is up to date with only the target commit.
