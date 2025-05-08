@@ -4,8 +4,8 @@ import shlex
 import subprocess
 import textwrap
 import time
-from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, as_completed, wait, Future
-from typing import Any, cast, Set
+from concurrent.futures import FIRST_EXCEPTION, Future, ThreadPoolExecutor, as_completed, wait
+from typing import Any, Set, cast
 
 import sentry_sdk
 from langfuse.decorators import observe
@@ -25,6 +25,7 @@ from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codegen.codegen_context import CodegenContext
+from seer.automation.codegen.models import CodegenBaseRequest
 from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
@@ -961,22 +962,32 @@ class BaseTools:
         self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
     ) -> str:
         """Handles the undo edit command to remove file changes."""
-        with self.context.state.update() as cur:
-            for repo in cur.request.repos:
-                if repo.full_name == repo_name:
-                    codebase = cur.codebases[repo.external_id]
-                    if not codebase:
-                        return "Error: No codebases found"
+        external_id = None
+        cur_state = self.context.state.get()
+        if isinstance(cur_state.request, AutofixRequest):
+            repos = cur_state.request.repos
+        elif isinstance(cur_state.request, CodegenBaseRequest):
+            repos = [cur_state.request.repo]
+        else:
+            raise ValueError("Invalid request type")
 
-                    # Remove all file changes for this path
-                    codebase.file_changes = [fc for fc in codebase.file_changes if fc.path != path]
+        for repo in repos:
+            if repo.full_name == repo_name:
+                external_id = repo.external_id
+                break
 
-                    self.context.event_manager.add_log(
-                        f"Undoing edits to `{path}` in `{repo_name}`..."
-                    )
-
-                    return "File changes undone successfully."
+        if not external_id:
             return "Error: No file changes found to undo."
+
+        with self.context.state.update() as cur:
+            codebase = cur.codebases[external_id]
+            if not codebase:
+                return "Error: No codebases found"
+            # Remove all file changes for this path
+            codebase.file_changes = [fc for fc in codebase.file_changes if fc.path != path]
+
+        self.context.event_manager.add_log(f"Undoing edits to `{path}` in `{repo_name}`...")
+        return "File changes undone successfully."
 
     def get_tools(
         self, can_access_repos: bool = True, include_claude_tools: bool = False
