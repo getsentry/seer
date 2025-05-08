@@ -13,6 +13,9 @@ from seer.automation.codebase.utils import cleanup_dir
 
 logger = logging.getLogger(__name__)
 
+# Minimum seconds between consecutive liveness probe updates
+LIVENESS_UPDATE_INTERVAL = 5.0
+
 
 class RepoManager:
     """
@@ -25,6 +28,7 @@ class RepoManager:
     repo_path: str
     initialization_future: Future | None
 
+    _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
     _has_timed_out: bool
 
@@ -44,6 +48,7 @@ class RepoManager:
 
         self._trigger_liveness_probe = trigger_liveness_probe
         self._has_timed_out = False
+        self._last_liveness_update = 0.0
 
     @property
     def is_available(self):
@@ -95,9 +100,7 @@ class RepoManager:
             self.git_repo = git.Repo.clone_from(
                 repo_clone_url,
                 self.repo_path,
-                progress=lambda *args, **kwargs: (
-                    self._trigger_liveness_probe() if self._trigger_liveness_probe else None
-                ),
+                progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
                 depth=1,
             )
             end_time = time.time()
@@ -132,6 +135,18 @@ class RepoManager:
         except Exception as e:
             logger.error(f"Failed to sync repository {self.repo_client.repo_full_name}: {e}")
             self.git_repo = None  # clear the repo to fail the available check
+
+    def _throttled_liveness_probe(self):
+        """
+        Triggers the liveness probe only after a minimum time interval has elapsed since the last update.
+        """
+        current_time = time.time()
+        if (
+            current_time - self._last_liveness_update >= LIVENESS_UPDATE_INTERVAL
+            and self._trigger_liveness_probe is not None
+        ):
+            self._trigger_liveness_probe()
+            self._last_liveness_update = current_time
 
     def mark_as_timed_out(self):
         if self.initialization_future:
