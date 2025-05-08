@@ -28,36 +28,42 @@ def repo_manager(mock_repo_client, tmp_path):
 
 
 def test_clone_success(repo_manager, mock_repo_client, caplog):
-    """Test successful repository cloning."""
+    """Test successful repository cloning and checkout of a specific commit."""
     caplog.set_level(logging.INFO)
 
-    # Setup mock repo client to return a local file URL
+    # Setup mock repo client to return a local file URL and a fake commit sha
     mock_repo_client.get_clone_url_with_auth.return_value = "file:///fake/repo.git"
+    mock_repo_client.base_commit_sha = "deadbeef"
 
-    # Create a mock git.Repo object
+    # Create a mock git.Repo object with mock git attribute
+    mock_git = MagicMock()
     mock_git_repo = MagicMock(spec=git.Repo)
+    mock_git_repo.git = mock_git
 
     with (
         patch("git.Repo.clone_from", return_value=mock_git_repo) as mock_clone,
         patch("seer.automation.codebase.repo_manager.cleanup_dir"),
     ):
-
         repo_manager._clone_repo()
 
         # Verify clone was called with correct arguments, using ANY for the progress callback
         mock_clone.assert_called_once_with(
             "file:///fake/repo.git",
             repo_manager.repo_path,
-            progress=ANY,  # Use ANY to match any function
             depth=1,
+            progress=ANY,
         )
+
+        # Verify fetch and checkout were called with correct arguments
+        mock_git.fetch.assert_called_once_with("origin", "deadbeef", depth=1)
+        mock_git.checkout.assert_called_once_with("deadbeef")
 
         # Verify the repo was set
         assert repo_manager.git_repo == mock_git_repo
 
         # Check logging
         assert "Cloning repository test-owner/test-repo" in caplog.text
-        assert "Cloned repository" in caplog.text
+        assert "Cloned and checked out repository at commit deadbeef" in caplog.text
 
 
 def test_clone_failure_clears_repo(repo_manager, mock_repo_client, caplog):
@@ -80,27 +86,6 @@ def test_clone_failure_clears_repo(repo_manager, mock_repo_client, caplog):
 
         # Verify error was logged
         assert "Failed to clone repository" in caplog.text
-
-
-def test_sync_success(repo_manager, mock_repo_client, caplog):
-    """Test successful repository sync."""
-    caplog.set_level(logging.INFO)
-
-    # Setup mock git repo
-    mock_git_repo = MagicMock(spec=git.Repo)
-    repo_manager.git_repo = mock_git_repo
-
-    repo_manager._sync_repo()
-
-    # Verify git commands were called
-    mock_git_repo.git.execute.assert_called_once_with(
-        ["git", "fetch", "--depth=1", "origin", mock_repo_client.base_commit_sha]
-    )
-    mock_git_repo.git.checkout.assert_called_once_with(mock_repo_client.base_commit_sha)
-
-    # Check logging
-    assert f"Syncing repository {mock_repo_client.repo_full_name}" in caplog.text
-    assert "Checked out repo" in caplog.text
 
 
 def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
