@@ -2,6 +2,7 @@ import functools
 import logging
 import os
 import shutil
+import time
 from pathlib import Path
 
 from seer.automation.codebase.models import Document
@@ -173,12 +174,37 @@ def read_specific_files(repo_path: str, files: list[str] | set[str]) -> list[Doc
     return documents
 
 
-def cleanup_dir(directory: str):
-    if os.path.exists(directory):
-        shutil.rmtree(directory)
-        logger.info(f"Cleaned up directory: {directory}")
-    else:
+def cleanup_dir(directory: str, max_retries: int = 3, initial_delay: float = 0.5):
+    """
+    Clean up a directory with retries on failure.
+    
+    Args:
+        directory: The directory to remove
+        max_retries: Maximum number of retries before giving up
+        initial_delay: Initial delay between retries, doubles after each retry
+    """
+    if not os.path.exists(directory):
         logger.info(f"Directory {directory} already cleaned!")
+        return
+    
+    delay = initial_delay
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            shutil.rmtree(directory)
+            logger.info(f"Cleaned up directory: {directory}")
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                logger.warning(
+                    f"Failed to clean directory {directory} (attempt {attempt + 1}/{max_retries + 1}): {e}"
+                )
+                time.sleep(delay)
+                delay *= 2
+            else:
+                raise OSError(f"Failed to clean directory {directory} after {max_retries + 1} attempts") from last_error
 
 
 def potential_frame_match(src_file: str, frame: StacktraceFrame) -> bool:

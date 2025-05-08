@@ -146,9 +146,14 @@ class RepoManager:
             and self._trigger_liveness_probe is not None
         ):
             self._trigger_liveness_probe()
-            self._last_liveness_update = current_time
-
-    def mark_as_timed_out(self):
+            try:
+                cleanup_dir(self.repo_path)
+            except Exception as e:
+                logger.error(f"Error during repo cleanup, but continuing: {e}")
+            finally:
+                # Ensure we null out paths even if cleanup fails
+                self.repo_path = None
+                self.git_repo = None
         if self.initialization_future:
             # Have the thread deal with cleanup
             self._has_timed_out = True
