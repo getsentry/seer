@@ -102,8 +102,8 @@ class RepoManager:
             self.git_repo = git.Repo.clone_from(
                 repo_clone_url,
                 self.repo_path,
-                no_checkout=True,
                 depth=1,
+                progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
             )
             # Fetch the specific commit if it's not present
             try:
