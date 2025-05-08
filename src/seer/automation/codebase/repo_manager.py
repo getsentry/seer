@@ -85,9 +85,13 @@ class RepoManager:
     @sentry_sdk.trace
     def _clone_repo(self) -> str:
         """
-        Clone a repository to a local temporary directory.
+        Clone a repository to a local temporary directory and checkout a specific commit.
+        We fetch the specific commit to avoid a scenario where if you start a root cause -> solution
+        -> code changes then someone changes a file, then you try to draft a pr, that file could
+        potentially not exist anymore for you to make changes to. - AIML-286
         """
         repo_clone_url = self.repo_client.get_clone_url_with_auth()
+        commit_sha = self.repo_client.base_commit_sha
 
         try:
             logger.info(
@@ -97,14 +101,24 @@ class RepoManager:
             cleanup_dir(self.repo_path)
 
             start_time = time.time()
+            # Clone with no checkout to allow checking out a specific commit
             self.git_repo = git.Repo.clone_from(
                 repo_clone_url,
                 self.repo_path,
-                progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
+                no_checkout=True,
                 depth=1,
             )
+            # Fetch the specific commit if it's not present
+            try:
+                self.git_repo.git.fetch("origin", commit_sha, depth=1)
+            except Exception as fetch_exc:
+                logger.warning(f"Could not fetch specific commit {commit_sha}: {fetch_exc}")
+            # Checkout the specific commit
+            self.git_repo.git.checkout(commit_sha)
             end_time = time.time()
-            logger.info(f"Cloned repository in {end_time - start_time} seconds")
+            logger.info(
+                f"Cloned and checked out repository at commit {commit_sha} in {end_time - start_time} seconds"
+            )
 
             return self.repo_path
         except git.GitCommandError as e:
