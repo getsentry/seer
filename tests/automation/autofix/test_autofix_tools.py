@@ -3,6 +3,7 @@ from unittest.mock import ANY, MagicMock, patch
 import pytest
 
 from seer.automation.autofix.autofix_context import AutofixContext
+from seer.automation.autofix.models import AutofixRequest
 from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.models import FileChange, FilePatch, Hunk, Line, RepoDefinition
 
@@ -639,13 +640,13 @@ class TestClaudeTools:
         mock_repo = MagicMock(full_name="test/repo", external_id="123")
         mock_codebase = MagicMock(file_changes=[file_change])
 
-        mock_state = MagicMock()
+        mock_state = MagicMock(request=MagicMock(spec=AutofixRequest))
         mock_state.codebases = {
             "123": mock_codebase,
         }
         mock_state.request.repos = [mock_repo]
 
-        autofix_tools.context.state.update.return_value.__enter__.return_value = mock_state
+        autofix_tools.context.state.get.return_value = mock_state
 
         # Test
         result = autofix_tools._handle_undo_edit_command({}, "test/repo", "test.py")
@@ -660,10 +661,10 @@ class TestClaudeTools:
         mock_codebase = MagicMock(file_changes=[])
         mock_repo.codebases = [mock_codebase]
 
-        mock_state = MagicMock()
+        mock_state = MagicMock(request=MagicMock(spec=AutofixRequest))
         mock_state.request.repos = []  # Set empty repos to trigger "No file changes found to undo"
 
-        autofix_tools.context.state.update.return_value.__enter__.return_value = mock_state
+        autofix_tools.context.state.get.return_value = mock_state
 
         # Test
         result = autofix_tools._handle_undo_edit_command({}, "test/repo", "test.py")

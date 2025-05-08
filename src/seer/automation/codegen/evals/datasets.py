@@ -18,6 +18,8 @@ A new dataset will be created in Langfuse.
 """
 
 import os
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
@@ -26,6 +28,9 @@ import httpx
 import tqdm
 from click import option
 from langfuse import Langfuse
+from langfuse.api.resources.commons.errors import NotFoundError
+from langfuse.api.resources.commons.types.dataset_run_item import DatasetRunItem
+from langfuse.api.resources.commons.types.dataset_run_with_items import DatasetRunWithItems
 from pydantic.main import BaseModel
 
 from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
@@ -122,6 +127,61 @@ def create_dataset(details_file: Path, collect_diff: bool):
     )
 
     click.echo(f"✓ Dataset created: {dataset.id}")
+
+
+@main.command()
+@option("--dataset-name", type=str, required=True)
+@option("--run-name", type=str, required=True)
+@option(
+    "--hide-details", is_flag=True, help="Whether to hide the details of the items.", default=False
+)
+def run_report(dataset_name: str, run_name: str, hide_details: bool):
+    langfuse = Langfuse()
+    try:
+        run = langfuse.get_dataset_run(dataset_name, run_name)
+    except NotFoundError as e:
+        click.echo(f"❌ Run {run_name} not found: {e}")
+        return
+    summary = calculate_run_summary(langfuse, run)
+
+    # Print report on the run
+    evaluated_successfully_percentage = (
+        summary.items_evaluated_successfully / max(summary.items_count, 1) * 100
+    )
+    evaluated_with_errors_percentage = 100 - evaluated_successfully_percentage
+
+    click.echo("\n" + "=" * 42)
+    click.echo(f"Run {run_name}")
+    click.echo("=" * 42 + "\n")
+    click.echo("# Summary")
+    click.echo("┌─────────────────────────────┬────────┬────────────┐")
+    click.echo("│ Metric                      │  Count │ Percentage │")
+    click.echo("├─────────────────────────────┼────────┼────────────┤")
+    click.echo(f"│ Total items                 │ {summary.items_count:>6} │    100.00% │")
+    click.echo(
+        f"│ Evaluated successfully      │ {summary.items_evaluated_successfully:>6} │ {evaluated_successfully_percentage:>9.2f}% │"
+    )
+    click.echo(
+        f"│ Evaluated with errors       │ {summary.items_count - summary.items_evaluated_successfully:>6} │ {evaluated_with_errors_percentage:>9.2f}% │"
+    )
+    click.echo("└─────────────────────────────┴────────┴────────────┘")
+
+    click.echo("\n# Average Scores (successful evaluations only)")
+    click.echo("┌─────────────────────────────┬────────┐")
+    click.echo("│ Metric                      │  Score │")
+    click.echo("├─────────────────────────────┼────────┤")
+    click.echo(f"│ Average Bugs Found          │ {summary.avg_bugs_found:>6.2f} │")
+    click.echo(f"│ Average Bugs Missed         │ {summary.avg_bugs_missed:>6.2f} │")
+    click.echo(f"│ Average Content Match       │ {summary.avg_content_match:>6.2f} │")
+    click.echo(f"│ Average Location Match      │ {summary.avg_location_match:>6.2f} │")
+    click.echo(f"│ Average Noise               │ {summary.avg_noise:>6.2f} │")
+    click.echo("└─────────────────────────────┴────────┘")
+
+    if not hide_details:
+        click.echo("\n# Items details")
+        click.echo(" (items marked with ❌ were not evaluated successfully)\n")
+        for item in summary.item_details:
+            item.pretty_print()
 
 
 def create_langfuse_dataset(
@@ -259,6 +319,117 @@ def get_issue_events(issue_id: int, sentry_token: str) -> SentryEventData:
         title=entries[0]["title"],
         entries=entries,
         tags=entries[0]["tags"],
+    )
+
+
+class RelevantScorePrefixes(Enum):
+    NOISE = "noise"
+    BUGS_NOT_FOUND = "bugs_not_found"
+    CONTENT_MATCH = "content_match"
+    LOCATION_MATCH = "location_match"
+    BUGS_FOUND_COUNT = "bugs_found_count"
+
+
+def pretty_print_scores(scores: list[dict]) -> None:
+    """Print scores in a formatted way, highlighting important metrics."""
+
+    # Filter out error_running_evaluation and sort by highlight order
+    filtered_scores = [s for s in scores if s["name"] != "error_running_evaluation"]
+
+    # Print scores
+    for score in filtered_scores:
+        score_name = score["name"]
+        highlight_name = next(
+            (name.value for name in RelevantScorePrefixes if name.value in score_name), None
+        )
+        value = score["value"]
+        comment = score["comment"]
+
+        if highlight_name:
+            display_name = (
+                click.style(highlight_name, bold=True) + score_name[len(highlight_name) :]
+            )
+        else:
+            display_name = score_name
+
+        display_value = click.style(str(value), bold=True)
+
+        click.echo(f"    * {display_name}: {display_value}")
+        click.echo(f"      {comment}")
+
+
+@dataclass
+class RelevantItemInfo:
+    item_id: str
+    trace_id: str
+    was_evaluated_successfully: bool
+    scores: list[dict]
+
+    def pretty_print(self) -> None:
+        success_symbol = "✓" if self.was_evaluated_successfully else "❌"
+        click.echo(f"{success_symbol} Item {self.item_id} - Trace ID: {self.trace_id}")
+        if self.was_evaluated_successfully:
+            pretty_print_scores(self.scores)
+
+
+@dataclass
+class RunSummaryInfo:
+    items_count: int
+    items_evaluated_successfully: int
+    item_details: list[RelevantItemInfo]
+    avg_noise: float
+    avg_bugs_found: float
+    avg_bugs_missed: float
+    avg_content_match: float
+    avg_location_match: float
+
+
+def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> RelevantItemInfo:
+    trace = langfuse.fetch_trace(item.trace_id)
+    scores: list[dict] = [
+        {"name": score.name, "value": score.value, "comment": score.comment}
+        for score in trace.data.scores
+    ]
+    error_score = next(
+        (score for score in scores if score["name"] == "error_running_evaluation"), None
+    )
+    was_evaluated_successfully = error_score is not None and error_score["value"] == 0
+    return RelevantItemInfo(
+        item_id=item.id,
+        trace_id=item.trace_id,
+        was_evaluated_successfully=was_evaluated_successfully,
+        scores=scores,
+    )
+
+
+def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSummaryInfo:
+    items_in_run = [get_relevant_info_for_item(langfuse, item) for item in run.dataset_run_items]
+
+    # Calculate averages for successful evaluations only
+    successful_items = [item for item in items_in_run if item.was_evaluated_successfully]
+
+    def get_avg_score(score_name_start: RelevantScorePrefixes) -> float:
+        if not successful_items:
+            return 0.0
+        scores = []
+        for item in successful_items:
+            score = next(
+                (s["value"] for s in item.scores if s["name"].startswith(score_name_start.value)),
+                None,
+            )
+            if score is not None:
+                scores.append(score)
+        return sum(scores) / len(scores) if scores else 0.0
+
+    return RunSummaryInfo(
+        items_count=len(items_in_run),
+        items_evaluated_successfully=sum(item.was_evaluated_successfully for item in items_in_run),
+        item_details=items_in_run,
+        avg_noise=get_avg_score(RelevantScorePrefixes.NOISE),
+        avg_bugs_found=get_avg_score(RelevantScorePrefixes.BUGS_FOUND_COUNT),
+        avg_bugs_missed=get_avg_score(RelevantScorePrefixes.BUGS_NOT_FOUND),
+        avg_content_match=get_avg_score(RelevantScorePrefixes.CONTENT_MATCH),
+        avg_location_match=get_avg_score(RelevantScorePrefixes.LOCATION_MATCH),
     )
 
 

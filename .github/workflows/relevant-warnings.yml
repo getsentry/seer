@@ -42,4 +42,5 @@ jobs:
             --auth-token ${{ secrets.OVERWATCH_SENTRY_AUTH_TOKEN }} \
             --organization-slug sentry \
             python \
-            --tool ruff
+            --tool mypy,ruff \
+            --workdir src

@@ -1375,12 +1375,14 @@ class EAPTrace(BaseModel):
             trace = self._get_transaction_spans(self.trace)
 
         def format_span_as_tag(span, depth=0):
-            indent = "    " * depth
+            indent = "  " * depth
 
             attrs = []
             for key, value in span.items():
                 # Ignore event_type since all events are marked as "span"
-                if key not in ["children", "event_type"]:
+                if key not in ["children", "event_type", "is_transaction"]:
+                    if key == "errors" and value == []:
+                        continue
                     attrs.append(f'{key}="{value}"')
             attrs_str = " ".join(attrs)
 
