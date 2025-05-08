@@ -50,7 +50,7 @@ class TestRuns:
 
         # Assertions
         self.mock_autofix_continuation.assert_called_once_with(request=mock_request)
-        mock_state.update.assert_called_once()
+        assert mock_state.update.call_count == 2
 
         self.mock_event_manager.assert_called_once_with(mock_state)
         self.mock_event_manager.return_value.send_root_cause_analysis_will_start.assert_called_once()
