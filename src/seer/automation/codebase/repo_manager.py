@@ -140,8 +140,10 @@ class RepoManager:
         Triggers the liveness probe only after a minimum time interval has elapsed since the last update.
         """
         current_time = time.time()
-        if (current_time - self._last_liveness_update >= LIVENESS_UPDATE_INTERVAL and 
-                self._trigger_liveness_probe is not None):
+        if (
+            current_time - self._last_liveness_update >= LIVENESS_UPDATE_INTERVAL
+            and self._trigger_liveness_probe is not None
+        ):
             self._trigger_liveness_probe()
             self._last_liveness_update = current_time
 
