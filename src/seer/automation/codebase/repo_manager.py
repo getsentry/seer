@@ -142,9 +142,3 @@ class RepoManager:
         self._has_timed_out = False
 
         logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
-
-    def __del__(self):
-        """
-        Ensure cleanup happens when the object is garbage collected.
-        """
-        self.cleanup()

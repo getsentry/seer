@@ -5,7 +5,7 @@ import subprocess
 import textwrap
 import time
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, as_completed, wait
-from typing import Any, Dict, cast
+from typing import Any, cast
 
 import sentry_sdk
 from langfuse.decorators import observe
