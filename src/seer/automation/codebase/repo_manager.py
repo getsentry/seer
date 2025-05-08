@@ -69,7 +69,7 @@ class RepoManager:
             self._sync_repo()
         except Exception:
             logger.exception(
-                f"Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
+                "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
             )
             self.cleanup()
             raise
@@ -108,7 +108,7 @@ class RepoManager:
             return self.repo_path
         except Exception:
             logger.exception(
-                f"Failed to clone repository", extra={"repo": self.repo_client.repo_full_name}
+                "Failed to clone repository", extra={"repo": self.repo_client.repo_full_name}
             )
             self.git_repo = None  # clear the repo to fail the available check
             raise
@@ -135,7 +135,7 @@ class RepoManager:
             )
         except Exception:
             logger.exception(
-                f"Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
+                "Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
             )
             self.git_repo = None  # clear the repo to fail the available check
 
