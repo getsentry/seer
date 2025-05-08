@@ -184,9 +184,8 @@ class RepoClient:
                 f"Unsupported repo provider: {repo_definition.provider}, only {', '.join(self.supported_providers)} are supported."
             )
 
-        retry = GithubRetry(total=5)
-        # Default total=10 exceeds autofix's soft time limit anyway
-        retry.DEFAULT_BACKOFF_MAX = 30
+        GithubRetry.DEFAULT_BACKOFF_MAX = 15  # On retries, new instances are created
+        retry = GithubRetry(total=5)  # Default total=10 exceeds autofix's soft time limit
 
         if app_id and private_key:
             self.github_auth = get_github_app_auth_and_installation(
