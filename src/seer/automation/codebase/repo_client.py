@@ -197,7 +197,14 @@ class RepoClient:
                 retry=retry,
             )
         else:
-            self.github_auth = get_github_token_auth()
+            token_auth = get_github_token_auth()
+
+            if not token_auth:
+                raise InitializationError(
+                    "No app credentials or token auth provided, please set GITHUB_APP_ID and GITHUB_PRIVATE_KEY or GITHUB_TOKEN"
+                )
+
+            self.github_auth = token_auth
             self.github = Github(auth=self.github_auth, retry=retry)
 
         try:

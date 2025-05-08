@@ -4,8 +4,8 @@ import shlex
 import subprocess
 import textwrap
 import time
-from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, as_completed, wait
-from typing import Any, cast
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, as_completed, wait, Future
+from typing import Any, cast, Set
 
 import sentry_sdk
 from langfuse.decorators import observe
@@ -100,7 +100,7 @@ class BaseTools:
         start_time = time.time()
 
         # Collect all futures that need to be waited on
-        futures_to_wait = [
+        futures_to_wait: list[Future[Any]] = [
             repo_manager.initialization_future
             for repo_manager in self.repo_managers.values()
             if repo_manager.initialization_future
@@ -109,9 +109,10 @@ class BaseTools:
         self.context.event_manager.add_log(f"Waiting for your repositories to download...")
 
         # Use concurrent.futures.wait with a single timeout for all futures
-        done, not_done = wait(
+        done_not_done: tuple[Set[Future[Any]], Set[Future[Any]]] = wait(
             futures_to_wait, timeout=REPO_WAIT_TIMEOUT_SECS, return_when=FIRST_EXCEPTION
         )
+        done, not_done = done_not_done
 
         # Process results and handle errors
         for repo_manager in self.repo_managers.values():

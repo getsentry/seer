@@ -2,7 +2,7 @@ import logging
 import os
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Callable
 
 import git
@@ -18,6 +18,15 @@ class RepoManager:
     """
     A client for downloading and syncing git repositories using GitPython.
     """
+
+    repo_client: RepoClient
+    git_repo: git.Repo | None
+    tmp_dir: str
+    repo_path: str
+    initialization_future: Future | None
+
+    _trigger_liveness_probe: Callable[[], None] | None
+    _has_timed_out: bool
 
     def __init__(
         self, repo_client: RepoClient, trigger_liveness_probe: Callable[[], None] | None = None
@@ -86,7 +95,9 @@ class RepoManager:
             self.git_repo = git.Repo.clone_from(
                 repo_clone_url,
                 self.repo_path,
-                progress=lambda *args, **kwargs: self._trigger_liveness_probe(),
+                progress=lambda *args, **kwargs: (
+                    self._trigger_liveness_probe() if self._trigger_liveness_probe else None
+                ),
                 depth=1,
             )
             end_time = time.time()
