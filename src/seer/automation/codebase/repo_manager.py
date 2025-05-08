@@ -30,7 +30,7 @@ class RepoManager:
 
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
-    _has_timed_out: bool
+    _cancelled: bool
 
     def __init__(
         self, repo_client: RepoClient, trigger_liveness_probe: Callable[[], None] | None = None
@@ -47,7 +47,7 @@ class RepoManager:
         self.initialization_future = None
 
         self._trigger_liveness_probe = trigger_liveness_probe
-        self._has_timed_out = False
+        self._cancelled = False
         self._last_liveness_update = 0.0
 
     @property
@@ -69,7 +69,7 @@ class RepoManager:
 
         try:
             self._clone_repo()
-            if self._has_timed_out:
+            if self._cancelled:
                 return
             self._sync_repo()
         except Exception:
@@ -81,7 +81,7 @@ class RepoManager:
         finally:
             self.initialization_future = None
 
-            if self._has_timed_out:
+            if self._cancelled:
                 self.cleanup()
 
     @sentry_sdk.trace
@@ -154,10 +154,10 @@ class RepoManager:
             self._trigger_liveness_probe()
             self._last_liveness_update = current_time
 
-    def mark_as_timed_out(self):
+    def cancel(self):
         if self.initialization_future:
             # Have the thread deal with cleanup
-            self._has_timed_out = True
+            self._cancelled = True
         else:
             # Do it now
             self.cleanup()
@@ -176,6 +176,6 @@ class RepoManager:
                 self.repo_path = None
                 self.git_repo = None
 
-        self._has_timed_out = False
+        self._cancelled = True
 
         logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
