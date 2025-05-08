@@ -1,5 +1,7 @@
 import logging
 import os
+import shutil
+import tarfile
 import tempfile
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -7,9 +9,12 @@ from typing import Callable
 
 import git
 import sentry_sdk
+from google.cloud import storage
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir
+from seer.configuration import AppConfig
+from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +33,17 @@ class RepoManager:
     repo_path: str
     initialization_future: Future | None
 
+    _use_gcs: bool
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
     _has_timed_out: bool
 
     def __init__(
-        self, repo_client: RepoClient, trigger_liveness_probe: Callable[[], None] | None = None
+        self,
+        repo_client: RepoClient,
+        *,
+        trigger_liveness_probe: Callable[[], None] | None = None,
+        use_gcs: bool = True,
     ):
         """
         Initialize the local git client.
@@ -49,10 +59,20 @@ class RepoManager:
         self._trigger_liveness_probe = trigger_liveness_probe
         self._has_timed_out = False
         self._last_liveness_update = 0.0
+        self._use_gcs = use_gcs
 
     @property
     def is_available(self):
         return self.git_repo is not None and self.initialization_future is None
+
+    @property
+    @inject
+    def bucket_name(self, config: AppConfig = injected):
+        return config.get("GCS_BUCKET_NAME")
+
+    @property
+    def blob_name(self):
+        return f"repos/{self.repo_client.repo_owner}/{self.repo_client.repo_name}.tar.gz"
 
     def initialize_in_background(self):
         logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
@@ -68,9 +88,17 @@ class RepoManager:
         logger.info(f"Initializing repo {self.repo_client.repo_full_name}")
 
         try:
-            self._clone_repo()
+            if not self._use_gcs or not self.gcs_archive_exists():
+                self._clone_repo()
+
+                if self._use_gcs:
+                    self.upload_to_gcs()
+            else:
+                self.download_from_gcs()
+
             if self._has_timed_out:
                 return
+
             self._sync_repo()
         except Exception:
             logger.exception(
@@ -125,12 +153,18 @@ class RepoManager:
 
         try:
             start_time = time.time()
-
             commit_sha = self.repo_client.base_commit_sha
+
+            # Reset any perceived local changes first
+            self.git_repo.git.reset("--hard")
+            # Clean any untracked files
+            self.git_repo.git.clean("-fdx")
 
             # Fetch only the specific commit
             self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
-            self.git_repo.git.checkout(commit_sha)
+
+            # Force checkout to avoid the "local changes" error
+            self.git_repo.git.checkout(commit_sha, force=True)
 
             end_time = time.time()
             logger.info(
@@ -153,6 +187,203 @@ class RepoManager:
         ):
             self._trigger_liveness_probe()
             self._last_liveness_update = current_time
+
+    def _copy_repo(self, target_folder: str = "copied_repo"):
+        """
+        Copy the repository to a new directory.
+        """
+        target_path = os.path.join(self.tmp_dir, target_folder)
+        shutil.copytree(self.repo_path, target_path, symlinks=True)
+        return target_path
+
+    def _prune_repo(self, *, repo_path: str | None = None):
+        """
+        Prune the repository to only include the target commit.
+        """
+        if repo_path is None:
+            repo_path = self.repo_path
+
+        git_repo = git.Repo(repo_path)
+
+        commit_sha = self.repo_client.base_commit_sha
+
+        # Remove all remote branches except the one we need
+        logger.info("Pruning unnecessary references")
+        for ref in git_repo.git.execute(["git", "show-ref"]).split("\n"):
+            if ref and commit_sha not in ref:
+                ref_name = ref.split()[1]
+                try:
+                    git_repo.git.execute(["git", "update-ref", "-d", ref_name])
+                except git.GitCommandError:
+                    logger.debug(f"Could not delete reference {ref_name}")
+
+        # Clean up completely - expire reflog, remove unreachable objects
+        logger.info("Cleaning Git repository to minimal state")
+        git_repo.git.execute(["git", "reflog", "expire", "--expire=now", "--all"])
+        git_repo.git.execute(["git", "gc", "--prune=now", "--aggressive"])
+
+    def upload_to_gcs(self):
+        """
+        Upload the repository from the cloned tmp directory to GCS.
+        This method uses a thread to perform the upload without blocking.
+        """
+        copied_repo_path = self._copy_repo()
+        self._prune_repo(repo_path=copied_repo_path)
+
+        # Create a temporary tar.gz file of the repository
+        temp_tarfile = os.path.join(self.tmp_dir, "upload_repo_archive.tar.gz")
+        try:
+            logger.info(f"Creating tar archive of repository at {copied_repo_path}")
+            with tarfile.open(temp_tarfile, "w:gz") as tar:
+                for item in os.listdir(copied_repo_path):
+                    item_path = os.path.join(copied_repo_path, item)
+                    tar.add(item_path, arcname=item)
+
+            # Upload the tar file to GCS in a separate thread
+            logger.info(f"Uploading repository archive to GCS: {self.bucket_name}/{self.blob_name}")
+
+            # Use ThreadPoolExecutor to run the upload in a separate thread
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(self._do_gcs_upload, temp_tarfile)
+                # Wait for the upload to complete
+                future.result()
+
+            logger.info(
+                f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to upload repository to GCS: {e}")
+            raise
+        finally:
+            # Clean up the temporary tar file
+            if os.path.exists(temp_tarfile):
+                os.unlink(temp_tarfile)
+
+            # Clean up the copied repo
+            if os.path.exists(copied_repo_path):
+                shutil.rmtree(copied_repo_path)
+
+    def _do_gcs_upload(self, temp_tarfile):
+        """
+        Perform the actual GCS upload operation.
+        This method is designed to be run in a separate thread.
+
+        Args:
+            temp_tarfile: Path to the temporary tarfile to upload
+        """
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(self.bucket_name)
+        blob = bucket.blob(self.blob_name)
+        blob.upload_from_filename(temp_tarfile)
+
+    def gcs_archive_exists(self):
+        """
+        Check if an archive exists in GCS for this repository.
+
+        Returns:
+            bool: True if the archive exists, False otherwise
+        """
+        try:
+            # Check if the archive exists in GCS
+            logger.info(
+                f"Checking if repository archive exists in GCS: {self.bucket_name}/{self.blob_name}"
+            )
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(self.bucket_name)
+            blob = bucket.blob(self.blob_name)
+
+            exists = blob.exists()
+
+            if exists:
+                logger.info(f"Repository archive found in GCS: {self.bucket_name}/{self.blob_name}")
+            else:
+                logger.info(
+                    f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
+                )
+
+            return exists
+        except Exception as e:
+            logger.error(f"Error checking if repository archive exists in GCS: {e}")
+            return False
+
+    def download_from_gcs(self):
+        """
+        Download the repository from GCS to the cloned tmp directory.
+
+        Args:
+            max_workers: Maximum number of concurrent extraction threads (default: 4)
+                         [No longer used as extraction is now sequential]
+        """
+
+        # Create a temporary file within self.tmp_dir to download the tar.gz
+        temp_tarfile = os.path.join(self.tmp_dir, "repo_archive.tar.gz")
+
+        try:
+            # Download the tar file from GCS
+            logger.info(
+                f"Downloading repository archive from GCS: {self.bucket_name}/{self.blob_name}"
+            )
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(self.bucket_name)
+            blob = bucket.blob(self.blob_name)
+
+            if not blob.exists():
+                logger.error(
+                    f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
+                )
+                raise FileNotFoundError(
+                    f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
+                )
+
+            # Download the blob to the temporary file with larger chunk size for faster download
+            start_time = time.time()
+            blob.download_to_filename(temp_tarfile)
+            end_time = time.time()
+            logger.info(f"Downloaded repository archive in {end_time - start_time} seconds")
+
+            # Clean up existing repo path before extracting
+            cleanup_dir(self.repo_path)
+            os.makedirs(self.repo_path, exist_ok=True)
+
+            # Extract the tar file to the repo path using simple sequential extraction
+            logger.info(f"Extracting repository archive to {self.repo_path}")
+            with tarfile.open(temp_tarfile, "r:gz") as tar:
+                # Get all members of the archive
+                members = tar.getmembers()
+                # Strip the top directory from paths and validate paths
+                safe_members = []
+                for member in members:
+                    # Prevent path traversal attacks
+                    if member.name.startswith("copied_repo/"):
+                        member.name = member.name.replace("copied_repo/", "", 1)
+                    else:
+                        member.name = member.name.replace("copied_repo", "", 1)
+
+                    # Ensure the path doesn't contain dangerous patterns like "../"
+                    if ".." not in member.name and not os.path.isabs(member.name):
+                        safe_members.append(member)
+                    else:
+                        logger.warning(f"Skipping potentially unsafe path: {member.name}")
+
+                # Extract with modified and validated paths
+                tar.extractall(path=self.repo_path, members=safe_members)
+
+            logger.info(f"Extracted repository archive to {self.repo_path}")
+
+            # Do a debug ls of the repo path
+            logger.info(f"Debug ls of repo path: {self.repo_path}")
+            logger.info(os.listdir(self.repo_path))
+
+            self.git_repo = git.Repo(self.repo_path)
+
+            logger.info(f"Successfully downloaded repository from GCS to {self.repo_path}")
+        except Exception as e:
+            logger.error(f"Failed to download repository from GCS: {e}")
+            raise
+        finally:
+            # Clean up the temporary files
+            if os.path.exists(temp_tarfile):
+                os.unlink(temp_tarfile)
 
     def mark_as_timed_out(self):
         if self.initialization_future:
