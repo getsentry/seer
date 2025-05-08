@@ -72,7 +72,7 @@ class BaseTools:
             self.repo_managers[repo_name] = repo_manager
 
     def _trigger_liveness_probe(self):
-        with self.context.state.update() as state:
+        with self.context.state.update():
             # Do nothing, the state should self update updated_at
             pass
 
@@ -107,7 +107,7 @@ class BaseTools:
             if repo_manager.initialization_future
         ]
 
-        self.context.event_manager.add_log(f"Waiting for your repositories to download...")
+        self.context.event_manager.add_log("Waiting for your repositories to download...")
 
         # Use concurrent.futures.wait with a single timeout for all futures
         done_not_done: tuple[Set[Future[Any]], Set[Future[Any]]] = wait(

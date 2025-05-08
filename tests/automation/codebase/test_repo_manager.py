@@ -1,5 +1,4 @@
 import logging
-import os
 from concurrent.futures import Future
 from unittest.mock import ANY, MagicMock, patch
 
@@ -8,7 +7,6 @@ import pytest
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.repo_manager import RepoManager
-from seer.automation.codebase.utils import cleanup_dir
 
 
 @pytest.fixture
@@ -41,7 +39,7 @@ def test_clone_success(repo_manager, mock_repo_client, caplog):
 
     with (
         patch("git.Repo.clone_from", return_value=mock_git_repo) as mock_clone,
-        patch("seer.automation.codebase.repo_manager.cleanup_dir") as mock_cleanup,
+        patch("seer.automation.codebase.repo_manager.cleanup_dir"),
     ):
 
         repo_manager._clone_repo()
