@@ -66,6 +66,7 @@ services:
             - GOOGLE_CLOUD_PROJECT=ml-ai-420606
             - SENTRY_REGION=us
             - IGNORE_API_AUTH=1
+            - GCS_BUCKET_NAME=autofix-repositories-local
         ports:
             - "${APP_PORT:-9091}:9091" # Local dev sentry app looks for port 9091 for the seer service.
             - 5555:5555 # Flower
