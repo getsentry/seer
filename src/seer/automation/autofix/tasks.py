@@ -138,13 +138,14 @@ def check_and_mark_recent_autofix_runs():
 
 
 def check_and_mark_if_timed_out(state: ContinuationState):
-    with state.update() as cur:
-        if cur.is_running and cur.has_timed_out:
+    cur_state = state.get()
+    if cur_state.is_running and cur_state.has_timed_out:
+        with state.update() as cur:
             cur.mark_running_steps_errored()
             cur.status = AutofixStatus.ERROR
 
-            # Will log to Sentry. We will have an alert set up to notify us when this happens.
-            logger.error(f"Autofix run {cur.run_id} has timed out")
+        # Will log to Sentry. We will have an alert set up to notify us when this happens.
+        logger.error(f"Autofix run {cur.run_id} has timed out")
 
 
 @inject
