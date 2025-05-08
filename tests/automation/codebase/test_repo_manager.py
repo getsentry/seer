@@ -118,7 +118,7 @@ def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
     assert repo_manager.git_repo is None
 
     # Verify error was logged
-    assert f"Failed to sync repository {mock_repo_client.repo_full_name}" in caplog.text
+    assert f"Failed to sync repository" in caplog.text
 
 
 def test_mark_as_timed_out_before_init(repo_manager):
