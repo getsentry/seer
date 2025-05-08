@@ -19,6 +19,7 @@ A new dataset will be created in Langfuse.
 
 import os
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
@@ -321,24 +322,26 @@ def get_issue_events(issue_id: int, sentry_token: str) -> SentryEventData:
     )
 
 
+class RelevantScorePrefixes(Enum):
+    NOISE = "noise"
+    BUGS_NOT_FOUND = "bugs_not_found"
+    CONTENT_MATCH = "content_match"
+    LOCATION_MATCH = "location_match"
+    BUGS_FOUND_COUNT = "bugs_found_count"
+
+
 def pretty_print_scores(scores: list[dict]) -> None:
     """Print scores in a formatted way, highlighting important metrics."""
 
     # Filter out error_running_evaluation and sort by highlight order
     filtered_scores = [s for s in scores if s["name"] != "error_running_evaluation"]
 
-    score_prefix_names = [
-        "noise",
-        "bugs_not_found",
-        "content_match",
-        "location_match",
-        "bugs_found_count",
-    ]
-
     # Print scores
     for score in filtered_scores:
         score_name = score["name"]
-        highlight_name = next((name for name in score_prefix_names if name in score_name), None)
+        highlight_name = next(
+            (name.value for name in RelevantScorePrefixes if name.value in score_name), None
+        )
         value = score["value"]
         comment = score["comment"]
 
@@ -405,13 +408,14 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
     # Calculate averages for successful evaluations only
     successful_items = [item for item in items_in_run if item.was_evaluated_successfully]
 
-    def get_avg_score(score_name_start: str) -> float:
+    def get_avg_score(score_name_start: RelevantScorePrefixes) -> float:
         if not successful_items:
             return 0.0
         scores = []
         for item in successful_items:
             score = next(
-                (s["value"] for s in item.scores if s["name"].startswith(score_name_start)), None
+                (s["value"] for s in item.scores if s["name"].startswith(score_name_start.value)),
+                None,
             )
             if score is not None:
                 scores.append(score)
@@ -421,11 +425,11 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
         items_count=len(items_in_run),
         items_evaluated_successfully=sum(item.was_evaluated_successfully for item in items_in_run),
         item_details=items_in_run,
-        avg_noise=get_avg_score("noise"),
-        avg_bugs_found=get_avg_score("bugs_found_count"),
-        avg_bugs_missed=get_avg_score("bugs_not_found"),
-        avg_content_match=get_avg_score("content_match"),
-        avg_location_match=get_avg_score("location_match"),
+        avg_noise=get_avg_score(RelevantScorePrefixes.NOISE),
+        avg_bugs_found=get_avg_score(RelevantScorePrefixes.BUGS_FOUND_COUNT),
+        avg_bugs_missed=get_avg_score(RelevantScorePrefixes.BUGS_NOT_FOUND),
+        avg_content_match=get_avg_score(RelevantScorePrefixes.CONTENT_MATCH),
+        avg_location_match=get_avg_score(RelevantScorePrefixes.LOCATION_MATCH),
     )
 
 
