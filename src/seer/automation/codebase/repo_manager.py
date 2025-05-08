@@ -161,9 +161,14 @@ class RepoManager:
         Clean up the temporary directory if it exists.
         """
         if self.repo_path and os.path.exists(self.repo_path):
-            cleanup_dir(self.repo_path)
-            self.repo_path = None
-            self.git_repo = None
+            try:
+                cleanup_dir(self.repo_path)
+            except Exception as e:
+                logger.error(f"Error during repo cleanup, but continuing: {e}")
+            finally:
+                # Ensure we null out paths even if cleanup fails
+                self.repo_path = None
+                self.git_repo = None
 
         self._has_timed_out = False
 
