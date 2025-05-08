@@ -177,7 +177,7 @@ def read_specific_files(repo_path: str, files: list[str] | set[str]) -> list[Doc
 def cleanup_dir(directory: str, max_retries: int = 3, initial_delay: float = 0.5):
     """
     Clean up a directory with retries on failure.
-    
+
     Args:
         directory: The directory to remove
         max_retries: Maximum number of retries before giving up
@@ -186,7 +186,7 @@ def cleanup_dir(directory: str, max_retries: int = 3, initial_delay: float = 0.5
     if not os.path.exists(directory):
         logger.info(f"Directory {directory} already cleaned!")
         return
-    
+
     delay = initial_delay
     last_error = None
 
@@ -204,7 +204,9 @@ def cleanup_dir(directory: str, max_retries: int = 3, initial_delay: float = 0.5
                 time.sleep(delay)
                 delay *= 2
             else:
-                raise OSError(f"Failed to clean directory {directory} after {max_retries + 1} attempts") from last_error
+                raise OSError(
+                    f"Failed to clean directory {directory} after {max_retries + 1} attempts"
+                ) from last_error
 
 
 def potential_frame_match(src_file: str, frame: StacktraceFrame) -> bool:
