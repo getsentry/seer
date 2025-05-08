@@ -761,7 +761,7 @@ tqdm==4.66.3
     #   prophet
     #   sentence-transformers
     #   transformers
-transformers==4.37.2
+transformers==4.50.0
     # via
     #   -r requirements-constraints.txt
     #   optimum
