@@ -1119,12 +1119,12 @@ def test_get_and_format_trace():
     trace = EAPTrace(trace_id="simple-trace", trace=trace_data, timestamp=datetime.datetime.now())
 
     result = trace.get_and_format_trace()
-    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />
-<span id="span2" name="Non-Transaction Span" is_transaction="False">
-    <span id="span2_1" name="Non-Transaction Span 1" is_transaction="False" />
-    <span id="span2_2" name="Non-Transaction Span 2" is_transaction="False" />
+    expected = """<txn id="span1" name="Transaction 1" />
+<span id="span2" name="Non-Transaction Span">
+  <span id="span2_1" name="Non-Transaction Span 1" />
+  <span id="span2_2" name="Non-Transaction Span 2" />
 </span>
-<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+<txn id="span3" name="Transaction 2" />"""
     assert result == expected
 
     trace_data = [
@@ -1136,13 +1136,15 @@ def test_get_and_format_trace():
     trace = EAPTrace(trace_id="simple-trace", trace=trace_data, timestamp=datetime.datetime.now())
 
     result = trace.get_and_format_trace()
-    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />
-<span id="span2" name="Non-Transaction Span" is_transaction="False" />
-<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    expected = """<txn id="span1" name="Transaction 1" />
+<span id="span2" name="Non-Transaction Span" />
+<txn id="span3" name="Transaction 2" />"""
     assert result == expected
 
     result = trace.get_and_format_trace(only_transactions=True)
-    expected = """<txn id="span1" name="Transaction 1" is_transaction="True" />\n<txn id="span3" name="Transaction 2" is_transaction="True" />"""
+    expected = (
+        """<txn id="span1" name="Transaction 1" />\n<txn id="span3" name="Transaction 2" />"""
+    )
     assert result == expected
 
 

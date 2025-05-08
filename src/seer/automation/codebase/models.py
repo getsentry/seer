@@ -153,6 +153,7 @@ class StaticAnalysisWarning(BaseModel):
     code: str
     message: str
     encoded_location: str
+    is_first_occurrence: bool
     rule_id: int | None = None
     rule: StaticAnalysisRule | None = None
     encoded_code_snippet: str | None = None
@@ -199,6 +200,13 @@ class StaticAnalysisWarning(BaseModel):
         else:
             formatted_code_snippet = ""
 
+        if self.is_first_occurrence:
+            occurrence_message = "This is likely a newly introduced warning from this code change."
+        else:
+            occurrence_message = (
+                "The warning at this location has been seen before prior to this code change."
+            )
+
         return textwrap.dedent(
             """\
             <warning><warning_id>{id}</warning_id>
@@ -212,6 +220,9 @@ class StaticAnalysisWarning(BaseModel):
             Potentially related issue titles:
             {formatted_issue_titles}
             ----------
+            Has this warning at this location been seen before?
+                {occurrence_message}
+            ----------
             {formatted_rule}</warning>"""
         ).format(
             id=self.id,
@@ -222,4 +233,5 @@ class StaticAnalysisWarning(BaseModel):
             formatted_code_snippet=formatted_code_snippet,
             formatted_issue_titles=formatted_issue_titles,
             formatted_rule=self.rule.format_rule() if self.rule else "",
+            occurrence_message=occurrence_message,
         )

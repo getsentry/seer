@@ -351,6 +351,7 @@ class StaticAnalysisSuggestionsPrompts:
               Ignore issues or warnings that aren't caused by the code change.
               Pay more attention to warnings and issues around wrong types, values, and syntax. Linter warnings about unnecessary imports, suboptimal style, etc. are rarely critical.
               Express in words what you're uncertain about, and what you're more confident about. You are more than free to point out that the warnings and issues are not clearly problematic in context of the code change, and should be ignored.
+            - Each warning also indicates if it is a first occurrence or not. If it is a first occurrence then pay more attention to it. If it is not a first occurrence then you can analyze it with less emphasis.
             """
         ).format(
             diff_with_warnings=diff_with_warnings,
