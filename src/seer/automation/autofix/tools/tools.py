@@ -86,13 +86,19 @@ class BaseTools:
                       If None, waits for all repos to be downloaded.
         """
         if repo_name:
-            repo_names_to_download = [repo_name] if repo_name not in self.repo_managers else []
+            repo_managers_to_wait_for = (
+                [self.repo_managers[repo_name]]
+                if not self.repo_managers[repo_name].is_available
+                else []
+            )
         else:
-            repo_names_to_download = [
-                rn for rn in self._get_repo_names() if rn not in self.repo_managers
+            repo_managers_to_wait_for = [
+                self.repo_managers[rn]
+                for rn in self._get_repo_names()
+                if not self.repo_managers[rn].is_available
             ]
 
-        if not repo_names_to_download:
+        if not repo_managers_to_wait_for:
             return
 
         append_langfuse_observation_metadata({"repo_download": True})
@@ -103,7 +109,7 @@ class BaseTools:
         # Collect all futures that need to be waited on
         futures_to_wait: list[Future[Any]] = [
             repo_manager.initialization_future
-            for repo_manager in self.repo_managers.values()
+            for repo_manager in repo_managers_to_wait_for
             if repo_manager.initialization_future
         ]
 

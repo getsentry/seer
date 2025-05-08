@@ -1,10 +1,11 @@
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
+from concurrent.futures import Future
 
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.models import AutofixRequest
-from seer.automation.autofix.tools.tools import BaseTools
+from seer.automation.autofix.tools.tools import BaseTools, FIRST_EXCEPTION, RepoClientType
 from seer.automation.models import FileChange, FilePatch, Hunk, Line, RepoDefinition
 
 
@@ -69,6 +70,367 @@ def autofix_tools(test_state):
     with patch("seer.automation.autofix.tools.tools.BaseTools._download_repos", MagicMock()):
         tools = BaseTools(context)
     return tools
+
+
+class TestDownloadRepos:
+    @patch("seer.automation.autofix.tools.tools.RepoManager")
+    def test_download_repos_basic(self, mock_repo_manager):
+        """Test that _download_repos creates and initializes repo managers correctly."""
+        # Setup
+        context = MagicMock()
+        repo_names = ["owner/repo1", "owner/repo2"]
+        repo_clients = {name: MagicMock() for name in repo_names}
+
+        # Mock the _get_repo_names method directly to avoid state.get() issues
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=repo_names)
+        tools.retrieval_top_k = 8
+        tools.repo_client_type = RepoClientType.READ
+        tools.repo_managers = {}
+
+        # Mock get_repo_client to return our test repo clients
+        def mock_get_repo_client(repo_name, type):
+            return repo_clients[repo_name]
+
+        context.get_repo_client = MagicMock(side_effect=mock_get_repo_client)
+
+        # Create mock repo manager instances
+        mock_repo_manager_instances = []
+        for _ in range(len(repo_names)):
+            manager = MagicMock()
+            manager.initialize_in_background = MagicMock()
+            mock_repo_manager_instances.append(manager)
+
+        # Make the RepoManager mock return our instances
+        mock_repo_manager.side_effect = mock_repo_manager_instances
+
+        # Call _download_repos directly
+        tools._download_repos()
+
+        # Verify that get_repo_client was called for each repo with correct args
+        assert context.get_repo_client.call_count == len(repo_names)
+        for repo_name in repo_names:
+            context.get_repo_client.assert_any_call(repo_name=repo_name, type=RepoClientType.READ)
+
+        # Verify that the repo_managers dict was populated
+        assert len(tools.repo_managers) == len(repo_names)
+
+        # Verify that initialize_in_background was called for each manager
+        for manager in mock_repo_manager_instances:
+            manager.initialize_in_background.assert_called_once()
+
+    @patch("seer.automation.autofix.tools.tools.RepoManager")
+    def test_download_repos_empty(self, mock_repo_manager):
+        """Test that _download_repos handles empty repo lists correctly."""
+        # Setup
+        context = MagicMock()
+
+        # Create the tools instance without mocking _download_repos
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=[])  # Empty repo list
+        tools.retrieval_top_k = 8
+        tools.repo_client_type = RepoClientType.READ
+        tools.repo_managers = {}
+
+        # Call _download_repos directly
+        tools._download_repos()
+
+        # Verify that get_repo_client was not called
+        context.get_repo_client.assert_not_called()
+
+        # Verify that RepoManager was not created
+        mock_repo_manager.assert_not_called()
+
+        # Verify that the repo_managers dict remains empty
+        assert len(tools.repo_managers) == 0
+
+    @patch("seer.automation.autofix.tools.tools.RepoManager")
+    def test_download_repos_exception(self, mock_repo_manager):
+        """Test that _download_repos handles exceptions during repo client creation."""
+        # Setup
+        context = MagicMock()
+        repo_names = ["owner/repo1", "owner/repo2", "owner/error_repo"]
+
+        # Create the tools instance without mocking _download_repos
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=repo_names)
+        tools.retrieval_top_k = 8
+        tools.repo_client_type = RepoClientType.READ
+        tools.repo_managers = {}
+
+        # Mock get_repo_client to raise an exception for one repo
+        def mock_get_repo_client(repo_name, type):
+            if repo_name == "owner/error_repo":
+                raise ValueError("Error creating repo client")
+            return MagicMock()
+
+        context.get_repo_client = MagicMock(side_effect=mock_get_repo_client)
+
+        # Create mock repo manager instances
+        mock_repo_manager_instances = []
+        for _ in range(2):  # Only two successful repos
+            manager = MagicMock()
+            manager.initialize_in_background = MagicMock()
+            mock_repo_manager_instances.append(manager)
+
+        # Make the RepoManager mock return our instances
+        mock_repo_manager.side_effect = mock_repo_manager_instances
+
+        # Call _download_repos directly - should raise an exception
+        with pytest.raises(ValueError):
+            tools._download_repos()
+
+        # Verify that get_repo_client was called for each repo until exception
+        assert context.get_repo_client.call_count >= 2  # At least the first two repos
+
+
+class TestEnsureReposDownloaded:
+    @patch("seer.automation.autofix.tools.tools.wait")
+    def test_ensure_repos_downloaded_specific_repo(self, mock_wait):
+        """Test that _ensure_repos_downloaded only waits for a specific repo when repo_name is provided."""
+        # Setup
+        context = MagicMock()
+        context.event_manager = MagicMock()
+
+        repo_names = ["owner/repo1", "owner/repo2", "owner/repo3"]
+        specific_repo_name = "owner/repo2"
+
+        # Create mock repo managers with initialization futures
+        repo_managers = {}
+        futures = {}
+
+        for name in repo_names:
+            future = MagicMock(spec=Future)
+            future.exception.return_value = None
+
+            repo_manager = MagicMock()
+            repo_manager.initialization_future = future
+            repo_manager.repo_client.repo_full_name = name
+            repo_manager.is_available = False
+
+            repo_managers[name] = repo_manager
+            futures[name] = future
+
+        # Mock wait to return done and not_done sets
+        mock_wait.return_value = (set([futures[specific_repo_name]]), set())
+
+        # Create the tools instance
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=repo_names)
+        tools.repo_managers = repo_managers
+        tools._trigger_liveness_probe = MagicMock()
+
+        # Patch the internal wait function to use our mock
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
+            with patch("seer.automation.autofix.tools.tools.time"):
+                # Call _ensure_repos_downloaded with a specific repo
+                tools._ensure_repos_downloaded(specific_repo_name)
+
+        # Verify that wait was called with only the future for the specific repo
+        mock_wait.assert_called_once()
+        args, kwargs = mock_wait.call_args
+        assert len(args[0]) == 1
+        assert args[0][0] == futures[specific_repo_name]
+        assert kwargs["timeout"] == 120.0
+        assert kwargs["return_when"] == FIRST_EXCEPTION
+
+        # Verify that event_manager.add_log was called
+        context.event_manager.add_log.assert_called_once()
+
+    @patch("seer.automation.autofix.tools.tools.wait")
+    def test_ensure_repos_downloaded_all_repos(self, mock_wait):
+        """Test that _ensure_repos_downloaded waits for all repos when repo_name is None."""
+        # Setup
+        context = MagicMock()
+        context.event_manager = MagicMock()
+
+        repo_names = ["owner/repo1", "owner/repo2", "owner/repo3"]
+
+        # Create mock repo managers with initialization futures
+        repo_managers = {}
+        all_futures = []
+
+        for name in repo_names:
+            future = MagicMock(spec=Future)
+            future.exception.return_value = None
+
+            repo_manager = MagicMock()
+            repo_manager.initialization_future = future
+            repo_manager.repo_client.repo_full_name = name
+            repo_manager.is_available = False
+
+            repo_managers[name] = repo_manager
+            all_futures.append(future)
+
+        # Mock wait to return all futures as done
+        mock_wait.return_value = (set(all_futures), set())
+
+        # Create the tools instance
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=repo_names)
+        tools.repo_managers = repo_managers
+        tools._trigger_liveness_probe = MagicMock()
+
+        # Patch the internal wait function to use our mock
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
+            with patch("seer.automation.autofix.tools.tools.time"):
+                # Call _ensure_repos_downloaded without specifying a repo
+                tools._ensure_repos_downloaded()
+
+        # Verify that wait was called with all futures
+        mock_wait.assert_called_once()
+        args, kwargs = mock_wait.call_args
+        assert len(args[0]) == 3
+        assert set(args[0]) == set(all_futures)
+
+        # Verify that event_manager.add_log was called
+        context.event_manager.add_log.assert_called_once()
+
+    @patch("seer.automation.autofix.tools.tools.wait")
+    def test_ensure_repos_downloaded_already_downloaded(self, mock_wait):
+        """Test that _ensure_repos_downloaded handles repos that are already downloaded."""
+        # Setup
+        context = MagicMock()
+        context.event_manager = MagicMock()
+
+        repo_names = ["owner/repo1", "owner/repo2"]
+
+        # Create mock repo managers with no initialization futures (already downloaded)
+        repo_managers = {}
+
+        for name in repo_names:
+            repo_manager = MagicMock()
+            repo_manager.initialization_future = None  # Already downloaded
+            repo_manager.repo_client.repo_full_name = name
+            repo_manager.is_available = True
+
+            repo_managers[name] = repo_manager
+
+        # Create the tools instance
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=repo_names)
+        tools.repo_managers = repo_managers
+
+        # Call _ensure_repos_downloaded
+        tools._ensure_repos_downloaded()
+
+        # Verify that wait was not called (no futures to wait for)
+        mock_wait.assert_not_called()
+
+        # Verify that event_manager.add_log was not called (no need to wait)
+        context.event_manager.add_log.assert_not_called()
+
+    @patch("seer.automation.autofix.tools.tools.wait")
+    def test_ensure_repos_downloaded_timeout(self, mock_wait):
+        """Test that _ensure_repos_downloaded handles timeouts correctly."""
+        # Setup
+        context = MagicMock()
+        context.event_manager = MagicMock()
+
+        repo_names = ["owner/repo1", "owner/repo2"]
+
+        # Create mock repo managers with initialization futures
+        repo_managers = {}
+        futures = {}
+
+        for name in repo_names:
+            future = MagicMock(spec=Future)
+            future.exception.return_value = None
+
+            repo_manager = MagicMock()
+            repo_manager.initialization_future = future
+            repo_manager.repo_client.repo_full_name = name
+            repo_manager.mark_as_timed_out = MagicMock()
+            repo_manager.is_available = False
+            repo_managers[name] = repo_manager
+            futures[name] = future
+
+        # Mock wait to return one future as not done (timed out)
+        mock_wait.return_value = (
+            set([futures["owner/repo1"]]),  # done
+            set([futures["owner/repo2"]]),  # not done (timed out)
+        )
+
+        # Create the tools instance
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=repo_names)
+        tools.repo_managers = repo_managers
+        tools._trigger_liveness_probe = MagicMock()
+
+        # Patch the internal wait function to use our mock
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
+            with patch("seer.automation.autofix.tools.tools.time"):
+                # Call _ensure_repos_downloaded
+                tools._ensure_repos_downloaded()
+
+        # Verify that wait was called with all futures
+        mock_wait.assert_called_once()
+
+        # Verify that mark_as_timed_out was called for the timed out repo
+        repo_managers["owner/repo2"].mark_as_timed_out.assert_called_once()
+        repo_managers["owner/repo1"].mark_as_timed_out.assert_not_called()
+
+    @patch("seer.automation.autofix.tools.tools.wait")
+    def test_ensure_repos_downloaded_exception(self, mock_wait):
+        """Test that _ensure_repos_downloaded handles exceptions from initialization_future."""
+        # Setup
+        context = MagicMock()
+        context.event_manager = MagicMock()
+
+        repo_names = ["owner/repo1", "owner/repo2"]
+
+        # Create mock repo managers with initialization futures
+        repo_managers = {}
+
+        # First repo has a successful future
+        future1 = MagicMock(spec=Future)
+        future1.exception.return_value = None
+
+        # Second repo has a future with an exception
+        future2 = MagicMock(spec=Future)
+        future2.exception.return_value = ValueError("Failed to initialize")
+
+        repo_manager1 = MagicMock()
+        repo_manager1.initialization_future = future1
+        repo_manager1.repo_client.repo_full_name = "owner/repo1"
+        repo_manager1.mark_as_timed_out = MagicMock()
+        repo_manager1.is_available = False
+
+        repo_manager2 = MagicMock()
+        repo_manager2.initialization_future = future2
+        repo_manager2.repo_client.repo_full_name = "owner/repo2"
+        repo_manager2.mark_as_timed_out = MagicMock()
+        repo_manager2.is_available = False
+
+        repo_managers["owner/repo1"] = repo_manager1
+        repo_managers["owner/repo2"] = repo_manager2
+
+        # Mock wait to return all futures as done
+        mock_wait.return_value = (set([future1, future2]), set())
+
+        # Create the tools instance
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=repo_names)
+        tools.repo_managers = repo_managers
+        tools._trigger_liveness_probe = MagicMock()
+
+        # Patch the internal wait function to use our mock
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
+            with patch("seer.automation.autofix.tools.tools.time"):
+                # Call _ensure_repos_downloaded
+                tools._ensure_repos_downloaded()
+
+        # Verify that mark_as_timed_out was called for the repo with exception
+        repo_managers["owner/repo2"].mark_as_timed_out.assert_called_once()
+        repo_managers["owner/repo1"].mark_as_timed_out.assert_not_called()
 
 
 class TestSemanticFileSearch:
