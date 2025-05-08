@@ -189,14 +189,16 @@ class RepoClient:
         retry.DEFAULT_BACKOFF_MAX = 30
 
         if app_id and private_key:
+            self.github_auth = get_github_app_auth_and_installation(
+                app_id, private_key, repo_definition.owner, repo_definition.name
+            )[0]
             self.github = Github(
-                auth=get_github_app_auth_and_installation(
-                    app_id, private_key, repo_definition.owner, repo_definition.name
-                )[0],
+                auth=self.github_auth,
                 retry=retry,
             )
         else:
-            self.github = Github(auth=get_github_token_auth(), retry=retry)
+            self.github_auth = get_github_token_auth()
+            self.github = Github(auth=self.github_auth, retry=retry)
 
         try:
             with sentry_sdk.start_span(
@@ -371,6 +373,15 @@ class RepoClient:
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
         return tmp_dir, tmp_repo_dir
+
+    def get_clone_url_with_auth(self) -> str:
+        token = self.github_auth.token
+        base_url = self.repo.clone_url  # e.g. "https://github.com/owner/repo.git"
+
+        # insert token as password for the "x-access-token" user
+        auth_url = base_url.replace("https://", f"https://x-access-token:{token}@")
+
+        return auth_url
 
     def _autocorrect_path(self, path: str, sha: str | None = None) -> tuple[str, bool]:
         """

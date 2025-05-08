@@ -288,6 +288,22 @@ class DbSeerProjectPreference(Base):
     __table_args__ = (UniqueConstraint("organization_id", "project_id"),)
 
 
+class DbRepoArchive(Base):
+    __tablename__ = "repo_archives"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repo_id: Mapped[str] = mapped_column(String, nullable=False)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    project_id: Mapped[int] = mapped_column(BigInteger, nullable=False, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+
 def create_grouping_partition(target: Any, connection: Connection, **kw: Any) -> None:
     for i in range(100):
         connection.execute(
