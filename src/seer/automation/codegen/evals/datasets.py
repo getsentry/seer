@@ -18,6 +18,7 @@ A new dataset will be created in Langfuse.
 """
 
 import os
+import re
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -166,16 +167,31 @@ def run_report(dataset_name: str, run_name: str, hide_details: bool):
     )
     click.echo("└─────────────────────────────┴────────┴────────────┘")
 
-    click.echo("\n# Average Scores (successful evaluations only)")
-    click.echo("┌─────────────────────────────┬────────┐")
-    click.echo("│ Metric                      │  Score │")
-    click.echo("├─────────────────────────────┼────────┤")
-    click.echo(f"│ Average Bugs Found          │ {summary.avg_bugs_found:>6.2f} │")
-    click.echo(f"│ Average Bugs Missed         │ {summary.avg_bugs_missed:>6.2f} │")
-    click.echo(f"│ Average Content Match       │ {summary.avg_content_match:>6.2f} │")
-    click.echo(f"│ Average Location Match      │ {summary.avg_location_match:>6.2f} │")
-    click.echo(f"│ Average Noise               │ {summary.avg_noise:>6.2f} │")
-    click.echo("└─────────────────────────────┴────────┘")
+    click.echo("\n# Positive Items Statistics (items with expected bugs)")
+    click.echo(f"Total items: {summary.positive_items_summary.items_count}")
+    click.echo("┌─────────────────────────────┬──────────┬──────────┐")
+    click.echo("│ Metric                      │   Avg    │   Total  │")
+    click.echo("├─────────────────────────────┼──────────┼──────────┤")
+    click.echo(
+        f"│ Total bugs expected         │ {(summary.positive_items_summary.total_bugs_expected / summary.positive_items_summary.items_count):>8.2f} │ {summary.positive_items_summary.total_bugs_expected:>8.2f} │"
+    )
+    click.echo(
+        f"│ Total bugs found            │ {(summary.positive_items_summary.total_bugs_found / summary.positive_items_summary.items_count):>8.2f} │ {summary.positive_items_summary.total_bugs_found:>8.2f} │"
+    )
+    click.echo(
+        f"│ Total suggested bugs        │ {(summary.positive_items_summary.total_suggested_bugs / summary.positive_items_summary.items_count):>8.2f} │ {summary.positive_items_summary.total_suggested_bugs:>8.2f} │"
+    )
+    click.echo("└─────────────────────────────┴──────────┴──────────┘")
+
+    click.echo("\n# Negative Items Statistics (items without expected bugs)")
+    click.echo(f"Total items: {summary.negative_items_summary.items_count}")
+    click.echo("┌─────────────────────────────┬──────────┬──────────┐")
+    click.echo("│ Metric                      │   Avg    │   Total  │")
+    click.echo("├─────────────────────────────┼──────────┼──────────┤")
+    click.echo(
+        f"│ Total suggested bugs        │ {(summary.negative_items_summary.total_suggested_bugs / summary.negative_items_summary.items_count):>8.2f} │ {summary.negative_items_summary.total_suggested_bugs:>8.2f} │"
+    )
+    click.echo("└─────────────────────────────┴──────────┴──────────┘")
 
     if not hide_details:
         click.echo("\n# Items details")
@@ -329,6 +345,9 @@ class RelevantScorePrefixes(Enum):
     LOCATION_MATCH = "location_match"
     BUGS_FOUND_COUNT = "bugs_found_count"
 
+    def get_score_by_prefix(self, scores: list[dict]) -> dict | None:
+        return next((s for s in scores if s["name"].startswith(self.value)), None)
+
 
 def pretty_print_scores(scores: list[dict]) -> None:
     """Print scores in a formatted way, highlighting important metrics."""
@@ -373,15 +392,26 @@ class RelevantItemInfo:
 
 
 @dataclass
+class PositiveItemsSummary:
+    items_count: int
+    total_bugs_expected: int
+    total_bugs_found: int
+    total_suggested_bugs: int
+
+
+@dataclass
+class NegativeItemsSummary:
+    items_count: int
+    total_suggested_bugs: int
+
+
+@dataclass
 class RunSummaryInfo:
     items_count: int
     items_evaluated_successfully: int
     item_details: list[RelevantItemInfo]
-    avg_noise: float
-    avg_bugs_found: float
-    avg_bugs_missed: float
-    avg_content_match: float
-    avg_location_match: float
+    positive_items_summary: PositiveItemsSummary
+    negative_items_summary: NegativeItemsSummary
 
 
 def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> RelevantItemInfo:
@@ -402,34 +432,82 @@ def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> Rele
     )
 
 
+@dataclass
+class ItemDetailedScores:
+    bugs_expected: int
+    bugs_found: int
+    content_match: float
+    location_match: float
+    noise: float
+    suggestions_count: int
+
+
+def calculate_item_detailed_scores(item: RelevantItemInfo) -> ItemDetailedScores | None:
+    bugs_found_score = RelevantScorePrefixes.BUGS_FOUND_COUNT.get_score_by_prefix(item.scores)
+    if bugs_found_score is None:
+        return None
+    match = re.match(r"Expected number of bugs: (\d+);", bugs_found_score["comment"])
+    if match is None:
+        return None
+    bugs_expected = int(match.group(1))
+    content_match_score = RelevantScorePrefixes.CONTENT_MATCH.get_score_by_prefix(item.scores)
+    location_match_score = RelevantScorePrefixes.LOCATION_MATCH.get_score_by_prefix(item.scores)
+    noise_score = RelevantScorePrefixes.NOISE.get_score_by_prefix(item.scores)
+    # All suggestions are the matched (bugs_found) + unmatched (noise) suggestions
+    suggestions_count = noise_score["value"] if noise_score else 0 + bugs_found_score["value"]
+    return ItemDetailedScores(
+        bugs_expected=bugs_expected,
+        bugs_found=bugs_found_score["value"],
+        content_match=content_match_score["value"] if content_match_score else 0,
+        location_match=location_match_score["value"] if location_match_score else 0,
+        noise=noise_score["value"] if noise_score else 0,
+        suggestions_count=suggestions_count,
+    )
+
+
 def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSummaryInfo:
     items_in_run = [get_relevant_info_for_item(langfuse, item) for item in run.dataset_run_items]
 
     # Calculate averages for successful evaluations only
     successful_items = [item for item in items_in_run if item.was_evaluated_successfully]
+    positive_items_summary: dict[str, int] = {
+        "items_count": 0,
+        "total_bugs_found": 0,
+        "total_bugs_expected": 0,
+        "total_suggested_bugs": 0,
+    }
+    negative_items_summary: dict[str, int] = {"items_count": 0, "total_suggested_bugs": 0}
 
-    def get_avg_score(score_name_start: RelevantScorePrefixes) -> float:
-        if not successful_items:
-            return 0.0
-        scores = []
-        for item in successful_items:
-            score = next(
-                (s["value"] for s in item.scores if s["name"].startswith(score_name_start.value)),
-                None,
-            )
-            if score is not None:
-                scores.append(score)
-        return sum(scores) / len(scores) if scores else 0.0
+    for item in successful_items:
+        # Bugs found score includes a comment that starts with "Expected number of bugs: X;"
+        item_detailed_scores = calculate_item_detailed_scores(item)
+        if item_detailed_scores is None:
+            click.echo(f"! Bugs found score not found for item {item.item_id}. Ignoring item.")
+            continue
+
+        if item_detailed_scores.bugs_expected == 0:
+            negative_items_summary["items_count"] += 1
+            negative_items_summary["total_suggested_bugs"] += item_detailed_scores.suggestions_count
+        else:
+            positive_items_summary["items_count"] += 1
+            positive_items_summary["total_bugs_found"] += item_detailed_scores.bugs_found
+            positive_items_summary["total_bugs_expected"] += item_detailed_scores.bugs_expected
+            positive_items_summary["total_suggested_bugs"] += item_detailed_scores.suggestions_count
 
     return RunSummaryInfo(
         items_count=len(items_in_run),
         items_evaluated_successfully=sum(item.was_evaluated_successfully for item in items_in_run),
         item_details=items_in_run,
-        avg_noise=get_avg_score(RelevantScorePrefixes.NOISE),
-        avg_bugs_found=get_avg_score(RelevantScorePrefixes.BUGS_FOUND_COUNT),
-        avg_bugs_missed=get_avg_score(RelevantScorePrefixes.BUGS_NOT_FOUND),
-        avg_content_match=get_avg_score(RelevantScorePrefixes.CONTENT_MATCH),
-        avg_location_match=get_avg_score(RelevantScorePrefixes.LOCATION_MATCH),
+        positive_items_summary=PositiveItemsSummary(
+            items_count=positive_items_summary["items_count"],
+            total_bugs_expected=positive_items_summary["total_bugs_expected"],
+            total_bugs_found=positive_items_summary["total_bugs_found"],
+            total_suggested_bugs=positive_items_summary["total_suggested_bugs"],
+        ),
+        negative_items_summary=NegativeItemsSummary(
+            items_count=negative_items_summary["items_count"],
+            total_suggested_bugs=negative_items_summary["total_suggested_bugs"],
+        ),
     )
 
 
