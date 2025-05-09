@@ -104,7 +104,6 @@ class RepoManager:
                 self.repo_path,
                 progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
                 depth=1,
-                no_checkout=True,
             )
             # Fetch the specific commit
             try:
@@ -116,7 +115,7 @@ class RepoManager:
             self.git_repo.git.checkout(commit_sha)
             end_time = time.time()
             logger.info(
-                f"Cloned and checked out repository at commit {commit_sha} in {end_time - start_time} seconds"
+                f"Cloned and checked out repository at commit {commit_sha} in {end_time - start_time:.4f} seconds"
             )
 
             return self.repo_path
