@@ -62,8 +62,8 @@ class BaseTools:
             return
 
         org_id = self.context.state.get().request.organization_id
-        # use_gcs = org_id == 1
-        use_gcs = True
+        project_id = self.context.state.get().request.project_id
+        use_gcs = org_id == 1 and project_id == 6178942  # Seer
 
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
