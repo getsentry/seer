@@ -203,6 +203,7 @@ class BaseTools:
         if valid_file_path is None:
             other_paths = self._get_potential_abs_paths(file_path, repo_name)
             return f"Error: The file path `{file_path}` doesn't exist in `{repo_name}`.\n{other_paths}".strip()
+        file_path = valid_file_path
 
         # At this point we have ensured the file path and the repo name are valid.
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
