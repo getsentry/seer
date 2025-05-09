@@ -1,20 +1,17 @@
 import logging
 
-
 import sentry_sdk
 from psycopg import Connection
 from sentry_sdk.integrations import Integration
 from sentry_sdk.types import Event
 
+# Make sure this import is here
+import seer.logging  # noqa: F401
 from seer.automation.utils import AgentError
 from seer.configuration import AppConfig
 from seer.db import initialize_database
 from seer.dependency_injection import Module, inject, injected
 from seer.inference_models import initialize_models
-
-# Make sure this import is here
-import seer.logging  # noqa: F401
-
 
 logger = logging.getLogger(__name__)
 

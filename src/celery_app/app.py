@@ -2,7 +2,6 @@ import logging
 import os
 from typing import Any
 
-
 import billiard  # type: ignore[import-untyped]
 from celery import Celery, signals
 from sentry_sdk.integrations.celery import CeleryIntegration
