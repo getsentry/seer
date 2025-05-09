@@ -45,7 +45,7 @@ class RepoManager:
         repo_client: RepoClient,
         *,
         trigger_liveness_probe: Callable[[], None] | None = None,
-        use_gcs: bool = True,
+        use_gcs: bool = False,
         config: AppConfig = injected,
     ):
         """
@@ -96,6 +96,9 @@ class RepoManager:
         logger.info(f"Initializing repo {self.repo_client.repo_full_name}")
 
         try:
+            if self._cancelled:
+                return
+
             if not self._use_gcs or not self.gcs_archive_exists():
                 self._clone_repo()
 
@@ -268,7 +271,7 @@ class RepoManager:
                 f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
             )
         except Exception:
-            logger.exception(f"Failed to upload repository to GCS")
+            logger.exception("Failed to upload repository to GCS")
             raise
         finally:
             # Clean up the temporary tar file
@@ -319,7 +322,7 @@ class RepoManager:
 
             return exists
         except Exception:
-            logger.exception(f"Error checking if repository archive exists in GCS")
+            logger.exception("Error checking if repository archive exists in GCS")
             return False
 
     def download_from_gcs(self):
@@ -390,7 +393,7 @@ class RepoManager:
 
             logger.info(f"Successfully downloaded repository from GCS to {self.repo_path}")
         except Exception:
-            logger.exception(f"Failed to download repository from GCS")
+            logger.exception("Failed to download repository from GCS")
             raise
         finally:
             # Clean up the temporary files
@@ -411,6 +414,7 @@ class RepoManager:
         """
         if self.tmp_dir and os.path.exists(self.tmp_dir):
             try:
+                # Cleaning up with the tmp_dir itself ensures that we don't leave the archives or the copied repo folder behind
                 cleanup_dir(self.tmp_dir)
             except Exception as e:
                 logger.error(f"Error during repo cleanup, but continuing: {e}")
