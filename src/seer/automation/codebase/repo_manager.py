@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 LIVENESS_UPDATE_INTERVAL = 5.0
 
 
+class RepoInitializationError(RuntimeError):
+    """
+    An error that occurs during the initialization of a repository.
+    """
+
+    pass
+
+
 class RepoManager:
     """
     A client for downloading and syncing git repositories using GitPython.
@@ -72,7 +80,7 @@ class RepoManager:
     @property
     def bucket_name(self):
         if not self._app_config.CODEBASE_GCS_STORAGE_BUCKET:
-            raise RuntimeError("CODEBASE_GCS_STORAGE_BUCKET is not set, can't use GCS")
+            raise RepoInitializationError("CODEBASE_GCS_STORAGE_BUCKET is not set, can't use GCS")
 
         return self._app_config.CODEBASE_GCS_STORAGE_BUCKET
 
@@ -83,7 +91,7 @@ class RepoManager:
     def initialize_in_background(self):
         logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
         if self.initialization_future is not None:
-            raise RuntimeError(
+            raise RepoInitializationError(
                 f"Repo {self.repo_client.repo_full_name} is already being initialized"
             )
 
@@ -184,11 +192,36 @@ class RepoManager:
             logger.info(
                 f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
             )
+
+            if self._use_gcs:  # We'll only hardcode this to be used with the seer project
+                self._verify_repo_state()
         except Exception:
             logger.exception(
                 "Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
             )
             self.git_repo = None  # clear the repo to fail the available check
+
+    def _verify_repo_state(self):
+        """
+        Verify the repository state to ensure it is in the expected state at the right commit. Only use this for Debugging because it's slow.
+        Should silently error to Sentry.
+        """
+        if self._cancelled:
+            raise RepoInitializationError("Repository has been cancelled")
+
+        if self.git_repo is None:
+            raise RepoInitializationError("Repository is not cloned")
+
+        if self.git_repo.head.commit.hexsha != self.repo_client.base_commit_sha:
+            raise RepoInitializationError("Repository is not at the right commit")
+
+        repo_file_paths = self.repo_client.get_valid_file_paths()
+        for file_path in repo_file_paths:
+            if not os.path.exists(os.path.join(self.repo_path, file_path)):
+                logger.exception(
+                    "Repository failed validation and is missing file",
+                    extra={"file_path": file_path, "repo": self.repo_client.repo_full_name},
+                )
 
     def _throttled_liveness_probe(self):
         """
