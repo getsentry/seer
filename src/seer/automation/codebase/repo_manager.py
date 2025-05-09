@@ -14,7 +14,7 @@ from google.cloud import storage
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir
 from seer.configuration import AppConfig
-from seer.dependency_injection import inject, injected
+from seer.dependency_injection import copy_modules_initializer, inject, injected
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +37,16 @@ class RepoManager:
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
     _cancelled: bool
+    _app_config: AppConfig  # This is here because we can't inject on a property...
 
+    @inject
     def __init__(
         self,
         repo_client: RepoClient,
         *,
         trigger_liveness_probe: Callable[[], None] | None = None,
         use_gcs: bool = True,
+        config: AppConfig = injected,
     ):
         """
         Initialize the local git client.
@@ -60,15 +63,18 @@ class RepoManager:
         self._cancelled = False
         self._last_liveness_update = 0.0
         self._use_gcs = use_gcs
+        self._app_config = config
 
     @property
     def is_available(self):
         return self.git_repo is not None and self.initialization_future is None
 
     @property
-    @inject
-    def bucket_name(self, config: AppConfig = injected):
-        return config.CODEBASE_GCS_STORAGE_BUCKET
+    def bucket_name(self):
+        if not self._app_config.CODEBASE_GCS_STORAGE_BUCKET:
+            raise RuntimeError("CODEBASE_GCS_STORAGE_BUCKET is not set, can't use GCS")
+
+        return self._app_config.CODEBASE_GCS_STORAGE_BUCKET
 
     @property
     def blob_name(self):
@@ -81,7 +87,9 @@ class RepoManager:
                 f"Repo {self.repo_client.repo_full_name} is already being initialized"
             )
 
-        self.initialization_future = ThreadPoolExecutor(1).submit(self.initialize)
+        self.initialization_future = ThreadPoolExecutor(
+            1, initializer=copy_modules_initializer
+        ).submit(self.initialize)
 
     @sentry_sdk.trace
     def initialize(self):
@@ -94,6 +102,9 @@ class RepoManager:
                 if self._use_gcs:
                     self.upload_to_gcs()
             else:
+                logger.info(
+                    f"Using repository archive from GCS for {self.repo_client.repo_full_name}: {self.bucket_name}/{self.blob_name}"
+                )
                 self.download_from_gcs()
 
             if self._cancelled:
@@ -239,11 +250,16 @@ class RepoManager:
                     item_path = os.path.join(copied_repo_path, item)
                     tar.add(item_path, arcname=item)
 
+            if self._cancelled:
+                return self.cleanup()
+
             # Upload the tar file to GCS in a separate thread
             logger.info(f"Uploading repository archive to GCS: {self.bucket_name}/{self.blob_name}")
 
             # Use ThreadPoolExecutor to run the upload in a separate thread
-            with ThreadPoolExecutor(max_workers=1) as executor:
+            with ThreadPoolExecutor(
+                max_workers=1, initializer=copy_modules_initializer
+            ) as executor:
                 future = executor.submit(self._do_gcs_upload, temp_tarfile)
                 # Wait for the upload to complete
                 future.result()
@@ -251,8 +267,8 @@ class RepoManager:
             logger.info(
                 f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
             )
-        except Exception as e:
-            logger.error(f"Failed to upload repository to GCS: {e}")
+        except Exception:
+            logger.exception(f"Failed to upload repository to GCS")
             raise
         finally:
             # Clean up the temporary tar file
@@ -302,8 +318,8 @@ class RepoManager:
                 )
 
             return exists
-        except Exception as e:
-            logger.error(f"Error checking if repository archive exists in GCS: {e}")
+        except Exception:
+            logger.exception(f"Error checking if repository archive exists in GCS")
             return False
 
     def download_from_gcs(self):
@@ -328,9 +344,6 @@ class RepoManager:
             blob = bucket.blob(self.blob_name)
 
             if not blob.exists():
-                logger.error(
-                    f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
-                )
                 raise FileNotFoundError(
                     f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
                 )
@@ -376,8 +389,8 @@ class RepoManager:
             self.git_repo = git.Repo(self.repo_path)
 
             logger.info(f"Successfully downloaded repository from GCS to {self.repo_path}")
-        except Exception as e:
-            logger.error(f"Failed to download repository from GCS: {e}")
+        except Exception:
+            logger.exception(f"Failed to download repository from GCS")
             raise
         finally:
             # Clean up the temporary files
@@ -394,7 +407,7 @@ class RepoManager:
 
     def cleanup(self):
         """
-        Clean up the temporary directory if it exists.
+        Clean up the temporary directory if it exists, and mark the repo as cancelled.
         """
         if self.tmp_dir and os.path.exists(self.tmp_dir):
             try:
@@ -404,8 +417,10 @@ class RepoManager:
             finally:
                 # Ensure we null out paths even if cleanup fails
                 self.repo_path = None
-                self.git_repo = None
                 self.tmp_dir = None
-                self._cancelled = True
+
+        # always marked as cancelled and clear out the repo if we're here
+        self._cancelled = True
+        self.git_repo = None
 
         logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
