@@ -87,13 +87,13 @@ def handle_task_failure(**kwargs):
     logger.error("Task failed", exc_info=kwargs["exception"])
 
 
-# 3) Patch Celery's worker logger
+# Patch Celery's worker logger
 @signals.after_setup_logger.connect
 def patch_worker_logger(logger: logging.Logger, **kwargs):
     setup_logger(logger)
 
 
-# 4) Patch Celery's per-task logger (if you want to catch task-level logs too)
+# Patch Celery's per-task logger (if you want to catch task-level logs too)
 @signals.after_setup_task_logger.connect
 def patch_task_logger(logger: logging.Logger, **kwargs):
     setup_logger(logger)
