@@ -33,7 +33,7 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
 
     if not cache_name:
         # Will result in cold start
-        logger.info("Creating cached prompt as not available upon translation request.")
+        logger.info(f"Cache miss for {cache_display_name}, creating new cache")
         res = create_cache(CreateCacheRequest(org_id=org_id, project_ids=project_ids))
         cache_name = res.cache_name
 
@@ -82,6 +82,7 @@ def create_query_from_natural_language(
     relevant_fields = (
         relevant_fields_response.parsed.fields if relevant_fields_response.parsed else []
     )
+    logger.info(f"Identified {len(relevant_fields)} relevant fields for query")
 
     # Step 2: Fetch values for relevant fields
     field_values_response = rpc_client.call(
@@ -93,6 +94,8 @@ def create_query_from_natural_language(
         limit=150,
     )
     field_values = field_values_response.get("field_values", {}) if field_values_response else {}
+    total_values = sum(len(values) for values in field_values.values())
+    logger.info(f"Fetched {total_values} values across {len(field_values)} fields")
 
     # Step 3: Generate final prompt based off of relevant fields and values
     fields_and_values_prompt = prompts.get_fields_and_values_prompt(

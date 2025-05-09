@@ -160,6 +160,10 @@ def process_sources(sources: list, context: AutofixContext, trace_tree: TraceTre
                 continue
             repo_client = context.get_repo_client(repo_name)
             file_name = source.file_name
+            corrected_file_name = context.autocorrect_file_path(path=file_name, repo_name=repo_name)
+            if not corrected_file_name:
+                continue
+            file_name = corrected_file_name
             snippet_to_find = source.code_snippet
 
             file_content = context.get_file_contents(file_name, repo_name)

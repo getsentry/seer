@@ -73,6 +73,7 @@ class RepoManager:
                 return
         except Exception as e:
             logger.error(f"Failed to initialize repo {self.repo_client.repo_full_name}: {e}")
+
             self.cleanup()
             raise
         finally:
@@ -119,8 +120,10 @@ class RepoManager:
             )
 
             return self.repo_path
-        except git.GitCommandError as e:
-            logger.error(f"Failed to clone repository: {e}")
+        except Exception:
+            logger.exception(
+                "Failed to clone repository", extra={"repo": self.repo_client.repo_full_name}
+            )
             self.git_repo = None  # clear the repo to fail the available check
             raise
 
@@ -149,9 +152,14 @@ class RepoManager:
         Clean up the temporary directory if it exists.
         """
         if self.repo_path and os.path.exists(self.repo_path):
-            cleanup_dir(self.repo_path)
-            self.repo_path = None
-            self.git_repo = None
+            try:
+                cleanup_dir(self.repo_path)
+            except Exception as e:
+                logger.error(f"Error during repo cleanup, but continuing: {e}")
+            finally:
+                # Ensure we null out paths even if cleanup fails
+                self.repo_path = None
+                self.git_repo = None
 
         self._has_timed_out = False
 
