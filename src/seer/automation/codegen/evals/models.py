@@ -1,7 +1,7 @@
 from pydantic import BaseModel, field_validator
 from pydantic.fields import Field
 
-from seer.automation.codebase.models import PrFile, StaticAnalysisWarning
+from seer.automation.codebase.models import StaticAnalysisWarning
 from seer.automation.codegen.models import CodegenRelevantWarningsRequest
 from seer.automation.models import IssueDetails, RepoDefinition
 
@@ -23,7 +23,6 @@ class EvalItemInput(BaseModel):
     organization_id: int
     commit_sha: str
     warnings: list[StaticAnalysisWarning]
-    pr_files: list[PrFile] | None = None
     issues: list[IssueDetails] | None = None
 
     @field_validator("issues", mode="after")

@@ -86,13 +86,7 @@ def main():
     required=True,
     help="The path to the file containing the dataset details.",
 )
-@option(
-    "--collect-diff",
-    is_flag=True,
-    help="Whether to collect the diffs of the PRs.",
-    default=True,
-)
-def create_dataset(details_file: Path, collect_diff: bool):
+def create_dataset(details_file: Path):
     dataset_details = DatasetDetails.model_validate_json(details_file.read_text())
     items_raw_data: list[tuple[EvalItemInput, EvalItemOutput | list[EvalItemOutput]]] = []
 
@@ -115,9 +109,7 @@ def create_dataset(details_file: Path, collect_diff: bool):
             warnings=item_input.warnings,
             issues=item_input.issues,
         )
-        items_raw_data.append(
-            (enrich_item(**raw_item_data, should_collect_diff=collect_diff), item_output)
-        )
+        items_raw_data.append((enrich_item(**raw_item_data), item_output))
 
     # Create the dataset
     dataset = create_langfuse_dataset(
@@ -233,30 +225,20 @@ def enrich_item(
     github_info: GitHubInfo,
     warnings: list[StaticAnalysisWarning],
     issues: list[IssueDetails] | None = None,
-    should_collect_diff: bool = False,
 ) -> EvalItemInput:
     """
     Creates an EvalItem from the given GitHub info, warnings, expected suggestions, and (optional) issues.
-
-    GitHub info is used to fetch the PR files (aka diff).
-        This is done when creating the EvalItem so we don't have to do it at evaluation time,
-        and to avoid access issues (depending on the GH token you use to create the EvalItem).
 
     If issues are not provided, it will fetch them from Sentry (public API).
         This means you can exactly control the issues that are used for the evaluation, and thus test
         how impactful to the suggestion having the issue context is.
     """
 
-    # Get the PR files from the PR definition
-    if should_collect_diff:
-        pr_files = collect_diff(github_info)
-    else:
-        pr_files = None
-
-    if pr_files and issues is None:
+    if issues is None:
         issues = []
         sentry_token = os.getenv("SENTRY_TOKEN")
         assert sentry_token, "SENTRY_TOKEN is not set"
+        pr_files = collect_diff(github_info)
         for file in pr_files:
             issues_in_file = list_issues(github_info.repo_definition, file.filename, sentry_token)
             for issue in issues_in_file:
@@ -275,7 +257,6 @@ def enrich_item(
         organization_id=github_info.org_details.organization_id,
         commit_sha=github_info.commit_sha,
         warnings=warnings,
-        pr_files=pr_files,
         issues=issues,
     )
 
