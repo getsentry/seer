@@ -16,6 +16,8 @@ def mock_repo_client():
     client.repo_name = "test-repo"
     client.base_commit_sha = "abcd123"
     client.repo_full_name = "test-owner/test-repo"
+    client.provider = "github"
+    client.repo_external_id = "1234567890"
     return client
 
 
@@ -96,7 +98,7 @@ def test_sync_success(repo_manager, mock_repo_client, caplog):
     mock_git_repo.git.execute.assert_called_once_with(
         ["git", "fetch", "--depth=1", "origin", mock_repo_client.base_commit_sha]
     )
-    mock_git_repo.git.checkout.assert_called_once_with(mock_repo_client.base_commit_sha)
+    mock_git_repo.git.checkout.assert_called_once_with(mock_repo_client.base_commit_sha, force=True)
 
     # Check logging
     assert f"Syncing repository {mock_repo_client.repo_full_name}" in caplog.text
@@ -123,7 +125,7 @@ def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
 
 def test_mark_as_timed_out_before_init(repo_manager):
     """Test marking as timed out before initialization."""
-    repo_path = repo_manager.repo_path
+    tmp_dir = repo_manager.tmp_dir
 
     with (
         patch("seer.automation.codebase.repo_manager.cleanup_dir") as mock_cleanup,
@@ -132,9 +134,9 @@ def test_mark_as_timed_out_before_init(repo_manager):
         repo_manager.mark_as_timed_out()
 
         # Verify cleanup was called
-        mock_cleanup.assert_called_once_with(repo_path)
+        mock_cleanup.assert_called_once_with(tmp_dir)
         assert repo_manager.git_repo is None
-        assert not repo_manager._has_timed_out
+        assert repo_manager._cancelled
 
 
 def test_mark_as_timed_out_during_init(repo_manager):
@@ -145,13 +147,13 @@ def test_mark_as_timed_out_during_init(repo_manager):
         repo_manager.mark_as_timed_out()
 
         # Verify cleanup was deferred
-        assert repo_manager._has_timed_out
+        assert repo_manager._cancelled
         assert repo_manager.repo_path is not None
 
 
 def test_cleanup_idempotent(repo_manager):
     """Test that cleanup can be called multiple times safely."""
-    repo_path = repo_manager.repo_path
+    tmp_dir = repo_manager.tmp_dir
 
     with (
         patch("seer.automation.codebase.repo_manager.cleanup_dir") as mock_cleanup,
@@ -159,7 +161,7 @@ def test_cleanup_idempotent(repo_manager):
     ):
         # First cleanup
         repo_manager.cleanup()
-        mock_cleanup.assert_called_once_with(repo_path)
+        mock_cleanup.assert_called_once_with(tmp_dir)
 
         # Reset the mock for second call
         mock_cleanup.reset_mock()
@@ -205,23 +207,54 @@ def test_initialize_in_background(repo_manager, caplog):
         repo_manager.initialize_in_background()
 
 
-def test_initialize_success(repo_manager, mock_repo_client):
+def test_initialize_success_without_gcs(repo_manager, mock_repo_client):
     """Test successful initialization sequence."""
+
     with (
         patch.object(repo_manager, "_clone_repo") as mock_clone,
+        patch.object(repo_manager, "download_from_gcs") as mock_download,
         patch.object(repo_manager, "_sync_repo") as mock_sync,
+        patch.object(repo_manager, "_copy_repo", return_value="copied_repo_path") as mock_copy,
+        patch.object(repo_manager, "upload_to_gcs") as mock_upload,
     ):
         repo_manager.initialize()
 
         # Verify sequence
         mock_clone.assert_called_once()
+        mock_download.assert_not_called()
         mock_sync.assert_called_once()
+        mock_copy.assert_not_called()
+        mock_upload.assert_not_called()
+        assert repo_manager.initialization_future is None
+
+
+def test_initialize_from_gcs_download(repo_manager, mock_repo_client):
+    """Test initialization from a GCS download."""
+    repo_manager._use_gcs = True
+
+    with (
+        patch.object(repo_manager, "_clone_repo") as mock_clone,
+        patch.object(repo_manager, "gcs_archive_exists", return_value=True) as mock_gcs_exists,
+        patch.object(repo_manager, "download_from_gcs") as mock_download,
+        patch.object(repo_manager, "_sync_repo") as mock_sync,
+        patch.object(repo_manager, "_copy_repo", return_value="copied_repo_path") as mock_copy,
+        patch.object(repo_manager, "upload_to_gcs") as mock_upload,
+    ):
+        repo_manager.initialize()
+
+        # Verify sequence
+        mock_clone.assert_not_called()
+        mock_gcs_exists.assert_called_once()
+        mock_download.assert_called_once()
+        mock_sync.assert_called_once()
+        mock_copy.assert_not_called()
+        mock_upload.assert_not_called()
         assert repo_manager.initialization_future is None
 
 
 def test_initialize_cleans_up_on_timeout(repo_manager):
     """Test that initialization cleans up when timed out."""
-    repo_manager._has_timed_out = True
+    repo_manager._cancelled = True
 
     with (
         patch.object(repo_manager, "_clone_repo") as mock_clone,
@@ -229,5 +262,5 @@ def test_initialize_cleans_up_on_timeout(repo_manager):
     ):
         repo_manager.initialize()
 
-        mock_clone.assert_called_once()
+        mock_clone.assert_not_called()
         mock_cleanup.assert_called_once()
