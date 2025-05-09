@@ -102,14 +102,16 @@ class RepoManager:
             self.git_repo = git.Repo.clone_from(
                 repo_clone_url,
                 self.repo_path,
-                depth=1,
                 progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
+                depth=1,
+                no_checkout=True,
             )
-            # Fetch the specific commit if it's not present
+            # Fetch the specific commit
             try:
                 self.git_repo.git.fetch("origin", commit_sha, depth=1)
             except git.GitCommandError as e:
                 logger.error(f"Could not fetch specific commit {commit_sha}: {e}")
+                raise
             # Checkout the specific commit
             self.git_repo.git.checkout(commit_sha)
             end_time = time.time()
