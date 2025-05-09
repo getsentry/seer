@@ -63,14 +63,16 @@ class BaseTools:
 
         org_id = self.context.state.get().request.organization_id
         project_id = self.context.state.get().request.project_id
-        use_gcs = org_id == 1 and project_id == 6178942  # Seer
 
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
             repo_manager = RepoManager(
-                repo_client, trigger_liveness_probe=self._trigger_liveness_probe, use_gcs=use_gcs
+                repo_client,
+                trigger_liveness_probe=self._trigger_liveness_probe,
+                organization_id=org_id,
+                project_id=project_id,
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager

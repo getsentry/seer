@@ -14,6 +14,7 @@ from google.cloud import storage
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir
 from seer.configuration import AppConfig
+from seer.db import DbSeerRepoArchive, Session
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ class RepoManager:
     repo_path: str
     initialization_future: Future | None
 
+    organization_id: int
+    project_id: int
+
     _use_gcs: bool
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
@@ -52,8 +56,9 @@ class RepoManager:
         self,
         repo_client: RepoClient,
         *,
+        organization_id: int,
+        project_id: int,
         trigger_liveness_probe: Callable[[], None] | None = None,
-        use_gcs: bool = False,
         config: AppConfig = injected,
     ):
         """
@@ -67,11 +72,16 @@ class RepoManager:
         self.repo_path = os.path.join(self.tmp_dir, "repo")
         self.initialization_future = None
 
+        self.organization_id = organization_id
+        self.project_id = project_id
+
         self._trigger_liveness_probe = trigger_liveness_probe
         self._cancelled = False
         self._last_liveness_update = 0.0
-        self._use_gcs = use_gcs
         self._app_config = config
+
+        # self._use_gcs = org_id == 1 and project_id == 6178942  # Seer
+        self._use_gcs = True
 
     @property
     def is_available(self):
@@ -107,7 +117,8 @@ class RepoManager:
             if self._cancelled:
                 return
 
-            if not self._use_gcs or not self.gcs_archive_exists():
+            db_archive_entry: DbSeerRepoArchive | None = None
+            if not self._use_gcs or not (db_archive_entry := self.gcs_archive_exists()):
                 self._clone_repo()
 
                 if self._use_gcs:
@@ -122,6 +133,31 @@ class RepoManager:
                 return
 
             self._sync_repo()
+
+            if db_archive_entry:
+                original_timestamp = self.repo_client.get_current_commit_info(
+                    db_archive_entry.commit_sha
+                )["timestamp"]
+                new_commit_time = self.repo_client.get_current_commit_info(
+                    self.repo_client.base_commit_sha
+                )["timestamp"]
+
+                print(f"original_timestamp: {original_timestamp}")
+                print(f"new_commit_time: {new_commit_time}")
+
+                if new_commit_time > original_timestamp:
+                    logger.info(
+                        f"Repository {self.repo_client.repo_full_name} after syncing is in a newer state than before syncing",
+                    )
+                    if self._use_gcs:
+                        logger.info(
+                            f"Uploading newer state of repository {self.repo_client.repo_full_name} to GCS"
+                        )
+                        self.upload_to_gcs()
+                else:
+                    logger.info(
+                        f"Repository {self.repo_client.repo_full_name} after syncing is in an older state than before syncing",
+                    )
         except Exception:
             logger.exception(
                 "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
@@ -207,21 +243,41 @@ class RepoManager:
         Should silently error to Sentry.
         """
         if self._cancelled:
-            raise RepoInitializationError("Repository has been cancelled")
+            return logger.exception(
+                RepoInitializationError("Repository has been cancelled"),
+                extra={"repo": self.repo_client.repo_full_name},
+            )
 
         if self.git_repo is None:
-            raise RepoInitializationError("Repository is not cloned")
+            return logger.exception(
+                RepoInitializationError("Repository is not cloned"),
+                extra={"repo": self.repo_client.repo_full_name},
+            )
 
         if self.git_repo.head.commit.hexsha != self.repo_client.base_commit_sha:
-            raise RepoInitializationError("Repository is not at the right commit")
+            return logger.exception(
+                RepoInitializationError("Repository is not at the right commit"),
+                extra={"repo": self.repo_client.repo_full_name},
+            )
 
+        invalid_file_paths = set()
         repo_file_paths = self.repo_client.get_valid_file_paths()
         for file_path in repo_file_paths:
             if not os.path.exists(os.path.join(self.repo_path, file_path)):
-                logger.exception(
-                    "Repository failed validation and is missing file",
-                    extra={"file_path": file_path, "repo": self.repo_client.repo_full_name},
-                )
+                invalid_file_paths.add(file_path)
+
+        if invalid_file_paths:
+            logger.exception(
+                RepoInitializationError("Repository failed validation and is missing files"),
+                extra={
+                    "repo": self.repo_client.repo_full_name,
+                    "invalid_file_paths": invalid_file_paths,
+                },
+            )
+        else:
+            logger.info(
+                f"Repository {self.repo_client.repo_full_name} passed validation with no missing files",
+            )
 
     def _throttled_liveness_probe(self):
         """
@@ -277,6 +333,8 @@ class RepoManager:
         copied_repo_path = self._copy_repo()
         self._prune_repo(repo_path=copied_repo_path)
 
+        # TODO: Add an upload locking mechanism to prevent race conditions
+
         # Create a temporary tar.gz file of the repository
         temp_tarfile = os.path.join(self.tmp_dir, "upload_repo_archive.tar.gz")
         try:
@@ -303,6 +361,33 @@ class RepoManager:
             logger.info(
                 f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
             )
+
+            with Session() as session:
+                existing_repo_archive = (
+                    session.query(DbSeerRepoArchive)
+                    .filter(
+                        DbSeerRepoArchive.organization_id == self.organization_id,
+                        DbSeerRepoArchive.project_id == self.project_id,
+                        DbSeerRepoArchive.bucket_name == self.bucket_name,
+                        DbSeerRepoArchive.blob_path == self.blob_name,
+                    )
+                    .first()
+                )
+
+                if existing_repo_archive is None:
+                    repo_archive = DbSeerRepoArchive(
+                        organization_id=self.organization_id,
+                        project_id=self.project_id,
+                        bucket_name=self.bucket_name,
+                        blob_path=self.blob_name,
+                        commit_sha=self.repo_client.base_commit_sha,
+                    )
+                    session.add(repo_archive)
+                else:
+                    existing_repo_archive.commit_sha = self.repo_client.base_commit_sha
+
+                session.commit()
+
         except Exception:
             logger.exception("Failed to upload repository to GCS")
             raise
@@ -328,7 +413,22 @@ class RepoManager:
         blob = bucket.blob(self.blob_name)
         blob.upload_from_filename(temp_tarfile)
 
-    def gcs_archive_exists(self):
+    def get_db_archive_entry(self):
+        with Session() as session:
+            repo_archive = (
+                session.query(DbSeerRepoArchive)
+                .filter(
+                    DbSeerRepoArchive.organization_id == self.organization_id,
+                    DbSeerRepoArchive.project_id == self.project_id,
+                    DbSeerRepoArchive.bucket_name == self.bucket_name,
+                    DbSeerRepoArchive.blob_path == self.blob_name,
+                )
+                .first()
+            )
+
+        return repo_archive
+
+    def gcs_archive_exists(self) -> DbSeerRepoArchive | None:
         """
         Check if an archive exists in GCS for this repository.
 
@@ -340,6 +440,10 @@ class RepoManager:
             logger.info(
                 f"Checking if repository archive exists in GCS: {self.bucket_name}/{self.blob_name}"
             )
+
+            if self.get_db_archive_entry() is None:
+                return None
+
             storage_client = storage.Client()
             bucket = storage_client.bucket(self.bucket_name)
             blob = bucket.blob(self.blob_name)
@@ -353,10 +457,13 @@ class RepoManager:
                     f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
                 )
 
-            return exists
+            if exists:
+                return self.get_db_archive_entry()
+            else:
+                return None
         except Exception:
             logger.exception("Error checking if repository archive exists in GCS")
-            return False
+            return None
 
     def download_from_gcs(self):
         """
