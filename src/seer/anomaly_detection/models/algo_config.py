@@ -115,6 +115,11 @@ class AlgoConfig(BaseModel):
         description="Flag to control if the matrix profile is normalized first",
     )
 
+    mp_use_approx: bool = Field(
+        True,
+        description="Flag to control if the matrix profile is computed using the approximate (SCRUMP)algorithm",
+    )
+
     prophet_uncertainty_samples: int = Field(
         ...,
         description="Number of montecarlo simulations to run to compute uncertainty intervals",
