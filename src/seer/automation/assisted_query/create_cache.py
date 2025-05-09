@@ -9,6 +9,22 @@ from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
 
+REQUEST_VALUES_LIMIT = 125
+REQUIRED_FIELD_PREFIXES = [
+    "span.",
+    "transaction",
+    "user.",
+    "http.",
+    "request.",
+    "db.",
+    "project.",
+    "trace.",
+    "organization.",
+    "user",
+    "release",
+    "ai.",
+]
+
 
 @inject
 def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> CreateCacheResponse:
@@ -29,12 +45,28 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
         "get_attribute_names", org_id=org_id, project_ids=project_ids, stats_period="48h"
     )
 
-    fields = fields_response.get("fields", []) if fields_response else []
-    logger.info(f"Fetched {len(fields)} attribute names")
+    all_fields = fields_response.get("fields", []) if fields_response else []
+
+    # Filter out numeric tags
+    string_fields = [
+        field for field in all_fields if not (field.startswith("tags[") and ",number]" in field)
+    ]
+    filtered_fields = string_fields
+
+    # Include the most important fields for this portion of the query until we reach the limit
+    if len(string_fields) > REQUEST_VALUES_LIMIT:
+        filtered_fields = []
+        for prefix in REQUIRED_FIELD_PREFIXES:
+            filtered_fields.extend([field for field in string_fields if field.startswith(prefix)])
+        for field in string_fields:
+            if len(filtered_fields) >= REQUEST_VALUES_LIMIT:
+                break
+            if field not in filtered_fields:
+                filtered_fields.append(field)
 
     field_values_response = client.call(
         "get_attribute_values",
-        fields=fields,
+        fields=filtered_fields,
         org_id=org_id,
         project_ids=project_ids,
         stats_period="48h",
@@ -42,10 +74,8 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
     )
 
     field_values = field_values_response.get("field_values", {}) if field_values_response else {}
-    total_values = sum(len(values) for values in field_values.values())
-    logger.info(f"Fetched {total_values} total values across {len(field_values)} fields")
 
-    cache_prompt = get_cache_prompt(fields=fields, field_values=field_values)
+    cache_prompt = get_cache_prompt(fields=all_fields, field_values=field_values)
 
     cache_name = LlmClient().create_cache(
         display_name=cache_diplay_name, contents=cache_prompt, model=get_model_provider()
