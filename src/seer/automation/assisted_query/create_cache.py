@@ -1,9 +1,13 @@
+import logging
+
 from seer.automation.agent.client import LlmClient
 from seer.automation.assisted_query.models import CreateCacheRequest, CreateCacheResponse
 from seer.automation.assisted_query.prompts import get_cache_prompt
 from seer.automation.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
+
+logger = logging.getLogger(__name__)
 
 
 @inject
@@ -26,6 +30,7 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
     )
 
     fields = fields_response.get("fields", []) if fields_response else []
+    logger.info(f"Fetched {len(fields)} attribute names")
 
     field_values_response = client.call(
         "get_attribute_values",
@@ -37,6 +42,8 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
     )
 
     field_values = field_values_response.get("field_values", {}) if field_values_response else {}
+    total_values = sum(len(values) for values in field_values.values())
+    logger.info(f"Fetched {total_values} total values across {len(field_values)} fields")
 
     cache_prompt = get_cache_prompt(fields=fields, field_values=field_values)
 
