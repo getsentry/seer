@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Any
 
+
 import billiard  # type: ignore[import-untyped]
 from celery import Celery, signals
 from sentry_sdk.integrations.celery import CeleryIntegration
@@ -9,6 +10,7 @@ from sentry_sdk.integrations.celery import CeleryIntegration
 from celery_app.config import CeleryConfig
 from seer.bootup import bootup
 from seer.dependency_injection import inject, injected
+from seer.logging import setup_logger
 
 logger = logging.getLogger(__name__)
 celery_app = Celery("seer")
@@ -84,3 +86,15 @@ def handle_task_internal_error(**kwargs):
 @signals.task_failure.connect
 def handle_task_failure(**kwargs):
     logger.error("Task failed", exc_info=kwargs["exception"])
+
+
+# 3) Patch Celery's worker logger
+@signals.after_setup_logger.connect
+def patch_worker_logger(logger: logging.Logger, **kwargs):
+    setup_logger(logger)
+
+
+# 4) Patch Celery's per-task logger (if you want to catch task-level logs too)
+@signals.after_setup_task_logger.connect
+def patch_task_logger(logger: logging.Logger, **kwargs):
+    setup_logger(logger)

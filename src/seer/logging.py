@@ -8,74 +8,14 @@ from structlog import get_logger
 
 from seer.dependency_injection import Labeled, Module, inject, injected
 
-DefaultLoggingHandlers = Annotated[list[logging.Handler], Labeled("default")]
-LogLevel = Annotated[int, Labeled("log_level")]
-LoggingPrefixes = Annotated[list[str], Labeled("logging_prefixes")]
 
-logging_module = Module()
+class SubstringFilter(logging.Filter):
+    def __init__(self, substrings: list[str]):
+        self.substrings = substrings
 
-logging_module.constant(LogLevel, logging.INFO)
-logging_module.constant(LoggingPrefixes, ["seer.", "celery_app."])
-
-
-@logging_module.provider
-def default_handlers() -> DefaultLoggingHandlers:
-    return [StructLogHandler(sys.stdout)]
-
-
-@inject
-def initialize_logs(
-    prefixes: list[str],
-    handlers: DefaultLoggingHandlers = injected,
-    log_level: LogLevel = injected,
-):
-    for log_name in logging.root.manager.loggerDict:
-        if any(log_name.startswith(prefix) for prefix in prefixes):
-            logger = logging.getLogger(log_name)
-            logger.setLevel(log_level)
-            for handler in handlers:
-                logger.addHandler(handler)
-
-    structlog.configure(
-        processors=[
-            structlog.stdlib.add_log_level,
-            structlog.processors.format_exc_info,
-            structlog.processors.JSONRenderer(),
-        ]
-    )
-
-
-class StructLogHandler(logging.StreamHandler):
-    def get_log_kwargs(self, record, logger):
-        kwargs = {k: v for k, v in vars(record).items() if k not in throwaways and v is not None}
-        kwargs.update({"level": record.levelno, "event": record.msg})
-
-        if record.args:
-            # record.args inside of LogRecord.__init__ gets unrolled
-            # if it's the shape `({},)`, a single item dictionary.
-            # so we need to check for this, and re-wrap it because
-            # down the line of structlog, it's expected to be this
-            # original shape.
-            if isinstance(record.args, (tuple, list)):
-                kwargs["positional_args"] = record.args
-            else:
-                kwargs["positional_args"] = (record.args,)
-
-        return kwargs
-
-    def emit(self, record, logger=None):
-        # If anyone wants to use the 'extra' kwarg to provide context within
-        # structlog, we have to strip all of the default attributes from
-        # a record because the RootLogger will take the 'extra' dictionary
-        # and just turn them into attributes.
-        try:
-            if logger is None:
-                logger = get_logger()
-
-            logger.log(**self.get_log_kwargs(record=record, logger=logger))
-        except Exception:
-            if logging.raiseExceptions:
-                raise
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not any(substring in message for substring in self.substrings)
 
 
 class GunicornHealthCheckFilterLogger(GunicornBaseLogger):
@@ -84,26 +24,35 @@ class GunicornHealthCheckFilterLogger(GunicornBaseLogger):
             super().access(resp, req, environ, request_time)
 
 
-throwaways = frozenset(
-    (
-        "threadName",
-        "thread",
-        "created",
-        "process",
-        "processName",
-        "args",
-        "module",
-        "filename",
-        "levelno",
-        "exc_text",
-        "msg",
-        "pathname",
-        "lineno",
-        "funcName",
-        "relativeCreated",
-        "levelname",
-        "msecs",
-    )
-)
+def setup_logger(logger: logging.Logger):
+    # Remove existing filters to avoid duplication
+    for filter in logger.filters[:]:
+        if isinstance(filter, SubstringFilter):
+            logger.removeFilter(filter)
 
-logging_module.enable()
+    logger.addFilter(
+        SubstringFilter(
+            [
+                "AFC is enabled",  # Google genai library logs this
+                "AFC remote call",  # Google genai library logs this
+                "Item exceeds size limit",  # Langfuse
+            ]
+        )
+    )
+    logger.setLevel(logging.INFO)
+
+
+# Set up root logger and module loggers
+root_loggers = [logging.getLogger(__name__), logging.getLogger()]
+celery_loggers = [
+    logging.getLogger("celery"),
+    logging.getLogger("celery.worker"),
+    logging.getLogger("celery.app.trace"),
+    logging.getLogger("celery.worker.strategy"),
+    logging.getLogger("celery.worker.consumer"),
+    logging.getLogger("celery.concurrency"),
+]
+library_loggers = [logging.getLogger("langfuse")]
+loggers = root_loggers + celery_loggers + library_loggers
+for logger in loggers:
+    setup_logger(logger)

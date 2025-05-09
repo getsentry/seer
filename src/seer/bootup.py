@@ -1,5 +1,6 @@
 import logging
 
+
 import sentry_sdk
 from psycopg import Connection
 from sentry_sdk.integrations import Integration
@@ -10,7 +11,10 @@ from seer.configuration import AppConfig
 from seer.db import initialize_database
 from seer.dependency_injection import Module, inject, injected
 from seer.inference_models import initialize_models
-from seer.logging import initialize_logs
+
+# Make sure this import is here
+import seer.logging  # noqa: F401
+
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,6 @@ def bootup(
 ):
     initialize_sentry_sdk(integrations)
     with sentry_sdk.metrics.timing(key="seer_bootup_time"):
-        initialize_logs(["seer.", "celery_app."])
         config.do_validation()
         initialize_database()
         initialize_models(start_model_loading)
