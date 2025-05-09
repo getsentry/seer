@@ -33,7 +33,7 @@ def test_clone_success(repo_manager, mock_repo_client, caplog):
 
     # Setup mock repo client to return a local file URL and a fake commit sha
     mock_repo_client.get_clone_url_with_auth.return_value = "file:///fake/repo.git"
-    mock_repo_client.base_commit_sha = "deadbeef"
+    mock_repo_client.base_commit_sha = "fakecommit"
 
     # Create a mock git.Repo object with mock git attribute
     mock_git = MagicMock()
@@ -55,15 +55,15 @@ def test_clone_success(repo_manager, mock_repo_client, caplog):
         )
 
         # Verify fetch and checkout were called with correct arguments
-        mock_git.fetch.assert_called_once_with("origin", "deadbeef", depth=1)
-        mock_git.checkout.assert_called_once_with("deadbeef")
+        mock_git.fetch.assert_called_once_with("origin", "fakecommit", depth=1)
+        mock_git.checkout.assert_called_once_with("fakecommit")
 
         # Verify the repo was set
         assert repo_manager.git_repo == mock_git_repo
 
         # Check logging
         assert "Cloning repository test-owner/test-repo" in caplog.text
-        assert "Cloned and checked out repository at commit deadbeef" in caplog.text
+        assert "Cloned and checked out repository at commit fakecommit" in caplog.text
 
 
 def test_clone_failure_clears_repo(repo_manager, mock_repo_client, caplog):
