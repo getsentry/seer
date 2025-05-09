@@ -36,7 +36,7 @@ class RepoManager:
     _use_gcs: bool
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
-    _has_timed_out: bool
+    _cancelled: bool
 
     def __init__(
         self,
@@ -51,13 +51,13 @@ class RepoManager:
         self.repo_client = repo_client
         self.git_repo = None
         self.tmp_dir = tempfile.mkdtemp(
-            prefix=f"{self.repo_client.repo_owner}-{self.repo_client.repo_name}_{self.repo_client.base_commit_sha}"
+            prefix=f"{self.repo_client.repo_owner}-{self.repo_client.repo_name}"
         )
         self.repo_path = os.path.join(self.tmp_dir, "repo")
         self.initialization_future = None
 
         self._trigger_liveness_probe = trigger_liveness_probe
-        self._has_timed_out = False
+        self._cancelled = False
         self._last_liveness_update = 0.0
         self._use_gcs = use_gcs
 
@@ -72,7 +72,7 @@ class RepoManager:
 
     @property
     def blob_name(self):
-        return f"repos/{self.repo_client.repo_owner}/{self.repo_client.repo_name}.tar.gz"
+        return f"repos/{self.repo_client.provider}/{self.repo_client.repo_owner}/{self.repo_client.repo_name}_{self.repo_client.repo_external_id}.tar.gz"
 
     def initialize_in_background(self):
         logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
@@ -96,7 +96,7 @@ class RepoManager:
             else:
                 self.download_from_gcs()
 
-            if self._has_timed_out:
+            if self._cancelled:
                 return
 
             self._sync_repo()
@@ -109,7 +109,7 @@ class RepoManager:
         finally:
             self.initialization_future = None
 
-            if self._has_timed_out:
+            if self._cancelled:
                 self.cleanup()
 
     @sentry_sdk.trace
@@ -370,9 +370,8 @@ class RepoManager:
 
             logger.info(f"Extracted repository archive to {self.repo_path}")
 
-            # Do a debug ls of the repo path
-            logger.info(f"Debug ls of repo path: {self.repo_path}")
-            logger.info(os.listdir(self.repo_path))
+            # Do a debug ls of the repo path, to ensure the archive was extracted correctly
+            logger.debug(f"Debug ls of repo path {self.repo_path}: {os.listdir(self.repo_path)}")
 
             self.git_repo = git.Repo(self.repo_path)
 
@@ -388,7 +387,7 @@ class RepoManager:
     def mark_as_timed_out(self):
         if self.initialization_future:
             # Have the thread deal with cleanup
-            self._has_timed_out = True
+            self._cancelled = True
         else:
             # Do it now
             self.cleanup()
@@ -397,16 +396,16 @@ class RepoManager:
         """
         Clean up the temporary directory if it exists.
         """
-        if self.repo_path and os.path.exists(self.repo_path):
+        if self.tmp_dir and os.path.exists(self.tmp_dir):
             try:
-                cleanup_dir(self.repo_path)
+                cleanup_dir(self.tmp_dir)
             except Exception as e:
                 logger.error(f"Error during repo cleanup, but continuing: {e}")
             finally:
                 # Ensure we null out paths even if cleanup fails
                 self.repo_path = None
                 self.git_repo = None
-
-        self._has_timed_out = False
+                self.tmp_dir = None
+                self._cancelled = True
 
         logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
