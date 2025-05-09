@@ -88,24 +88,6 @@ def test_clone_failure_clears_repo(repo_manager, mock_repo_client, caplog):
         assert "Failed to clone repository" in caplog.text
 
 
-def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
-    """Test that sync failure clears the repo reference."""
-    caplog.set_level(logging.ERROR)
-
-    # Setup mock git repo that raises on execute
-    mock_git_repo = MagicMock(spec=git.Repo)
-    mock_git_repo.git.execute.side_effect = Exception("Sync failed")
-    repo_manager.git_repo = mock_git_repo
-
-    repo_manager._sync_repo()
-
-    # Verify repo was cleared
-    assert repo_manager.git_repo is None
-
-    # Verify error was logged
-    assert f"Failed to sync repository {mock_repo_client.repo_full_name}" in caplog.text
-
-
 def test_mark_as_timed_out_before_init(repo_manager):
     """Test marking as timed out before initialization."""
     repo_path = repo_manager.repo_path
@@ -192,15 +174,11 @@ def test_initialize_in_background(repo_manager, caplog):
 
 def test_initialize_success(repo_manager, mock_repo_client):
     """Test successful initialization sequence."""
-    with (
-        patch.object(repo_manager, "_clone_repo") as mock_clone,
-        patch.object(repo_manager, "_sync_repo") as mock_sync,
-    ):
+    with (patch.object(repo_manager, "_clone_repo") as mock_clone,):
         repo_manager.initialize()
 
         # Verify sequence
         mock_clone.assert_called_once()
-        mock_sync.assert_called_once()
         assert repo_manager.initialization_future is None
 
 
