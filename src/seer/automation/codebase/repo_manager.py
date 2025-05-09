@@ -71,11 +71,9 @@ class RepoManager:
             self._clone_repo()
             if self._has_timed_out:
                 return
-            self._sync_repo()
-        except Exception:
-            logger.exception(
-                "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
-            )
+        except Exception as e:
+            logger.error(f"Failed to initialize repo {self.repo_client.repo_full_name}: {e}")
+
             self.cleanup()
             raise
         finally:
@@ -87,9 +85,11 @@ class RepoManager:
     @sentry_sdk.trace
     def _clone_repo(self) -> str:
         """
-        Clone a repository to a local temporary directory.
+        Clone a repository to a local temporary directory and checkout a specific commit.
+        Reason to checkout specific commit - AIML-286
         """
         repo_clone_url = self.repo_client.get_clone_url_with_auth()
+        commit_sha = self.repo_client.base_commit_sha
 
         try:
             logger.info(
@@ -99,14 +99,25 @@ class RepoManager:
             cleanup_dir(self.repo_path)
 
             start_time = time.time()
+            # Clone with no checkout to allow checking out a specific commit
             self.git_repo = git.Repo.clone_from(
                 repo_clone_url,
                 self.repo_path,
                 progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
                 depth=1,
             )
+            # Fetch the specific commit
+            try:
+                self.git_repo.git.fetch("origin", commit_sha, depth=1)
+            except git.GitCommandError as e:
+                logger.error(f"Could not fetch specific commit {commit_sha}: {e}")
+                raise
+            # Checkout the specific commit
+            self.git_repo.git.checkout(commit_sha)
             end_time = time.time()
-            logger.info(f"Cloned repository in {end_time - start_time} seconds")
+            logger.info(
+                f"Cloned and checked out repository at commit {commit_sha} in {end_time - start_time:.4f} seconds"
+            )
 
             return self.repo_path
         except Exception:
@@ -115,32 +126,6 @@ class RepoManager:
             )
             self.git_repo = None  # clear the repo to fail the available check
             raise
-
-    @sentry_sdk.trace
-    def _sync_repo(self):
-        """
-        Ensure the repository is up to date with only the target commit.
-        """
-        logger.info(f"Syncing repository {self.repo_client.repo_full_name}")
-
-        try:
-            start_time = time.time()
-
-            commit_sha = self.repo_client.base_commit_sha
-
-            # Fetch only the specific commit
-            self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
-            self.git_repo.git.checkout(commit_sha)
-
-            end_time = time.time()
-            logger.info(
-                f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
-            )
-        except Exception:
-            logger.exception(
-                "Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
-            )
-            self.git_repo = None  # clear the repo to fail the available check
 
     def _throttled_liveness_probe(self):
         """
