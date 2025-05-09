@@ -70,9 +70,13 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 corrected_repo_name = self.context.autocorrect_repo_name(file["repo_name"])
                 if corrected_repo_name is None:
                     continue
-
-                file_content = self.context.get_file_contents(
+                corrected_file_path = self.context.autocorrect_file_path(
                     path=file["file_path"], repo_name=corrected_repo_name
+                )
+                if not corrected_file_path:
+                    continue
+                file_content = self.context.get_file_contents(
+                    path=corrected_file_path, repo_name=corrected_repo_name
                 )
             except Exception as e:
                 logger.exception(f"Error getting file contents in memory prefill: {e}")
@@ -81,13 +85,13 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             if file_content:
                 agent_message = Message(
                     role="tool_use",
-                    content=f"Expand document: {file['file_path']} in {file['repo_name']}",
+                    content=f"Expand document: {corrected_file_path} in {corrected_repo_name}",
                     tool_calls=[
                         ToolCall(
                             id=str(i),
                             function="expand_document",
                             args=json.dumps(
-                                {"file_path": file["file_path"], "repo_name": file["repo_name"]}
+                                {"file_path": corrected_file_path, "repo_name": corrected_repo_name}
                             ),
                         )
                     ],
