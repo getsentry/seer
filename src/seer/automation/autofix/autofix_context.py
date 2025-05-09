@@ -220,6 +220,27 @@ class AutofixContext(PipelineContext):
         repo_client = self.get_repo_client(repo_name)
         return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
 
+    def attempt_fix_path(self, path: str, repo_name: str) -> str | None:
+        """
+        Attempts to fix a path by checking if it exists in the repository as a path or directory.
+        """
+        repo_client = self.get_repo_client(repo_name=repo_name)
+        all_files = repo_client.get_valid_file_paths()
+
+        normalized_path = path.lstrip("./").lstrip("/")
+        if not normalized_path:
+            return None
+
+        for p in all_files:
+            if p.endswith(normalized_path):
+                # is a valid file path
+                return p
+            if p.startswith(normalized_path):
+                # is a valid directory path
+                return normalized_path
+
+        return None
+
     def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
