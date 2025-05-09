@@ -70,7 +70,7 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                 corrected_repo_name = self.context.autocorrect_repo_name(file["repo_name"])
                 if corrected_repo_name is None:
                     continue
-                corrected_file_path = self.context.attempt_fix_path(
+                corrected_file_path = self.context.autocorrect_file_path(
                     path=file["file_path"], repo_name=corrected_repo_name
                 )
                 if not corrected_file_path:

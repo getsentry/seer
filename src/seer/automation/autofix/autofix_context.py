@@ -220,7 +220,7 @@ class AutofixContext(PipelineContext):
         repo_client = self.get_repo_client(repo_name)
         return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
 
-    def attempt_fix_path(self, path: str, repo_name: str) -> str | None:
+    def autocorrect_file_path(self, path: str, repo_name: str) -> str | None:
         """
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
         """
