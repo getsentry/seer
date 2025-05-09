@@ -64,7 +64,7 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
             if field not in filtered_fields:
                 filtered_fields.append(field)
 
-    field_values_response = client.call(
+    filtered_field_values_response = client.call(
         "get_attribute_values",
         fields=filtered_fields,
         org_id=org_id,
@@ -73,9 +73,13 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
         limit=5,
     )
 
-    field_values = field_values_response.get("field_values", {}) if field_values_response else {}
+    filtered_field_values = (
+        filtered_field_values_response.get("field_values", {})
+        if filtered_field_values_response
+        else {}
+    )
 
-    cache_prompt = get_cache_prompt(fields=all_fields, field_values=field_values)
+    cache_prompt = get_cache_prompt(fields=all_fields, field_values=filtered_field_values)
 
     cache_name = LlmClient().create_cache(
         display_name=cache_diplay_name, contents=cache_prompt, model=get_model_provider()
