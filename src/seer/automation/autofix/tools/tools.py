@@ -495,7 +495,7 @@ class BaseTools:
             if not fixed_repo_name:
                 return self._make_repo_not_found_error_message(repo_name)
             repo_name = fixed_repo_name
-            
+
         self._ensure_repos_downloaded(repo_name)
 
         if not query:
