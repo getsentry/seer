@@ -38,6 +38,7 @@ from seer.dependency_injection import inject, injected
 logger = logging.getLogger(__name__)
 
 
+@functools.lru_cache(maxsize=8)
 def get_github_app_auth_and_installation(
     app_id: int | str, private_key: str, repo_owner: str, repo_name: str
 ):
