@@ -151,11 +151,11 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         2. Pattern Recognition:
            - Look for common patterns in the available values before using wildcards
-           - For example, if you see multiple URLs like:
+           - For example, if you see multiple values like this for the span.description field:
              - youtube.com/video1
              - youtube.com/video2
              - youtube.com/video3
-           - Use span.description:"*youtube.com*" to match all YouTube URLs
+           - Use span.description:*youtube.com* to match all YouTube URLs
 
         3. Field-Specific Guidelines:
            - For fields like span.description that often contain URLs or paths:
