@@ -86,17 +86,23 @@ def validate_repo_branches_exist(
 
 def create_missing_codebase_states(state: ContinuationState) -> None:
     cur_state = state.get()
+    new_codebases = {}
+
     for repo in cur_state.request.repos:
         if repo.external_id not in cur_state.codebases:
-            with state.update() as cur:
-                cur.codebases[repo.external_id] = CodebaseState(
-                    file_changes=[],
-                    repo_external_id=repo.external_id,
-                )
+            new_codebases[repo.external_id] = CodebaseState(
+                file_changes=[],
+                repo_external_id=repo.external_id,
+            )
+
+    if new_codebases:
+        with state.update() as cur:
+            cur.codebases.update(new_codebases)
 
 
 def set_accessible_repos(state: ContinuationState) -> None:
     cur_state = state.get()
+
     for repo in cur_state.request.repos:
         if repo.provider == "github":
             is_readable = RepoClient.check_repo_read_access(repo)

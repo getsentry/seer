@@ -1,7 +1,8 @@
 import functools
 import logging
 import textwrap
-from typing import Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Mapping, Set, Tuple
 
 import sentry_sdk
 from github import UnknownObjectException
@@ -26,7 +27,7 @@ from seer.automation.state import State
 from seer.automation.summarize.issue import IssueSummaryWithScores
 from seer.automation.utils import AgentError
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
-from seer.dependency_injection import inject, injected
+from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
@@ -245,32 +246,56 @@ class AutofixContext(PipelineContext):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
-        for repo in self.repos:
-            if repo.provider not in RepoClient.supported_providers:
-                continue
+        supported_repos = [
+            repo for repo in self.repos if repo.provider in RepoClient.supported_providers
+        ]
 
+        repo_data: dict[str, Tuple[RepoClient, Set[str]]] = {}
+
+        def get_repo_data(repo):
             try:
                 repo_client = self.get_repo_client(
                     repo_external_id=repo.external_id, type=RepoClientType.READ
                 )
+                valid_file_paths = repo_client.get_valid_file_paths()
+                return repo.external_id, (repo_client, valid_file_paths)
             except UnknownObjectException:
                 self.event_manager.on_error(
                     error_msg=f"Autofix does not have access to the `{repo.full_name}` repo. Please give permission through the Sentry GitHub integration, or remove the repo from your code mappings.",
                     should_completely_error=True,
                 )
-                return
+                return None
 
-            valid_file_paths = repo_client.get_valid_file_paths()
-            for frame in stacktrace.frames:
-                if frame.in_app and frame.repo_name is None:
+        with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+            future_to_repo = {
+                executor.submit(get_repo_data, repo): repo for repo in supported_repos
+            }
+
+            for future in as_completed(future_to_repo):
+                result = future.result()
+                if result:
+                    repo_external_id, data = result
+                    repo_data[repo_external_id] = data
+
+        for frame in stacktrace.frames:
+            if frame.in_app and frame.repo_name is None:
+                for repo in supported_repos:
+                    if repo.external_id not in repo_data:
+                        continue
+
+                    _, valid_file_paths = repo_data[repo.external_id]
+
                     if frame.filename in valid_file_paths:
                         frame.repo_name = repo.full_name
+                        break
                     else:
                         for valid_path in valid_file_paths:
                             if potential_frame_match(valid_path, frame):
                                 frame.repo_name = repo.full_name
                                 frame.filename = valid_path
                                 break
+                        if frame.repo_name:
+                            break
 
     def process_event_paths(self, event: EventDetails):
         """
