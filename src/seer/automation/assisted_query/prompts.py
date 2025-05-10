@@ -141,8 +141,38 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         In the example above, the search query will match on browser values like "Safari 11.0.2", "Safari 11.0.3", etc.
 
-        If you ever need to search for a string match which is not very specific, you should use wildcards around the string to ensure you get the most relevant results.
-        For example, if you want to find all spans about a certain customer, say "acme", but you cannot find specific fields or values to search for,you should search for "span.description:"*acme*" so that you get all spans that contain the word "acme" in the description.
+        ### Smart Wildcard Usage Guidelines
+
+        When deciding whether to use wildcards, follow these guidelines:
+
+        1. Prefer Exact Matches:
+           - Always use exact values from the <available_values> section when they exist and are specific enough
+           - Only use wildcards when exact matches would be too restrictive or when you need to match a pattern
+
+        2. Pattern Recognition:
+           - Look for common patterns in the available values before using wildcards
+           - For example, if you see multiple URLs like:
+             - youtube.com/video1
+             - youtube.com/video2
+             - youtube.com/video3
+           - Use span.description:"*youtube.com*" to match all YouTube URLs
+
+        3. Field-Specific Guidelines:
+           - For fields like span.description that often contain URLs or paths:
+             - Use wildcards to match domain patterns (e.g., "*youtube.com*")
+             - Use wildcards to match path patterns (e.g., "*/api/users*")
+           - For fields like browser.name or os.name:
+             - Prefer exact matches when available
+             - Only use wildcards for version numbers (e.g., "Chrome 11*")
+           - For fields like user.email:
+             - Use exact matches when possible
+             - Use wildcards only for domain patterns (e.g., "*@company.com")
+
+        4. When to Avoid Wildcards:
+           - When the available values are specific and limited
+           - When exact matches would be more precise
+           - When the field is a numeric or boolean type
+           - When using comparison operators
 
         You may also combine operators like so:
 
@@ -304,22 +334,39 @@ def get_fields_and_values_prompt(
     natural_language_query: str, relevant_fields: list[str], field_values: dict[str, list[str]]
 ) -> str:
     return f"""
-        ## In a previous step, we have identified the following fields as relevant to the user's query:
+        ## Final Query Construction Guidelines
+
+        Based on the user's natural language query and the search guidelines provided, construct 3 options for the final query using the field names and appropriate values from the possible values.
+        You MUST use the values from the <available_values> section to construct the query. Follow these steps carefully for each query option:
+
+        1. Deeply analyze the available values for each field to identify patterns
+        2. For String fields, decide whether to use exact matches or wildcards based on the patterns found
+        3. For numeric fields, use comparison operators to find close or exact matches
+        4. Construct the query using the most appropriate matching strategy
+
+        Please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places.
+
+        You must ONLY use the fields and the values you've identified as relevant. DO NOT USE OR MAKE UP ANY OTHER FIELDS OR VALUES. THIS IS VERY IMPORTANT.
+
+        When thinking of the query options, please think about each step of the query and how confident you are that the query will return relevant results. You should show your work as you think through the query options, including:
+        - The patterns you identified in the values
+        - Why you chose to use (or not use) wildcards
+        - How the query matches the user's intent
+
+        Finally, select the best query option from the 3 options you have created. You should combine the best portions from each query you have generated if applicable.
+
+        ## We have identified the following fields as most relevant to the user's query:
+
         <available_fields>
         {relevant_fields}
         </available_fields>
+
         ## The possible values for these fields are:
-        Note: The values include the count of how many times the value occurred in the last 48 hours in order of most common to least common.
-        Use the values and the count to guide if you should use the field in the final query. '' indicates that the value has not been defined. If a field has '' as the only value or has a very high amount of '' values, then it is likely not a useful field to use since a query will likely not return any results.
+
         <available_values>
         {json.dumps(field_values, indent=2)}
         </available_values>
-        Based on the user's natural language query and the search guidelines provided, construct 3 options for the final query using the field names and appropriate values from the possible values.
-        You should use the values from the <available_values> section to construct the query. If you are not doing a general search using wildcards, DO NOT MAKE UP YOUR OWN VALUES. Try your best to use the specific values from the <available_values> section.
-        Also, please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places. The score MUST be 3 decimal places (ie: 0.104 or 0.872).
-        You must ONLY use the fields and the values you've identified as relevant. You can also use the raw search to search for specific values if there are no relevant fields or values. DO NOT USE OR MAKE UP ANY OTHER FIELDS OR VALUES. THIS IS VERY IMPORTANT.
-        When thinking of the query options, please think about each step of the query and how confident you are that the query will return relevant results. You should show your work as you think through the query options.
-        Finally, select the best query option from the 3 options you have created. You should combine the best portions from each query you have generated if applicable.
+
         Here is the user's natural language query:
         {natural_language_query}
         """
