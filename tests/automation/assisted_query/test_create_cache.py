@@ -90,7 +90,7 @@ class TestCreateCache(unittest.TestCase):
 
         # These fields should be filtered out
         fields.extend([f"tags[field{i},number]" for i in range(50)])
-        fields.extend([f"other.field{i}" for i in range(50)])
+        fields.extend([f"other.field{i}" for i in range(150)])
 
         mock_rpc_client_call.return_value = {
             "fields": fields,
