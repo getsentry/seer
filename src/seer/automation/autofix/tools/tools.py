@@ -486,6 +486,16 @@ class BaseTools:
         repo_name: str | None = None,
         use_regex: bool = False,
     ) -> str:
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
+
         self._ensure_repos_downloaded(repo_name)
 
         if not query:
@@ -568,6 +578,16 @@ class BaseTools:
         command = command.replace('\\"', '"')  # un-escape escaped quotes
         command = command.replace("\\'", "'")  # un-escape escaped single quotes
         command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
+
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
 
         self.context.event_manager.add_log(f"Searching files with `{command}`...")
 
