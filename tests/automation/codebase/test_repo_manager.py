@@ -115,7 +115,7 @@ def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
 
     # Setup mock git repo that raises on execute
     mock_git_repo = MagicMock(spec=git.Repo)
-    mock_git_repo.git.execute.side_effect = Exception("Sync failed")
+    mock_git_repo.git.fetch.side_effect = Exception("Sync failed")
     repo_manager.git_repo = mock_git_repo
 
     repo_manager._sync_repo()
