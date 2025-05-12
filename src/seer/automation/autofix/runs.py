@@ -99,12 +99,11 @@ def set_accessible_repos(state: ContinuationState) -> None:
     cur_state = state.get()
     for repo in cur_state.request.repos:
         if repo.provider == "github":
-            if RepoClient.check_repo_read_access(repo):
-                with state.update() as cur:
-                    cur.codebases[repo.external_id].is_readable = True
-            if RepoClient.check_repo_write_access(repo):
-                with state.update() as cur:
-                    cur.codebases[repo.external_id].is_writeable = True
+            is_readable = RepoClient.check_repo_read_access(repo)
+            is_writeable = RepoClient.check_repo_write_access(repo)
+            with state.update() as cur:
+                cur.codebases[repo.external_id].is_readable = bool(is_readable)
+                cur.codebases[repo.external_id].is_writeable = bool(is_writeable)
         else:
             with state.update() as cur:
                 cur.codebases[repo.external_id].is_readable = False
