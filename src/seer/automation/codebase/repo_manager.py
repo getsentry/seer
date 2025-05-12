@@ -89,7 +89,6 @@ class RepoManager:
     def _clone_repo(self) -> str:
         """
         Clone a repository to a local temporary directory and checkout a specific commit.
-        Reason to checkout specific commit - AIML-286
         """
         repo_clone_url = self.repo_client.get_clone_url_with_auth()
         commit_sha = self.repo_client.base_commit_sha
