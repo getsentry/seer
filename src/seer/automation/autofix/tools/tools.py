@@ -532,17 +532,8 @@ class BaseTools:
 
             cmd.append(tmp_repo_dir)
 
-            try:
-                return run_ripgrep_in_repo(tmp_repo_dir, cmd)
-            except RuntimeError as e:
-                error_msg = str(e)
-                if use_regex and "regex parse error" in error_msg:
-                    logger.info(
-                        "Failed to parse regex pattern, retrying with literal string search"
-                    )
-                    cmd.insert(1, "--fixed-strings")  # Insert flag right after rg
-                    return run_ripgrep_in_repo(tmp_repo_dir, cmd)
-                return error_msg
+            return run_ripgrep_in_repo(tmp_repo_dir, cmd)
+
         else:
             # Multiple repository search - we'll need to run separate commands for each repo
             # and combine results
