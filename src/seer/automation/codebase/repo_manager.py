@@ -136,7 +136,7 @@ class RepoManager:
             commit_sha = self.repo_client.base_commit_sha
 
             # Fetch only the specific commit
-            self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
+            self.git_repo.git.fetch("origin", commit_sha, depth=1)
             self.git_repo.git.checkout(commit_sha)
 
             end_time = time.time()

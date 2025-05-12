@@ -99,8 +99,8 @@ def test_sync_success(repo_manager, mock_repo_client, caplog):
     repo_manager._sync_repo()
 
     # Verify git commands were called
-    mock_git_repo.git.execute.assert_called_once_with(
-        ["git", "fetch", "--depth=1", "origin", mock_repo_client.base_commit_sha]
+    mock_git_repo.git.fetch.assert_called_once_with(
+        "origin", mock_repo_client.base_commit_sha, depth=1
     )
     mock_git_repo.git.checkout.assert_called_once_with(mock_repo_client.base_commit_sha)
 
