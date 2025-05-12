@@ -167,6 +167,14 @@ def run_report(dataset_name: str, run_name: str, hide_details: bool):
     )
     click.echo("└─────────────────────────────┴────────┴────────────┘")
 
+    click.echo("\n# Suggestion Count Distribution (All Items)")
+    click.echo("Suggestions | Count")
+    max_count = max(summary.suggestion_count_distribution.values())
+    bar_length = 30  # Maximum length of the bar
+    for suggestion_count, item_count in sorted(summary.suggestion_count_distribution.items()):
+        bar = "█" * int((item_count / max_count) * bar_length)
+        click.echo(f"{suggestion_count:>11.1f} | {bar} {item_count}")
+
     click.echo("\n# Positive Items Statistics (items with expected bugs)")
     click.echo(f"Total items: {summary.positive_items_summary.items_count}")
     click.echo("┌─────────────────────────────┬──────────┬──────────┐")
@@ -183,6 +191,23 @@ def run_report(dataset_name: str, run_name: str, hide_details: bool):
     )
     click.echo("└─────────────────────────────┴──────────┴──────────┘")
 
+    click.echo("\n# Quality Metrics")
+    click.echo("┌─────────────────────────────┬──────────┐")
+    click.echo("│ Metric                      │  Score   │")
+    click.echo("├─────────────────────────────┼──────────┤")
+    click.echo(
+        f"│ Precision                   │ {summary.positive_items_summary.precision:>8.2f} │"
+    )
+    click.echo(f"│ Recall                      │ {summary.positive_items_summary.recall:>8.2f} │")
+    click.echo(f"│ F1 Score                    │ {summary.positive_items_summary.f1_score:>8.2f} │")
+    click.echo(
+        f"│ Avg Content Match           │ {summary.positive_items_summary.avg_content_match:>8.2f} │"
+    )
+    click.echo(
+        f"│ Avg Location Match          │ {summary.positive_items_summary.avg_location_match:>8.2f} │"
+    )
+    click.echo("└─────────────────────────────┴──────────┘")
+
     click.echo("\n# Negative Items Statistics (items without expected bugs)")
     click.echo(f"Total items: {summary.negative_items_summary.items_count}")
     click.echo("┌─────────────────────────────┬──────────┬──────────┐")
@@ -192,6 +217,16 @@ def run_report(dataset_name: str, run_name: str, hide_details: bool):
         f"│ Total suggested bugs        │ {(summary.negative_items_summary.total_suggested_bugs / summary.negative_items_summary.items_count):>8.2f} │ {summary.negative_items_summary.total_suggested_bugs:>8.2f} │"
     )
     click.echo("└─────────────────────────────┴──────────┴──────────┘")
+
+    click.echo("\n# False positives distribution")
+    click.echo("False Positives | Count")
+    max_count = max(summary.negative_items_summary.false_positives_distribution.values())
+    bar_length = 30  # Maximum length of the bar
+    for fp_count, item_count in sorted(
+        summary.negative_items_summary.false_positives_distribution.items()
+    ):
+        bar = "█" * int((item_count / max_count) * bar_length)
+        click.echo(f"{fp_count:>15.1f} | {bar} {item_count}")
 
     if not hide_details:
         click.echo("\n# Items details")
@@ -397,12 +432,18 @@ class PositiveItemsSummary:
     total_bugs_expected: int
     total_bugs_found: int
     total_suggested_bugs: int
+    avg_content_match: float
+    avg_location_match: float
+    precision: float
+    recall: float
+    f1_score: float
 
 
 @dataclass
 class NegativeItemsSummary:
     items_count: int
     total_suggested_bugs: int
+    false_positives_distribution: dict[int, int]  # Maps number of false positives to count of items
 
 
 @dataclass
@@ -412,6 +453,7 @@ class RunSummaryInfo:
     item_details: list[RelevantItemInfo]
     positive_items_summary: PositiveItemsSummary
     negative_items_summary: NegativeItemsSummary
+    suggestion_count_distribution: dict[int, int]  # Maps number of suggestions to count of items
 
 
 def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> RelevantItemInfo:
@@ -470,29 +512,77 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
 
     # Calculate averages for successful evaluations only
     successful_items = [item for item in items_in_run if item.was_evaluated_successfully]
-    positive_items_summary: dict[str, int] = {
+    positive_items_summary: dict = {
         "items_count": 0,
         "total_bugs_found": 0,
         "total_bugs_expected": 0,
         "total_suggested_bugs": 0,
+        "total_content_match": 0.0,
+        "total_location_match": 0.0,
     }
-    negative_items_summary: dict[str, int] = {"items_count": 0, "total_suggested_bugs": 0}
+    negative_items_summary: dict = {
+        "items_count": 0,
+        "total_suggested_bugs": 0,
+        "false_positives_distribution": {},
+    }
+    suggestion_count_distribution: dict[int, int] = {}
 
     for item in successful_items:
-        # Bugs found score includes a comment that starts with "Expected number of bugs: X;"
         item_detailed_scores = calculate_item_detailed_scores(item)
         if item_detailed_scores is None:
             click.echo(f"! Bugs found score not found for item {item.item_id}. Ignoring item.")
             continue
 
+        # Update overall suggestion count distribution
+        suggestion_count = item_detailed_scores.suggestions_count
+        current_count = suggestion_count_distribution.get(suggestion_count, 0)
+        suggestion_count_distribution[suggestion_count] = current_count + 1
+
         if item_detailed_scores.bugs_expected == 0:
+            # Negative item (no expected bugs)
             negative_items_summary["items_count"] += 1
-            negative_items_summary["total_suggested_bugs"] += item_detailed_scores.suggestions_count
+            negative_items_summary["total_suggested_bugs"] += suggestion_count
+
+            # Update false positives distribution
+            current_count = negative_items_summary["false_positives_distribution"].get(
+                suggestion_count, 0
+            )
+            negative_items_summary["false_positives_distribution"][suggestion_count] = (
+                current_count + 1
+            )
         else:
+            # Positive item (has expected bugs)
             positive_items_summary["items_count"] += 1
             positive_items_summary["total_bugs_found"] += item_detailed_scores.bugs_found
             positive_items_summary["total_bugs_expected"] += item_detailed_scores.bugs_expected
-            positive_items_summary["total_suggested_bugs"] += item_detailed_scores.suggestions_count
+            positive_items_summary["total_suggested_bugs"] += suggestion_count
+            positive_items_summary["total_content_match"] += item_detailed_scores.content_match
+            positive_items_summary["total_location_match"] += item_detailed_scores.location_match
+
+    # Calculate precision, recall, and F1 score
+    precision = (
+        positive_items_summary["total_bugs_found"] / positive_items_summary["total_suggested_bugs"]
+        if positive_items_summary["total_suggested_bugs"] > 0
+        else 0.0
+    )
+    recall = (
+        positive_items_summary["total_bugs_found"] / positive_items_summary["total_bugs_expected"]
+        if positive_items_summary["total_bugs_expected"] > 0
+        else 0.0
+    )
+    f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    # Calculate averages for content and location match
+    avg_content_match = (
+        positive_items_summary["total_content_match"] / positive_items_summary["items_count"]
+        if positive_items_summary["items_count"] > 0
+        else 0.0
+    )
+    avg_location_match = (
+        positive_items_summary["total_location_match"] / positive_items_summary["items_count"]
+        if positive_items_summary["items_count"] > 0
+        else 0.0
+    )
 
     return RunSummaryInfo(
         items_count=len(items_in_run),
@@ -503,11 +593,18 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
             total_bugs_expected=positive_items_summary["total_bugs_expected"],
             total_bugs_found=positive_items_summary["total_bugs_found"],
             total_suggested_bugs=positive_items_summary["total_suggested_bugs"],
+            avg_content_match=avg_content_match,
+            avg_location_match=avg_location_match,
+            precision=precision,
+            recall=recall,
+            f1_score=f1_score,
         ),
         negative_items_summary=NegativeItemsSummary(
             items_count=negative_items_summary["items_count"],
             total_suggested_bugs=negative_items_summary["total_suggested_bugs"],
+            false_positives_distribution=negative_items_summary["false_positives_distribution"],
         ),
+        suggestion_count_distribution=suggestion_count_distribution,
     )
 
 
