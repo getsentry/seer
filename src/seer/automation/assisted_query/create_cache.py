@@ -31,8 +31,9 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
 
     org_id = data.org_id
     project_ids = data.project_ids
+    no_values = data.no_values
 
-    cache_diplay_name = get_cache_display_name(org_id, project_ids)
+    cache_diplay_name = get_cache_display_name(org_id, project_ids, no_values)
 
     cache_name = LlmClient().get_cache(display_name=cache_diplay_name, model=get_model_provider())
 

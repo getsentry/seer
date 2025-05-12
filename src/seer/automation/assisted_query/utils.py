@@ -1,7 +1,9 @@
 from seer.automation.agent.client import GeminiProvider
 
 
-def get_cache_display_name(org_id: int, project_ids: list[int]):
+def get_cache_display_name(org_id: int, project_ids: list[int], no_values: bool = False):
+    if no_values:
+        return f"{org_id}_{'-'.join(map(str, project_ids))}_no_values"
     return f"{org_id}_{'-'.join(map(str, project_ids))}"
 
 

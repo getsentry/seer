@@ -4,7 +4,9 @@ import textwrap
 from seer.automation.assisted_query.attributes_reference import get_searchable_properties
 
 
-def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> str:
+def get_cache_prompt(
+    fields: list[str], field_values: dict[str, list[str]] | None = None, no_values: bool = False
+) -> str:
 
     fields_with_definitions = _get_fields_with_definitions(fields=fields)
 
@@ -269,6 +271,10 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         {fields_with_definitions}
         </available_fields_and_functions>
 
+        """
+    )
+    if not no_values:
+        prompt += f"""
         ## Available Field Values
 
         For the string fields below, here are up to 15 possible values you can use for up to 125 fields.
@@ -279,7 +285,6 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         {json.dumps(field_values, indent=2)}
         </available_field_values>
         """
-    )
 
     return prompt
 
