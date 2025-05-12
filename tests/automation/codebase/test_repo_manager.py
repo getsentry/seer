@@ -51,7 +51,7 @@ def test_clone_success(repo_manager, mock_repo_client, caplog):
         mock_clone.assert_called_once_with(
             "file:///fake/repo.git",
             repo_manager.repo_path,
-            progress=ANY,
+            progress=ANY,  # Use ANY to match any function
             depth=1,
         )
 
