@@ -533,7 +533,6 @@ class BaseTools:
             cmd.append(tmp_repo_dir)
 
             return run_ripgrep_in_repo(tmp_repo_dir, cmd)
-
         else:
             # Multiple repository search - we'll need to run separate commands for each repo
             # and combine results
