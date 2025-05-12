@@ -442,13 +442,13 @@ class BugPredictionPrompts:
     def _focus_on_crashes(cls) -> str:
         return textwrap.dedent(
             """\
-            Important: we're NOT looking for:
+            IMPORTANT: we are **not** looking for:
             - silent failures
             - gracefully handled failures
             - security concerns
             - performance concerns.
 
-            Focus exclusively on bugs that will cause the server to unexpectedly crash, including crashes during or after the code change is deployed to the production environment.
+            Focus exclusively on bugs that will cause the server to unexpectedly crash.
             Be careful about interpreting a code change that *intentionally* raises an error."""
         )
 
