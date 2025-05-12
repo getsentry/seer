@@ -109,14 +109,8 @@ class RepoManager:
                 progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
                 depth=1,
             )
-            # Fetch the specific commit
-            try:
-                self.git_repo.git.fetch("origin", commit_sha, depth=1)
-            except git.GitCommandError as e:
-                logger.error(f"Could not fetch specific commit {commit_sha}: {e}")
-                raise
-            # Checkout the specific commit
-            self.git_repo.git.checkout(commit_sha)
+            # Fetch the commit saved in the repo_client base_commit_sha
+            self._sync_repo()
             end_time = time.time()
             logger.info(
                 f"Cloned and checked out repository at commit {commit_sha} in {end_time - start_time:.4f} seconds"

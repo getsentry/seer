@@ -56,7 +56,6 @@ def test_clone_success(repo_manager, mock_repo_client, caplog):
         )
 
         # Verify fetch and checkout were called with correct arguments
-        mock_git.fetch.assert_called_once_with("origin", "fakecommit", depth=1)
         mock_git.checkout.assert_called_once_with("fakecommit")
 
         # Verify the repo was set
