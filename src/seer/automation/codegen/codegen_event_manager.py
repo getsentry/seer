@@ -41,6 +41,8 @@ class CodegenEventManager:
         with self.state.update() as cur:
             cur.status = CodegenStatus.ERRORED
 
-    def send_insight(self, insight: InsightSharingOutput):
-        # Do nothing for now, this is only used for autofix
+    def send_insight(self, insight_card: InsightSharingOutput):
+        """
+        Do nothing for now, this is only used for autofix
+        """
         pass

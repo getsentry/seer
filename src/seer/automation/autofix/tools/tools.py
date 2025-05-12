@@ -155,19 +155,15 @@ class BaseTools:
                 logger.exception(f"Error shutting down executor: {e}")
 
     def _get_repo_names(self) -> list[str]:
-        if isinstance(self.context, AutofixContext):
-            return [repo.full_name for repo in self.context.state.get().readable_repos]
-        elif isinstance(self.context, CodegenContext):
-            return [self.context.repo.full_name]
-        else:
-            raise ValueError(f"Unsupported context type: {type(self.context)}")
+        return [repo.full_name for repo in self.context.state.get().readable_repos]
 
     def _make_repo_not_found_error_message(self, repo_name: str) -> str:
-        return f"Error: Repo '{repo_name}' not found." + (
-            f" Available repos: {', '.join([repo.full_name for repo in self.context.repos if isinstance(self.context, AutofixContext)])}"
-            if isinstance(self.context, AutofixContext)
-            else ""
-        )
+        if isinstance(self.context, AutofixContext):
+            available_repos = self.context.repos
+        else:
+            available_repos = self.context.state.get().readable_repos
+        available_repos_str = ", ".join([repo.full_name for repo in available_repos])
+        return f"Error: Repo '{repo_name}' not found. Available repos: {available_repos_str}"
 
     def _make_repo_unavailable_error_message(self, repo_name: str) -> str:
         return f"Error: We had an issue loading the repository `{repo_name}`. This tool is unavailable for this repository, you must stop using it for this repository `{repo_name}`."
@@ -190,11 +186,7 @@ class BaseTools:
     @observe(name="Expand Document")
     @sentry_sdk.trace
     def expand_document(self, file_path: str, repo_name: str):
-        fixed_repo_name = (
-            self.context.autocorrect_repo_name(repo_name)
-            if isinstance(self.context, AutofixContext)
-            else repo_name
-        )
+        fixed_repo_name = self.context.autocorrect_repo_name(repo_name)
         if not fixed_repo_name:
             return self._make_repo_not_found_error_message(repo_name)
         repo_name = fixed_repo_name
@@ -709,11 +701,7 @@ class BaseTools:
         tool_call_id = kwargs.get("tool_call_id", None)
         current_memory_index = kwargs.get("current_memory_index", -1)
 
-        fixed_repo_name = (
-            self.context.autocorrect_repo_name(repo_name)
-            if isinstance(self.context, AutofixContext)
-            else repo_name
-        )
+        fixed_repo_name = self.context.autocorrect_repo_name(repo_name)
         if not fixed_repo_name:
             return self._make_repo_not_found_error_message(repo_name)
         repo_name = fixed_repo_name
@@ -969,15 +957,15 @@ class BaseTools:
         self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
     ) -> str:
         """Handles the undo edit command to remove file changes."""
-        external_id = None
         cur_state = self.context.state.get()
         if isinstance(cur_state.request, AutofixRequest):
             repos = cur_state.request.repos
         elif isinstance(cur_state.request, CodegenBaseRequest):
-            repos = [cur_state.request.repo]
+            repos = cur_state.readable_repos
         else:
             raise ValueError("Invalid request type")
 
+        external_id = None
         for repo in repos:
             if repo.full_name == repo_name:
                 external_id = repo.external_id

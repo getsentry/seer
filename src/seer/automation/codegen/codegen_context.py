@@ -1,7 +1,12 @@
 import logging
 
 from seer.automation.agent.models import Message
-from seer.automation.codebase.repo_client import RepoClient, RepoClientType
+from seer.automation.codebase.repo_client import (
+    RepoClientType,
+    autocorrect_repo_name,
+    get_file_contents_and_repo_client,
+    get_repo_client,
+)
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
 from seer.automation.codegen.models import CodegenContinuation, UnitTestRunMemory
 from seer.automation.codegen.state import CodegenContinuationState
@@ -57,20 +62,27 @@ class CodegenContext(PipelineContext):
             state.signals = value
 
     def get_repo_client(
-        self, repo_name: str | None = None, type: RepoClientType = RepoClientType.READ
+        self,
+        repo_name: str | None = None,
+        repo_external_id: str | None = None,
+        type: RepoClientType = RepoClientType.READ,
     ):
-        """
-        Gets a repo client for the current single repo or for a given repo name.
-        If there are more than 1 repos, a repo name must be provided.
-        """
-        return RepoClient.from_repo_definition(self.repo, type)
+        repos = self.state.get().readable_repos
+        return get_repo_client(
+            repos=repos, repo_name=repo_name, repo_external_id=repo_external_id, type=type
+        )
+
+    def autocorrect_repo_name(self, repo_name: str) -> str | None:
+        return autocorrect_repo_name(
+            readable_repos=self.state.get().readable_repos, repo_name=repo_name
+        )
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        repo_client = self.get_repo_client()
-
-        file_contents, _ = repo_client.get_file_content(path)
+        file_contents, _ = get_file_contents_and_repo_client(
+            repos=self.state.get().readable_repos, path=path, repo_name=repo_name
+        )
 
         if not ignore_local_changes:
             cur_state = self.state.get()

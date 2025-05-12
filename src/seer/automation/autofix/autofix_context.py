@@ -18,7 +18,13 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
-from seer.automation.codebase.repo_client import RepoClient, RepoClientType
+from seer.automation.codebase.repo_client import (
+    RepoClient,
+    RepoClientType,
+    autocorrect_repo_name,
+    get_file_contents_and_repo_client,
+    get_repo_client,
+)
 from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
@@ -111,81 +117,21 @@ class AutofixContext(PipelineContext):
         repo_external_id: str | None = None,
         type: RepoClientType = RepoClientType.READ,
     ) -> RepoClient:
-        """
-        Gets a repo client for the current single repo or for a given repo name.
-        If there are more than 1 repos, a repo name must be provided.
-        """
-        repo: RepoDefinition | None = None
-        if len(self.repos) == 1:
-            repo = self.repos[0]
-        elif repo_name:
-            repo = next((r for r in self.repos if r.full_name == repo_name), None)
-        elif repo_external_id:
-            repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
-
-        if not repo:
-            raise AgentError() from ValueError(
-                "Repo not found. Please provide a valid repo name or external ID."
-            )
-
-        return RepoClient.from_repo_definition(repo, type)
+        return get_repo_client(
+            repos=self.repos, repo_name=repo_name, repo_external_id=repo_external_id, type=type
+        )
 
     def autocorrect_repo_name(self, repo_name: str) -> str | None:
-        """
-        Attempts to autocorrect a repository name by finding the closest match among available repositories.
-
-        Args:
-            repo_name: The repository name to autocorrect
-
-        Returns:
-            The corrected repository name if a match is found, or None if no match is found
-        """
-        readable_repos = self.state.get().readable_repos
-        repo_names = [
-            repo.full_name
-            for repo in readable_repos
-            if repo.provider in RepoClient.supported_providers
-        ]
-        if repo_name and repo_name in repo_names:
-            return repo_name
-        elif repo_name and repo_name not in repo_names:
-            # No exact match, try to autocorrect
-            matching_full_names = [r for r in repo_names if repo_name.lower() in r.lower()]
-            names_without_owner = [
-                r.split("/")[-1] for r in matching_full_names if len(r.split("/")) > 1
-            ]  # the repo names without the orgs, e.g. "seer", not "getsentry/seer"
-            matching_names_without_owner = [
-                r for r in names_without_owner if repo_name.lower() == r.lower()
-            ]
-            if matching_names_without_owner:
-                repo_name_without_owner = matching_names_without_owner[0]
-                repo_name = next(
-                    (r for r in matching_full_names if f"/{repo_name_without_owner}" in r), ""
-                )
-                if not repo_name:
-                    return None
-            elif matching_full_names:
-                repo_name = min(
-                    matching_full_names, key=lambda x: abs(len(x) - len(repo_name or ""))
-                )
-            else:
-                return None
-            return repo_name
-        else:
-            return None
+        return autocorrect_repo_name(
+            readable_repos=self.state.get().readable_repos, repo_name=repo_name
+        )
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        if len(self.repos) > 1:
-            if not repo_name:
-                raise ValueError("Repo name is required when there are multiple repos.")
-
-            if repo_name not in [repo.full_name for repo in self.repos]:
-                raise ValueError(f"Repo '{repo_name}' not found in the list of repos.")
-
-        repo_client = self.get_repo_client(repo_name)
-        file_contents, _ = repo_client.get_file_content(path)
+        file_contents, repo_client = get_file_contents_and_repo_client(
+            repos=self.repos, path=path, repo_name=repo_name
+        )
 
         if not ignore_local_changes:
             cur_state = self.state.get()
