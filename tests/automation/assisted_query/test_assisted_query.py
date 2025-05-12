@@ -141,7 +141,7 @@ class TestAssistedQuery(unittest.TestCase):
         mock_llm_client = MagicMock()
 
         first_call = LlmGenerateStructuredResponse(
-            RelevantFieldsResponse(fields=["span.op", "span.description"]),
+            RelevantFieldsResponse(fields=["span.op", "span.description", "transaction"]),
             metadata=LlmResponseMetadata(
                 model="gemini-2.0-flash-001",
                 provider_name=LlmProviderType.GEMINI,
@@ -217,7 +217,7 @@ class TestAssistedQuery(unittest.TestCase):
         mock_rpc_client.call.assert_called_once_with(
             "get_attribute_values",
             org_id=1,
-            fields=["span.op", "span.description"],
+            fields=["span.op", "span.description", "transaction"],
             project_ids=[1, 2],
             stats_period="48h",
             limit=150,
