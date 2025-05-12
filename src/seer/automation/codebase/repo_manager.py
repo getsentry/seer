@@ -100,7 +100,7 @@ class RepoManager:
 
     @property
     def blob_name(self):
-        return f"repos/{self.repo_client.provider}/{self.repo_client.repo_owner}/{self.repo_client.repo_name}_{self.repo_client.repo_external_id}.tar.gz"
+        return f"repos/{self.organization_id}/{self.project_id}/{self.repo_client.provider}/{self.repo_client.repo_owner}/{self.repo_client.repo_name}_{self.repo_client.repo_external_id}.tar.gz"
 
     def initialize_in_background(self):
         logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
