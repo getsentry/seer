@@ -14,6 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContinuation]:
+    """
+    Creates a new autofix run for an issue.
+    Args:
+        request (AutofixRequest): The autofix request containing issue and project details.
+    Returns:
+        DbState[AutofixContinuation]: Database state manager for the new autofix run.
+    """
     state = ContinuationState.new(
         AutofixContinuation(request=request),
         group_id=request.issue.id,
