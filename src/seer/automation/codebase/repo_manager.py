@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 # Minimum seconds between consecutive liveness probe updates
 LIVENESS_UPDATE_INTERVAL = 5.0
 
+UPLOAD_LOCK_TIMEOUT_MINUTES = 10
+
 
 class RepoInitializationError(RuntimeError):
     """
@@ -83,8 +85,7 @@ class RepoManager:
         self._last_liveness_update = 0.0
         self._app_config = config
 
-        # self._use_gcs = org_id == 1 and project_id == 6178942  # Seer
-        self._use_gcs = True
+        self._use_gcs = organization_id == 1 and project_id == 6178942  # Hardcoded ONLY for Seer
 
     @property
     def is_available(self):
@@ -135,6 +136,9 @@ class RepoManager:
 
             self._sync_repo()
 
+            if self.is_cancelled:
+                return
+
             if db_archive_entry:
                 original_timestamp = self.repo_client.get_current_commit_info(
                     db_archive_entry.commit_sha
@@ -142,9 +146,6 @@ class RepoManager:
                 new_commit_time = self.repo_client.get_current_commit_info(
                     self.repo_client.base_commit_sha
                 )["timestamp"]
-
-                print(f"original_timestamp: {original_timestamp}")
-                print(f"new_commit_time: {new_commit_time}")
 
                 if new_commit_time > original_timestamp:
                     logger.info(
@@ -154,19 +155,19 @@ class RepoManager:
                         logger.info(
                             f"Uploading newer state of repository {self.repo_client.repo_full_name} to GCS"
                         )
-                        try:
-                            self.upload_to_gcs()
-                        except Exception:
-                            logger.exception("Failed to upload newer state of repository to GCS")
+
+                        # Upload to GCS in a separate thread, don't wait for it.
+                        ThreadPoolExecutor(
+                            max_workers=1, initializer=copy_modules_initializer
+                        ).submit(self.upload_to_gcs)
                 else:
                     logger.info(
                         f"Repository {self.repo_client.repo_full_name} after syncing is in an older state than before syncing",
                     )
             elif self._use_gcs:
-                try:
-                    self.upload_to_gcs()
-                except Exception:
-                    logger.exception("Failed to upload initial state of repository to GCS")
+                ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer).submit(
+                    self.upload_to_gcs
+                )
         except Exception:
             logger.exception(
                 "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
@@ -387,18 +388,14 @@ class RepoManager:
                 if self.is_cancelled:
                     return self.cleanup()
 
-                # Upload the tar file to GCS in a separate thread
                 logger.info(
                     f"Uploading repository archive to GCS: {self.bucket_name}/{self.blob_name}"
                 )
 
-                # Use ThreadPoolExecutor to run the upload in a separate thread
-                with ThreadPoolExecutor(
-                    max_workers=1, initializer=copy_modules_initializer
-                ) as executor:
-                    future = executor.submit(self._do_gcs_upload, temp_tarfile)
-                    # Wait for the upload to complete
-                    future.result()
+                storage_client = storage.Client()
+                bucket = storage_client.bucket(self.bucket_name)
+                blob = bucket.blob(self.blob_name)
+                blob.upload_from_filename(temp_tarfile)
 
                 logger.info(
                     f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
@@ -414,20 +411,6 @@ class RepoManager:
                 # Clean up the copied repo
                 if os.path.exists(copied_repo_path):
                     shutil.rmtree(copied_repo_path)
-
-    @sentry_sdk.trace
-    def _do_gcs_upload(self, temp_tarfile):
-        """
-        Perform the actual GCS upload operation.
-        This method is designed to be run in a separate thread.
-
-        Args:
-            temp_tarfile: Path to the temporary tarfile to upload
-        """
-        storage_client = storage.Client()
-        bucket = storage_client.bucket(self.bucket_name)
-        blob = bucket.blob(self.blob_name)
-        blob.upload_from_filename(temp_tarfile)
 
     def get_db_archive_entry(self, session: SQLAlchemySession):
         return (
@@ -507,7 +490,7 @@ class RepoManager:
                     f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
                 )
 
-            # Download the blob to the temporary file with larger chunk size for faster download
+            # Download the blob
             start_time = time.time()
             blob.download_to_filename(temp_tarfile)
             end_time = time.time()
@@ -563,9 +546,12 @@ class RepoManager:
             with Session() as session:
                 repo_archive = self.get_db_archive_entry(session)
                 if repo_archive and (
+                    # Not locked
                     not repo_archive.upload_locked_at
+                    # Expired
                     or repo_archive.upload_locked_at
-                    < datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=10)
+                    < datetime.datetime.now(datetime.UTC)
+                    - datetime.timedelta(minutes=UPLOAD_LOCK_TIMEOUT_MINUTES)
                 ):
                     repo_archive.upload_locked_at = datetime.datetime.now(datetime.UTC)
                     session.commit()
@@ -578,6 +564,7 @@ class RepoManager:
 
             yield
         finally:
+            # only clear the lock if we actually set it
             if did_lock:
                 with Session() as session:
                     repo_archive = self.get_db_archive_entry(session)
