@@ -8,7 +8,7 @@ This module contains functions for getting run reports from Langfuse.
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
+from typing import Literal, Self
 
 import click
 from click import option
@@ -16,6 +16,9 @@ from langfuse import Langfuse
 from langfuse.api.resources.commons.errors import NotFoundError
 from langfuse.api.resources.commons.types.dataset_run_item import DatasetRunItem
 from langfuse.api.resources.commons.types.dataset_run_with_items import DatasetRunWithItems
+
+from seer.automation.codegen.evals.models import EvalItemInput, EvalItemOutput
+from seer.automation.codegen.models import StaticAnalysisSuggestion
 
 
 @click.group()
@@ -26,10 +29,7 @@ def main():
 @main.command()
 @option("--dataset-name", type=str, required=True)
 @option("--run-name", type=str, required=True)
-@option(
-    "--hide-details", is_flag=True, help="Whether to hide the details of the items.", default=False
-)
-def run_report(dataset_name: str, run_name: str, hide_details: bool):
+def run_summary(dataset_name: str, run_name: str):
     langfuse = Langfuse()
     try:
         run = langfuse.get_dataset_run(dataset_name, run_name)
@@ -143,11 +143,25 @@ def run_report(dataset_name: str, run_name: str, hide_details: bool):
     )
     click.echo("\n".join(false_positives_distribution))
 
-    if not hide_details:
-        click.echo("\n# Items details")
-        click.echo(" (items marked with ❌ were not evaluated successfully)\n")
-        for item in summary.item_details:
-            item.pretty_print()
+
+@main.command()
+@option("--dataset-name", type=str, required=True)
+@option("--run-name", type=str, required=True)
+@option("--format", type=click.Choice(["md"]), required=True, default="md")
+def run_details(dataset_name: str, run_name: str, format: Literal["md"]):
+    langfuse = Langfuse()
+    try:
+        run = langfuse.get_dataset_run(dataset_name, run_name)
+    except NotFoundError as e:
+        click.echo(f"❌ Run {run_name} not found: {e}")
+        return
+    summary = calculate_run_summary(langfuse, run)
+
+    click.echo("\n# Items details")
+    click.echo(" (items marked with ❌ were not evaluated successfully)\n")
+    for item in summary.item_details:
+        click.echo("\n".join(item.to_markdown()))
+        click.echo("")
 
 
 class RelevantScorePrefixes(Enum):
@@ -161,13 +175,14 @@ class RelevantScorePrefixes(Enum):
         return next((s for s in scores if s["name"].startswith(self.value)), None)
 
 
-def pretty_print_scores(scores: list[dict]) -> None:
+def pretty_print_scores(scores: list[dict]) -> list[str]:
     """Print scores in a formatted way, highlighting important metrics."""
 
     # Filter out error_running_evaluation and sort by highlight order
     filtered_scores = [s for s in scores if s["name"] != "error_running_evaluation"]
 
     # Print scores
+    lines = []
     for score in filtered_scores:
         score_name = score["name"]
         highlight_name = next(
@@ -185,8 +200,52 @@ def pretty_print_scores(scores: list[dict]) -> None:
 
         display_value = click.style(str(value), bold=True)
 
-        click.echo(f"    * {display_name}: {display_value}")
-        click.echo(f"      {comment}")
+        lines.append(f"* {display_name}: {display_value}")
+        lines.append(f"  {comment}")
+    return lines
+
+
+def pretty_print_expected_bugs(expected_bugs: list[EvalItemOutput]) -> list[str]:
+    lines = []
+    for bug in expected_bugs:
+        description_lines = bug.description.strip().split("\n")
+        lines.append(f"* {bug.encoded_location}")
+        lines.append(f"  {description_lines[0]}")
+        lines.extend(map(lambda line: (" " * 2) + line, description_lines[1:]))
+    return lines
+
+
+def pretty_print_generated_suggestions(
+    generated_suggestions: list[StaticAnalysisSuggestion],
+) -> list[str]:
+    lines = []
+    for suggestion in generated_suggestions:
+        lines.append(f"* {suggestion.path}:{suggestion.line}")
+        lines.append(f"  {suggestion.short_description}")
+        lines.append(f"  {suggestion.justification}")
+        lines.append(f"  missing evidence: {suggestion.missing_evidence}")
+        lines.append(
+            f"  severity: {suggestion.severity_score}; confidence: {suggestion.confidence_score}"
+        )
+        lines.append("")
+    return lines
+
+
+@dataclass
+class ItemOrigin:
+    org_name: str
+    repo_name: str
+    pr_id: int
+    commit_sha: str
+
+    @classmethod
+    def from_input(cls, input: EvalItemInput) -> Self:
+        return cls(
+            org_name=input.repo.owner,
+            repo_name=input.repo.name,
+            pr_id=input.pr_id,
+            commit_sha=input.commit_sha,
+        )
 
 
 @dataclass
@@ -195,12 +254,47 @@ class RelevantItemInfo:
     trace_id: str
     was_evaluated_successfully: bool
     scores: list[dict]
+    origin: ItemOrigin
+    expected_bugs: list[EvalItemOutput]
+    generated_suggestions: list[StaticAnalysisSuggestion]
 
-    def pretty_print(self) -> None:
+    def to_markdown(self) -> list[str]:
         success_symbol = "✓" if self.was_evaluated_successfully else "❌"
-        click.echo(f"{success_symbol} Item {self.item_id} - Trace ID: {self.trace_id}")
+        lines = []
+        lines.append(f"{success_symbol} Item {self.item_id} - Trace ID: {self.trace_id}")
+        lines.append(
+            f"  Origin: {self.origin.org_name}/{self.origin.repo_name} - PR #{self.origin.pr_id} - Commit SHA: {self.origin.commit_sha} - URL: https://github.com/{self.origin.org_name}/{self.origin.repo_name}/pull/{self.origin.pr_id}"
+        )
         if self.was_evaluated_successfully:
-            pretty_print_scores(self.scores)
+            padding = 4
+            lines.append("    # Scores")
+            lines.append("    --------------------------------")
+            lines.extend(map(lambda line: " " * padding + line, pretty_print_scores(self.scores)))
+            lines.append("")
+            lines.append("    # Expected bugs")
+            lines.append("    --------------------------------")
+            if self.expected_bugs:
+                lines.extend(
+                    map(
+                        lambda line: " " * padding + line,
+                        pretty_print_expected_bugs(self.expected_bugs),
+                    )
+                )
+            else:
+                lines.append("    No expected bugs")
+            lines.append("")
+            lines.append("    # Generated suggestions")
+            lines.append("    --------------------------------")
+            if self.generated_suggestions:
+                lines.extend(
+                    map(
+                        lambda line: " " * padding + line,
+                        pretty_print_generated_suggestions(self.generated_suggestions),
+                    )
+                )
+            else:
+                lines.append("    No generated suggestions")
+        return lines
 
 
 @dataclass
@@ -235,6 +329,26 @@ class RunSummaryInfo:
 
 def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> RelevantItemInfo:
     trace = langfuse.fetch_trace(item.trace_id)
+    dataset_item = langfuse.get_dataset_item(item.dataset_item_id)
+
+    # Load the expected issues from the dataset item.
+    if not dataset_item.expected_output:
+        # This happens in negative test cases where we don't have any expected issues.
+        # The value is `{}` in this case.
+        list_of_issues = []
+    elif isinstance(dataset_item.expected_output, list):
+        list_of_issues = dataset_item.expected_output
+    else:
+        list_of_issues = [dataset_item.expected_output]
+    list_of_issues = [EvalItemOutput.model_validate(issue) for issue in list_of_issues]
+
+    item_origin = ItemOrigin.from_input(EvalItemInput.model_validate(dataset_item.input))
+
+    generated_suggestions = (
+        [StaticAnalysisSuggestion.model_validate(suggestion) for suggestion in trace.data.output]
+        if trace.data.output
+        else []
+    )
     scores: list[dict] = [
         {"name": score.name, "value": score.value, "comment": score.comment}
         for score in trace.data.scores
@@ -244,10 +358,13 @@ def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> Rele
     )
     was_evaluated_successfully = error_score is not None and error_score["value"] == 0
     return RelevantItemInfo(
-        item_id=item.id,
+        item_id=dataset_item.id,
         trace_id=item.trace_id,
         was_evaluated_successfully=was_evaluated_successfully,
         scores=scores,
+        expected_bugs=list_of_issues,
+        generated_suggestions=generated_suggestions,
+        origin=item_origin,
     )
 
 
