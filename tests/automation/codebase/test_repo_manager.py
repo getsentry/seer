@@ -25,7 +25,7 @@ def mock_repo_client():
 def repo_manager(mock_repo_client, tmp_path):
     """Create a RepoManager instance with a mock repo client."""
     with patch("tempfile.mkdtemp", return_value=str(tmp_path)):
-        manager = RepoManager(repo_client=mock_repo_client)
+        manager = RepoManager(repo_client=mock_repo_client, organization_id=1, project_id=6178942)
         yield manager
 
 

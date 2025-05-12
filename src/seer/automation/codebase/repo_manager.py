@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import shutil
@@ -5,11 +6,13 @@ import tarfile
 import tempfile
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from typing import Callable
 
 import git
 import sentry_sdk
 from google.cloud import storage
+from sqlalchemy.orm import Session as SQLAlchemySession
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir
@@ -121,8 +124,6 @@ class RepoManager:
             if not self._use_gcs or not (db_archive_entry := self.gcs_archive_exists()):
                 self._clone_repo()
 
-                if self._use_gcs:
-                    self.upload_to_gcs()
             else:
                 logger.info(
                     f"Using repository archive from GCS for {self.repo_client.repo_full_name}: {self.bucket_name}/{self.blob_name}"
@@ -153,11 +154,19 @@ class RepoManager:
                         logger.info(
                             f"Uploading newer state of repository {self.repo_client.repo_full_name} to GCS"
                         )
-                        self.upload_to_gcs()
+                        try:
+                            self.upload_to_gcs()
+                        except Exception:
+                            logger.exception("Failed to upload newer state of repository to GCS")
                 else:
                     logger.info(
                         f"Repository {self.repo_client.repo_full_name} after syncing is in an older state than before syncing",
                     )
+            elif self._use_gcs:
+                try:
+                    self.upload_to_gcs()
+                except Exception:
+                    logger.exception("Failed to upload initial state of repository to GCS")
         except Exception:
             logger.exception(
                 "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
@@ -237,11 +246,14 @@ class RepoManager:
             )
             self.git_repo = None  # clear the repo to fail the available check
 
-    def _verify_repo_state(self):
+    def _verify_repo_state(self, repo_path: str | None = None):
         """
         Verify the repository state to ensure it is in the expected state at the right commit. Only use this for Debugging because it's slow.
         Should silently error to Sentry.
         """
+        if repo_path is None:
+            repo_path = self.repo_path
+
         if self._cancelled:
             return logger.exception(
                 RepoInitializationError("Repository has been cancelled"),
@@ -263,7 +275,7 @@ class RepoManager:
         invalid_file_paths = set()
         repo_file_paths = self.repo_client.get_valid_file_paths()
         for file_path in repo_file_paths:
-            if not os.path.exists(os.path.join(self.repo_path, file_path)):
+            if not os.path.exists(os.path.join(repo_path, file_path)):
                 invalid_file_paths.add(file_path)
 
         if invalid_file_paths:
@@ -308,98 +320,102 @@ class RepoManager:
 
         git_repo = git.Repo(repo_path)
 
+        # Validate that the repo is initialized
+        if not git_repo.git.execute(["git", "status"]):
+            raise RepoInitializationError("Repository is not initialized")
+
         commit_sha = self.repo_client.base_commit_sha
 
         # Remove all remote branches except the one we need
         logger.info("Pruning unnecessary references")
-        for ref in git_repo.git.execute(["git", "show-ref"]).split("\n"):
-            if ref and commit_sha not in ref:
-                ref_name = ref.split()[1]
-                try:
-                    git_repo.git.execute(["git", "update-ref", "-d", ref_name])
-                except git.GitCommandError:
-                    logger.debug(f"Could not delete reference {ref_name}")
+        try:
+            refs = git_repo.git.execute(["git", "show-ref"])
+            if refs:  # Only process if we have refs
+                for ref in refs.split("\n"):
+                    if ref and commit_sha not in ref:
+                        ref_name = ref.split()[1]
+                        try:
+                            git_repo.git.execute(["git", "update-ref", "-d", ref_name])
+                        except git.GitCommandError:
+                            logger.debug(f"Could not delete reference {ref_name}")
+        except git.GitCommandError:
+            # Git show-ref returns exit code 1 if no refs exist, which is not necessarily an error
+            logger.info("No references found in the repository")
 
         # Clean up completely - expire reflog, remove unreachable objects
         logger.info("Cleaning Git repository to minimal state")
         git_repo.git.execute(["git", "reflog", "expire", "--expire=now", "--all"])
         git_repo.git.execute(["git", "gc", "--prune=now", "--aggressive"])
 
+    @sentry_sdk.trace
     def upload_to_gcs(self):
         """
         Upload the repository from the cloned tmp directory to GCS.
         This method uses a thread to perform the upload without blocking.
         """
         copied_repo_path = self._copy_repo()
+        self._verify_repo_state(repo_path=copied_repo_path)
         self._prune_repo(repo_path=copied_repo_path)
 
-        # TODO: Add an upload locking mechanism to prevent race conditions
+        with Session() as session:
+            existing_repo_archive = self.get_db_archive_entry(session)
 
-        # Create a temporary tar.gz file of the repository
-        temp_tarfile = os.path.join(self.tmp_dir, "upload_repo_archive.tar.gz")
-        try:
-            logger.info(f"Creating tar archive of repository at {copied_repo_path}")
-            with tarfile.open(temp_tarfile, "w:gz") as tar:
-                for item in os.listdir(copied_repo_path):
-                    item_path = os.path.join(copied_repo_path, item)
-                    tar.add(item_path, arcname=item)
+            if existing_repo_archive is None:
+                repo_archive = DbSeerRepoArchive(
+                    organization_id=self.organization_id,
+                    project_id=self.project_id,
+                    bucket_name=self.bucket_name,
+                    blob_path=self.blob_name,
+                    commit_sha=self.repo_client.base_commit_sha,
+                )
+                session.add(repo_archive)
+            else:
+                existing_repo_archive.commit_sha = self.repo_client.base_commit_sha
 
-            if self._cancelled:
-                return self.cleanup()
+            session.commit()
 
-            # Upload the tar file to GCS in a separate thread
-            logger.info(f"Uploading repository archive to GCS: {self.bucket_name}/{self.blob_name}")
+        with self.upload_lock():
+            # Create a temporary tar.gz file of the repository
+            temp_tarfile = os.path.join(self.tmp_dir, "upload_repo_archive.tar.gz")
+            try:
+                logger.info(f"Creating tar archive of repository at {copied_repo_path}")
+                with tarfile.open(temp_tarfile, "w:gz") as tar:
+                    for item in os.listdir(copied_repo_path):
+                        item_path = os.path.join(copied_repo_path, item)
+                        tar.add(item_path, arcname=item)
 
-            # Use ThreadPoolExecutor to run the upload in a separate thread
-            with ThreadPoolExecutor(
-                max_workers=1, initializer=copy_modules_initializer
-            ) as executor:
-                future = executor.submit(self._do_gcs_upload, temp_tarfile)
-                # Wait for the upload to complete
-                future.result()
+                if self._cancelled:
+                    return self.cleanup()
 
-            logger.info(
-                f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
-            )
-
-            with Session() as session:
-                existing_repo_archive = (
-                    session.query(DbSeerRepoArchive)
-                    .filter(
-                        DbSeerRepoArchive.organization_id == self.organization_id,
-                        DbSeerRepoArchive.project_id == self.project_id,
-                        DbSeerRepoArchive.bucket_name == self.bucket_name,
-                        DbSeerRepoArchive.blob_path == self.blob_name,
-                    )
-                    .first()
+                # Upload the tar file to GCS in a separate thread
+                logger.info(
+                    f"Uploading repository archive to GCS: {self.bucket_name}/{self.blob_name}"
                 )
 
-                if existing_repo_archive is None:
-                    repo_archive = DbSeerRepoArchive(
-                        organization_id=self.organization_id,
-                        project_id=self.project_id,
-                        bucket_name=self.bucket_name,
-                        blob_path=self.blob_name,
-                        commit_sha=self.repo_client.base_commit_sha,
-                    )
-                    session.add(repo_archive)
-                else:
-                    existing_repo_archive.commit_sha = self.repo_client.base_commit_sha
+                # Use ThreadPoolExecutor to run the upload in a separate thread
+                with ThreadPoolExecutor(
+                    max_workers=1, initializer=copy_modules_initializer
+                ) as executor:
+                    future = executor.submit(self._do_gcs_upload, temp_tarfile)
+                    # Wait for the upload to complete
+                    future.result()
 
-                session.commit()
+                logger.info(
+                    f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
+                )
+            except Exception:
+                logger.exception("Failed to upload repository to GCS")
+                raise
+            finally:
+                # Clean up the temporary tar file
+                if os.path.exists(temp_tarfile):
+                    os.unlink(temp_tarfile)
 
-        except Exception:
-            logger.exception("Failed to upload repository to GCS")
-            raise
-        finally:
-            # Clean up the temporary tar file
-            if os.path.exists(temp_tarfile):
-                os.unlink(temp_tarfile)
+                # Clean up the copied repo
+                if os.path.exists(copied_repo_path):
+                    shutil.rmtree(copied_repo_path)
 
-            # Clean up the copied repo
-            if os.path.exists(copied_repo_path):
-                shutil.rmtree(copied_repo_path)
-
+    @sentry_sdk.trace
     def _do_gcs_upload(self, temp_tarfile):
         """
         Perform the actual GCS upload operation.
@@ -413,20 +429,17 @@ class RepoManager:
         blob = bucket.blob(self.blob_name)
         blob.upload_from_filename(temp_tarfile)
 
-    def get_db_archive_entry(self):
-        with Session() as session:
-            repo_archive = (
-                session.query(DbSeerRepoArchive)
-                .filter(
-                    DbSeerRepoArchive.organization_id == self.organization_id,
-                    DbSeerRepoArchive.project_id == self.project_id,
-                    DbSeerRepoArchive.bucket_name == self.bucket_name,
-                    DbSeerRepoArchive.blob_path == self.blob_name,
-                )
-                .first()
+    def get_db_archive_entry(self, session: SQLAlchemySession):
+        return (
+            session.query(DbSeerRepoArchive)
+            .filter(
+                DbSeerRepoArchive.organization_id == self.organization_id,
+                DbSeerRepoArchive.project_id == self.project_id,
+                DbSeerRepoArchive.bucket_name == self.bucket_name,
+                DbSeerRepoArchive.blob_path == self.blob_name,
             )
-
-        return repo_archive
+            .first()
+        )
 
     def gcs_archive_exists(self) -> DbSeerRepoArchive | None:
         """
@@ -441,8 +454,9 @@ class RepoManager:
                 f"Checking if repository archive exists in GCS: {self.bucket_name}/{self.blob_name}"
             )
 
-            if self.get_db_archive_entry() is None:
-                return None
+            with Session() as session:
+                if self.get_db_archive_entry(session) is None:
+                    return None
 
             storage_client = storage.Client()
             bucket = storage_client.bucket(self.bucket_name)
@@ -458,13 +472,15 @@ class RepoManager:
                 )
 
             if exists:
-                return self.get_db_archive_entry()
+                with Session() as session:
+                    return self.get_db_archive_entry(session)
             else:
                 return None
         except Exception:
             logger.exception("Error checking if repository archive exists in GCS")
             return None
 
+    @sentry_sdk.trace
     def download_from_gcs(self):
         """
         Download the repository from GCS to the cloned tmp directory.
@@ -539,6 +555,35 @@ class RepoManager:
             # Clean up the temporary files
             if os.path.exists(temp_tarfile):
                 os.unlink(temp_tarfile)
+
+    @contextmanager
+    def upload_lock(self):
+        did_lock = False
+        try:
+            with Session() as session:
+                repo_archive = self.get_db_archive_entry(session)
+                if repo_archive and (
+                    not repo_archive.upload_locked_at
+                    or repo_archive.upload_locked_at
+                    < datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=10)
+                ):
+                    repo_archive.upload_locked_at = datetime.datetime.now(datetime.UTC)
+                    session.commit()
+                    did_lock = True
+                else:
+                    logger.info(
+                        f"Repository is already locked for upload, was locked at {repo_archive.upload_locked_at} ({datetime.datetime.now(datetime.UTC) - repo_archive.upload_locked_at})",
+                    )
+                    raise RepoInitializationError("Repository is already locked for upload")
+
+            yield
+        finally:
+            if did_lock:
+                with Session() as session:
+                    repo_archive = self.get_db_archive_entry(session)
+                    if repo_archive:
+                        repo_archive.upload_locked_at = None
+                        session.commit()
 
     def mark_as_timed_out(self):
         if self.initialization_future:

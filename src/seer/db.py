@@ -297,6 +297,10 @@ class DbSeerRepoArchive(Base):
     blob_path: Mapped[str] = mapped_column(String, nullable=False)
     commit_sha: Mapped[str] = mapped_column(String, nullable=False)
 
+    upload_locked_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=True, default=None
+    )
+
     __table_args__ = (
         UniqueConstraint(
             "organization_id",
