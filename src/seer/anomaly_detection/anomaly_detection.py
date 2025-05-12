@@ -449,6 +449,7 @@ class AnomalyDetection(BaseModel):
                 ad_config.time_period
             ],
         )
+
         if time_budget_ms is not None:
             time_elapsed = datetime.datetime.now(datetime.timezone.utc) - time_start
             time_budget_ms = time_budget_ms - (time_elapsed.microseconds // 1000)
