@@ -108,6 +108,7 @@ class PrFile(BaseModel):
     status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
     changes: int
     sha: str
+    previous_filename: str | None = None
 
     @cached_property
     def hunks(self) -> list[Hunk]:
