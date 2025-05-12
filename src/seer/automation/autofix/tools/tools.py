@@ -61,8 +61,7 @@ class BaseTools:
         if not repo_names:
             return
 
-        org_id = self.context.state.get().request.organization_id
-        project_id = self.context.state.get().request.project_id
+        request = self.context.state.get().request
 
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
@@ -71,8 +70,8 @@ class BaseTools:
             repo_manager = RepoManager(
                 repo_client,
                 trigger_liveness_probe=self._trigger_liveness_probe,
-                organization_id=org_id,
-                project_id=project_id,
+                organization_id=request.organization_id,
+                project_id=request.project_id,
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
