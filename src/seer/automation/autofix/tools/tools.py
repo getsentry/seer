@@ -96,14 +96,16 @@ class BaseTools:
                 raise ValueError(f"Repository {repo_name} not found")
             repo_managers_to_wait_for = (
                 [self.repo_managers[repo_name]]
-                if not self.repo_managers[repo_name].is_available
+                if (not self.repo_managers[repo_name].is_available)
+                and (not self.repo_managers[repo_name].is_cancelled)
                 else []
             )
         else:
             repo_managers_to_wait_for = [
                 self.repo_managers[rn]
                 for rn in self._get_repo_names()
-                if not self.repo_managers[rn].is_available
+                if (not self.repo_managers[rn].is_available)
+                and (not self.repo_managers[rn].is_cancelled)
             ]
 
         if not repo_managers_to_wait_for:

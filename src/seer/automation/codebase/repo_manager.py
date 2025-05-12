@@ -44,6 +44,7 @@ class RepoManager:
     tmp_dir: str
     repo_path: str
     initialization_future: Future | None
+    is_cancelled: bool
 
     organization_id: int
     project_id: int
@@ -51,7 +52,6 @@ class RepoManager:
     _use_gcs: bool
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
-    _cancelled: bool
     _app_config: AppConfig  # This is here because we can't inject on a property...
 
     @inject
@@ -79,7 +79,7 @@ class RepoManager:
         self.project_id = project_id
 
         self._trigger_liveness_probe = trigger_liveness_probe
-        self._cancelled = False
+        self.is_cancelled = False
         self._last_liveness_update = 0.0
         self._app_config = config
 
@@ -117,7 +117,7 @@ class RepoManager:
         logger.info(f"Initializing repo {self.repo_client.repo_full_name}")
 
         try:
-            if self._cancelled:
+            if self.is_cancelled:
                 return
 
             db_archive_entry: DbSeerRepoArchive | None = None
@@ -130,7 +130,7 @@ class RepoManager:
                 )
                 self.download_from_gcs()
 
-            if self._cancelled:
+            if self.is_cancelled:
                 return
 
             self._sync_repo()
@@ -176,7 +176,7 @@ class RepoManager:
         finally:
             self.initialization_future = None
 
-            if self._cancelled:
+            if self.is_cancelled:
                 self.cleanup()
 
     @sentry_sdk.trace
@@ -254,7 +254,7 @@ class RepoManager:
         if repo_path is None:
             repo_path = self.repo_path
 
-        if self._cancelled:
+        if self.is_cancelled:
             return logger.exception(
                 RepoInitializationError("Repository has been cancelled"),
                 extra={"repo": self.repo_client.repo_full_name},
@@ -384,7 +384,7 @@ class RepoManager:
                         item_path = os.path.join(copied_repo_path, item)
                         tar.add(item_path, arcname=item)
 
-                if self._cancelled:
+                if self.is_cancelled:
                     return self.cleanup()
 
                 # Upload the tar file to GCS in a separate thread
@@ -586,9 +586,14 @@ class RepoManager:
                         session.commit()
 
     def mark_as_timed_out(self):
+        logger.error(
+            "Repo manager timed out",
+            extra={"repo": self.repo_client.repo_full_name},
+        )
+
         if self.initialization_future:
             # Have the thread deal with cleanup
-            self._cancelled = True
+            self.is_cancelled = True
         else:
             # Do it now
             self.cleanup()
@@ -609,7 +614,7 @@ class RepoManager:
                 self.tmp_dir = None
 
         # always marked as cancelled and clear out the repo if we're here
-        self._cancelled = True
+        self.is_cancelled = True
         self.git_repo = None
 
         logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
