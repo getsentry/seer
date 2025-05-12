@@ -44,14 +44,15 @@ def test_clone_success(repo_manager, mock_repo_client, caplog):
         patch("git.Repo.clone_from", return_value=mock_git_repo) as mock_clone,
         patch("seer.automation.codebase.repo_manager.cleanup_dir"),
     ):
+
         repo_manager._clone_repo()
 
         # Verify clone was called with correct arguments, using ANY for the progress callback
         mock_clone.assert_called_once_with(
             "file:///fake/repo.git",
             repo_manager.repo_path,
-            depth=1,
             progress=ANY,
+            depth=1,
         )
 
         # Verify fetch and checkout were called with correct arguments
@@ -86,6 +87,45 @@ def test_clone_failure_clears_repo(repo_manager, mock_repo_client, caplog):
 
         # Verify error was logged
         assert "Failed to clone repository" in caplog.text
+
+
+def test_sync_success(repo_manager, mock_repo_client, caplog):
+    """Test successful repository sync."""
+    caplog.set_level(logging.INFO)
+
+    # Setup mock git repo
+    mock_git_repo = MagicMock(spec=git.Repo)
+    repo_manager.git_repo = mock_git_repo
+
+    repo_manager._sync_repo()
+
+    # Verify git commands were called
+    mock_git_repo.git.execute.assert_called_once_with(
+        ["git", "fetch", "--depth=1", "origin", mock_repo_client.base_commit_sha]
+    )
+    mock_git_repo.git.checkout.assert_called_once_with(mock_repo_client.base_commit_sha)
+
+    # Check logging
+    assert f"Syncing repository {mock_repo_client.repo_full_name}" in caplog.text
+    assert "Checked out repo" in caplog.text
+
+
+def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
+    """Test that sync failure clears the repo reference."""
+    caplog.set_level(logging.ERROR)
+
+    # Setup mock git repo that raises on execute
+    mock_git_repo = MagicMock(spec=git.Repo)
+    mock_git_repo.git.execute.side_effect = Exception("Sync failed")
+    repo_manager.git_repo = mock_git_repo
+
+    repo_manager._sync_repo()
+
+    # Verify repo was cleared
+    assert repo_manager.git_repo is None
+
+    # Verify error was logged
+    assert "Failed to sync repository" in caplog.text
 
 
 def test_mark_as_timed_out_before_init(repo_manager):
@@ -174,11 +214,15 @@ def test_initialize_in_background(repo_manager, caplog):
 
 def test_initialize_success(repo_manager, mock_repo_client):
     """Test successful initialization sequence."""
-    with (patch.object(repo_manager, "_clone_repo") as mock_clone,):
+    with (
+        patch.object(repo_manager, "_clone_repo") as mock_clone,
+        patch.object(repo_manager, "_sync_repo") as mock_sync,
+    ):
         repo_manager.initialize()
 
         # Verify sequence
         mock_clone.assert_called_once()
+        mock_sync.assert_called_once()
         assert repo_manager.initialization_future is None
 
 

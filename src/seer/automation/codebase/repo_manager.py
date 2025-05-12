@@ -71,8 +71,11 @@ class RepoManager:
             self._clone_repo()
             if self._has_timed_out:
                 return
-        except Exception as e:
-            logger.error(f"Failed to initialize repo {self.repo_client.repo_full_name}: {e}")
+            self._sync_repo()
+        except Exception:
+            logger.exception(
+                "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
+            )
 
             self.cleanup()
             raise
@@ -126,6 +129,31 @@ class RepoManager:
             )
             self.git_repo = None  # clear the repo to fail the available check
             raise
+
+    @sentry_sdk.trace
+    def _sync_repo(self):
+        """
+        Ensure the repository is up to date with only the target commit.
+        """
+        logger.info(f"Syncing repository {self.repo_client.repo_full_name}")
+        try:
+            start_time = time.time()
+
+            commit_sha = self.repo_client.base_commit_sha
+
+            # Fetch only the specific commit
+            self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
+            self.git_repo.git.checkout(commit_sha)
+
+            end_time = time.time()
+            logger.info(
+                f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
+            )
+        except Exception:
+            logger.exception(
+                "Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
+            )
+            self.git_repo = None  # clear the repo to fail the available check
 
     def _throttled_liveness_probe(self):
         """
