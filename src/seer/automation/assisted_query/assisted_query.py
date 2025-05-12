@@ -33,7 +33,7 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
 
     if not cache_name:
         # Will result in cold start
-        logger.info("Creating cached prompt as not available upon translation request.")
+        logger.info(f"Cache miss for {cache_display_name}, creating new cache")
         res = create_cache(CreateCacheRequest(org_id=org_id, project_ids=project_ids))
         cache_name = res.cache_name
 

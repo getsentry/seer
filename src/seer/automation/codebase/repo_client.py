@@ -184,19 +184,27 @@ class RepoClient:
                 f"Unsupported repo provider: {repo_definition.provider}, only {', '.join(self.supported_providers)} are supported."
             )
 
-        retry = GithubRetry(total=5)
-        # Default total=10 exceeds autofix's soft time limit anyway
-        retry.DEFAULT_BACKOFF_MAX = 30
+        GithubRetry.DEFAULT_BACKOFF_MAX = 15  # On retries, new instances are created
+        retry = GithubRetry(total=5)  # Default total=10 exceeds autofix's soft time limit
 
         if app_id and private_key:
+            self.github_auth = get_github_app_auth_and_installation(
+                app_id, private_key, repo_definition.owner, repo_definition.name
+            )[0]
             self.github = Github(
-                auth=get_github_app_auth_and_installation(
-                    app_id, private_key, repo_definition.owner, repo_definition.name
-                )[0],
+                auth=self.github_auth,
                 retry=retry,
             )
         else:
-            self.github = Github(auth=get_github_token_auth(), retry=retry)
+            token_auth = get_github_token_auth()
+
+            if not token_auth:
+                raise InitializationError(
+                    "No app credentials or token auth provided, please set GITHUB_APP_ID and GITHUB_PRIVATE_KEY or GITHUB_TOKEN"
+                )
+
+            self.github_auth = token_auth
+            self.github = Github(auth=self.github_auth, retry=retry)
 
         try:
             with sentry_sdk.start_span(
@@ -371,6 +379,15 @@ class RepoClient:
                 shutil.rmtree(root_folder_path)  # remove the root folder
 
         return tmp_dir, tmp_repo_dir
+
+    def get_clone_url_with_auth(self) -> str:
+        token = self.github_auth.token
+        base_url = self.repo.clone_url  # e.g. "https://github.com/owner/repo.git"
+
+        # insert token as password for the "x-access-token" user
+        auth_url = base_url.replace("https://", f"https://x-access-token:{token}@")
+
+        return auth_url
 
     def _autocorrect_path(self, path: str, sha: str | None = None) -> tuple[str, bool]:
         """

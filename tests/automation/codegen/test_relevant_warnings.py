@@ -117,6 +117,7 @@ def _mock_issue_details() -> IssueDetails:
                 ),
                 potentially_related_issue_titles=["Issue 1", "Issue 2"],
                 encoded_code_snippet="    def test_format_code_snippet(self):\n        pass\n",
+                is_first_occurrence=True,
             ),
             textwrap.dedent(
                 """\
@@ -138,6 +139,9 @@ def _mock_issue_details() -> IssueDetails:
                 Potentially related issue titles:
                 * Issue 1
                 * Issue 2
+                ----------
+                Has this warning at this location been seen before?
+                    This is likely a newly introduced warning from this code change.
                 ----------
                 Static Analysis Rule:
                     Rule: unused-variable
@@ -164,6 +168,7 @@ def _mock_issue_details() -> IssueDetails:
                     is_stable=False,
                 ),
                 encoded_code_snippet="",
+                is_first_occurrence=False,
             ),
             textwrap.dedent(
                 """\
@@ -177,6 +182,9 @@ def _mock_issue_details() -> IssueDetails:
                 ----------
                 Potentially related issue titles:
                     (no related issues found)
+                ----------
+                Has this warning at this location been seen before?
+                    The warning at this location has been seen before prior to this code change.
                 ----------
                 Static Analysis Rule:
                     Rule: unused-variable
@@ -201,6 +209,7 @@ def warning_and_pr_file():
         code="unused-variable",
         message="Variables unused",  # artificially assuming it's talking about both y, z
         encoded_location="app/src/main.py:5~8",
+        is_first_occurrence=True,
     )
     pr_file = PrFile(
         filename="src/main.py",

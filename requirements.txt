@@ -9,7 +9,6 @@ aiohappyeyeballs==2.6.1
 aiohttp==3.11.18
     # via
     #   -r requirements-constraints.txt
-    #   datasets
     #   fsspec
 aiosignal==1.3.2
     # via aiohttp
@@ -21,7 +20,7 @@ amqp==5.3.1
     # via kombu
 annotated-types==0.7.0
     # via pydantic
-anthropic==0.50.0
+anthropic==0.51.0
     # via -r requirements-constraints.txt
 anyio==4.9.0
     # via
@@ -58,7 +57,7 @@ celery==5.3.6
     #   flower
 celery-stubs==0.1.3
     # via -r requirements-constraints.txt
-certifi==2025.1.31
+certifi==2025.4.26
     # via
     #   -r requirements-constraints.txt
     #   httpcore
@@ -126,7 +125,7 @@ cython==3.0.2
     # via -r requirements-constraints.txt
 datadog==0.51.0
     # via -r requirements-constraints.txt
-datasets==3.5.0
+datasets==3.6.0
     # via optimum
 deprecated==1.2.18
     # via pygithub
@@ -184,6 +183,10 @@ fsspec==2023.6.0
     #   datasets
     #   huggingface-hub
     #   torch
+gitdb==4.0.12
+    # via gitpython
+gitpython==3.1.44
+    # via -r requirements-constraints.txt
 google-api-core==2.24.2
     # via
     #   google-cloud-aiplatform
@@ -192,7 +195,7 @@ google-api-core==2.24.2
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
     #   google-cloud-storage
-google-auth==2.39.0
+google-auth==2.40.1
     # via
     #   anthropic
     #   google-api-core
@@ -203,7 +206,7 @@ google-auth==2.39.0
     #   google-cloud-secret-manager
     #   google-cloud-storage
     #   google-genai
-google-cloud-aiplatform==1.90.0
+google-cloud-aiplatform==1.92.0
     # via -r requirements-constraints.txt
 google-cloud-bigquery==3.31.0
     # via google-cloud-aiplatform
@@ -224,7 +227,9 @@ google-crc32c==1.7.1
     #   google-cloud-storage
     #   google-resumable-media
 google-genai==1.2.0
-    # via -r requirements-constraints.txt
+    # via
+    #   -r requirements-constraints.txt
+    #   google-cloud-aiplatform
 google-resumable-media==2.7.2
     # via
     #   google-cloud-bigquery
@@ -238,7 +243,7 @@ grpc-google-iam-v1==0.14.2
     # via
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
-grpc-stubs==1.53.0.5
+grpc-stubs==1.53.0.6
     # via sentry-protos
 grpcio==1.71.0
     # via
@@ -259,15 +264,17 @@ grpcio-status==1.71.0
     # via google-api-core
 gunicorn==22.0.0
     # via -r requirements-constraints.txt
-h11==0.14.0
+h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
+hf-xet==1.1.0
+    # via huggingface-hub
 holidays==0.31
     # via
     #   -r requirements-constraints.txt
     #   prophet
-httpcore==1.0.8
+httpcore==1.0.9
     # via httpx
 httptools==0.6.4
     # via uvicorn
@@ -277,7 +284,7 @@ httpx==0.27.2
     #   anthropic
     #   langfuse
     #   openai
-huggingface-hub==0.30.2
+huggingface-hub==0.31.1
     # via
     #   datasets
     #   optimum
@@ -286,7 +293,7 @@ huggingface-hub==0.30.2
     #   transformers
 humanfriendly==10.0
     # via coloredlogs
-humanize==4.12.2
+humanize==4.12.3
     # via flower
 idna==3.10
     # via
@@ -361,14 +368,12 @@ markupsafe==2.1.3
     #   mako
     #   sentry-sdk
     #   werkzeug
-matplotlib==3.10.1
+matplotlib==3.10.3
     # via
     #   prophet
     #   seaborn
 mdurl==0.1.2
     # via markdown-it-py
-monotonic==1.6
-    # via posthog
 more-itertools==10.7.0
     # via openapi-core
 mpmath==1.3.0
@@ -430,7 +435,7 @@ onnx==1.16.0
     # via -r requirements-constraints.txt
 onnxruntime==1.21.1
     # via chromadb
-openai==1.76.0
+openai==1.78.0
     # via -r requirements-constraints.txt
 openapi-core==0.18.2
     # via -r requirements-constraints.txt
@@ -491,7 +496,7 @@ pip-tools==7.4.1
     # via -r requirements-constraints.txt
 pluggy==1.5.0
     # via pytest
-posthog==4.0.0
+posthog==4.0.1
     # via chromadb
 prometheus-client==0.21.1
     # via flower
@@ -531,7 +536,7 @@ psycopg==3.1.18
     # via -r requirements-constraints.txt
 pulsar-client==3.6.1
     # via chromadb
-pyarrow==19.0.1
+pyarrow==20.0.0
     # via datasets
 pyasn1==0.6.1
     # via
@@ -683,7 +688,7 @@ sentencepiece==0.2.0
     # via
     #   sentence-transformers
     #   transformers
-sentry-protos==0.1.72
+sentry-protos==0.2.0
     # via -r requirements-constraints.txt
 sentry-sdk==2.27.0
     # via -r requirements-constraints.txt
@@ -702,6 +707,8 @@ six==1.16.0
     #   posthog
     #   python-dateutil
     #   rfc3339-validator
+smmap==5.0.2
+    # via gitdb
 sniffio==1.3.1
     # via
     #   anthropic
@@ -719,8 +726,6 @@ stanio==0.5.1
 starlette==0.46.2
     # via fastapi
 statsmodels==0.14.0
-    # via -r requirements-constraints.txt
-structlog==25.2.0
     # via -r requirements-constraints.txt
 stumpy==1.13.0
     # via -r requirements-constraints.txt
@@ -770,7 +775,7 @@ tree-sitter-languages==1.10.2
     # via -r requirements-constraints.txt
 tsmoothie==1.0.5
     # via -r requirements-constraints.txt
-typer==0.15.2
+typer==0.15.3
     # via chromadb
 types-colorama==0.4.15.12
     # via -r requirements-constraints.txt

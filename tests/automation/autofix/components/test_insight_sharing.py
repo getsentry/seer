@@ -20,6 +20,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
 def mock_context():
     context = MagicMock()
     context.autocorrect_repo_name.side_effect = lambda x: x
+    context.autocorrect_file_path.side_effect = lambda path, repo_name: path
 
     repo_client = MagicMock()
     repo_client.provider = "github"

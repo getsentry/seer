@@ -146,14 +146,33 @@ class AutofixContext(PipelineContext):
             for repo in readable_repos
             if repo.provider in RepoClient.supported_providers
         ]
-        if repo_name and repo_name not in repo_names:
-            # Try to find a repo name that contains the provided one to autocorrect
-            matching_repos = [r for r in repo_names if repo_name.lower() in r.lower()]
-            if matching_repos:
-                repo_name = min(matching_repos, key=lambda x: abs(len(x) - len(repo_name or "")))
+        if repo_name and repo_name in repo_names:
+            return repo_name
+        elif repo_name and repo_name not in repo_names:
+            # No exact match, try to autocorrect
+            matching_full_names = [r for r in repo_names if repo_name.lower() in r.lower()]
+            names_without_owner = [
+                r.split("/")[-1] for r in matching_full_names if len(r.split("/")) > 1
+            ]  # the repo names without the orgs, e.g. "seer", not "getsentry/seer"
+            matching_names_without_owner = [
+                r for r in names_without_owner if repo_name.lower() == r.lower()
+            ]
+            if matching_names_without_owner:
+                repo_name_without_owner = matching_names_without_owner[0]
+                repo_name = next(
+                    (r for r in matching_full_names if f"/{repo_name_without_owner}" in r), ""
+                )
+                if not repo_name:
+                    return None
+            elif matching_full_names:
+                repo_name = min(
+                    matching_full_names, key=lambda x: abs(len(x) - len(repo_name or ""))
+                )
             else:
                 return None
-        return repo_name
+            return repo_name
+        else:
+            return None
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
@@ -200,6 +219,27 @@ class AutofixContext(PipelineContext):
 
         repo_client = self.get_repo_client(repo_name)
         return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
+
+    def autocorrect_file_path(self, path: str, repo_name: str) -> str | None:
+        """
+        Attempts to fix a path by checking if it exists in the repository as a path or directory.
+        """
+        repo_client = self.get_repo_client(repo_name=repo_name)
+        all_files = repo_client.get_valid_file_paths()
+
+        normalized_path = path.lstrip("./").lstrip("/")
+        if not normalized_path:
+            return None
+
+        for p in all_files:
+            if p.endswith(normalized_path):
+                # is a valid file path
+                return p
+            if p.startswith(normalized_path):
+                # is a valid directory path
+                return normalized_path
+
+        return None
 
     def _process_stacktrace_paths(self, stacktrace: Stacktrace):
         """

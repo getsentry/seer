@@ -79,7 +79,9 @@ class AutofixCodingStep(AutofixPipelineStep):
         if not solution:
             raise ValueError("Solution must be found before coding")
 
-        if not self.request.initial_memory:
+        if self.request.is_retry:
+            self.context.event_manager.add_log("Something broke. Coding from scratch...")
+        elif not self.request.initial_memory:
             self.context.event_manager.add_log(
                 f"Coding up a {'fix' if coding_mode == 'fix' else 'test' if coding_mode == 'test' else 'fix and a test'} for this issue..."
             )

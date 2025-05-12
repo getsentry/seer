@@ -99,6 +99,8 @@ class AutofixEventManager:
             )  # We want it to be spinning on the UI, not a grey pending, so we just make it processing.
 
     def send_root_cause_analysis_start(self):
+        log_payload = None
+
         with self.state.update() as cur:
             root_cause_step = cur.find_step(key=self.root_cause_analysis_processing_step.key)
 
@@ -110,16 +112,20 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
+            log_payload = {
+                "run_id": cur.run_id,
+                "is_auto_run": cur.request.options.auto_run_source is not None,
+                "auto_run_source": cur.request.options.auto_run_source,
+            }
+
+        if log_payload:
             log_seer_event(
                 SeerEventNames.AUTOFIX_ROOT_CAUSE_STARTED,
-                {
-                    "run_id": cur.run_id,
-                    "is_auto_run": cur.request.options.auto_run_source is not None,
-                    "auto_run_source": cur.request.options.auto_run_source,
-                },
+                log_payload,
             )
 
     def send_root_cause_analysis_result(self, root_cause_output: RootCauseAnalysisOutput):
+        log_payload = None
         with self.state.update() as cur:
             root_cause_processing_step = cur.find_or_add(self.root_cause_analysis_processing_step)
             root_cause_processing_step.status = AutofixStatus.COMPLETED
@@ -133,11 +139,14 @@ class AutofixEventManager:
             else:
                 root_cause_step.termination_reason = root_cause_output.termination_reason
 
+            log_payload = {
+                "run_id": cur.run_id,
+            }
+
+        if log_payload:
             log_seer_event(
                 SeerEventNames.AUTOFIX_ROOT_CAUSE_COMPLETED,
-                {
-                    "run_id": cur.run_id,
-                },
+                log_payload,
             )
 
     def set_selected_root_cause(self, payload: AutofixRootCauseUpdatePayload):
@@ -164,6 +173,7 @@ class AutofixEventManager:
             cur.status = AutofixStatus.PROCESSING
 
     def send_solution_start(self):
+        log_payload = None
         with self.state.update() as cur:
             solution_step = cur.find_step(key=self.solution_processing_step.key)
             if not solution_step or solution_step.status != AutofixStatus.PROCESSING:
@@ -173,14 +183,18 @@ class AutofixEventManager:
             cur.make_step_latest(solution_step)
             cur.status = AutofixStatus.PROCESSING
 
+            log_payload = {
+                "run_id": cur.run_id,
+            }
+
+        if log_payload:
             log_seer_event(
                 SeerEventNames.AUTOFIX_SOLUTION_STARTED,
-                {
-                    "run_id": cur.run_id,
-                },
+                log_payload,
             )
 
     def send_solution_result(self, solution_output: SolutionOutput):
+        log_payload = None
         with self.state.update() as cur:
             solution_processing_step = cur.find_or_add(self.solution_processing_step)
             solution_processing_step.status = AutofixStatus.COMPLETED
@@ -208,11 +222,14 @@ class AutofixEventManager:
             solution_step.description = solution_output.summary
             cur.status = AutofixStatus.NEED_MORE_INFORMATION
 
+            log_payload = {
+                "run_id": cur.run_id,
+            }
+
+        if log_payload:
             log_seer_event(
                 SeerEventNames.AUTOFIX_SOLUTION_COMPLETED,
-                {
-                    "run_id": cur.run_id,
-                },
+                log_payload,
             )
 
     def set_selected_solution(self, payload: AutofixSolutionUpdatePayload):
@@ -235,13 +252,17 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.PROCESSING
 
-            # This is here so we can get the original and updated solution for the event.
-            # set_selected_solution is called at coding start anyways.
-            self._log_coding_start(
-                run_id=cur.run_id,
-                new_solution=solution_step.solution,
-                original_solution=original_solution,
-            )
+            run_id = cur.run_id
+            new_solution = solution_step.solution
+            old_solution = original_solution
+
+        # This is here so we can get the original and updated solution for the event.
+        # set_selected_solution is called at coding start anyways.
+        self._log_coding_start(
+            run_id=run_id,
+            new_solution=new_solution,
+            original_solution=old_solution,
+        )
 
     def send_coding_start(self):
         with self.state.update() as cur:
@@ -254,6 +275,7 @@ class AutofixEventManager:
             cur.status = AutofixStatus.PROCESSING
 
     def send_coding_result(self, termination_reason: str | None = None):
+        log_payload = None
         with self.state.update() as cur:
             plan_step = cur.find_or_add(self.plan_step)
             plan_step.status = AutofixStatus.PROCESSING
@@ -266,14 +288,18 @@ class AutofixEventManager:
                 changes_step.status = AutofixStatus.COMPLETED
                 cur.status = AutofixStatus.COMPLETED
 
+            log_payload = {
+                "run_id": cur.run_id,
+            }
+
+        if log_payload:
             log_seer_event(
                 SeerEventNames.AUTOFIX_CODING_COMPLETED,
-                {
-                    "run_id": cur.run_id,
-                },
+                log_payload,
             )
 
     def send_complete(self, codebase_changes: list[CodebaseChange]):
+        log_payload = None
         with self.state.update() as cur:
             cur.mark_running_steps_completed()
 
@@ -283,11 +309,14 @@ class AutofixEventManager:
 
             cur.status = AutofixStatus.COMPLETED
 
+            log_payload = {
+                "run_id": cur.run_id,
+            }
+
+        if log_payload:
             log_seer_event(
                 SeerEventNames.AUTOFIX_COMPLETED,
-                {
-                    "run_id": cur.run_id,
-                },
+                log_payload,
             )
 
     def send_push_changes_start(self):
@@ -349,6 +378,7 @@ class AutofixEventManager:
                 )
 
     def ask_user_question(self, question: str):
+        log_payload = None
         with self.state.update() as cur:
             step = cur.steps[-1]
             step.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
@@ -360,18 +390,20 @@ class AutofixEventManager:
             )
 
             cur.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
+            log_payload = {
+                "run_id": cur.run_id,
+                "question": question,
+            }
 
-            log_seer_event(
-                SeerEventNames.AUTOFIX_ASKED_USER_QUESTION,
-                {
-                    "run_id": cur.run_id,
-                    "question": question,
-                },
-            )
+        log_seer_event(
+            SeerEventNames.AUTOFIX_ASKED_USER_QUESTION,
+            log_payload,
+        )
 
     def on_error(
         self, error_msg: str = "Something went wrong", should_completely_error: bool = True
     ):
+        log_payload = None
         with self.state.update() as cur:
             cur.mark_running_steps_errored()
             cur.set_last_step_completed_message(error_msg)
@@ -383,16 +415,24 @@ class AutofixEventManager:
             if cur.steps:
                 current_running_step = cur.steps[-1]
 
+            log_payload = {
+                "run_id": cur.run_id,
+                "error_msg": error_msg,
+                "current_running_step": (
+                    current_running_step.key if current_running_step else None
+                ),
+                "should_completely_error": should_completely_error,
+            }
+
+            if (
+                not should_completely_error and cur.steps
+            ):  # delete the last step so it's replaced with the new one upon retry
+                cur.steps = cur.steps[:-1]
+
+        if log_payload:
             log_seer_event(
                 SeerEventNames.AUTOFIX_RUN_ERROR,
-                {
-                    "run_id": cur.run_id,
-                    "error_msg": error_msg,
-                    "current_running_step": (
-                        current_running_step.key if current_running_step else None
-                    ),
-                    "should_completely_error": should_completely_error,
-                },
+                log_payload,
             )
 
     def clear_file_changes(self):
