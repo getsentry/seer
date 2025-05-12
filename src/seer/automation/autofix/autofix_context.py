@@ -22,7 +22,6 @@ from seer.automation.codebase.repo_client import (
     RepoClient,
     RepoClientType,
     autocorrect_repo_name,
-    get_file_contents_and_repo_client,
     get_repo_client,
 )
 from seer.automation.codebase.utils import potential_frame_match
@@ -129,9 +128,15 @@ class AutofixContext(PipelineContext):
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        file_contents, repo_client = get_file_contents_and_repo_client(
-            repos=self.repos, path=path, repo_name=repo_name
-        )
+        if len(self.repos) > 1:
+            if not repo_name:
+                raise ValueError("Repo name is required when there are multiple repos.")
+
+            if repo_name not in [repo.full_name for repo in self.repos]:
+                raise ValueError(f"Repo '{repo_name}' not found in the list of repos.")
+
+        repo_client = self.get_repo_client(repo_name)
+        file_contents, _ = repo_client.get_file_content(path)
 
         if not ignore_local_changes:
             cur_state = self.state.get()

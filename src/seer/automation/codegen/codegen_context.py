@@ -4,7 +4,6 @@ from seer.automation.agent.models import Message
 from seer.automation.codebase.repo_client import (
     RepoClientType,
     autocorrect_repo_name,
-    get_file_contents_and_repo_client,
     get_repo_client,
 )
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
@@ -80,9 +79,9 @@ class CodegenContext(PipelineContext):
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
     ) -> str | None:
-        file_contents, _ = get_file_contents_and_repo_client(
-            repos=self.state.get().readable_repos, path=path, repo_name=repo_name
-        )
+        repo_client = self.get_repo_client(repo_name=repo_name)
+
+        file_contents, _ = repo_client.get_file_content(path)
 
         if not ignore_local_changes:
             cur_state = self.state.get()

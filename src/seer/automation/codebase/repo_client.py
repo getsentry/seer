@@ -1139,18 +1139,3 @@ def autocorrect_repo_name(readable_repos: list[RepoDefinition], repo_name: str) 
         return repo_name
     else:
         return None
-
-
-def get_file_contents_and_repo_client(
-    repos: list[RepoDefinition], path: str, repo_name: str | None = None
-) -> tuple[str | None, RepoClient]:
-    if len(repos) > 1:
-        if not repo_name:
-            raise ValueError("Repo name is required when there are multiple repos.")
-
-        if repo_name not in [repo.full_name for repo in repos]:
-            raise ValueError(f"Repo '{repo_name}' not found in the list of repos.")
-
-    repo_client = get_repo_client(repos, repo_name=repo_name)
-    file_contents, _ = repo_client.get_file_content(path)
-    return file_contents, repo_client
