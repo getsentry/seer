@@ -146,6 +146,7 @@ OpenAiProviderFlaky = flakify(
 )
 
 gemini_exhausted_response = requests.Response()
+gemini_exhausted_response.status_code = 429
 gemini_exhausted_response._content = b"429 RESOURCE_EXHAUSTED."
 gemini_exhausted_response.headers = CaseInsensitiveDict({"Content-Type": "text/plain"})
 GeminiProviderFlaky = flakify(
