@@ -18,6 +18,9 @@ def mock_repo_client():
     client.repo_full_name = "test-owner/test-repo"
     client.provider = "github"
     client.repo_external_id = "1234567890"
+    client.get_current_commit_info.return_value = {
+        "timestamp": "2021-01-01",
+    }
     return client
 
 
@@ -136,7 +139,7 @@ def test_mark_as_timed_out_before_init(repo_manager):
         # Verify cleanup was called
         mock_cleanup.assert_called_once_with(tmp_dir)
         assert repo_manager.git_repo is None
-        assert repo_manager._cancelled
+        assert repo_manager.is_cancelled
 
 
 def test_mark_as_timed_out_during_init(repo_manager):
@@ -147,7 +150,7 @@ def test_mark_as_timed_out_during_init(repo_manager):
         repo_manager.mark_as_timed_out()
 
         # Verify cleanup was deferred
-        assert repo_manager._cancelled
+        assert repo_manager.is_cancelled
         assert repo_manager.repo_path is not None
 
 
@@ -209,6 +212,7 @@ def test_initialize_in_background(repo_manager, caplog):
 
 def test_initialize_success_without_gcs(repo_manager, mock_repo_client):
     """Test successful initialization sequence."""
+    repo_manager._use_gcs = False
 
     with (
         patch.object(repo_manager, "_clone_repo") as mock_clone,
@@ -232,9 +236,16 @@ def test_initialize_from_gcs_download(repo_manager, mock_repo_client):
     """Test initialization from a GCS download."""
     repo_manager._use_gcs = True
 
+    mock_repo_client.get_current_commit_info.side_effect = [
+        {"timestamp": "2021-01-01"},
+        {"timestamp": "2021-01-01"},
+    ]
+
     with (
         patch.object(repo_manager, "_clone_repo") as mock_clone,
-        patch.object(repo_manager, "gcs_archive_exists", return_value=True) as mock_gcs_exists,
+        patch.object(
+            repo_manager, "gcs_archive_exists", return_value=MagicMock(commit_sha="123")
+        ) as mock_gcs_exists,
         patch.object(repo_manager, "download_from_gcs") as mock_download,
         patch.object(repo_manager, "_sync_repo") as mock_sync,
         patch.object(repo_manager, "_copy_repo", return_value="copied_repo_path") as mock_copy,
@@ -254,7 +265,7 @@ def test_initialize_from_gcs_download(repo_manager, mock_repo_client):
 
 def test_initialize_cleans_up_on_timeout(repo_manager):
     """Test that initialization cleans up when timed out."""
-    repo_manager._cancelled = True
+    repo_manager.is_cancelled = True
 
     with (
         patch.object(repo_manager, "_clone_repo") as mock_clone,
