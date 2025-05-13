@@ -325,6 +325,8 @@ class AutofixRequestOptions(BaseModel):
 
 class AutofixRequest(BaseModel):
     """
+    This class is used to store the request JSON for an autofix run. It contains repository information,
+    issue details, and other information needed to start an autofix run.
     This class maps to the JSON key "request" inside the "value" column of the run_state table.
     """
 
