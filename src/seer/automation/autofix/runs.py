@@ -61,8 +61,11 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
             logger.exception(e)
 
     continuation_state = ContinuationState(state.id)
+
+    # Add information about the git repositories to the autofix state
     create_missing_codebase_states(continuation_state)
     set_accessible_repos(continuation_state)
+    set_repo_branches_and_commits(continuation_state)
 
     with state.update() as cur:
         cur.mark_triggered()
@@ -131,3 +134,25 @@ def set_accessible_repos(state: ContinuationState) -> None:
 def update_repo_access(state: ContinuationState) -> None:
     create_missing_codebase_states(state)
     set_accessible_repos(state)
+
+
+def set_repo_branches_and_commits(state: ContinuationState) -> None:
+    """
+    Ensures that each accessible repo in the request has its branch_name and base_commit_sha set.
+    For repos where branch or base_commit_sha is not set, it initializes a RepoClient and sets
+    the branch_name and base_commit_sha from the repo client.
+    Args:
+        state: The ContinuationState object containing the request.
+    """
+    cur_state = state.get()
+    for repo in cur_state.request.repos:
+        codebase = cur_state.codebases.get(repo.external_id)
+        if codebase and codebase.is_readable and codebase.is_writeable:
+            if not repo.branch_name:
+                repo_client = RepoClient.from_repo_definition(repo, "read")
+                repo.branch_name = repo_client.base_branch
+                if not repo.base_commit_sha:
+                    repo.base_commit_sha = repo_client.base_commit_sha
+
+        with state.update() as cur:
+            cur.request.repos = cur_state.request.repos

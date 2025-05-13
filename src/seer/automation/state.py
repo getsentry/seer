@@ -122,6 +122,7 @@ class DbState(State[_State]):
         of inter related locks), the database may reach a deadlock state which last until the lock timeout configured
         on the postgres database.
         """
+
         with Session() as session:
             r = session.execute(
                 select(DbRunState).where(DbRunState.id == self.id).with_for_update()

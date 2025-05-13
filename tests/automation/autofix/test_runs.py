@@ -8,7 +8,7 @@ from seer.automation.autofix.models import (
     AutofixRequestOptions,
     IssueDetails,
 )
-from seer.automation.autofix.runs import create_initial_autofix_run
+from seer.automation.autofix.runs import create_initial_autofix_run, set_repo_branches_and_commits
 
 
 @pytest.fixture
@@ -68,3 +68,44 @@ class TestRuns:
 
         # Assert that the event manager was not called due to the exception
         self.mock_event_manager.assert_not_called()
+
+    def test_set_repo_branches_and_commits(self):
+        # Mock repo and codebase
+        mock_repo = MagicMock()
+        mock_repo.provider = "github"
+        mock_repo.external_id = "repo1"
+        mock_repo.branch_name = None
+        mock_repo.base_commit_sha = None
+
+        mock_codebase = MagicMock()
+        mock_codebase.is_readable = True
+        mock_codebase.is_writeable = True
+
+        # Mock state.get() to return a state with repos and codebases
+        mock_state = MagicMock()
+        mock_state.request.repos = [mock_repo]
+        mock_state.codebases = {"repo1": mock_codebase}
+
+        # Patch state.update() as a context manager
+        mock_update_cm = MagicMock()
+        mock_update_cm.__enter__.return_value = mock_state
+        mock_update_cm.__exit__.return_value = None
+
+        mock_continuation_state = MagicMock()
+        mock_continuation_state.get.return_value = mock_state
+        mock_continuation_state.update.return_value = mock_update_cm
+
+        # Patch RepoClient.from_repo_definition
+        with patch(
+            "seer.automation.autofix.runs.RepoClient.from_repo_definition"
+        ) as mock_from_repo_def:
+            mock_repo_client = MagicMock()
+            mock_repo_client.base_branch = "main"
+            mock_repo_client.base_commit_sha = "abc123"
+            mock_from_repo_def.return_value = mock_repo_client
+
+            set_repo_branches_and_commits(mock_continuation_state)
+
+            mock_from_repo_def.assert_called_once_with(mock_repo, "read")
+            assert mock_repo.branch_name == "main"
+            assert mock_repo.base_commit_sha == "abc123"
