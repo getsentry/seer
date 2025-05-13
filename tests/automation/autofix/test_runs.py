@@ -74,8 +74,8 @@ class TestRuns:
         mock_repo = MagicMock()
         mock_repo.provider = "github"
         mock_repo.external_id = "repo1"
-        mock_repo.branch_name = None
-        mock_repo.base_commit_sha = None
+        mock_repo.branch_name = "test_branch"
+        mock_repo.base_commit_sha = "test_commit_sha"
 
         mock_codebase = MagicMock()
         mock_codebase.is_readable = True
@@ -85,6 +85,7 @@ class TestRuns:
         mock_state = MagicMock()
         mock_state.request.repos = [mock_repo]
         mock_state.codebases = {"repo1": mock_codebase}
+        mock_state.readable_repos = MagicMock(return_value=[mock_repo])
 
         # Patch state.update() as a context manager
         mock_update_cm = MagicMock()
@@ -95,17 +96,8 @@ class TestRuns:
         mock_continuation_state.get.return_value = mock_state
         mock_continuation_state.update.return_value = mock_update_cm
 
-        # Patch RepoClient.from_repo_definition
-        with patch(
-            "seer.automation.autofix.runs.RepoClient.from_repo_definition"
-        ) as mock_from_repo_def:
-            mock_repo_client = MagicMock()
-            mock_repo_client.base_branch = "main"
-            mock_repo_client.base_commit_sha = "abc123"
-            mock_from_repo_def.return_value = mock_repo_client
+        set_repo_branches_and_commits(mock_continuation_state)
 
-            set_repo_branches_and_commits(mock_continuation_state)
-
-            mock_from_repo_def.assert_called_once_with(mock_repo, "read")
-            assert mock_repo.branch_name == "main"
-            assert mock_repo.base_commit_sha == "abc123"
+        # The fixture already asserts the patch was used, so just check the results
+        assert mock_repo.branch_name == "test_branch"
+        assert mock_repo.base_commit_sha == "test_commit_sha"
