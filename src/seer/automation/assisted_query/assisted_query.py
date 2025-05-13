@@ -90,7 +90,7 @@ def create_query_from_natural_language(
         fields=relevant_fields,
         project_ids=project_ids,
         stats_period="48h",
-        limit=150,
+        limit=200,
     )
     field_values = field_values_response.get("field_values", {}) if field_values_response else {}
 

@@ -8,9 +8,6 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
     fields_with_definitions = _get_fields_with_definitions(fields=fields)
 
-    # TODO:
-    # - Handle generating multiple visualizations (usually for group by fields)
-
     prompt = textwrap.dedent(
         f"""You are a principal performance engineer who is the leading expert in Sentry's Trace Explorer page which is a tool for analyzing hundres of thousands of traces and spans.
         There is a lot of data on the page, so you need to be able to select the right fields and functions to visualize the data in a way that is most useful to the user so they can find the answers to their questionsas fast as possible.
@@ -234,8 +231,8 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         - 1 represents a line chart
         - 2 represents an area chart
 
-        You should use a line chart when visualizing by multiple functions or when visualizing a group by so it is easy to compare the values.
-        If you are visualizing just one function, then you should default to a bar chart.
+        Count and count_unique should default to using a bar chart.
+        Anything else should use a line chart by default.
 
         YOU MUST ONLY RETURN THE CHART TYPE AS AN INTEGER AND MUST BE 0, 1, OR 2.
 
@@ -274,8 +271,8 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         ## Available Field Values
 
-        For the string fields below, here are up to 5 possible values you can use for up to 125 fields.
-        These are not fully exhaustive as some fields can have many more than 5 values, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
+        For the string fields below, here are up to 15 possible values you can use for up to 125 fields.
+        These are not fully exhaustive as some fields can have many more than 15 values, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
         You will receive more values for specific string fields in the future. For numeric fields, you should use the comparison operators to find close or exact matches.
 
         <available_field_values>
@@ -325,6 +322,7 @@ def select_relevant_fields_prompt(natural_language_query: str) -> str:
     Notice that all of the fields may not directly be used in the final query, but could be used to narrow down the search without excluding any relevant results.
     The relevant fields MUST be from the list of available fields provided. THIS IS VERY IMPORTANT.
     If the user's query is not clear, try your best to translate it into a valid query (while still maintaining the original meaning as much as possible), then identify the most relevant fields.
+
     ## User's natural language query:
     {natural_language_query}
     """
@@ -362,6 +360,8 @@ def get_fields_and_values_prompt(
         </available_fields>
 
         ## The possible values for these fields are:
+
+        Here are up to 200 possible values for the available fields. Remember, use these values to construct the query. Use wildcards only if necessary to construct the query.
 
         <available_values>
         {json.dumps(field_values, indent=2)}
