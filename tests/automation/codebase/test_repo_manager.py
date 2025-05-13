@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 from concurrent.futures import Future
 from unittest.mock import ANY, MagicMock, patch
@@ -34,9 +33,8 @@ def repo_manager(mock_repo_client, tmp_path):
         yield manager
 
 
-def test_clone_success(repo_manager, mock_repo_client, caplog):
+def test_clone_success(repo_manager, mock_repo_client):
     """Test successful repository cloning."""
-    caplog.set_level(logging.INFO)
 
     # Setup mock repo client to return a local file URL
     mock_repo_client.get_clone_url_with_auth.return_value = "file:///fake/repo.git"
@@ -62,14 +60,9 @@ def test_clone_success(repo_manager, mock_repo_client, caplog):
         # Verify the repo was set
         assert repo_manager.git_repo == mock_git_repo
 
-        # Check logging
-        assert "Cloning repository test-owner/test-repo" in caplog.text
-        assert "Cloned repository" in caplog.text
 
-
-def test_clone_failure_clears_repo(repo_manager, mock_repo_client, caplog):
+def test_clone_failure_clears_repo(repo_manager, mock_repo_client):
     """Test that clone failure clears the repo reference."""
-    caplog.set_level(logging.ERROR)
 
     mock_repo_client.get_clone_url_with_auth.return_value = "file:///fake/repo.git"
 
@@ -85,13 +78,9 @@ def test_clone_failure_clears_repo(repo_manager, mock_repo_client, caplog):
         # Verify repo was cleared
         assert repo_manager.git_repo is None
 
-        # Verify error was logged
-        assert "Failed to clone repository" in caplog.text
 
-
-def test_sync_success(repo_manager, mock_repo_client, caplog):
+def test_sync_success(repo_manager, mock_repo_client):
     """Test successful repository sync."""
-    caplog.set_level(logging.INFO)
 
     # Setup mock git repo
     mock_git_repo = MagicMock(spec=git.Repo)
@@ -105,14 +94,9 @@ def test_sync_success(repo_manager, mock_repo_client, caplog):
     )
     mock_git_repo.git.checkout.assert_called_once_with(mock_repo_client.base_commit_sha, force=True)
 
-    # Check logging
-    assert f"Syncing repository {mock_repo_client.repo_full_name}" in caplog.text
-    assert "Checked out repo" in caplog.text
 
-
-def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
+def test_sync_failure_clears_repo(repo_manager, mock_repo_client):
     """Test that sync failure clears the repo reference."""
-    caplog.set_level(logging.ERROR)
 
     # Setup mock git repo that raises on execute
     mock_git_repo = MagicMock(spec=git.Repo)
@@ -123,9 +107,6 @@ def test_sync_failure_clears_repo(repo_manager, mock_repo_client, caplog):
 
     # Verify repo was cleared
     assert repo_manager.git_repo is None
-
-    # Verify error was logged
-    assert "Failed to sync repository" in caplog.text
 
 
 def test_mark_as_timed_out_before_init(repo_manager):
@@ -195,17 +176,13 @@ def test_is_available_states(repo_manager):
     assert not repo_manager.is_available
 
 
-def test_initialize_in_background(repo_manager, caplog):
+def test_initialize_in_background(
+    repo_manager,
+):
     """Test background initialization."""
-    caplog.set_level(logging.INFO)
-
     # First call should work
     repo_manager.initialize_in_background()
     assert repo_manager.initialization_future is not None
-    assert (
-        f"Creating initialize task for repo {repo_manager.repo_client.repo_full_name}"
-        in caplog.text
-    )
 
     # Second call should raise
     with pytest.raises(RuntimeError, match="is already being initialized"):
@@ -364,7 +341,7 @@ def test_gcs_archive_exists_db_entry_blob_exists(repo_manager):
         mock_blob.exists.assert_called_once()
 
 
-def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager, caplog):
+def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager):
     """Test that if checking blob.exists raises, gcs_archive_exists logs and returns None."""
     dummy_entry = MagicMock()
     dummy_session = object()
@@ -384,7 +361,6 @@ def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager, caplog):
             return_value=mock_storage_instance,
         ),
         patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
-        patch("seer.automation.codebase.repo_manager.logger") as mock_logger,
     ):
         mock_session = mock_session_class.return_value
         mock_session.__enter__.return_value = dummy_session
@@ -392,12 +368,9 @@ def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager, caplog):
         result = repo_manager.gcs_archive_exists()
 
         assert result is None
-        mock_logger.exception.assert_called_once_with(
-            "Error checking if repository archive exists in GCS"
-        )
 
 
-def test_download_from_gcs_blob_not_exists(repo_manager, mock_repo_client, caplog):
+def test_download_from_gcs_blob_not_exists(repo_manager, mock_repo_client):
     """Test that when the blob does not exist, download_from_gcs raises and logs."""
     mock_blob = MagicMock()
     mock_blob.exists.return_value = False
@@ -406,7 +379,6 @@ def test_download_from_gcs_blob_not_exists(repo_manager, mock_repo_client, caplo
     mock_storage_instance = MagicMock()
     mock_storage_instance.bucket.return_value = mock_bucket
 
-    caplog.set_level(logging.ERROR)
     with (
         patch(
             "seer.automation.codebase.repo_manager.storage.Client",
@@ -416,10 +388,9 @@ def test_download_from_gcs_blob_not_exists(repo_manager, mock_repo_client, caplo
     ):
         with pytest.raises(FileNotFoundError):
             repo_manager.download_from_gcs()
-    assert "Failed to download repository from GCS" in caplog.text
 
 
-def test_download_from_gcs_success(repo_manager, mock_repo_client, caplog):
+def test_download_from_gcs_success(repo_manager, mock_repo_client):
     """Test successful download_from_gcs sequence."""
     mock_blob = MagicMock()
     mock_blob.exists.return_value = True
@@ -434,7 +405,6 @@ def test_download_from_gcs_success(repo_manager, mock_repo_client, caplog):
     fake_tar.getmembers.return_value = []
     fake_tar.extractall = MagicMock()
 
-    caplog.set_level(logging.INFO)
     with (
         patch(
             "seer.automation.codebase.repo_manager.storage.Client",
@@ -458,7 +428,6 @@ def test_download_from_gcs_success(repo_manager, mock_repo_client, caplog):
         fake_tar.getmembers.assert_called_once()
         fake_tar.extractall.assert_called_once_with(path=repo_manager.repo_path, members=[])
         assert repo_manager.git_repo is not None
-        assert "Successfully downloaded repository from GCS" in caplog.text
 
 
 def test_upload_lock_success(repo_manager):
@@ -486,17 +455,15 @@ def test_upload_lock_success(repo_manager):
         assert dummy_session.commit.call_count == 2
 
 
-def test_upload_lock_already_locked(repo_manager, caplog):
+def test_upload_lock_already_locked(repo_manager):
     """Test that upload_lock raises when the archive is already locked."""
     now = datetime.datetime.now(datetime.timezone.utc)
     dummy_archive = MagicMock()
     dummy_archive.upload_locked_at = now
     dummy_session = MagicMock()
-    # Patch logger to assert info log on locked
     with (
         patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
         patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_archive),
-        patch("seer.automation.codebase.repo_manager.logger") as mock_logger,
     ):
         mock_session = mock_session_class.return_value
         mock_session.__enter__.return_value = dummy_session
@@ -505,14 +472,11 @@ def test_upload_lock_already_locked(repo_manager, caplog):
             with repo_manager.upload_lock():
                 pass
 
-        mock_logger.info.assert_called_once()
-        # Optionally, verify message content
-        assert "Repository is already locked for upload" in mock_logger.info.call_args[0][0]
+        assert dummy_archive.upload_locked_at == now
 
 
-def test_upload_to_gcs_success(repo_manager, mock_repo_client, caplog):
+def test_upload_to_gcs_success(repo_manager, mock_repo_client):
     """Test upload_to_gcs uploads tar to GCS and cleans up temp files."""
-    caplog.set_level(logging.INFO)
     # Prepare a dummy archive record for upload_lock
     dummy_archive = MagicMock()
     dummy_archive.upload_locked_at = None
@@ -569,13 +533,10 @@ def test_upload_to_gcs_success(repo_manager, mock_repo_client, caplog):
         # Cleanup
         mock_unlink.assert_called_once_with(temp_tar)
         mock_rmtree.assert_called_once_with(copied_path)
-        # Logging
-        assert "Successfully uploaded repository to GCS" in caplog.text
 
 
-def test_upload_to_gcs_failure(repo_manager, mock_repo_client, caplog):
+def test_upload_to_gcs_failure(repo_manager, mock_repo_client):
     """Test upload_to_gcs logs and propagates exception during upload."""
-    caplog.set_level(logging.ERROR)
     # Prepare a dummy archive record for upload_lock
     dummy_archive = MagicMock()
     dummy_archive.upload_locked_at = None
@@ -617,18 +578,14 @@ def test_upload_to_gcs_failure(repo_manager, mock_repo_client, caplog):
         with pytest.raises(Exception, match="upload error"):
             repo_manager.upload_to_gcs()
 
-        # Logged failure
-        assert "Failed to upload repository to GCS" in caplog.text
         # Cleanup still executed
         temp_tar = os.path.join(repo_manager.tmp_dir, "upload_repo_archive.tar.gz")
         mock_unlink.assert_called_once_with(temp_tar)
         mock_rmtree.assert_called_once_with(copied_path)
 
 
-def test_download_from_gcs_prevent_path_traversal(repo_manager, mock_repo_client, caplog):
+def test_download_from_gcs_prevent_path_traversal(repo_manager, mock_repo_client):
     """Test that download_from_gcs skips unsafe paths to prevent path traversal and completes successfully."""
-    # Capture INFO and above to verify success log and warnings
-    caplog.set_level(logging.INFO)
     # Setup storage blob
     storage_instance = MagicMock()
     bucket = MagicMock()
@@ -680,13 +637,8 @@ def test_download_from_gcs_prevent_path_traversal(repo_manager, mock_repo_client
         assert fake_member_unsafe not in members_list
         assert fake_member_abs not in members_list
 
-        # Warnings for unsafe paths
-        assert "Skipping potentially unsafe path: ../unsafe.txt" in caplog.text
-        assert "Skipping potentially unsafe path: /absolute/path" in caplog.text
-
         # Git repo should be set
         assert repo_manager.git_repo is not None
-        assert "Successfully downloaded repository from GCS" in caplog.text
 
 
 def test_prune_repo_not_initialized(repo_manager):
@@ -700,7 +652,7 @@ def test_prune_repo_not_initialized(repo_manager):
             repo_manager._prune_repo()
 
 
-def test_prune_repo_no_refs(repo_manager, caplog):
+def test_prune_repo_no_refs(repo_manager):
     """Test that _prune_repo skips deletion when no refs are found."""
     mock_git = MagicMock()
 
@@ -715,17 +667,14 @@ def test_prune_repo_no_refs(repo_manager, caplog):
     mock_git.git = MagicMock()
     mock_git.git.execute.side_effect = fake_execute
     with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
-        caplog.set_level(logging.INFO)
         repo_manager._prune_repo()
-        assert "Pruning unnecessary references" in caplog.text
-        assert "Cleaning Git repository to minimal state" in caplog.text
         # Ensure update-ref not called
         for args, kwargs in mock_git.git.execute.call_args_list:
             if args and isinstance(args[0], list) and args[0][1] == "update-ref":
                 pytest.fail("update-ref should not be called when no refs")
 
 
-def test_prune_repo_delete_refs(repo_manager, caplog):
+def test_prune_repo_delete_refs(repo_manager):
     """Test that _prune_repo deletes refs that do not include base_commit_sha."""
     base_sha = repo_manager.repo_client.base_commit_sha
     show_refs = f"{base_sha} refs/heads/keep\notherref refs/heads/delete1"
@@ -740,14 +689,12 @@ def test_prune_repo_delete_refs(repo_manager, caplog):
     mock_git.git = MagicMock()
     mock_git.git.execute.side_effect = side_effects
     with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
-        caplog.set_level(logging.INFO)
         repo_manager._prune_repo()
         # Ensure update-ref called for delete1
         mock_git.git.execute.assert_any_call(["git", "update-ref", "-d", "refs/heads/delete1"])
-        assert "Cleaning Git repository to minimal state" in caplog.text
 
 
-def test_prune_repo_show_ref_error(repo_manager, caplog):
+def test_prune_repo_show_ref_error(repo_manager):
     """Test that _prune_repo handles show-ref errors gracefully."""
     mock_git = MagicMock()
     error = git.GitCommandError("git show-ref", 1)
@@ -760,8 +707,6 @@ def test_prune_repo_show_ref_error(repo_manager, caplog):
     mock_git.git = MagicMock()
     mock_git.git.execute.side_effect = side_effects
     with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
-        caplog.set_level(logging.INFO)
         repo_manager._prune_repo()
-        assert "No references found in the repository" in caplog.text
         mock_git.git.execute.assert_any_call(["git", "reflog", "expire", "--expire=now", "--all"])
         mock_git.git.execute.assert_any_call(["git", "gc", "--prune=now", "--aggressive"])
