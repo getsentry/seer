@@ -150,8 +150,9 @@ GeminiProviderFlaky = flakify(
     GeminiProvider,
     retryable_exception=ClientError(
         code=429,
-        response_json={"error": {"code": 429, "message": "RESOURCE_EXHAUSTED"}},
         response=gemini_exhausted_response,
+        response_json={"error": {"code": 429, "message": "RESOURCE_EXHAUSTED"}},
+        message="429 None. {'error': {'code': 429, 'message': 'RESOURCE_EXHAUSTED'}}",
     ),
     # https://sentry.sentry.io/issues/6301072208
     get_obj_with_create_stream_method_from_client=lambda client: client.models,
