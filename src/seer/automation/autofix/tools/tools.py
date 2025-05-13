@@ -61,12 +61,17 @@ class BaseTools:
         if not repo_names:
             return
 
+        request = self.context.state.get().request
+
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
             repo_manager = RepoManager(
-                repo_client, trigger_liveness_probe=self._trigger_liveness_probe
+                repo_client,
+                trigger_liveness_probe=self._trigger_liveness_probe,
+                organization_id=request.organization_id,
+                project_id=request.project_id,
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
@@ -86,16 +91,20 @@ class BaseTools:
                       If None, waits for all repos to be downloaded.
         """
         if repo_name:
+            if repo_name not in self.repo_managers:
+                raise ValueError(f"Repository {repo_name} not found")
             repo_managers_to_wait_for = (
                 [self.repo_managers[repo_name]]
-                if not self.repo_managers[repo_name].is_available
+                if (not self.repo_managers[repo_name].is_available)
+                and (not self.repo_managers[repo_name].is_cancelled)
                 else []
             )
         else:
             repo_managers_to_wait_for = [
                 self.repo_managers[rn]
                 for rn in self._get_repo_names()
-                if not self.repo_managers[rn].is_available
+                if (not self.repo_managers[rn].is_available)
+                and (not self.repo_managers[rn].is_cancelled)
             ]
 
         if not repo_managers_to_wait_for:
