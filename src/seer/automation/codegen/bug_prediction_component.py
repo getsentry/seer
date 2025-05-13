@@ -12,11 +12,14 @@ from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
+    BugPredictorFormatterInput,
+    BugPredictorFormatterOutput,
     BugPredictorHypothesis,
     BugPredictorOutput,
     BugPredictorRequest,
     FilterFilesOutput,
     FilterFilesRequest,
+    FormattedBugPrediction,
 )
 from seer.automation.codegen.prompts import BugPredictionPrompts
 from seer.automation.component import BaseComponent
@@ -202,3 +205,28 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
             hypotheses=hypotheses,
             followups=followups,
         )
+
+
+class BugPredictionFormatterComponent(
+    BaseComponent[BugPredictorFormatterInput, BugPredictorFormatterOutput]
+):
+    @inject
+    def invoke(
+        self, request: BugPredictorFormatterInput, llm_client: LlmClient = injected
+    ) -> BugPredictorFormatterOutput:
+        if not request.followups:
+            return BugPredictorFormatterOutput(formatted_predictions=[])
+
+        response = llm_client.generate_structured(
+            prompt=BugPredictionPrompts.format_prompt_bug_prediction_formatter(request.followups),
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
+            response_format=list[FormattedBugPrediction],
+            run_name="Bug Prediction Formatter",
+            max_tokens=8192,
+        )
+
+        if response.parsed is None:
+            self.logger.warning("Failed to extract structured information from bug prediction")
+            return BugPredictorFormatterOutput(formatted_predictions=[])
+
+        return BugPredictorFormatterOutput(formatted_predictions=response.parsed)

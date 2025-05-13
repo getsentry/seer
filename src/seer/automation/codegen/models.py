@@ -367,6 +367,33 @@ class BugPredictorOutput(BaseComponentOutput):
         return v
 
 
+class FormattedBugPrediction(BaseModel):
+    title: str
+    description: str
+    affected_files: list[str]
+    suggested_fix: str
+    severity: float
+    confidence: float
+    is_valid: bool
+    code_locations: list[str]
+
+    def to_overwatch_result(self) -> RelevantWarningResult:
+        return RelevantWarningResult(
+            reasoning=self.description,
+            short_description=self.description,
+            short_justification=self.description,
+            encoded_location=self.code_locations[0] if self.code_locations else None,
+        )
+
+
+class BugPredictorFormatterInput(BaseComponentRequest):
+    followups: list[str] | None = None
+
+
+class BugPredictorFormatterOutput(BaseComponentOutput):
+    formatted_predictions: list[FormattedBugPrediction]
+
+
 class CodecovTaskRequest(BaseModel):
     data: (
         CodegenUnitTestsRequest
