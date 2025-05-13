@@ -517,6 +517,9 @@ class BaseTools:
         if not use_regex:
             cmd.append("--fixed-strings")
 
+        if "\n" in query:
+            cmd.append("--multiline")
+
         if not case_sensitive:
             cmd.append("--ignore-case")
 

@@ -434,6 +434,12 @@ class RepoClient:
         if sha is None:
             sha = self.base_commit_sha
 
+        # Normalize the path by removing leading slashes
+        if path.startswith("/"):
+            path = path[1:]
+        if path.startswith("./"):
+            path = path[2:]
+
         try:
             contents = self.repo.get_contents(path, ref=sha)
 
