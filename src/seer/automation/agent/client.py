@@ -990,8 +990,10 @@ class GeminiProvider:
                     max_output_tokens=max_tokens or 8192,
                     response_schema=response_format,
                     cached_content=cache_name,
-                    thinking_budget=ThinkingConfig(
-                        thinking_budget=thinking_budget or 4096,
+                    thinking_config=(
+                        ThinkingConfig(thinking_budget=thinking_budget)
+                        if thinking_budget is not None
+                        else None
                     ),
                 ),
             )
