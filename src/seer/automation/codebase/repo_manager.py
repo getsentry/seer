@@ -201,7 +201,9 @@ class RepoManager:
                 depth=1,
             )
             end_time = time.time()
-            logger.info(f"Cloned repository {self.repo_client.repo_full_name} in {end_time - start_time} seconds")
+            logger.info(
+                f"Cloned repository {self.repo_client.repo_full_name} in {end_time - start_time} seconds"
+            )
 
             return self.repo_path
         except Exception:
@@ -503,7 +505,9 @@ class RepoManager:
             start_time = time.time()
             blob.download_to_filename(temp_tarfile)
             end_time = time.time()
-            logger.info(f"Downloaded repository archive for {self.repo_client.repo_full_name} in {end_time - start_time} seconds")
+            logger.info(
+                f"Downloaded repository archive for {self.repo_client.repo_full_name} in {end_time - start_time} seconds"
+            )
 
             # Clean up existing repo path before extracting
             cleanup_dir(self.repo_path)
