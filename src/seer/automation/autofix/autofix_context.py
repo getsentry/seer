@@ -550,21 +550,37 @@ class AutofixContext(PipelineContext):
     def make_file_patches(
         self, file_changes: list[FileChange], repo_name: str
     ) -> tuple[list[FilePatch], str]:
-        document_paths = list(set([file_change.path for file_change in file_changes]))
+        changes_by_path: dict[str, list[FileChange]] = {}
+        for change in file_changes:
+            if change.path not in changes_by_path:
+                changes_by_path[change.path] = []
+            changes_by_path[change.path].append(change)
 
-        if not document_paths:
+        if not changes_by_path.keys():
             return [], ""
 
-        original_documents = [
-            BaseDocument(
-                path=path,
-                text=self.get_file_contents(path, repo_name=repo_name, ignore_local_changes=True)
-                or "",
-            )
-            for path in document_paths
-        ]
+        original_documents = []
+        for path, changes in changes_by_path.items():
+            is_new_file = all(change.change_type == "create" for change in changes)
+            if not is_new_file:
+                original_documents.append(
+                    BaseDocument(
+                        path=path,
+                        text=self.get_file_contents(
+                            path, repo_name=repo_name, ignore_local_changes=True
+                        )
+                        or "",
+                    )
+                )
+            else:
+                original_documents.append(
+                    BaseDocument(
+                        path=path,
+                        text="",
+                    )
+                )
 
-        return make_file_patches(file_changes, document_paths, original_documents)
+        return make_file_patches(file_changes, changes_by_path.keys(), original_documents)
 
     def store_memory(self, key: str, memory: list[Message]):
         with Session() as session:
