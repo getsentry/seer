@@ -142,7 +142,7 @@ def set_repo_branches_and_commits(state: ContinuationState) -> None:
     For repos where branch or base_commit_sha is not set, it initializes a RepoClient and sets
     the branch_name and base_commit_sha from the repo client.
     Args:
-        state: The ContinuationState object containing the request.
+        state: The ContinuationState object containing the autofix run state.
     """
     cur_state = state.get()
     for repo in cur_state.readable_repos:
