@@ -211,6 +211,7 @@ class TestEnsureReposDownloaded:
             repo_manager.initialization_future = future
             repo_manager.repo_client.repo_full_name = name
             repo_manager.is_available = False
+            repo_manager.is_cancelled = False  # Explicitly set is_cancelled to False
 
             repo_managers[name] = repo_manager
             futures[name] = future
@@ -263,6 +264,7 @@ class TestEnsureReposDownloaded:
             repo_manager.initialization_future = future
             repo_manager.repo_client.repo_full_name = name
             repo_manager.is_available = False
+            repo_manager.is_cancelled = False  # Explicitly set is_cancelled to False
 
             repo_managers[name] = repo_manager
             all_futures.append(future)
@@ -309,6 +311,7 @@ class TestEnsureReposDownloaded:
             repo_manager.initialization_future = None  # Already downloaded
             repo_manager.repo_client.repo_full_name = name
             repo_manager.is_available = True
+            repo_manager.is_cancelled = False  # Explicitly set is_cancelled to False
 
             repo_managers[name] = repo_manager
 
@@ -349,6 +352,8 @@ class TestEnsureReposDownloaded:
             repo_manager.repo_client.repo_full_name = name
             repo_manager.mark_as_timed_out = MagicMock()
             repo_manager.is_available = False
+            repo_manager.is_cancelled = False  # Explicitly set is_cancelled to False
+
             repo_managers[name] = repo_manager
             futures[name] = future
 
@@ -403,12 +408,14 @@ class TestEnsureReposDownloaded:
         repo_manager1.repo_client.repo_full_name = "owner/repo1"
         repo_manager1.mark_as_timed_out = MagicMock()
         repo_manager1.is_available = False
+        repo_manager1.is_cancelled = False  # Explicitly set is_cancelled to False
 
         repo_manager2 = MagicMock()
         repo_manager2.initialization_future = future2
         repo_manager2.repo_client.repo_full_name = "owner/repo2"
         repo_manager2.mark_as_timed_out = MagicMock()
         repo_manager2.is_available = False
+        repo_manager2.is_cancelled = False  # Explicitly set is_cancelled to False
 
         repo_managers["owner/repo1"] = repo_manager1
         repo_managers["owner/repo2"] = repo_manager2
@@ -432,6 +439,91 @@ class TestEnsureReposDownloaded:
         # Verify that mark_as_timed_out was called for the repo with exception
         repo_managers["owner/repo2"].mark_as_timed_out.assert_called_once()
         repo_managers["owner/repo1"].mark_as_timed_out.assert_not_called()
+
+    @patch("seer.automation.autofix.tools.tools.wait")
+    def test_ensure_repos_downloaded_skips_cancelled_repos(self, mock_wait):
+        """Test that _ensure_repos_downloaded skips cancelled repos."""
+        # Setup
+        context = MagicMock()
+        context.event_manager = MagicMock()
+
+        # Create mock repo managers
+        repo_managers = {"normal/repo": MagicMock(), "cancelled/repo": MagicMock()}
+
+        # Set up a normal repo
+        normal_repo = repo_managers["normal/repo"]
+        normal_repo.is_available = False
+        normal_repo.is_cancelled = False
+        normal_repo.repo_client.repo_full_name = "normal/repo"
+        normal_future = MagicMock(spec=Future)
+        normal_repo.initialization_future = normal_future
+
+        # Set up a cancelled repo
+        cancelled_repo = repo_managers["cancelled/repo"]
+        cancelled_repo.is_available = False
+        cancelled_repo.is_cancelled = True
+        cancelled_repo.repo_client.repo_full_name = "cancelled/repo"
+        cancelled_future = MagicMock(spec=Future)
+        cancelled_repo.initialization_future = cancelled_future
+
+        # Mock wait to return done and not_done sets
+        mock_wait.return_value = (set([normal_future]), set())
+
+        # Create the tools instance
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=["normal/repo", "cancelled/repo"])
+        tools.repo_managers = repo_managers
+        tools._trigger_liveness_probe = MagicMock()
+
+        # Patch langfuse and time
+        with patch("seer.automation.autofix.tools.tools.append_langfuse_observation_metadata"):
+            with patch("seer.automation.autofix.tools.tools.time"):
+                # Call _ensure_repos_downloaded with no specific repo
+                tools._ensure_repos_downloaded()
+
+        # Verify that wait was called with only the normal repo's future
+        mock_wait.assert_called_once()
+        args, kwargs = mock_wait.call_args
+        assert len(args[0]) == 1
+        assert args[0][0] == normal_future
+        assert cancelled_future not in args[0]
+        assert kwargs["timeout"] == 120.0
+        assert kwargs["return_when"] == FIRST_EXCEPTION
+
+    @patch("seer.automation.autofix.tools.tools.wait")
+    def test_ensure_specific_repo_downloaded_skips_if_cancelled(self, mock_wait):
+        """Test that _ensure_repos_downloaded skips a specific repo if it's cancelled."""
+        # Setup
+        context = MagicMock()
+        context.event_manager = MagicMock()
+
+        # Create mock repo managers
+        repo_managers = {"cancelled/repo": MagicMock()}
+
+        # Set up a cancelled repo
+        cancelled_repo = repo_managers["cancelled/repo"]
+        cancelled_repo.is_available = False
+        cancelled_repo.is_cancelled = True
+        cancelled_repo.repo_client.repo_full_name = "cancelled/repo"
+        cancelled_future = MagicMock(spec=Future)
+        cancelled_repo.initialization_future = cancelled_future
+
+        # Create the tools instance
+        tools = BaseTools.__new__(BaseTools)
+        tools.context = context
+        tools._get_repo_names = MagicMock(return_value=["cancelled/repo"])
+        tools.repo_managers = repo_managers
+        tools._trigger_liveness_probe = MagicMock()
+
+        # Call _ensure_repos_downloaded for the cancelled repo
+        tools._ensure_repos_downloaded("cancelled/repo")
+
+        # Verify wait was not called at all because the repo is cancelled
+        mock_wait.assert_not_called()
+
+        # Verify event_manager.add_log was not called
+        context.event_manager.add_log.assert_not_called()
 
 
 class TestSemanticFileSearch:
