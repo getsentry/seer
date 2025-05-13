@@ -86,29 +86,39 @@ def validate_repo_branches_exist(
 
 def create_missing_codebase_states(state: ContinuationState) -> None:
     cur_state = state.get()
+    new_codebases = {}
+
     for repo in cur_state.request.repos:
         if repo.external_id not in cur_state.codebases:
-            with state.update() as cur:
-                cur.codebases[repo.external_id] = CodebaseState(
-                    file_changes=[],
-                    repo_external_id=repo.external_id,
-                )
+            new_codebases[repo.external_id] = CodebaseState(
+                file_changes=[],
+                repo_external_id=repo.external_id,
+            )
+
+    if new_codebases:
+        with state.update() as cur:
+            cur.codebases.update(new_codebases)
 
 
 def set_accessible_repos(state: ContinuationState) -> None:
     cur_state = state.get()
+    updates = {}
+
     for repo in cur_state.request.repos:
         if repo.provider == "github":
-            if RepoClient.check_repo_read_access(repo):
-                with state.update() as cur:
-                    cur.codebases[repo.external_id].is_readable = True
-            if RepoClient.check_repo_write_access(repo):
-                with state.update() as cur:
-                    cur.codebases[repo.external_id].is_writeable = True
+            is_readable = RepoClient.check_repo_read_access(repo)
+            is_writeable = RepoClient.check_repo_write_access(repo)
+            updates[repo.external_id] = {
+                "is_readable": bool(is_readable),
+                "is_writeable": bool(is_writeable),
+            }
         else:
-            with state.update() as cur:
-                cur.codebases[repo.external_id].is_readable = False
-                cur.codebases[repo.external_id].is_writeable = False
+            updates[repo.external_id] = {"is_readable": False, "is_writeable": False}
+
+    with state.update() as cur:
+        for repo_id, update in updates.items():
+            cur.codebases[repo_id].is_readable = update["is_readable"]
+            cur.codebases[repo_id].is_writeable = update["is_writeable"]
 
 
 def update_repo_access(state: ContinuationState) -> None:

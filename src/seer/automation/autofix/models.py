@@ -497,8 +497,6 @@ class AutofixContinuation(AutofixGroupState):
             repo
             for repo in self.request.repos
             if self.codebases[repo.external_id].is_readable is True
-            or self.codebases[repo.external_id].is_readable
-            is None  # TODO: Remove this once we don't need backwards compatibility
         ]
 
     @property

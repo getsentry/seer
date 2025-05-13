@@ -38,6 +38,7 @@ from seer.dependency_injection import inject, injected
 logger = logging.getLogger(__name__)
 
 
+@functools.lru_cache(maxsize=8)
 def get_github_app_auth_and_installation(
     app_id: int | str, private_key: str, repo_owner: str, repo_name: str
 ):
@@ -432,6 +433,12 @@ class RepoClient:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
+
+        # Normalize the path by removing leading slashes
+        if path.startswith("/"):
+            path = path[1:]
+        if path.startswith("./"):
+            path = path[2:]
 
         try:
             contents = self.repo.get_contents(path, ref=sha)

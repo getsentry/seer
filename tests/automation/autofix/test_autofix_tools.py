@@ -66,6 +66,7 @@ def autofix_tools(test_state):
     # Set up context methods
     context._get_repo_names = MagicMock(return_value=[repo.full_name for repo in test_state.repos])
     context._attempt_fix_path = MagicMock(return_value="test.py")
+    context.autocorrect_repo_name = MagicMock(return_value="test/repo")
 
     with patch("seer.automation.autofix.tools.tools.BaseTools._download_repos", MagicMock()):
         tools = BaseTools(context)
@@ -801,7 +802,7 @@ class TestFindFiles:
         autofix_tools.repo_managers = {
             "owner/test_repo": MagicMock(is_available=True, repo_path="/tmp/test_dir/repo")
         }
-
+        autofix_tools.context.autocorrect_repo_name = MagicMock(return_value="owner/test_repo")
         with patch("subprocess.run") as mock_run:
             mock_process = MagicMock()
             mock_process.returncode = 0

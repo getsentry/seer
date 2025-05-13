@@ -203,6 +203,7 @@ class BaseTools:
         if valid_file_path is None:
             other_paths = self._get_potential_abs_paths(file_path, repo_name)
             return f"Error: The file path `{file_path}` doesn't exist in `{repo_name}`.\n{other_paths}".strip()
+        file_path = valid_file_path
 
         # At this point we have ensured the file path and the repo name are valid.
         file_contents = self.context.get_file_contents(file_path, repo_name=repo_name)
@@ -485,6 +486,16 @@ class BaseTools:
         repo_name: str | None = None,
         use_regex: bool = False,
     ) -> str:
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
+
         self._ensure_repos_downloaded(repo_name)
 
         if not query:
@@ -500,6 +511,9 @@ class BaseTools:
 
         if not use_regex:
             cmd.append("--fixed-strings")
+
+        if "\n" in query:
+            cmd.append("--multiline")
 
         if not case_sensitive:
             cmd.append("--ignore-case")
@@ -567,6 +581,16 @@ class BaseTools:
         command = command.replace('\\"', '"')  # un-escape escaped quotes
         command = command.replace("\\'", "'")  # un-escape escaped single quotes
         command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
+
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
 
         self.context.event_manager.add_log(f"Searching files with `{command}`...")
 

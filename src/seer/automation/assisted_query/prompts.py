@@ -244,7 +244,9 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         ## Available Field Values
 
-        For the string fields below, here are up to 5 possible values you can use. These are not fully exhaustive as some fields can have many more than 5 values, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
+        For the string fields below, here are up to 5 possible values you can use for up to 125 fields.
+        These are not fully exhaustive as some fields can have many more than 5 values, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
+        You will receive more values for specific string fields in the future. For numeric fields, you should use the comparison operators to find close or exact matches.
 
         <available_field_values>
         {json.dumps(field_values, indent=2)}
