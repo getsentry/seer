@@ -238,6 +238,7 @@ class RepoClient:
         self.base_commit_sha = repo_definition.base_commit_sha or self.get_branch_head_sha(
             self.base_branch
         )
+        logger.info(f"Branch {self.base_branch} and Base commit sha: {self.base_commit_sha}")
 
         self.get_valid_file_paths = functools.lru_cache(maxsize=8)(self._get_valid_file_paths)
         self.get_commit_history = functools.lru_cache(maxsize=16)(self._get_commit_history)

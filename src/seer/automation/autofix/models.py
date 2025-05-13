@@ -255,11 +255,18 @@ class AutofixFeedback(BaseModel):
 
 
 class AutofixGroupState(BaseModel):
+    """
+    This class maps to the JSON keys inside the "value" field of the run_state table.
+    This class stores  almost the whole state of autofix run.
+    """
+
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
     status: AutofixStatus = AutofixStatus.PROCESSING
     codebases: dict[str, CodebaseState] = Field(default_factory=dict)
-    usage: Usage = Field(default_factory=Usage)
+    usage: Usage = Field(
+        default_factory=Usage
+    )  # Usage metrics like prompt_tokens, total_tokens, etc.
     last_triggered_at: Annotated[
         datetime.datetime, Examples(datetime.datetime.now() for _ in gen)
     ] = Field(default_factory=datetime.datetime.now)
@@ -319,6 +326,10 @@ class AutofixRequestOptions(BaseModel):
 
 
 class AutofixRequest(BaseModel):
+    """
+    This class maps to the JSON key "request" inside the "value" column of the run_state table.
+    """
+
     organization_id: Annotated[int, Examples(specialized.unsigned_ints)]
     project_id: Annotated[int, Examples(specialized.unsigned_ints)]
     repos: list[RepoDefinition]
