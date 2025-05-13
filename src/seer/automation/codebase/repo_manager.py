@@ -239,7 +239,7 @@ class RepoManager:
                 f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
             )
 
-            if self._use_gcs:  # We'll only hardcode this to be used with the seer project
+            if self._use_gcs:
                 self._verify_repo_state()
         except Exception:
             logger.exception(
