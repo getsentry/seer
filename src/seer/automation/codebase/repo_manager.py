@@ -128,9 +128,19 @@ class RepoManager:
 
             commit_sha = self.repo_client.base_commit_sha
 
-            # Fetch only the specific commit
-            self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
-            self.git_repo.git.checkout(commit_sha)
+            try:
+                # First attempt with shallow fetch
+                self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
+                self.git_repo.git.checkout(commit_sha)
+            except git.GitCommandError as e:
+                if "unable to read tree" in str(e.stderr):
+                    # If we can't read the tree, try a full fetch of just the commit
+                    logger.info(f"Shallow fetch failed for {commit_sha}, performing full fetch")
+                    self.git_repo.git.execute(["git", "fetch", "--no-tags", "origin", commit_sha])
+                    self.git_repo.git.checkout(commit_sha)
+                else:
+                    # If it's a different error, re-raise it
+                    raise
 
             end_time = time.time()
             logger.info(
