@@ -508,7 +508,8 @@ class AnthropicProvider:
 
     @staticmethod
     def is_input_too_long(exception: Exception) -> bool:
-        return "Prompt is too long" in str(exception)
+        error_msg = str(exception)
+        return ("Prompt is too long" in error_msg) or ("exceed context limit" in error_msg)
 
     @observe(as_type="generation", name="Anthropic Generation")
     @sentry_sdk.trace
