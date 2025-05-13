@@ -54,9 +54,7 @@ class RepoManager:
     _use_gcs: bool
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
-    _app_config: AppConfig  # This is here because we can't inject on a property...
 
-    @inject
     def __init__(
         self,
         repo_client: RepoClient,
@@ -64,7 +62,6 @@ class RepoManager:
         organization_id: int,
         project_id: int,
         trigger_liveness_probe: Callable[[], None] | None = None,
-        config: AppConfig = injected,
     ):
         """
         Initialize the local git client.
@@ -83,7 +80,6 @@ class RepoManager:
         self._trigger_liveness_probe = trigger_liveness_probe
         self.is_cancelled = False
         self._last_liveness_update = 0.0
-        self._app_config = config
 
         self._use_gcs = organization_id == 1 and project_id == 6178942  # Hardcoded ONLY for Seer
 
@@ -92,15 +88,16 @@ class RepoManager:
         return self.git_repo is not None and self.initialization_future is None
 
     @property
-    def bucket_name(self):
-        if not self._app_config.CODEBASE_GCS_STORAGE_BUCKET:
+    def blob_name(self):
+        # Segmented by organization
+        return f"repos/{self.organization_id}/{self.repo_client.provider}/{self.repo_client.repo_owner}/{self.repo_client.repo_name}_{self.repo_client.repo_external_id}.tar.gz"
+
+    @inject
+    def get_bucket_name(self, config: AppConfig = injected):
+        if not config.CODEBASE_GCS_STORAGE_BUCKET:
             raise RepoInitializationError("CODEBASE_GCS_STORAGE_BUCKET is not set, can't use GCS")
 
-        return self._app_config.CODEBASE_GCS_STORAGE_BUCKET
-
-    @property
-    def blob_name(self):
-        return f"repos/{self.organization_id}/{self.project_id}/{self.repo_client.provider}/{self.repo_client.repo_owner}/{self.repo_client.repo_name}_{self.repo_client.repo_external_id}.tar.gz"
+        return config.CODEBASE_GCS_STORAGE_BUCKET
 
     def initialize_in_background(self):
         logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
@@ -127,7 +124,7 @@ class RepoManager:
 
             else:
                 logger.info(
-                    f"Using repository archive from GCS for {self.repo_client.repo_full_name}: {self.bucket_name}/{self.blob_name}"
+                    f"Using repository archive from GCS for {self.repo_client.repo_full_name}: {self.get_bucket_name()}/{self.blob_name}"
                 )
                 self.download_from_gcs()
 
@@ -365,7 +362,7 @@ class RepoManager:
                 repo_archive = DbSeerRepoArchive(
                     organization_id=self.organization_id,
                     project_id=self.project_id,
-                    bucket_name=self.bucket_name,
+                    bucket_name=self.get_bucket_name(),
                     blob_path=self.blob_name,
                     commit_sha=self.repo_client.base_commit_sha,
                 )
@@ -389,16 +386,16 @@ class RepoManager:
                     return self.cleanup()
 
                 logger.info(
-                    f"Uploading repository archive to GCS: {self.bucket_name}/{self.blob_name}"
+                    f"Uploading repository archive to GCS: {self.get_bucket_name()}/{self.blob_name}"
                 )
 
                 storage_client = storage.Client()
-                bucket = storage_client.bucket(self.bucket_name)
+                bucket = storage_client.bucket(self.get_bucket_name())
                 blob = bucket.blob(self.blob_name)
                 blob.upload_from_filename(temp_tarfile)
 
                 logger.info(
-                    f"Successfully uploaded repository to GCS: {self.bucket_name}/{self.blob_name}"
+                    f"Successfully uploaded repository to GCS: {self.get_bucket_name()}/{self.blob_name}"
                 )
             except Exception:
                 logger.exception("Failed to upload repository to GCS")
@@ -418,7 +415,7 @@ class RepoManager:
             .filter(
                 DbSeerRepoArchive.organization_id == self.organization_id,
                 DbSeerRepoArchive.project_id == self.project_id,
-                DbSeerRepoArchive.bucket_name == self.bucket_name,
+                DbSeerRepoArchive.bucket_name == self.get_bucket_name(),
                 DbSeerRepoArchive.blob_path == self.blob_name,
             )
             .first()
@@ -434,7 +431,7 @@ class RepoManager:
         try:
             # Check if the archive exists in GCS
             logger.info(
-                f"Checking if repository archive exists in GCS: {self.bucket_name}/{self.blob_name}"
+                f"Checking if repository archive exists in GCS: {self.get_bucket_name()}/{self.blob_name}"
             )
 
             with Session() as session:
@@ -442,16 +439,18 @@ class RepoManager:
                     return None
 
             storage_client = storage.Client()
-            bucket = storage_client.bucket(self.bucket_name)
+            bucket = storage_client.bucket(self.get_bucket_name())
             blob = bucket.blob(self.blob_name)
 
             exists = blob.exists()
 
             if exists:
-                logger.info(f"Repository archive found in GCS: {self.bucket_name}/{self.blob_name}")
+                logger.info(
+                    f"Repository archive found in GCS: {self.get_bucket_name()}/{self.blob_name}"
+                )
             else:
                 logger.info(
-                    f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
+                    f"Repository archive not found in GCS: {self.get_bucket_name()}/{self.blob_name}"
                 )
 
             if exists:
@@ -479,15 +478,15 @@ class RepoManager:
         try:
             # Download the tar file from GCS
             logger.info(
-                f"Downloading repository archive from GCS: {self.bucket_name}/{self.blob_name}"
+                f"Downloading repository archive from GCS: {self.get_bucket_name()}/{self.blob_name}"
             )
             storage_client = storage.Client()
-            bucket = storage_client.bucket(self.bucket_name)
+            bucket = storage_client.bucket(self.get_bucket_name())
             blob = bucket.blob(self.blob_name)
 
             if not blob.exists():
                 raise FileNotFoundError(
-                    f"Repository archive not found in GCS: {self.bucket_name}/{self.blob_name}"
+                    f"Repository archive not found in GCS: {self.get_bucket_name()}/{self.blob_name}"
                 )
 
             # Download the blob
