@@ -1,4 +1,6 @@
+import datetime
 import logging
+import os
 from concurrent.futures import Future
 from unittest.mock import ANY, MagicMock, patch
 
@@ -6,7 +8,7 @@ import git
 import pytest
 
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codebase.repo_manager import RepoManager
+from seer.automation.codebase.repo_manager import RepoInitializationError, RepoManager
 
 
 @pytest.fixture
@@ -275,3 +277,228 @@ def test_initialize_cleans_up_on_timeout(repo_manager):
 
         mock_clone.assert_not_called()
         mock_cleanup.assert_called_once()
+
+
+def test_gcs_archive_exists_no_db_entry(repo_manager):
+    """Test that when no DB entry exists, gcs_archive_exists returns None without calling GCS."""
+    dummy_session = object()
+    with (
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(repo_manager, "get_db_archive_entry", return_value=None) as mock_get_db,
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+    ):
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = dummy_session
+
+        result = repo_manager.gcs_archive_exists()
+
+        assert result is None
+        mock_get_db.assert_called_once_with(dummy_session)
+        mock_storage_client.assert_not_called()
+
+
+def test_gcs_archive_exists_db_entry_blob_not_exists(repo_manager):
+    """Test that when a DB entry exists but the blob does not exist in GCS, returns None."""
+    dummy_entry = MagicMock()
+    dummy_session = object()
+    mock_blob = MagicMock()
+    mock_blob.exists.return_value = False
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_storage_instance = MagicMock()
+    mock_storage_instance.bucket.return_value = mock_bucket
+
+    with (
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_entry) as mock_get_db,
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client",
+            return_value=mock_storage_instance,
+        ) as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+    ):
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = dummy_session
+
+        result = repo_manager.gcs_archive_exists()
+
+        assert result is None
+        mock_get_db.assert_called_once_with(dummy_session)
+        mock_storage_client.assert_called_once()
+        mock_storage_instance.bucket.assert_called_once_with("bucket-name")
+        mock_bucket.blob.assert_called_once_with(repo_manager.blob_name)
+        mock_blob.exists.assert_called_once()
+
+
+def test_gcs_archive_exists_db_entry_blob_exists(repo_manager):
+    """Test that when a DB entry exists and the blob exists in GCS, returns the entry."""
+    dummy_entry = MagicMock()
+    dummy_session = object()
+    mock_blob = MagicMock()
+    mock_blob.exists.return_value = True
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_storage_instance = MagicMock()
+    mock_storage_instance.bucket.return_value = mock_bucket
+
+    with (
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_entry) as mock_get_db,
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client",
+            return_value=mock_storage_instance,
+        ) as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+    ):
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = dummy_session
+
+        result = repo_manager.gcs_archive_exists()
+
+        assert result == dummy_entry
+        assert mock_get_db.call_count == 2
+        mock_storage_client.assert_called_once()
+        mock_storage_instance.bucket.assert_called_once_with("bucket-name")
+        mock_bucket.blob.assert_called_once_with(repo_manager.blob_name)
+        mock_blob.exists.assert_called_once()
+
+
+def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager, caplog):
+    """Test that if checking blob.exists raises, gcs_archive_exists logs and returns None."""
+    dummy_entry = MagicMock()
+    dummy_session = object()
+    mock_blob = MagicMock()
+    mock_blob.exists.side_effect = Exception("GCS error")
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_storage_instance = MagicMock()
+    mock_storage_instance.bucket.return_value = mock_bucket
+
+    caplog.set_level(logging.ERROR)
+    with (
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_entry),
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client",
+            return_value=mock_storage_instance,
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+    ):
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = dummy_session
+
+        result = repo_manager.gcs_archive_exists()
+
+        assert result is None
+        assert "Error checking if repository archive exists in GCS" in caplog.text
+
+
+def test_download_from_gcs_blob_not_exists(repo_manager, mock_repo_client, caplog):
+    """Test that when the blob does not exist, download_from_gcs raises and logs."""
+    mock_blob = MagicMock()
+    mock_blob.exists.return_value = False
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_storage_instance = MagicMock()
+    mock_storage_instance.bucket.return_value = mock_bucket
+
+    caplog.set_level(logging.ERROR)
+    with (
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client",
+            return_value=mock_storage_instance,
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+    ):
+        with pytest.raises(FileNotFoundError):
+            repo_manager.download_from_gcs()
+    assert "Failed to download repository from GCS" in caplog.text
+
+
+def test_download_from_gcs_success(repo_manager, mock_repo_client, caplog):
+    """Test successful download_from_gcs sequence."""
+    mock_blob = MagicMock()
+    mock_blob.exists.return_value = True
+    mock_blob.download_to_filename = MagicMock()
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_storage_instance = MagicMock()
+    mock_storage_instance.bucket.return_value = mock_bucket
+
+    fake_tar = MagicMock()
+    fake_tar.__enter__.return_value = fake_tar
+    fake_tar.getmembers.return_value = []
+    fake_tar.extractall = MagicMock()
+
+    caplog.set_level(logging.INFO)
+    with (
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client",
+            return_value=mock_storage_instance,
+        ),
+        patch("seer.automation.codebase.repo_manager.cleanup_dir") as mock_cleanup_dir,
+        patch("seer.automation.codebase.repo_manager.tarfile.open", return_value=fake_tar),
+        patch(
+            "seer.automation.codebase.repo_manager.git.Repo", return_value=MagicMock(spec=git.Repo)
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+    ):
+        repo_manager.download_from_gcs()
+
+        temp_tar = os.path.join(repo_manager.tmp_dir, "repo_archive.tar.gz")
+        mock_cleanup_dir.assert_called_once_with(repo_manager.repo_path)
+        mock_storage_instance.bucket.assert_called_once_with(repo_manager.get_bucket_name())
+        mock_bucket.blob.assert_called_once_with(repo_manager.blob_name)
+        mock_blob.exists.assert_called_once()
+        mock_blob.download_to_filename.assert_called_once_with(temp_tar)
+        fake_tar.getmembers.assert_called_once()
+        fake_tar.extractall.assert_called_once_with(path=repo_manager.repo_path, members=[])
+        assert repo_manager.git_repo is not None
+        assert "Successfully downloaded repository from GCS" in caplog.text
+
+
+def test_upload_lock_success(repo_manager):
+    """Test that upload_lock sets and clears the lock when not already locked."""
+    dummy_archive = MagicMock()
+    dummy_archive.upload_locked_at = None
+    dummy_session = MagicMock()
+    with (
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_archive),
+    ):
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = dummy_session
+
+        # Acquire and release the lock
+        with repo_manager.upload_lock():
+            # Lock should be set
+            assert dummy_archive.upload_locked_at is not None
+            # Commit should be called once for locking
+            assert dummy_session.commit.call_count == 1
+
+        # After context, lock should be cleared
+        assert dummy_archive.upload_locked_at is None
+        # Commit should be called again for clearing
+        assert dummy_session.commit.call_count == 2
+
+
+def test_upload_lock_already_locked(repo_manager, caplog):
+    """Test that upload_lock raises when the archive is already locked."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    dummy_archive = MagicMock()
+    dummy_archive.upload_locked_at = now
+    dummy_session = MagicMock()
+    caplog.set_level(logging.INFO)
+    with (
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_archive),
+    ):
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = dummy_session
+
+        with pytest.raises(RepoInitializationError):
+            with repo_manager.upload_lock():
+                pass
+
+    assert "Repository is already locked for upload" in caplog.text
