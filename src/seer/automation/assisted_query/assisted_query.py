@@ -34,8 +34,7 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
     cache_name = LlmClient().get_cache(display_name=cache_display_name, model=get_model_provider())
 
     if not cache_name:
-        # Will result in cold start
-        logger.info(f"Cache miss for {cache_display_name}, using default cache")
+        sentry_sdk.set_tag("cache-miss-name", cache_display_name)
         res = create_cache(
             CreateCacheRequest(org_id=org_id, project_ids=project_ids, no_values=True)
         )
