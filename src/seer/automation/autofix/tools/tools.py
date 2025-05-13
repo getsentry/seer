@@ -75,8 +75,10 @@ class BaseTools:
             repo_manager = RepoManager(
                 repo_client,
                 trigger_liveness_probe=self._trigger_liveness_probe,
-                organization_id=request.organization_id,
-                project_id=request.project_id,
+                organization_id=(
+                    request.organization_id if isinstance(self.context, AutofixRequest) else None
+                ),
+                project_id=request.project_id if isinstance(self.context, AutofixRequest) else None,
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
@@ -143,8 +145,11 @@ class BaseTools:
             future = repo_manager.initialization_future
             if future in not_done:
                 repo_manager.mark_as_timed_out()
-                logger.warning(
-                    f"Repository {repo_manager.repo_client.repo_full_name} timed out after {REPO_WAIT_TIMEOUT_SECS} seconds"
+                logger.error(
+                    f"Repository download timed out after {REPO_WAIT_TIMEOUT_SECS} seconds",
+                    extra={
+                        "repo": repo_manager.repo_client.repo_full_name,
+                    },
                 )
             elif future.exception():
                 repo_manager.mark_as_timed_out()

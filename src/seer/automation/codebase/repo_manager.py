@@ -48,8 +48,8 @@ class RepoManager:
     initialization_future: Future | None
     is_cancelled: bool
 
-    organization_id: int
-    project_id: int
+    organization_id: int | None
+    project_id: int | None
 
     _use_gcs: bool
     _last_liveness_update: float
@@ -59,8 +59,8 @@ class RepoManager:
         self,
         repo_client: RepoClient,
         *,
-        organization_id: int,
-        project_id: int,
+        organization_id: int | None = None,
+        project_id: int | None = None,
         trigger_liveness_probe: Callable[[], None] | None = None,
     ):
         """
@@ -91,6 +91,9 @@ class RepoManager:
 
     @property
     def blob_name(self):
+        if self.organization_id is None:
+            raise RepoInitializationError("Organization ID is not set, can't get blob name")
+
         # Segmented by organization
         return f"repos/{self.organization_id}/{self.repo_client.provider}/{self.repo_client.repo_owner}/{self.repo_client.repo_name}_{self.repo_client.repo_external_id}.tar.gz"
 
@@ -423,6 +426,9 @@ class RepoManager:
                     shutil.rmtree(copied_repo_path)
 
     def get_db_archive_entry(self, session: SQLAlchemySession):
+        if self.organization_id is None:
+            raise RepoInitializationError("Organization ID is not set, can't get db archive entry")
+
         return (
             session.query(DbSeerRepoArchive)
             .filter(
