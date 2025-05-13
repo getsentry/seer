@@ -81,7 +81,7 @@ class RepoManager:
         self.is_cancelled = False
         self._last_liveness_update = 0.0
 
-        self._use_gcs = organization_id == 1 and project_id == 6178942  # Hardcoded ONLY for Seer
+        self._use_gcs = organization_id == 1 and project_id == 6178942  # TODO: Hardcoded ONLY for Seer
 
     @property
     def is_available(self):
