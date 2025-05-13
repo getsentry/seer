@@ -502,3 +502,118 @@ def test_upload_lock_already_locked(repo_manager, caplog):
                 pass
 
     assert "Repository is already locked for upload" in caplog.text
+
+
+def test_upload_to_gcs_success(repo_manager, mock_repo_client, caplog):
+    """Test upload_to_gcs uploads tar to GCS and cleans up temp files."""
+    caplog.set_level(logging.INFO)
+    # Prepare a dummy archive record for upload_lock
+    dummy_archive = MagicMock()
+    dummy_archive.upload_locked_at = None
+    copied_path = os.path.join(repo_manager.tmp_dir, "repo")
+    with (
+        patch.object(repo_manager, "_copy_repo", return_value=copied_path),
+        patch.object(repo_manager, "_verify_repo_state"),
+        patch.object(repo_manager, "_prune_repo"),
+        patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["foo"]),
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(
+            repo_manager, "get_db_archive_entry", side_effect=[None, dummy_archive, dummy_archive]
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch("seer.automation.codebase.repo_manager.tarfile.open") as mock_tar_open,
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.os.unlink") as mock_unlink,
+        patch("seer.automation.codebase.repo_manager.shutil.rmtree") as mock_rmtree,
+    ):
+        # Setup session
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = mock_session
+        mock_session.commit = MagicMock()
+        mock_session.add = MagicMock()
+
+        # Setup tar
+        fake_tar = MagicMock()
+        mock_tar_open.return_value.__enter__.return_value = fake_tar
+
+        # Setup storage
+        storage_instance = MagicMock()
+        bucket = MagicMock()
+        blob = MagicMock()
+        storage_instance.bucket.return_value = bucket
+        bucket.blob.return_value = blob
+        mock_storage_client.return_value = storage_instance
+
+        # Run
+        repo_manager.upload_to_gcs()
+
+        # DB actions should have added a new archive and committed
+        mock_session.add.assert_called_once()
+        mock_session.commit.assert_called()
+
+        # Tar and upload calls
+        temp_tar = os.path.join(repo_manager.tmp_dir, "upload_repo_archive.tar.gz")
+        mock_tar_open.assert_called_once_with(temp_tar, "w:gz")
+        fake_tar.add.assert_called_once_with(os.path.join(copied_path, "foo"), arcname="foo")
+        storage_instance.bucket.assert_called_once_with("bucket-name")
+        bucket.blob.assert_called_once_with(repo_manager.blob_name)
+        blob.upload_from_filename.assert_called_once_with(temp_tar)
+
+        # Cleanup
+        mock_unlink.assert_called_once_with(temp_tar)
+        mock_rmtree.assert_called_once_with(copied_path)
+        # Logging
+        assert "Successfully uploaded repository to GCS" in caplog.text
+
+
+def test_upload_to_gcs_failure(repo_manager, mock_repo_client, caplog):
+    """Test upload_to_gcs logs and propagates exception during upload."""
+    caplog.set_level(logging.ERROR)
+    # Prepare a dummy archive record for upload_lock
+    dummy_archive = MagicMock()
+    dummy_archive.upload_locked_at = None
+    copied_path = os.path.join(repo_manager.tmp_dir, "repo")
+    with (
+        patch.object(repo_manager, "_copy_repo", return_value=copied_path),
+        patch.object(repo_manager, "_verify_repo_state"),
+        patch.object(repo_manager, "_prune_repo"),
+        patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["bar"]),
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
+        patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_archive),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch("seer.automation.codebase.repo_manager.tarfile.open") as mock_tar_open,
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.os.unlink") as mock_unlink,
+        patch("seer.automation.codebase.repo_manager.shutil.rmtree") as mock_rmtree,
+    ):
+        # Setup session
+        mock_session = mock_session_class.return_value
+        mock_session.__enter__.return_value = mock_session
+        mock_session.commit = MagicMock()
+        mock_session.add = MagicMock()
+
+        # Setup tar
+        fake_tar = MagicMock()
+        mock_tar_open.return_value.__enter__.return_value = fake_tar
+
+        # Setup storage that raises
+        storage_instance = MagicMock()
+        bucket = MagicMock()
+        blob = MagicMock()
+        blob.upload_from_filename.side_effect = Exception("upload error")
+        storage_instance.bucket.return_value = bucket
+        bucket.blob.return_value = blob
+        mock_storage_client.return_value = storage_instance
+
+        # Run and assert exception
+        with pytest.raises(Exception, match="upload error"):
+            repo_manager.upload_to_gcs()
+
+        # Logged failure
+        assert "Failed to upload repository to GCS" in caplog.text
+        # Cleanup still executed
+        temp_tar = os.path.join(repo_manager.tmp_dir, "upload_repo_archive.tar.gz")
+        mock_unlink.assert_called_once_with(temp_tar)
+        mock_rmtree.assert_called_once_with(copied_path)
