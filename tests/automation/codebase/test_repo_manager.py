@@ -617,3 +617,145 @@ def test_upload_to_gcs_failure(repo_manager, mock_repo_client, caplog):
         temp_tar = os.path.join(repo_manager.tmp_dir, "upload_repo_archive.tar.gz")
         mock_unlink.assert_called_once_with(temp_tar)
         mock_rmtree.assert_called_once_with(copied_path)
+
+
+def test_download_from_gcs_prevent_path_traversal(repo_manager, mock_repo_client, caplog):
+    """Test that download_from_gcs skips unsafe paths to prevent path traversal and completes successfully."""
+    # Capture INFO and above to verify success log and warnings
+    caplog.set_level(logging.INFO)
+    # Setup storage blob
+    storage_instance = MagicMock()
+    bucket = MagicMock()
+    blob = MagicMock()
+    blob.exists.return_value = True
+    blob.download_to_filename = MagicMock()
+    storage_instance.bucket.return_value = bucket
+    bucket.blob.return_value = blob
+
+    # Create fake tar members
+    fake_member_safe = MagicMock()
+    fake_member_safe.name = "copied_repo/safe.txt"
+    fake_member_unsafe = MagicMock()
+    fake_member_unsafe.name = "copied_repo/../unsafe.txt"
+    fake_member_abs = MagicMock()
+    fake_member_abs.name = "/absolute/path"
+
+    fake_tar = MagicMock()
+
+    with (
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client", return_value=storage_instance
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.cleanup_dir"),
+        patch("seer.automation.codebase.repo_manager.os.makedirs"),
+        patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["safe.txt"]),
+        patch("seer.automation.codebase.repo_manager.tarfile.open") as mock_tar_open,
+        patch(
+            "seer.automation.codebase.repo_manager.git.Repo", return_value=MagicMock(spec=git.Repo)
+        ),
+    ):
+        # Configure tarfile context manager
+        mock_tar_open.return_value.__enter__.return_value = fake_tar
+        fake_tar.getmembers.return_value = [fake_member_safe, fake_member_unsafe, fake_member_abs]
+        fake_tar.extractall = MagicMock()
+
+        # Run download
+        repo_manager.download_from_gcs()
+
+        # Member name should be sanitized for safe member
+        assert fake_member_safe.name == "safe.txt"
+
+        # extractall called with only the safe member
+        args, kwargs = fake_tar.extractall.call_args
+        assert kwargs["path"] == repo_manager.repo_path
+        members_list = kwargs.get("members", [])
+        assert fake_member_safe in members_list
+        assert fake_member_unsafe not in members_list
+        assert fake_member_abs not in members_list
+
+        # Warnings for unsafe paths
+        assert "Skipping potentially unsafe path: ../unsafe.txt" in caplog.text
+        assert "Skipping potentially unsafe path: /absolute/path" in caplog.text
+
+        # Git repo should be set
+        assert repo_manager.git_repo is not None
+        assert "Successfully downloaded repository from GCS" in caplog.text
+
+
+def test_prune_repo_not_initialized(repo_manager):
+    """Test that _prune_repo raises when repository is not initialized."""
+    mock_git = MagicMock()
+    mock_git.git = MagicMock()
+    # status returns empty -> not initialized
+    mock_git.git.execute.return_value = ""
+    with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
+        with pytest.raises(RepoInitializationError, match="Repository is not initialized"):
+            repo_manager._prune_repo()
+
+
+def test_prune_repo_no_refs(repo_manager, caplog):
+    """Test that _prune_repo skips deletion when no refs are found."""
+    mock_git = MagicMock()
+
+    def fake_execute(*args, **kwargs):
+        cmd = kwargs.get("command", args[0] if args else None)
+        if cmd == ["git", "status"]:
+            return "status"
+        if args and args[0] == ["git", "show-ref"]:
+            return ""
+        return None
+
+    mock_git.git = MagicMock()
+    mock_git.git.execute.side_effect = fake_execute
+    with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
+        caplog.set_level(logging.INFO)
+        repo_manager._prune_repo()
+        assert "Pruning unnecessary references" in caplog.text
+        assert "Cleaning Git repository to minimal state" in caplog.text
+        # Ensure update-ref not called
+        for args, kwargs in mock_git.git.execute.call_args_list:
+            if args and isinstance(args[0], list) and args[0][1] == "update-ref":
+                pytest.fail("update-ref should not be called when no refs")
+
+
+def test_prune_repo_delete_refs(repo_manager, caplog):
+    """Test that _prune_repo deletes refs that do not include base_commit_sha."""
+    base_sha = repo_manager.repo_client.base_commit_sha
+    show_refs = f"{base_sha} refs/heads/keep\notherref refs/heads/delete1"
+    mock_git = MagicMock()
+    side_effects = [
+        "status",  # status
+        show_refs,  # show-ref
+        None,  # update-ref delete1
+        None,  # reflog expire
+        None,  # gc
+    ]
+    mock_git.git = MagicMock()
+    mock_git.git.execute.side_effect = side_effects
+    with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
+        caplog.set_level(logging.INFO)
+        repo_manager._prune_repo()
+        # Ensure update-ref called for delete1
+        mock_git.git.execute.assert_any_call(["git", "update-ref", "-d", "refs/heads/delete1"])
+        assert "Cleaning Git repository to minimal state" in caplog.text
+
+
+def test_prune_repo_show_ref_error(repo_manager, caplog):
+    """Test that _prune_repo handles show-ref errors gracefully."""
+    mock_git = MagicMock()
+    error = git.GitCommandError("git show-ref", 1)
+    side_effects = [
+        "status",  # status
+        error,  # show-ref raises
+        None,  # reflog expire
+        None,  # gc
+    ]
+    mock_git.git = MagicMock()
+    mock_git.git.execute.side_effect = side_effects
+    with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
+        caplog.set_level(logging.INFO)
+        repo_manager._prune_repo()
+        assert "No references found in the repository" in caplog.text
+        mock_git.git.execute.assert_any_call(["git", "reflog", "expire", "--expire=now", "--all"])
+        mock_git.git.execute.assert_any_call(["git", "gc", "--prune=now", "--aggressive"])

@@ -109,7 +109,7 @@ class RepoManager:
             )
 
         self.initialization_future = ThreadPoolExecutor(
-            1, initializer=copy_modules_initializer
+            1, initializer=copy_modules_initializer()
         ).submit(self.initialize)
 
     @sentry_sdk.trace
@@ -157,14 +157,14 @@ class RepoManager:
 
                         # Upload to GCS in a separate thread, don't wait for it.
                         ThreadPoolExecutor(
-                            max_workers=1, initializer=copy_modules_initializer
-                        ).submit(self.upload_to_gcs)
+                            max_workers=1, initializer=copy_modules_initializer()
+                        ).submit()
                 else:
                     logger.info(
                         f"Repository {self.repo_client.repo_full_name} after syncing is in an older state than before syncing",
                     )
             elif self._use_gcs:
-                ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer).submit(
+                ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer()).submit(
                     self.upload_to_gcs
                 )
         except Exception:
