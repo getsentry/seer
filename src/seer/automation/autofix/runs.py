@@ -145,14 +145,12 @@ def set_repo_branches_and_commits(state: ContinuationState) -> None:
         state: The ContinuationState object containing the request.
     """
     cur_state = state.get()
-    for repo in cur_state.request.repos:
-        codebase = cur_state.codebases.get(repo.external_id)
-        if codebase and codebase.is_readable and codebase.is_writeable:
-            if not repo.branch_name:
-                repo_client = RepoClient.from_repo_definition(repo, "read")
-                repo.branch_name = repo_client.base_branch
-                if not repo.base_commit_sha:
-                    repo.base_commit_sha = repo_client.base_commit_sha
+    for repo in cur_state.readable_repos:
+        if not repo.branch_name:
+            repo_client = RepoClient.from_repo_definition(repo, "read")
+            repo.branch_name = repo_client.base_branch
+            if not repo.base_commit_sha:
+                repo.base_commit_sha = repo_client.base_commit_sha
 
-        with state.update() as cur:
-            cur.request.repos = cur_state.request.repos
+    with state.update() as cur:
+        cur.request.repos = cur_state.request.repos
