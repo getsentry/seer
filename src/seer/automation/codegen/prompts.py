@@ -626,7 +626,7 @@ class BugPredictionPrompts:
 
             # Your goal:
             Review the bug prediction analyses and extract the information listed below.
-            
+
             # Guidelines:
             - Ensure all fields are properly populated based on each analysis.
             - Use the following JSON format for each finding:
