@@ -213,5 +213,5 @@ class TestAssistedQuery:
             fields=["span.op", "span.description", "transaction"],
             project_ids=[1, 2],
             stats_period="48h",
-            limit=150,
+            limit=200,
         )

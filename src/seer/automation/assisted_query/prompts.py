@@ -8,9 +8,6 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
     fields_with_definitions = _get_fields_with_definitions(fields=fields)
 
-    # TODO:
-    # - Handle generating multiple visualizations (usually for group by fields)
-
     prompt = textwrap.dedent(
         f"""You are a principal performance engineer who is the leading expert in Sentry's Trace Explorer page which is a tool for analyzing hundres of thousands of traces and spans.
         There is a lot of data on the page, so you need to be able to select the right fields and functions to visualize the data in a way that is most useful to the user so they can find the answers to their questionsas fast as possible.
@@ -141,8 +138,38 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         In the example above, the search query will match on browser values like "Safari 11.0.2", "Safari 11.0.3", etc.
 
-        If you ever need to search for a string match which is not very specific, you should use wildcards around the string to ensure you get the most relevant results.
-        For example, if you want to find all spans about a certain customer, say "acme", but you cannot find specific fields or values to search for,you should search for "span.description:"*acme*" so that you get all spans that contain the word "acme" in the description.
+        ### Smart Wildcard Usage Guidelines
+
+        When deciding whether to use wildcards, follow these guidelines:
+
+        1. Prefer Exact Matches:
+           - Always use exact values from the <available_values> section when they exist and are specific enough
+           - Only use wildcards when exact matches would be too restrictive or when you need to match a pattern
+
+        2. Pattern Recognition:
+           - Look for common patterns in the available values before using wildcards
+           - For example, if you see multiple values like this for the span.description field:
+             - youtube.com/video1
+             - youtube.com/video2
+             - youtube.com/video3
+           - Use span.description:*youtube.com* to match all YouTube URLs
+
+        3. Field-Specific Guidelines:
+           - For fields like span.description that often contain URLs or paths:
+             - Use wildcards to match domain patterns (e.g., "*youtube.com*")
+             - Use wildcards to match path patterns (e.g., "*/api/users*")
+           - For fields like browser.name or os.name:
+             - Prefer exact matches when available
+             - Only use wildcards for version numbers (e.g., "Chrome 11*")
+           - For fields like user.email:
+             - Use exact matches when possible
+             - Use wildcards only for domain patterns (e.g., "*@company.com")
+
+        4. When to Avoid Wildcards:
+           - When the available values are specific and limited
+           - When exact matches would be more precise
+           - When the field is a numeric or boolean type
+           - When using comparison operators
 
         You may also combine operators like so:
 
@@ -204,8 +231,8 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
         - 1 represents a line chart
         - 2 represents an area chart
 
-        You should use a line chart when visualizing by multiple functions or when visualizing a group by so it is easy to compare the values.
-        If you are visualizing just one function, then you should default to a bar chart.
+        Count and count_unique should default to using a bar chart.
+        Anything else should use a line chart by default.
 
         YOU MUST ONLY RETURN THE CHART TYPE AS AN INTEGER AND MUST BE 0, 1, OR 2.
 
@@ -244,8 +271,8 @@ def get_cache_prompt(fields: list[str], field_values: dict[str, list[str]]) -> s
 
         ## Available Field Values
 
-        For the string fields below, here are up to 5 possible values you can use for up to 125 fields.
-        These are not fully exhaustive as some fields can have many more than 5 values, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
+        For the string fields below, here are up to 15 possible values you can use for up to 125 fields.
+        These are not fully exhaustive as some fields can have many more than 15 values, but should give you a good starting point especially when finding the right field to use or constructing wildcard string matches.
         You will receive more values for specific string fields in the future. For numeric fields, you should use the comparison operators to find close or exact matches.
 
         <available_field_values>
@@ -295,6 +322,7 @@ def select_relevant_fields_prompt(natural_language_query: str) -> str:
     Notice that all of the fields may not directly be used in the final query, but could be used to narrow down the search without excluding any relevant results.
     The relevant fields MUST be from the list of available fields provided. THIS IS VERY IMPORTANT.
     If the user's query is not clear, try your best to translate it into a valid query (while still maintaining the original meaning as much as possible), then identify the most relevant fields.
+
     ## User's natural language query:
     {natural_language_query}
     """
@@ -304,22 +332,41 @@ def get_fields_and_values_prompt(
     natural_language_query: str, relevant_fields: list[str], field_values: dict[str, list[str]]
 ) -> str:
     return f"""
-        ## In a previous step, we have identified the following fields as relevant to the user's query:
+        ## Final Query Construction Guidelines
+
+        Based on the user's natural language query and the search guidelines provided, construct 3 options for the final query using the field names and appropriate values from the possible values.
+        You MUST use the values from the <available_values> section to construct the query. Follow these steps carefully for each query option:
+
+        1. Deeply analyze the available values for each field to identify patterns
+        2. For String fields, decide whether to use exact matches or wildcards based on the patterns found
+        3. For numeric fields, use comparison operators to find close or exact matches
+        4. Construct the query using the most appropriate matching strategy
+
+        Please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places.
+
+        You must ONLY use the fields and the values you've identified as relevant. DO NOT USE OR MAKE UP ANY OTHER FIELDS OR VALUES. THIS IS VERY IMPORTANT.
+
+        When thinking of the query options, please think about each step of the query and how confident you are that the query will return relevant results. You should show your work as you think through the query options, including:
+        - The patterns you identified in the values
+        - Why you chose to use (or not use) wildcards
+        - How the query matches the user's intent
+
+        Finally, select the best query option from the 3 options you have created. You should combine the best portions from each query you have generated if applicable.
+
+        ## We have identified the following fields as most relevant to the user's query:
+
         <available_fields>
         {relevant_fields}
         </available_fields>
+
         ## The possible values for these fields are:
-        Note: The values include the count of how many times the value occurred in the last 48 hours in order of most common to least common.
-        Use the values and the count to guide if you should use the field in the final query. '' indicates that the value has not been defined. If a field has '' as the only value or has a very high amount of '' values, then it is likely not a useful field to use since a query will likely not return any results.
+
+        Here are up to 200 possible values for the available fields. Remember, use these values to construct the query. Use wildcards only if necessary to construct the query.
+
         <available_values>
         {json.dumps(field_values, indent=2)}
         </available_values>
-        Based on the user's natural language query and the search guidelines provided, construct 3 options for the final query using the field names and appropriate values from the possible values.
-        You should use the values from the <available_values> section to construct the query. If you are not doing a general search using wildcards, DO NOT MAKE UP YOUR OWN VALUES. Try your best to use the specific values from the <available_values> section.
-        Also, please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places. The score MUST be 3 decimal places (ie: 0.104 or 0.872).
-        You must ONLY use the fields and the values you've identified as relevant. You can also use the raw search to search for specific values if there are no relevant fields or values. DO NOT USE OR MAKE UP ANY OTHER FIELDS OR VALUES. THIS IS VERY IMPORTANT.
-        When thinking of the query options, please think about each step of the query and how confident you are that the query will return relevant results. You should show your work as you think through the query options.
-        Finally, select the best query option from the 3 options you have created. You should combine the best portions from each query you have generated if applicable.
+
         Here is the user's natural language query:
         {natural_language_query}
         """
