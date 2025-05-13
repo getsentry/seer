@@ -20,6 +20,8 @@ from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
 
+REQUIRED_FIELDS = ["span.op", "span.description", "transaction"]
+
 
 def translate_query(request: TranslateRequest) -> TranslateResponse:
 
@@ -33,7 +35,7 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
 
     if not cache_name:
         # Will result in cold start
-        logger.info("Creating cached prompt as not available upon translation request.")
+        logger.info(f"Cache miss for {cache_display_name}, creating new cache")
         res = create_cache(CreateCacheRequest(org_id=org_id, project_ids=project_ids))
         cache_name = res.cache_name
 
@@ -82,6 +84,10 @@ def create_query_from_natural_language(
     relevant_fields = (
         relevant_fields_response.parsed.fields if relevant_fields_response.parsed else []
     )
+
+    for field in REQUIRED_FIELDS:
+        if field not in relevant_fields:
+            relevant_fields.append(field)
 
     # Step 2: Fetch values for relevant fields
     field_values_response = rpc_client.call(

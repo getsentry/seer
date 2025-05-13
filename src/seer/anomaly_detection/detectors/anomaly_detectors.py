@@ -254,11 +254,13 @@ class MPStreamAnomalyDetector(AnomalyDetector):
             flags: list[AnomalyFlags] = []
             streamed_mp: list[list[float]] = []
             thresholds: list[list[Threshold]] = []
+            mismatch_timestamps: list[float] = []
             time_allocated = (
                 datetime.timedelta(milliseconds=time_budget_ms) if time_budget_ms else None
             )
             time_start = datetime.datetime.now()
             batch_size = 10 if len(timeseries.values) > 10 else 1
+            should_log_payload = False
             for i, (cur_val, cur_timestamp) in enumerate(
                 zip(timeseries.values, timeseries.timestamps)
             ):
@@ -294,6 +296,9 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                     raise ServerError("Failed to score the matrix profile distance")
 
                 self.original_flags.append(flags_and_scores.flags[-1])
+                if flags_and_scores.prophet_mismatch:
+                    should_log_payload = True  # even if one of the timestamps is mismatched, we should log the payload
+                    mismatch_timestamps.append(cur_timestamp)
 
                 # if algo_types is empty, then default to MP logic
                 if len(flags_and_scores.algo_types) == 0:
@@ -328,6 +333,11 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 self.history_values = stream.T_
                 self.history_mp = np.vstack([self.history_mp, cur_mp])
 
+            if should_log_payload and prophet_df is not None:
+                try:
+                    self._log_mismatches(prophet_df, mismatch_timestamps)
+                except Exception as e:
+                    logger.warning("Error logging mismatches", extra={"error": e})
             return MPTimeSeriesAnomaliesSingleWindow(
                 flags=flags,
                 scores=scores,
@@ -343,3 +353,27 @@ class MPStreamAnomalyDetector(AnomalyDetector):
                 confidence_levels=flags_and_scores.confidence_levels,
                 algorithm_types=flags_and_scores.algo_types,
             )
+
+    @sentry_sdk.trace
+    def _log_mismatches(self, prophet_df, mismatch_timestamps):
+        scope = sentry_sdk.get_current_scope()
+        prophet_df_bytes = prophet_df.to_csv().encode("utf-8")
+        scope.add_attachment(bytes=prophet_df_bytes, filename="prophet_df.csv")
+        df = pd.DataFrame(
+            {
+                "timestamp": self.history_timestamps,
+                "value": self.history_values,
+            }
+        )
+        df_bytes = df.to_csv().encode("utf-8")
+        scope.add_attachment(bytes=df_bytes, filename="timeseries.csv")
+        df = pd.DataFrame(
+            {
+                "timestamp": mismatch_timestamps,
+            }
+        )
+        df_bytes = df.to_csv().encode("utf-8")
+        scope.add_attachment(bytes=df_bytes, filename="mismatch_timestamps.csv")
+        sentry_sdk.capture_message(
+            "Attaching files for mismatch in timestamps between prophet and mp."
+        )
