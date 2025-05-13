@@ -375,7 +375,7 @@ def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager, caplog):
     mock_storage_instance = MagicMock()
     mock_storage_instance.bucket.return_value = mock_bucket
 
-    caplog.set_level(logging.ERROR)
+    # Patch logger to assert exception log
     with (
         patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
         patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_entry),
@@ -384,6 +384,7 @@ def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager, caplog):
             return_value=mock_storage_instance,
         ),
         patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.logger") as mock_logger,
     ):
         mock_session = mock_session_class.return_value
         mock_session.__enter__.return_value = dummy_session
@@ -391,7 +392,9 @@ def test_gcs_archive_exists_blob_exists_raises_exception(repo_manager, caplog):
         result = repo_manager.gcs_archive_exists()
 
         assert result is None
-        assert "Error checking if repository archive exists in GCS" in caplog.text
+        mock_logger.exception.assert_called_once_with(
+            "Error checking if repository archive exists in GCS"
+        )
 
 
 def test_download_from_gcs_blob_not_exists(repo_manager, mock_repo_client, caplog):
@@ -489,10 +492,11 @@ def test_upload_lock_already_locked(repo_manager, caplog):
     dummy_archive = MagicMock()
     dummy_archive.upload_locked_at = now
     dummy_session = MagicMock()
-    caplog.set_level(logging.INFO)
+    # Patch logger to assert info log on locked
     with (
         patch("seer.automation.codebase.repo_manager.Session") as mock_session_class,
         patch.object(repo_manager, "get_db_archive_entry", return_value=dummy_archive),
+        patch("seer.automation.codebase.repo_manager.logger") as mock_logger,
     ):
         mock_session = mock_session_class.return_value
         mock_session.__enter__.return_value = dummy_session
@@ -501,7 +505,9 @@ def test_upload_lock_already_locked(repo_manager, caplog):
             with repo_manager.upload_lock():
                 pass
 
-    assert "Repository is already locked for upload" in caplog.text
+        mock_logger.info.assert_called_once()
+        # Optionally, verify message content
+        assert "Repository is already locked for upload" in mock_logger.info.call_args[0][0]
 
 
 def test_upload_to_gcs_success(repo_manager, mock_repo_client, caplog):
