@@ -158,7 +158,7 @@ class RepoManager:
                         # Upload to GCS in a separate thread, don't wait for it.
                         ThreadPoolExecutor(
                             max_workers=1, initializer=copy_modules_initializer()
-                        ).submit()
+                        ).submit(self.upload_to_gcs)
                 else:
                     logger.info(
                         f"Repository {self.repo_client.repo_full_name} after syncing is in an older state than before syncing",
@@ -201,7 +201,7 @@ class RepoManager:
                 depth=1,
             )
             end_time = time.time()
-            logger.info(f"Cloned repository in {end_time - start_time} seconds")
+            logger.info(f"Cloned repository {self.repo_client.repo_full_name} in {end_time - start_time} seconds")
 
             return self.repo_path
         except Exception:
@@ -503,7 +503,7 @@ class RepoManager:
             start_time = time.time()
             blob.download_to_filename(temp_tarfile)
             end_time = time.time()
-            logger.info(f"Downloaded repository archive in {end_time - start_time} seconds")
+            logger.info(f"Downloaded repository archive for {self.repo_client.repo_full_name} in {end_time - start_time} seconds")
 
             # Clean up existing repo path before extracting
             cleanup_dir(self.repo_path)
