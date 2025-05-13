@@ -70,7 +70,7 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
         org_id=org_id,
         project_ids=project_ids,
         stats_period="48h",
-        limit=5,
+        limit=15,
     )
 
     filtered_field_values = (

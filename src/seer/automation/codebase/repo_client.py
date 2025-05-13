@@ -172,6 +172,7 @@ class RepoClient:
     repo_external_id: str
     base_commit_sha: str
     base_branch: str
+    repo_definition: RepoDefinition
 
     supported_providers = ["github"]
 
@@ -238,6 +239,7 @@ class RepoClient:
         self.base_commit_sha = repo_definition.base_commit_sha or self.get_branch_head_sha(
             self.base_branch
         )
+        self.repo_definition = repo_definition
 
         self.get_valid_file_paths = functools.lru_cache(maxsize=8)(self._get_valid_file_paths)
         self.get_commit_history = functools.lru_cache(maxsize=16)(self._get_commit_history)
@@ -975,6 +977,17 @@ class RepoClient:
         data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="json"))
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
+
+    def get_current_commit_info(self, sha: str | None):
+        if sha is None:
+            sha = self.base_commit_sha
+
+        commit = self.repo.get_commit(sha)
+
+        return {
+            "sha": commit.sha,
+            "timestamp": commit.commit.author.date,
+        }
 
     def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
         original_pr_id = int(original_pr_url.split("/")[-1])

@@ -293,6 +293,33 @@ class DbSeerProjectPreference(Base):
     __table_args__ = (UniqueConstraint("organization_id", "project_id"),)
 
 
+class DbSeerRepoArchive(Base):
+    __tablename__ = "seer_repo_archive"
+    id: Mapped[int] = mapped_column(BigInteger, nullable=False, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    bucket_name: Mapped[str] = mapped_column(String, nullable=False)
+    blob_path: Mapped[str] = mapped_column(String, nullable=False)
+    commit_sha: Mapped[str] = mapped_column(String, nullable=False)
+
+    upload_locked_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=True, default=None
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "bucket_name",
+            "blob_path",
+        ),
+        Index(
+            "ix_seer_repo_archive_org_id_bucket_name_blob_path",
+            "organization_id",
+            "bucket_name",
+            "blob_path",
+        ),
+    )
+
+
 def create_grouping_partition(target: Any, connection: Connection, **kw: Any) -> None:
     for i in range(100):
         connection.execute(
