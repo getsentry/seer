@@ -2,7 +2,14 @@
 This module contains functions for getting run reports from Langfuse.
 ⚠️ It is created to be executed manually.
 
-
+Running this file:
+```
+make shell
+# Get summary of a run
+python src/seer/automation/codegen/evals/datasets.py run-summary --dataset-name <dataset-name> --run-name <run-name>
+# Get details of a run
+python src/seer/automation/codegen/evals/datasets.py run-details --dataset-name <dataset-name> --run-name <run-name>
+```
 """
 
 import re
@@ -30,6 +37,13 @@ def main():
 @option("--dataset-name", type=str, required=True)
 @option("--run-name", type=str, required=True)
 def run_summary(dataset_name: str, run_name: str):
+    """
+    Generate and display a summary report for a specific dataset run.
+
+    Args:
+        dataset_name (str): Name of the dataset to analyze
+        run_name (str): Name of the specific run to analyze
+    """
     langfuse = Langfuse()
     try:
         run = langfuse.get_dataset_run(dataset_name, run_name)
@@ -149,6 +163,14 @@ def run_summary(dataset_name: str, run_name: str):
 @option("--run-name", type=str, required=True)
 @option("--format", type=click.Choice(["md"]), required=True, default="md")
 def run_details(dataset_name: str, run_name: str, format: Literal["md"]):
+    """
+    Generate and display detailed information about each item in a dataset run.
+
+    Args:
+        dataset_name (str): Name of the dataset to analyze
+        run_name (str): Name of the specific run to analyze
+        format (Literal["md"]): Output format (currently only supports markdown)
+    """
     langfuse = Langfuse()
     try:
         run = langfuse.get_dataset_run(dataset_name, run_name)
@@ -165,6 +187,10 @@ def run_details(dataset_name: str, run_name: str, format: Literal["md"]):
 
 
 class RelevantScorePrefixes(Enum):
+    """Enumeration of score prefixes used in evaluation metrics.
+    (the actual score name also includes the model used to generate the score)
+    """
+
     NOISE = "noise"
     BUGS_NOT_FOUND = "bugs_not_found"
     CONTENT_MATCH = "content_match"
@@ -176,8 +202,15 @@ class RelevantScorePrefixes(Enum):
 
 
 def pretty_print_scores(scores: list[dict]) -> list[str]:
-    """Print scores in a formatted way, highlighting important metrics."""
+    """
+    Format scores for display, highlighting important metrics.
 
+    Args:
+        scores (list[dict]): List of score dictionaries to format
+
+    Returns:
+        list[str]: List of formatted strings representing the scores
+    """
     # Filter out error_running_evaluation and sort by highlight order
     filtered_scores = [s for s in scores if s["name"] != "error_running_evaluation"]
 
@@ -206,6 +239,15 @@ def pretty_print_scores(scores: list[dict]) -> list[str]:
 
 
 def pretty_print_expected_bugs(expected_bugs: list[EvalItemOutput]) -> list[str]:
+    """
+    Format expected bugs for display.
+
+    Args:
+        expected_bugs (list[EvalItemOutput]): List of expected bug outputs to format
+
+    Returns:
+        list[str]: List of formatted strings representing the expected bugs
+    """
     lines = []
     for bug in expected_bugs:
         description_lines = bug.description.strip().split("\n")
@@ -218,6 +260,15 @@ def pretty_print_expected_bugs(expected_bugs: list[EvalItemOutput]) -> list[str]
 def pretty_print_generated_suggestions(
     generated_suggestions: list[StaticAnalysisSuggestion],
 ) -> list[str]:
+    """
+    Format generated suggestions for display.
+
+    Args:
+        generated_suggestions (list[StaticAnalysisSuggestion]): List of suggestions to format
+
+    Returns:
+        list[str]: List of formatted strings representing the suggestions
+    """
     lines = []
     for suggestion in generated_suggestions:
         lines.append(f"* {suggestion.path}:{suggestion.line}")
@@ -259,6 +310,12 @@ class RelevantItemInfo:
     generated_suggestions: list[StaticAnalysisSuggestion]
 
     def to_markdown(self) -> list[str]:
+        """
+        Convert the item information to markdown format.
+
+        Returns:
+            list[str]: List of strings representing the item in markdown format
+        """
         success_symbol = "✓" if self.was_evaluated_successfully else "❌"
         lines = []
         lines.append(f"{success_symbol} Item {self.item_id} - Trace ID: {self.trace_id}")
@@ -328,6 +385,16 @@ class RunSummaryInfo:
 
 
 def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> RelevantItemInfo:
+    """
+    Extract relevant information from a dataset run item.
+
+    Args:
+        langfuse (Langfuse): Langfuse client instance
+        item (DatasetRunItem): Dataset run item to analyze
+
+    Returns:
+        RelevantItemInfo: Structured information about the item
+    """
     trace = langfuse.fetch_trace(item.trace_id)
     dataset_item = langfuse.get_dataset_item(item.dataset_item_id)
 
@@ -402,6 +469,16 @@ def calculate_item_detailed_scores(item: RelevantItemInfo) -> ItemDetailedScores
 
 
 def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSummaryInfo:
+    """
+    Calculate summary statistics for a dataset run.
+
+    Args:
+        langfuse (Langfuse): Langfuse client instance
+        run (DatasetRunWithItems): Dataset run to analyze
+
+    Returns:
+        RunSummaryInfo: Summary information about the run
+    """
     items_in_run = [get_relevant_info_for_item(langfuse, item) for item in run.dataset_run_items]
 
     # Calculate averages for successful evaluations only
@@ -529,16 +606,16 @@ def create_table(
     Creates a formatted table for terminal output.
 
     Args:
-        title: Optional title for the table
-        headers: List of column headers
-        rows: List of rows, where each row is a list of cell values
-        column_widths: Optional list of column widths. If not provided, will be calculated based on content
-        alignments: Optional list of alignments ('left', 'right', 'center'). Defaults to 'left'
+        title (str | None): Optional title for the table
+        subtitle (str | None): Optional subtitle for the table
+        headers (list[str]): List of column headers
+        rows (list[list[str]]): List of rows, where each row is a list of cell values
+        column_widths (list[int] | None): Optional list of column widths. If not provided, will be calculated based on content
+        alignments (list[str] | None): Optional list of alignments ('left', 'right', 'center'). Defaults to 'left'
 
     Returns:
-        List of strings representing the table lines
+        list[str]: List of strings representing the table lines
     """
-
     # Check that the length of each row matches length of headers
     if any(len(row) != len(headers) for row in rows):
         raise ValueError("Length of each row must match length of headers")
@@ -606,14 +683,13 @@ def create_distribution_chart(
     Creates a bar chart visualization of a distribution for terminal output.
 
     Args:
-        title: Title of the chart
-        x_label: Label for the x-axis (values)
-        y_label: Label for the y-axis (counts)
-        distribution: Dictionary mapping values to their counts
-        bar_length: Maximum length of the bars in characters
+        title (str): Title of the chart
+        metric_label (str): Label for the metric being displayed
+        distribution (dict[int, int]): Dictionary mapping values to their counts
+        bar_length (int, optional): Maximum length of the bars in characters. Defaults to 30.
 
     Returns:
-        List of strings representing the chart lines
+        list[str]: List of strings representing the chart lines
     """
     if not distribution:
         return []
