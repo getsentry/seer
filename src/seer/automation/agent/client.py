@@ -995,9 +995,15 @@ class GeminiProvider:
                 break
 
         usage = Usage(
-            completion_tokens=response.usage_metadata.candidates_token_count or 0,
-            prompt_tokens=response.usage_metadata.prompt_token_count or 0,
-            total_tokens=response.usage_metadata.total_token_count or 0,
+            completion_tokens=(
+                response.usage_metadata.candidates_token_count if response.usage_metadata else 0
+            ),
+            prompt_tokens=(
+                response.usage_metadata.prompt_token_count if response.usage_metadata else 0
+            ),
+            total_tokens=(
+                response.usage_metadata.total_token_count if response.usage_metadata else 0
+            ),
         )
         langfuse_context.update_current_observation(model=self.model_name, usage=usage)
 
@@ -1053,11 +1059,13 @@ class GeminiProvider:
             for chunk in stream:
                 # Handle function calls
                 if (
-                    chunk.candidates[0].content
+                    chunk.candidates
+                    and chunk.candidates[0].content
+                    and chunk.candidates[0].content.parts
                     and chunk.candidates[0].content.parts[0].function_call
                 ):
                     function_call = chunk.candidates[0].content.parts[0].function_call
-                    if not current_tool_call:
+                    if function_call.name and function_call.args and not current_tool_call:
                         current_tool_call = {
                             "id": str(hash(function_call.name + str(function_call.args))),
                             "function": function_call.name,
@@ -1124,9 +1132,15 @@ class GeminiProvider:
         message = self._format_gemini_response_to_message(response)
 
         usage = Usage(
-            completion_tokens=response.usage_metadata.candidates_token_count or 0,
-            prompt_tokens=response.usage_metadata.prompt_token_count or 0,
-            total_tokens=response.usage_metadata.total_token_count or 0,
+            completion_tokens=(
+                response.usage_metadata.candidates_token_count if response.usage_metadata else 0
+            ),
+            prompt_tokens=(
+                response.usage_metadata.prompt_token_count if response.usage_metadata else 0
+            ),
+            total_tokens=(
+                response.usage_metadata.total_token_count if response.usage_metadata else 0
+            ),
         )
 
         langfuse_context.update_current_observation(model=self.model_name, usage=usage)
@@ -1310,7 +1324,7 @@ class GeminiProvider:
 
         return message
 
-    def create_cache(self, contents: str, display_name: str, ttl: int = 3600) -> str:
+    def create_cache(self, contents: str, display_name: str, ttl: int = 3600) -> str | None:
         """
         Create a cache for the given content and display name. We will use the display name as the key.
         If the cache already exists, it will be updated with the new content.
@@ -1328,7 +1342,7 @@ class GeminiProvider:
         # So we must do an O(n) search to find the cache by display name
         caches = client.caches.list()
         for cache in caches:
-            if cache.display_name == display_name:
+            if cache.display_name == display_name and cache.name:
                 client.caches.update(
                     name=cache.name,
                     config=CreateCachedContentConfig(contents=contents, ttl=f"{ttl}s"),
@@ -1729,7 +1743,10 @@ class LlmClient:
     ) -> str:
         if model.provider_name == LlmProviderType.GEMINI:
             model = cast(GeminiProvider, model)
-            return model.create_cache(contents, display_name, ttl)
+            cache_name = model.create_cache(contents, display_name, ttl)
+            if not cache_name:
+                raise ValueError("Failed to create cache")
+            return cache_name
         else:
             raise ValueError("Manual cache creation is only supported for Gemini.")
 
