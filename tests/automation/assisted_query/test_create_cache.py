@@ -70,7 +70,7 @@ class TestCreateCache(unittest.TestCase):
             org_id=self.org_id,
             project_ids=self.project_ids,
             stats_period="48h",
-            limit=5,
+            limit=15,
         )
 
         mock_llm_instance.create_cache.assert_called_once()
