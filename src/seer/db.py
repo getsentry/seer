@@ -213,7 +213,7 @@ class DbSeerEvent(Base):
 class DbRunState(Base):
     """
     This is the schema of the run_state table that stores 1 row for every Autofix run.
-    The value field is a JSON field that has all the detial information of the state.
+    The value field maps to a JSON column that has all the detailed information of the autofix state.
     """
 
     __tablename__ = "run_state"

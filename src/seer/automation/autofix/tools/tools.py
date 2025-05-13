@@ -60,8 +60,6 @@ class BaseTools:
         self.repo_managers = {}
 
         self._download_repos()
-        for repodef in self.context.repos:
-            logger.info(f"Repo {repodef.full_name} base commit sha: {repodef.base_commit_sha}")
 
     def _download_repos(self):
         repo_names = self._get_repo_names()
@@ -72,8 +70,6 @@ class BaseTools:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
-
-            logger.info(f"Repo {repo_name} base commit sha: {repo_client.base_commit_sha}")
             repo_manager = RepoManager(
                 repo_client, trigger_liveness_probe=self._trigger_liveness_probe
             )

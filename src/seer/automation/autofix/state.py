@@ -16,8 +16,8 @@ class ContinuationState(DbState[AutofixContinuation]):
 
     def apply_to_run_state(self, state: AutofixContinuation, run_state: DbRunState):
         """
-        This function updates the updated_at and last_triggered_at fields in the value
-        field of the run_state table, the postgres table for autofix runs.
+        This function updates AutofixContinuation state whihc is turn updates the updated_at and
+        last_triggered_at fields in the run_state table, i.e. the postgres table for autofix runs.
         """
         run_state.updated_at = state.updated_at
         run_state.last_triggered_at = state.last_triggered_at
