@@ -11,7 +11,7 @@ from typing import Callable
 
 import git
 import sentry_sdk
-from google.cloud import storage
+from google.cloud import storage  # type:ignore
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from seer.automation.codebase.repo_client import RepoClient
@@ -321,7 +321,12 @@ class RepoManager:
         git_repo = git.Repo(repo_path)
 
         # Validate that the repo is initialized
-        if not git_repo.git.execute(["git", "status"]):
+        if not git_repo.git.execute(
+            command=["git", "status"],
+            stdout_as_string=True,
+            with_extended_output=False,
+            as_process=False,
+        ):
             raise RepoInitializationError("Repository is not initialized")
 
         commit_sha = self.repo_client.base_commit_sha
@@ -329,7 +334,12 @@ class RepoManager:
         # Remove all remote branches except the one we need
         logger.info("Pruning unnecessary references")
         try:
-            refs = git_repo.git.execute(["git", "show-ref"])
+            refs = git_repo.git.execute(
+                ["git", "show-ref"],
+                stdout_as_string=True,
+                with_extended_output=False,
+                as_process=False,
+            )
             if refs:  # Only process if we have refs
                 for ref in refs.split("\n"):
                     if ref and commit_sha not in ref:
@@ -363,7 +373,6 @@ class RepoManager:
             if existing_repo_archive is None:
                 repo_archive = DbSeerRepoArchive(
                     organization_id=self.organization_id,
-                    project_id=self.project_id,
                     bucket_name=self.get_bucket_name(),
                     blob_path=self.blob_name,
                     commit_sha=self.repo_client.base_commit_sha,
@@ -416,7 +425,6 @@ class RepoManager:
             session.query(DbSeerRepoArchive)
             .filter(
                 DbSeerRepoArchive.organization_id == self.organization_id,
-                DbSeerRepoArchive.project_id == self.project_id,
                 DbSeerRepoArchive.bucket_name == self.get_bucket_name(),
                 DbSeerRepoArchive.blob_path == self.blob_name,
             )
