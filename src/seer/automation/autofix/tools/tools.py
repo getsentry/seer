@@ -138,8 +138,11 @@ class BaseTools:
             future = repo_manager.initialization_future
             if future in not_done:
                 repo_manager.mark_as_timed_out()
-                logger.warning(
-                    f"Repository {repo_manager.repo_client.repo_full_name} timed out after {REPO_WAIT_TIMEOUT_SECS} seconds"
+                logger.error(
+                    f"Repository download timed out after {REPO_WAIT_TIMEOUT_SECS} seconds",
+                    extra={
+                        "repo": repo_manager.repo_client.repo_full_name,
+                    },
                 )
             elif future.exception():
                 repo_manager.mark_as_timed_out()
