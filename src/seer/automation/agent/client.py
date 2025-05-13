@@ -656,7 +656,7 @@ class AnthropicProvider:
         if isinstance(tool, ClaudeTool):
             return ToolParam(  # type: ignore
                 name=tool.name,
-                type=tool.type,
+                type=tool.type,  # type: ignore
             )
 
         return ToolParam(
