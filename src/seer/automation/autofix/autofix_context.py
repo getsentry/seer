@@ -580,7 +580,7 @@ class AutofixContext(PipelineContext):
                     )
                 )
 
-        return make_file_patches(file_changes, changes_by_path.keys(), original_documents)
+        return make_file_patches(file_changes, list(changes_by_path.keys()), original_documents)
 
     def store_memory(self, key: str, memory: list[Message]):
         with Session() as session:
