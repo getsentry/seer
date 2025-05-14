@@ -14,6 +14,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     StacktraceSource,
     TraceEventSource,
 )
+from seer.automation.codebase.repo_client import RepoClient
 
 
 @pytest.fixture
@@ -26,6 +27,16 @@ def mock_context():
     repo_client.provider = "github"
     repo_client.base_branch = "main"
     repo_client.base_commit_sha = "abcd1234"
+    repo_client.repo_full_name = "test-repo"
+
+    repo_client.get_file_url.side_effect = (
+        lambda file_path, start_line=None, end_line=None: RepoClient.get_file_url(
+            repo_client, file_path, start_line, end_line
+        )
+    )
+    repo_client.get_commit_url.side_effect = lambda commit_sha: RepoClient.get_commit_url(
+        repo_client, commit_sha
+    )
 
     context.get_repo_client.return_value = repo_client
     context.get_file_contents.return_value = "sample file content"
