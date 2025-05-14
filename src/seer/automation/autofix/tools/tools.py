@@ -25,7 +25,6 @@ from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codegen.codegen_context import CodegenContext
-from seer.automation.codegen.models import CodegenBaseRequest
 from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
@@ -172,10 +171,7 @@ class BaseTools:
         return [repo.full_name for repo in self.context.state.get().readable_repos]
 
     def _make_repo_not_found_error_message(self, repo_name: str) -> str:
-        if isinstance(self.context, AutofixContext):
-            available_repos = self.context.repos
-        else:
-            available_repos = self.context.state.get().readable_repos
+        available_repos = self.context.state.get().readable_repos
         available_repos_str = ", ".join([repo.full_name for repo in available_repos])
         return f"Error: Repo '{repo_name}' not found. Available repos: {available_repos_str}"
 
@@ -657,7 +653,7 @@ class BaseTools:
 
     def _append_file_change(self, repo_name: str, file_change: FileChange):
         with self.context.state.update() as cur:
-            for repo in cur.request.repos:
+            for repo in cur.readable_repos:
                 if repo.full_name == repo_name:
                     cur.codebases[repo.external_id].file_changes.append(file_change)
 
@@ -995,12 +991,7 @@ class BaseTools:
     ) -> str:
         """Handles the undo edit command to remove file changes."""
         cur_state = self.context.state.get()
-        if isinstance(cur_state.request, AutofixRequest):
-            repos = cur_state.request.repos
-        elif isinstance(cur_state.request, CodegenBaseRequest):
-            repos = cur_state.readable_repos
-        else:
-            raise ValueError("Invalid request type")
+        repos = cur_state.readable_repos
 
         external_id = None
         for repo in repos:
