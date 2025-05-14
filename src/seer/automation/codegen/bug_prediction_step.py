@@ -111,6 +111,8 @@ class BugPredictionStep(CodegenStep):
 
         """
         # 1. Read the PR.
+        # TODO: overwatch should populate base_commit_sha instead
+        self.request.repo.base_commit_sha = self.request.commit_sha
         repo_client = self.context.get_repo_client(type=RepoClientType.READ)
         pr = repo_client.repo.get_pull(self.request.pr_id)
         pr_files = [
