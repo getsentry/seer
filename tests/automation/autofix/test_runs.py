@@ -155,4 +155,3 @@ class TestRuns:
         # Verify that state.update was used to set repos to created preference
         ctx = mock_state.update.return_value.__enter__.return_value
         assert ctx.request.repos == sample_repos
-
