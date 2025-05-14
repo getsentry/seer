@@ -32,7 +32,7 @@ class TestBankAccount(unittest.TestCase):
         initial_balance = self.account.balance
         amount = 500.0
         new_balance = self.account.deposit(amount)
-        
+
         self.assertEqual(new_balance, initial_balance + amount)
         self.assertEqual(self.account.balance, initial_balance + amount)
         self.assertEqual(len(self.account.transactions), 1)
@@ -58,7 +58,7 @@ class TestBankAccount(unittest.TestCase):
         initial_balance = self.account.balance
         amount = 500.0
         new_balance = self.account.withdraw(amount)
-        
+
         self.assertEqual(new_balance, initial_balance - amount)
         self.assertEqual(self.account.balance, initial_balance - amount)
         self.assertEqual(len(self.account.transactions), 1)
@@ -91,18 +91,18 @@ class TestBankAccount(unittest.TestCase):
         with self.assertRaises(DailyLimitExceeded):
             self.account.withdraw(self.account.daily_limit / 2 + 1)
 
-    @patch('datetime.date')
+    @patch("datetime.date")
     def test_reset_daily_limit(self, mock_date):
         """Test daily withdrawal limit resets on a new day."""
         today = datetime.date(2023, 1, 1)
         tomorrow = datetime.date(2023, 1, 2)
-        
+
         # Set up "today"
         mock_date.today.return_value = today
         self.account.withdraw(500)
         self.assertEqual(self.account.withdrawals_today, 500)
         self.assertEqual(self.account.last_withdrawal_date, today)
-        
+
         # Change to "tomorrow"
         mock_date.today.return_value = tomorrow
         self.account.withdraw(200)
@@ -114,9 +114,9 @@ class TestBankAccount(unittest.TestCase):
         initial_balance = self.account.balance
         target_initial_balance = self.second_account.balance
         amount = 300.0
-        
+
         new_balance = self.account.transfer(self.second_account, amount)
-        
+
         self.assertEqual(new_balance, initial_balance - amount)
         self.assertEqual(self.account.balance, initial_balance - amount)
         self.assertEqual(self.second_account.balance, target_initial_balance + amount)
@@ -135,9 +135,9 @@ class TestBankAccount(unittest.TestCase):
         initial_balance = self.account.balance
         interest_rate = self.account.interest_rate
         expected_interest = initial_balance * interest_rate
-        
+
         earned_interest = self.account.apply_interest()
-        
+
         self.assertEqual(earned_interest, expected_interest)
         self.assertEqual(self.account.balance, initial_balance + expected_interest)
         self.assertEqual(len(self.account.transactions), 1)
@@ -151,11 +151,11 @@ class TestBankAccount(unittest.TestCase):
         self.account.withdraw(50)
         self.account.deposit(200)
         self.account.withdraw(75)
-        
+
         # Get limited history (default limit=10)
         history = self.account.get_transaction_history()
         self.assertEqual(len(history), 4)
-        
+
         # Get limited history with custom limit
         history = self.account.get_transaction_history(limit=2)
         self.assertEqual(len(history), 2)
