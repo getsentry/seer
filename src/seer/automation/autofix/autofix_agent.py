@@ -84,19 +84,18 @@ class AutofixAgent(LlmAgent):
         trace_id = langfuse_context.get_current_trace_id()
         observation_id = langfuse_context.get_current_observation_id()
 
-        # Share insights in parallel
-        cur_step_idx = len(cur.steps) - 1
-        self.futures.append(
-            self.executor.submit(
-                self.share_insights,
-                text,
-                cur_step_idx,
-                self.context.state,
-                max(0, len(self.memory) - 1),
-                langfuse_parent_trace_id=trace_id,  # type: ignore
-                langfuse_parent_observation_id=observation_id,  # type: ignore
+        if cur.steps and cur.steps[-1].id:
+            self.futures.append(
+                self.executor.submit(
+                    self.share_insights,
+                    text,
+                    self.context.state,
+                    max(0, len(self.memory) - 1),
+                    cur.steps[-1].id,
+                    langfuse_parent_trace_id=trace_id,  # type: ignore
+                    langfuse_parent_observation_id=observation_id,  # type: ignore
+                )
             )
-        )
 
     def _omit_biggest_n_tool_messages(self, messages: list[Message], n: int) -> list[Message]:
         """Creates a new list of messages with content of the n largest tool results ommitted."""
@@ -355,16 +354,14 @@ class AutofixAgent(LlmAgent):
     def share_insights(
         self,
         text: str,
-        cur_step_idx: int,
         state: State[AutofixContinuation],
         generated_at_memory_index: int,
+        step_id: str,
     ):
-        steps = state.get().steps
-        if cur_step_idx >= len(steps) or not steps:
-            return
-
-        step = steps[cur_step_idx]
-        if not isinstance(step, DefaultStep):
+        step = state.get().find_step(id=step_id)
+            
+        if not step or not isinstance(step, DefaultStep):
+            logger.exception(f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {step.key}")
             return
 
         insight_card, usage = create_insight_output(
