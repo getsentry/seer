@@ -1,7 +1,7 @@
 import datetime
 import os
 from concurrent.futures import Future
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, mock_open, patch
 
 import git
 import pytest
@@ -394,7 +394,9 @@ def test_download_from_gcs_success(repo_manager, mock_repo_client):
     """Test successful download_from_gcs sequence."""
     mock_blob = MagicMock()
     mock_blob.exists.return_value = True
-    mock_blob.download_to_filename = MagicMock()
+    mock_blob.size = 1024  # Add a numeric size for chunk calculations
+    mock_blob.reload = MagicMock()  # Mock the reload method
+    mock_blob.download_as_bytes = MagicMock(return_value=b"fake data")  # Mock download_as_bytes
     mock_bucket = MagicMock()
     mock_bucket.blob.return_value = mock_blob
     mock_storage_instance = MagicMock()
@@ -412,21 +414,28 @@ def test_download_from_gcs_success(repo_manager, mock_repo_client):
         ),
         patch("seer.automation.codebase.repo_manager.cleanup_dir") as mock_cleanup_dir,
         patch("seer.automation.codebase.repo_manager.tarfile.open", return_value=fake_tar),
+        patch("seer.automation.codebase.repo_manager.open", mock_open(), create=True),
         patch(
             "seer.automation.codebase.repo_manager.git.Repo", return_value=MagicMock(spec=git.Repo)
         ),
         patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.os.makedirs"),
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["some_file.txt"]),
+        patch("seer.automation.codebase.repo_manager.os.unlink") as mock_unlink,
     ):
-        repo_manager.download_from_gcs()
+        repo_manager.download_from_gcs(chunk_size=512)  # Use smaller chunk size for test
 
         temp_tar = os.path.join(repo_manager.tmp_dir, "repo_archive.tar.gz")
         mock_cleanup_dir.assert_called_once_with(repo_manager.repo_path)
         mock_storage_instance.bucket.assert_called_once_with(repo_manager.get_bucket_name())
         mock_bucket.blob.assert_called_once_with(repo_manager.blob_name)
         mock_blob.exists.assert_called_once()
-        mock_blob.download_to_filename.assert_called_once_with(temp_tar)
+        mock_blob.reload.assert_called_once()  # Verify reload was called
+
         fake_tar.getmembers.assert_called_once()
         fake_tar.extractall.assert_called_once_with(path=repo_manager.repo_path, members=[])
+        mock_unlink.assert_called_once_with(temp_tar)
         assert repo_manager.git_repo is not None
 
 
@@ -591,7 +600,9 @@ def test_download_from_gcs_prevent_path_traversal(repo_manager, mock_repo_client
     bucket = MagicMock()
     blob = MagicMock()
     blob.exists.return_value = True
-    blob.download_to_filename = MagicMock()
+    blob.size = 1024  # Add a numeric size for chunk calculations
+    blob.reload = MagicMock()  # Mock the reload method
+    blob.download_as_bytes = MagicMock(return_value=b"fake data")  # Mock download_as_bytes
     storage_instance.bucket.return_value = bucket
     bucket.blob.return_value = blob
 
@@ -613,10 +624,13 @@ def test_download_from_gcs_prevent_path_traversal(repo_manager, mock_repo_client
         patch("seer.automation.codebase.repo_manager.cleanup_dir"),
         patch("seer.automation.codebase.repo_manager.os.makedirs"),
         patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["safe.txt"]),
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.open", mock_open(), create=True),
         patch("seer.automation.codebase.repo_manager.tarfile.open") as mock_tar_open,
         patch(
             "seer.automation.codebase.repo_manager.git.Repo", return_value=MagicMock(spec=git.Repo)
         ),
+        patch("seer.automation.codebase.repo_manager.os.unlink"),
     ):
         # Configure tarfile context manager
         mock_tar_open.return_value.__enter__.return_value = fake_tar
@@ -624,7 +638,7 @@ def test_download_from_gcs_prevent_path_traversal(repo_manager, mock_repo_client
         fake_tar.extractall = MagicMock()
 
         # Run download
-        repo_manager.download_from_gcs()
+        repo_manager.download_from_gcs(chunk_size=512)  # Use smaller chunk size for test
 
         # Member name should be sanitized for safe member
         assert fake_member_safe.name == "safe.txt"

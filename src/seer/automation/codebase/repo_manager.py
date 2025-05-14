@@ -481,13 +481,13 @@ class RepoManager:
             return None
 
     @sentry_sdk.trace
-    def download_from_gcs(self):
+    def download_from_gcs(self, chunk_size: int = 128 * 1024 * 1024, max_workers: int = 8):
         """
-        Download the repository from GCS to the cloned tmp directory.
+        Download the repository from GCS to the cloned tmp directory by slicing the blob into parallel chunks.
 
         Args:
-            max_workers: Maximum number of concurrent extraction threads (default: 4)
-                         [No longer used as extraction is now sequential]
+            chunk_size: Size in bytes for each download segment (default: 128 * 1024 * 1024 or 128MB).
+            max_workers: Maximum number of concurrent download threads to use (default: 8).
         """
 
         # Create a temporary file within self.tmp_dir to download the tar.gz
@@ -507,12 +507,34 @@ class RepoManager:
                     f"Repository archive not found in GCS: {self.get_bucket_name()}/{self.blob_name}"
                 )
 
-            # Download the blob
+            # Download the blob in parallel
             start_time = time.time()
-            blob.download_to_filename(temp_tarfile)
+            # Reload metadata to get blob size
+            blob.reload()
+            total_bytes = blob.size
+            # Pre-allocate file
+            with open(temp_tarfile, "wb") as f:
+                f.truncate(total_bytes)
+            # Prepare byte ranges for each chunk
+            ranges = [
+                (i, min(i + chunk_size - 1, total_bytes - 1))
+                for i in range(0, total_bytes, chunk_size)
+            ]
+
+            def _download_range(start, end):
+                data = blob.download_as_bytes(start=start, end=end)
+                with open(temp_tarfile, "r+b") as f2:
+                    f2.seek(start)
+                    f2.write(data)
+
+            # Fetch segments in parallel
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(_download_range, start, end) for start, end in ranges]
+                for future in futures:
+                    future.result()
             end_time = time.time()
             logger.info(
-                f"Downloaded repository archive for {self.repo_client.repo_full_name} in {end_time - start_time} seconds"
+                f"Downloaded repository archive for {self.repo_client.repo_full_name} in {end_time - start_time} seconds using {len(ranges)} segments"
             )
 
             # Clean up existing repo path before extracting
