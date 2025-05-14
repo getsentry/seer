@@ -143,12 +143,12 @@ class AutofixSolutionStep(AutofixPipelineStep):
             if not relevant_code:
                 reproduction_urls.append(None)
                 continue
-            repo_name = relevant_code.repo_name
+            repo_name: str | None = relevant_code.repo_name
             repo_name = self.context.autocorrect_repo_name(repo_name)
             if not repo_name:
                 reproduction_urls.append(None)
                 continue
-            file_name = relevant_code.file_path
+            file_name: str | None = relevant_code.file_path
             file_name = self.context.autocorrect_file_path(path=file_name, repo_name=repo_name)
             if not file_name:
                 reproduction_urls.append(None)
