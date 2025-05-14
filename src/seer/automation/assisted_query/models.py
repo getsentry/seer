@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class CreateCacheRequest(BaseModel):
     org_id: int
     project_ids: list[int]
+    no_values: bool = False
 
 
 class CreateCacheResponse(BaseModel):
