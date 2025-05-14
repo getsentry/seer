@@ -1008,7 +1008,7 @@ class GeminiProvider:
         langfuse_context.update_current_observation(model=self.model_name, usage=usage)
 
         return LlmGenerateStructuredResponse(
-            parsed=response.parsed,
+            parsed=response.parsed,  # type: ignore[arg-type]
             metadata=LlmResponseMetadata(
                 model=self.model_name,
                 provider_name=self.provider_name,
@@ -1044,7 +1044,7 @@ class GeminiProvider:
         try:
             stream = client.models.generate_content_stream(
                 model=self.model_name,
-                contents=message_dicts,
+                contents=message_dicts,  # type: ignore[arg-type]
                 config=GenerateContentConfig(
                     tools=tool_dicts,
                     system_instruction=system_prompt,
@@ -1120,7 +1120,7 @@ class GeminiProvider:
         client = self.get_client()
         response = client.models.generate_content(
             model=self.model_name,
-            contents=message_dicts,
+            contents=message_dicts,  # type: ignore[arg-type]
             config=GenerateContentConfig(
                 tools=tool_dicts,
                 system_instruction=system_prompt,
