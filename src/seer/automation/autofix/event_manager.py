@@ -4,7 +4,11 @@ import time
 
 from seer.automation.autofix.components.insight_sharing.models import InsightSharingOutput
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisOutput
-from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionTimelineEvent
+from seer.automation.autofix.components.solution.models import (
+    RelevantCodeFileWithUrl,
+    SolutionOutput,
+    SolutionTimelineEvent,
+)
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixRootCauseUpdatePayload,
@@ -193,7 +197,9 @@ class AutofixEventManager:
                 log_payload,
             )
 
-    def send_solution_result(self, solution_output: SolutionOutput):
+    def send_solution_result(
+        self, solution_output: SolutionOutput, reproduction_urls: list[str | None]
+    ):
         log_payload = None
         with self.state.update() as cur:
             solution_processing_step = cur.find_or_add(self.solution_processing_step)
@@ -204,10 +210,18 @@ class AutofixEventManager:
                 SolutionTimelineEvent(
                     title=solution_step.title,
                     code_snippet_and_analysis=solution_step.code_snippet_and_analysis,
-                    relevant_code_file=solution_step.relevant_code_file,
+                    relevant_code_file=(
+                        RelevantCodeFileWithUrl(
+                            file_path=solution_step.relevant_code_file.file_path,
+                            repo_name=solution_step.relevant_code_file.repo_name,
+                            url=reproduction_urls[i] if i < len(reproduction_urls) else None,
+                        )
+                        if solution_step.relevant_code_file
+                        else None
+                    ),
                     is_most_important_event=solution_step.is_most_important,
                 )
-                for solution_step in solution_output.solution_steps
+                for i, solution_step in enumerate(solution_output.solution_steps)
             ]
             solution_step.solution.append(  # type: ignore[union-attr]
                 SolutionTimelineEvent(
