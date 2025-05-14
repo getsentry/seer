@@ -71,9 +71,9 @@ class BaseTools:
                 repo_client,
                 trigger_liveness_probe=self._trigger_liveness_probe,
                 organization_id=(
-                    request.organization_id if isinstance(self.context, AutofixRequest) else None
+                    request.organization_id if isinstance(request, AutofixRequest) else None
                 ),
-                project_id=request.project_id if isinstance(self.context, AutofixRequest) else None,
+                project_id=(request.project_id if isinstance(request, AutofixRequest) else None),
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
