@@ -98,7 +98,6 @@ def create_query_from_natural_language(
         fields=relevant_fields,
         project_ids=project_ids,
         stats_period="48h",
-        thinking_budget=0,
         limit=200,
     )
 
@@ -122,6 +121,7 @@ def create_query_from_natural_language(
         model=model,
         cache_name=cache_name,
         response_format=ModelResponse,
+        thinking_budget=0,
         use_local_endpoint=True,
     )
 
