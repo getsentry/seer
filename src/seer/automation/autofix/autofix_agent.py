@@ -376,7 +376,7 @@ class AutofixAgent(LlmAgent):
         )
 
         if insight_card:
-            self.context.event_manager.send_insight(insight_card)
+            self.context.event_manager.send_insight(insight_card, step_id)
 
         with state.update() as cur:
             cur.usage += usage
