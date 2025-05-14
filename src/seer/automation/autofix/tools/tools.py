@@ -76,9 +76,9 @@ class BaseTools:
                 repo_client,
                 trigger_liveness_probe=self._trigger_liveness_probe,
                 organization_id=(
-                    request.organization_id if isinstance(self.context, AutofixRequest) else None
+                    request.organization_id if isinstance(request, AutofixRequest) else None
                 ),
-                project_id=request.project_id if isinstance(self.context, AutofixRequest) else None,
+                project_id=(request.project_id if isinstance(request, AutofixRequest) else None),
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
@@ -895,7 +895,7 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
             )
 
             return self._apply_file_change(repo_name, file_change)
@@ -943,7 +943,7 @@ class BaseTools:
                 change_diff=file_diff,
                 generated_at_memory_index=current_memory_index,
                 type=InsightSharingType.FILE_CHANGE,
-            )
+            ),
         )
 
         return self._apply_file_change(repo_name, file_change)
@@ -998,7 +998,7 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
             )
 
             return self._apply_file_change(repo_name, file_change)

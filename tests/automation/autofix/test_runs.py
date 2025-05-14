@@ -9,6 +9,8 @@ from seer.automation.autofix.models import (
     IssueDetails,
 )
 from seer.automation.autofix.runs import create_initial_autofix_run, set_repo_branches_and_commits
+from seer.automation.models import RepoDefinition, SeerProjectPreference
+from seer.automation.preferences import GetSeerProjectPreferenceRequest
 
 
 @pytest.fixture
@@ -33,6 +35,13 @@ class TestRuns:
         ).start()
         self.mock_autofix_continuation = patch(
             "seer.automation.autofix.runs.AutofixContinuation"
+        ).start()
+        # Patch preference retrieval and creation
+        self.mock_get_pref = patch(
+            "seer.automation.autofix.runs.get_seer_project_preference"
+        ).start()
+        self.mock_create_initial_pref = patch(
+            "seer.automation.autofix.runs.create_initial_seer_project_preference_from_repos"
         ).start()
         yield
         patch.stopall()
@@ -101,3 +110,49 @@ class TestRuns:
         # The fixture already asserts the patch was used, so just check the results
         assert mock_repo.branch_name == "test_branch"
         assert mock_repo.base_commit_sha == "test_commit_sha"
+
+    def test_create_initial_autofix_run_creates_preference_when_none(self, mock_request):
+        # Setup mock state
+        mock_state = MagicMock()
+        self.mock_continuation_state.new.return_value = mock_state
+
+        # No existing preference
+        self.mock_get_pref.return_value = MagicMock(preference=None)
+        # Prepare sample repos
+        sample_repos = [
+            RepoDefinition(
+                owner="ownerX",
+                name="repoX",
+                external_id="extX",
+                provider="github",
+            )
+        ]
+        # Ensure request.repos is initial list
+        mock_request.repos = [
+            RepoDefinition(owner="initial", name="repo", external_id="extInit", provider="github")
+        ]
+        # Setup creation return
+        pref = SeerProjectPreference(
+            organization_id=mock_request.organization_id,
+            project_id=mock_request.project_id,
+            repositories=sample_repos,
+        )
+        self.mock_create_initial_pref.return_value = pref
+
+        # Call the function
+        create_initial_autofix_run(mock_request)
+
+        # Verify preference retrieval was attempted
+        self.mock_get_pref.assert_called_once_with(
+            GetSeerProjectPreferenceRequest(project_id=mock_request.project_id)
+        )
+        # Verify new preference creation was called
+        self.mock_create_initial_pref.assert_called_once_with(
+            organization_id=mock_request.organization_id,
+            project_id=mock_request.project_id,
+            repos=mock_request.repos,
+        )
+        # Verify that state.update was used to set repos to created preference
+        ctx = mock_state.update.return_value.__enter__.return_value
+        assert ctx.request.repos == sample_repos
+

@@ -8,7 +8,10 @@ from celery_app.app import celery_app
 from seer.automation.agent.models import Message
 from seer.automation.autofix.components.confidence import ConfidenceComponent, ConfidenceRequest
 from seer.automation.autofix.components.root_cause.component import RootCauseAnalysisComponent
-from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisRequest
+from seer.automation.autofix.components.root_cause.models import (
+    RootCauseAnalysisOutput,
+    RootCauseAnalysisRequest,
+)
 from seer.automation.autofix.config import (
     AUTOFIX_ROOT_CAUSE_HARD_TIME_LIMIT_SECS,
     AUTOFIX_ROOT_CAUSE_SOFT_TIME_LIMIT_SECS,
@@ -23,6 +26,7 @@ from seer.automation.autofix.steps.solution_step import (
     AutofixSolutionStepRequest,
 )
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
+from seer.automation.autofix.utils import find_original_snippet
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.utils import make_kill_signal
@@ -101,6 +105,11 @@ class RootCauseStep(AutofixPipelineStep):
         if make_kill_signal() in state.signals:
             return
 
+        # create URLs to relevant code snippets
+        reproduction_urls = self._get_reproduction_urls(root_cause_output)
+        if root_cause_output.causes and reproduction_urls:
+            root_cause_output.causes[0].reproduction_urls = reproduction_urls
+
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
 
         # confidence evaluation
@@ -174,3 +183,52 @@ class RootCauseStep(AutofixPipelineStep):
             ),
             queue=app_config.CELERY_WORKER_QUEUE,
         )
+
+    def _get_reproduction_urls(self, root_cause_output: RootCauseAnalysisOutput):
+        reproduction_urls: list[str | None] = []
+        if not root_cause_output.causes:
+            return []
+        repro_timeline = root_cause_output.causes[0].root_cause_reproduction
+        if not repro_timeline:
+            return []
+        for i, timeline_item in enumerate(repro_timeline):
+            reproduction_urls.append(None)
+            relevant_code = timeline_item.relevant_code_file
+            if not relevant_code:
+                continue
+            repo_name = self.context.autocorrect_repo_name(relevant_code.repo_name)
+            if not repo_name:
+                continue
+            file_name = self.context.autocorrect_file_path(
+                path=relevant_code.file_path, repo_name=repo_name
+            )
+            if not file_name:
+                continue
+
+            repo_client = self.context.get_repo_client(repo_name)
+
+            full_snippet = timeline_item.code_snippet_and_analysis
+            # Extract code snippet between triple backticks
+            code_snippet = None
+            parts = full_snippet.split("```")
+            if len(parts) > 2:
+                code_snippet = parts[1].split("```")[0]
+                if "\n" in code_snippet:
+                    code_snippet = "\n".join(
+                        code_snippet.split("\n")[1:]
+                    )  # remove the first line because it's often something like ```python
+            start_line = None
+            end_line = None
+            if code_snippet:
+                file_content = self.context.get_file_contents(file_name, repo_name)
+                if file_content:
+                    result = find_original_snippet(
+                        code_snippet, file_content, initial_line_threshold=0.5, threshold=0.5
+                    )
+                    if result:
+                        start_line = result[1]
+                        end_line = result[2]
+            code_url = repo_client.get_file_url(file_name, start_line, end_line)
+            reproduction_urls[i] = code_url
+
+        return reproduction_urls
