@@ -9,15 +9,16 @@ from seer.automation.models import EventDetails, Profile, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
-class RelevantCodeFile(BaseModel):
+class RelevantCodeFileWithUrl(BaseModel):
     file_path: str
     repo_name: str
+    url: str | None = None
 
 
 class SolutionTimelineEvent(BaseModel):
     title: str
     code_snippet_and_analysis: str | None = None
-    relevant_code_file: RelevantCodeFile | None = None
+    relevant_code_file: RelevantCodeFileWithUrl | None = None
     is_most_important_event: bool = False
     timeline_item_type: Literal["internal_code", "human_instruction", "repro_test"] = (
         "internal_code"
@@ -40,6 +41,11 @@ class SolutionTimelineEvent(BaseModel):
         ):
             data["timeline_item_type"] = "internal_code"
         return data
+
+
+class RelevantCodeFile(BaseModel):
+    file_path: str
+    repo_name: str
 
 
 class SolutionPlanStep(BaseModel):

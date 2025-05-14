@@ -1,4 +1,3 @@
-import unittest
 from unittest.mock import MagicMock, patch
 
 from seer.automation.agent.client import LlmClient
@@ -23,8 +22,8 @@ from seer.automation.assisted_query.models import (
 from seer.rpc import RpcClient
 
 
-class TestAssistedQuery(unittest.TestCase):
-    def setUp(self):
+class TestAssistedQuery:
+    def setup_method(self):
         self.mock_llm_client = MagicMock(spec=LlmClient)
         self.mock_rpc_client = MagicMock(spec=RpcClient)
 
@@ -65,20 +64,17 @@ class TestAssistedQuery(unittest.TestCase):
 
             response = translate_query(request)
 
-            self.assertIsInstance(response, TranslateResponse)
-            self.assertEqual(response.query, "error")
-            self.assertEqual(response.stats_period, "24h")
-            self.assertEqual(response.group_by, ["project"])
-            self.assertEqual(
-                response.visualization,
-                [
-                    Chart(
-                        chart_type=1,
-                        y_axes=["Test y-axis 1", "Test y-axis 2"],
-                    )
-                ],
-            )
-            self.assertEqual(response.sort, "-count")
+            assert isinstance(response, TranslateResponse)
+            assert response.query == "error"
+            assert response.stats_period == "24h"
+            assert response.group_by == ["project"]
+            assert response.visualization == [
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ]
+            assert response.sort == "-count"
 
     @patch("seer.automation.assisted_query.assisted_query.create_query_from_natural_language")
     @patch("seer.automation.assisted_query.assisted_query.LlmClient")
@@ -123,14 +119,14 @@ class TestAssistedQuery(unittest.TestCase):
 
         response = translate_query(request)
 
-        self.assertIsInstance(response, TranslateResponse)
-        self.assertEqual(response.query, "error")
-        self.assertEqual(response.stats_period, "24h")
-        self.assertEqual(response.group_by, ["project"])
-        self.assertEqual(
-            response.visualization, [Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])]
-        )
-        self.assertEqual(response.sort, "-count")
+        assert isinstance(response, TranslateResponse)
+        assert response.query == "error"
+        assert response.stats_period == "24h"
+        assert response.group_by == ["project"]
+        assert response.visualization == [
+            Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])
+        ]
+        assert response.sort == "-count"
 
     @patch("seer.automation.assisted_query.assisted_query.RpcClient")
     @patch("seer.automation.agent.client.LlmClient")
@@ -194,31 +190,28 @@ class TestAssistedQuery(unittest.TestCase):
             llm_client=mock_llm_client,
         )
 
-        self.assertIsInstance(response, LlmGenerateStructuredResponse)
-        self.assertEqual(
-            response.parsed,
-            ModelResponse(
-                explanation="This is a test explanation",
-                query="error",
-                stats_period="24h",
-                group_by=["project"],
-                visualization=[
-                    Chart(
-                        chart_type=1,
-                        y_axes=["Test y-axis 1", "Test y-axis 2"],
-                    )
-                ],
-                sort="-count",
-                confidence_score=0.95,
-            ),
+        assert isinstance(response, LlmGenerateStructuredResponse)
+        assert response.parsed == ModelResponse(
+            explanation="This is a test explanation",
+            query="error",
+            stats_period="24h",
+            group_by=["project"],
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
+            sort="-count",
+            confidence_score=0.95,
         )
-        self.assertEqual(mock_llm_client.generate_structured.call_count, 2)
+        assert mock_llm_client.generate_structured.call_count == 2
 
         mock_rpc_client.call.assert_called_once_with(
             "get_attribute_values",
             org_id=1,
-            fields=["span.op", "span.description"],
+            fields=["span.op", "span.description", "transaction"],
             project_ids=[1, 2],
             stats_period="48h",
-            limit=150,
+            limit=200,
         )

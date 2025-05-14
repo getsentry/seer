@@ -184,7 +184,9 @@ class CombinedAnomalyScorer(AnomalyScorer):
                 "Timestamp not found in prophet_df, skipping prophet scoring",
                 extra={"streamed_timestamp": streamed_timestamp},
             )
+            mp_flags_and_scores.prophet_mismatch = True
             return mp_flags_and_scores
+
         prophet_df.loc[prophet_df.ds == streamed_timestamp, "y"] = float(streamed_value)
         prophet_df.loc[prophet_df.ds == streamed_timestamp, "actual"] = float(streamed_value)
         df_prophet_scores = self.prophet_scorer.batch_score(prophet_df)
@@ -231,16 +233,13 @@ class CombinedAnomalyScorer(AnomalyScorer):
         # todo: return prophet thresholds
         def merge(timestamps, mp_flags_and_scores, prophet_map):
             mp_flags = mp_flags_and_scores.flags
-            mp_confidence_levels = mp_flags_and_scores.confidence_levels
             flags = []
             algo_types = []
             missing = 0
             found = 0
             previous_flag: AnomalyFlags = history_flags[-1] if history_flags else "none"
             missing_timestamps = []
-            for timestamp, mp_flag, mp_confidence_level in zip(
-                timestamps, mp_flags, mp_confidence_levels
-            ):
+            for timestamp, mp_flag in zip(timestamps, mp_flags):
                 pd_dt = float(timestamp)
                 algo_type = AlertAlgorithmType.NONE
                 if pd_dt in prophet_map["flag"]:
@@ -308,4 +307,5 @@ class CombinedAnomalyScorer(AnomalyScorer):
             thresholds=mp_flags_and_scores.thresholds,
             confidence_levels=mp_flags_and_scores.confidence_levels,
             algo_types=algo_types,
+            prophet_mismatch=mp_flags_and_scores.prophet_mismatch,
         )

@@ -20,6 +20,8 @@ from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
 
+REQUIRED_FIELDS = ["span.op", "span.description", "transaction"]
+
 
 def translate_query(request: TranslateRequest) -> TranslateResponse:
 
@@ -83,6 +85,10 @@ def create_query_from_natural_language(
         relevant_fields_response.parsed.fields if relevant_fields_response.parsed else []
     )
 
+    for field in REQUIRED_FIELDS:
+        if field not in relevant_fields:
+            relevant_fields.append(field)
+
     # Step 2: Fetch values for relevant fields
     field_values_response = rpc_client.call(
         "get_attribute_values",
@@ -90,7 +96,7 @@ def create_query_from_natural_language(
         fields=relevant_fields,
         project_ids=project_ids,
         stats_period="48h",
-        limit=150,
+        limit=200,
     )
     field_values = field_values_response.get("field_values", {}) if field_values_response else {}
 

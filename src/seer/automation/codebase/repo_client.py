@@ -38,6 +38,7 @@ from seer.dependency_injection import inject, injected
 logger = logging.getLogger(__name__)
 
 
+@functools.lru_cache(maxsize=8)
 def get_github_app_auth_and_installation(
     app_id: int | str, private_key: str, repo_owner: str, repo_name: str
 ):
@@ -171,6 +172,7 @@ class RepoClient:
     repo_external_id: str
     base_commit_sha: str
     base_branch: str
+    repo_definition: RepoDefinition
 
     supported_providers = ["github"]
 
@@ -237,6 +239,7 @@ class RepoClient:
         self.base_commit_sha = repo_definition.base_commit_sha or self.get_branch_head_sha(
             self.base_branch
         )
+        self.repo_definition = repo_definition
 
         self.get_valid_file_paths = functools.lru_cache(maxsize=8)(self._get_valid_file_paths)
         self.get_commit_history = functools.lru_cache(maxsize=16)(self._get_commit_history)
@@ -432,6 +435,12 @@ class RepoClient:
         logger.debug(f"Getting file contents for {path} in {self.repo.full_name} on sha {sha}")
         if sha is None:
             sha = self.base_commit_sha
+
+        # Normalize the path by removing leading slashes
+        if path.startswith("/"):
+            path = path[1:]
+        if path.startswith("./"):
+            path = path[2:]
 
         try:
             contents = self.repo.get_contents(path, ref=sha)
@@ -969,6 +978,17 @@ class RepoClient:
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
 
+    def get_current_commit_info(self, sha: str | None):
+        if sha is None:
+            sha = self.base_commit_sha
+
+        commit = self.repo.get_commit(sha)
+
+        return {
+            "sha": commit.sha,
+            "timestamp": commit.commit.author.date,
+        }
+
     def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
@@ -1072,6 +1092,21 @@ class RepoClient:
         branch_ref = self.repo.get_git_ref(f"heads/{branch_name}")
         branch_ref.edit(sha=new_commit.sha)
         return new_commit
+
+    def get_file_url(
+        self, file_path: str, start_line: int | None = None, end_line: int | None = None
+    ):
+        url = f"https://github.com/{self.repo_full_name}/blob/{self.base_commit_sha}/{file_path}"
+        if start_line:
+            url += f"#L{start_line}"
+        if start_line and end_line:
+            url += f"-L{end_line}"
+        elif end_line:
+            url += f"#L{end_line}"
+        return url
+
+    def get_commit_url(self, commit_sha: str):
+        return f"https://github.com/{self.repo_full_name}/commit/{commit_sha}"
 
 
 def get_repo_client(

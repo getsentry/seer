@@ -61,12 +61,19 @@ class BaseTools:
         if not repo_names:
             return
 
+        request = self.context.state.get().request
+
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
             repo_manager = RepoManager(
-                repo_client, trigger_liveness_probe=self._trigger_liveness_probe
+                repo_client,
+                trigger_liveness_probe=self._trigger_liveness_probe,
+                organization_id=(
+                    request.organization_id if isinstance(request, AutofixRequest) else None
+                ),
+                project_id=(request.project_id if isinstance(request, AutofixRequest) else None),
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
@@ -86,16 +93,20 @@ class BaseTools:
                       If None, waits for all repos to be downloaded.
         """
         if repo_name:
+            if repo_name not in self.repo_managers:
+                raise ValueError(f"Repository {repo_name} not found")
             repo_managers_to_wait_for = (
                 [self.repo_managers[repo_name]]
-                if not self.repo_managers[repo_name].is_available
+                if (not self.repo_managers[repo_name].is_available)
+                and (not self.repo_managers[repo_name].is_cancelled)
                 else []
             )
         else:
             repo_managers_to_wait_for = [
                 self.repo_managers[rn]
                 for rn in self._get_repo_names()
-                if not self.repo_managers[rn].is_available
+                if (not self.repo_managers[rn].is_available)
+                and (not self.repo_managers[rn].is_cancelled)
             ]
 
         if not repo_managers_to_wait_for:
@@ -129,8 +140,11 @@ class BaseTools:
             future = repo_manager.initialization_future
             if future in not_done:
                 repo_manager.mark_as_timed_out()
-                logger.warning(
-                    f"Repository {repo_manager.repo_client.repo_full_name} timed out after {REPO_WAIT_TIMEOUT_SECS} seconds"
+                logger.error(
+                    f"Repository download timed out after {REPO_WAIT_TIMEOUT_SECS} seconds",
+                    extra={
+                        "repo": repo_manager.repo_client.repo_full_name,
+                    },
                 )
             elif future.exception():
                 repo_manager.mark_as_timed_out()
@@ -478,6 +492,16 @@ class BaseTools:
         repo_name: str | None = None,
         use_regex: bool = False,
     ) -> str:
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
+
         self._ensure_repos_downloaded(repo_name)
 
         if not query:
@@ -493,6 +517,9 @@ class BaseTools:
 
         if not use_regex:
             cmd.append("--fixed-strings")
+
+        if "\n" in query:
+            cmd.append("--multiline")
 
         if not case_sensitive:
             cmd.append("--ignore-case")
@@ -560,6 +587,16 @@ class BaseTools:
         command = command.replace('\\"', '"')  # un-escape escaped quotes
         command = command.replace("\\'", "'")  # un-escape escaped single quotes
         command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
+
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
 
         self.context.event_manager.add_log(f"Searching files with `{command}`...")
 
@@ -841,7 +878,7 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
             )
 
             return self._apply_file_change(repo_name, file_change)
@@ -889,7 +926,7 @@ class BaseTools:
                 change_diff=file_diff,
                 generated_at_memory_index=current_memory_index,
                 type=InsightSharingType.FILE_CHANGE,
-            )
+            ),
         )
 
         return self._apply_file_change(repo_name, file_change)
@@ -944,7 +981,7 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
             )
 
             return self._apply_file_change(repo_name, file_change)

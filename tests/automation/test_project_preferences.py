@@ -9,10 +9,11 @@ from seer.automation.preferences import (
     GetSeerProjectPreferenceResponse,
     SetSeerProjectPreferenceRequest,
     SetSeerProjectPreferenceResponse,
+    create_initial_seer_project_preference_from_repos,
     get_seer_project_preference,
     set_seer_project_preference,
 )
-from seer.db import DbSeerProjectPreference
+from seer.db import DbSeerProjectPreference, Session
 
 
 class TestSeerProjectPreferenceModel(unittest.TestCase):
@@ -267,3 +268,71 @@ class TestSeerProjectPreferenceEndpoints(unittest.TestCase):
         # Verify function was called with correct arguments
         mock_set_preference.assert_called_once()
         self.assertEqual(mock_set_preference.call_args[0][0].preference.project_id, 456)
+
+
+class TestCreateInitialSeerProjectPreferenceFromRepos(unittest.TestCase):
+    def setUp(self):
+        # Clean up any existing test records for project_ids 20 and 40
+        with Session() as session:
+            session.query(DbSeerProjectPreference).filter(
+                DbSeerProjectPreference.project_id.in_([20, 40])
+            ).delete()
+            session.commit()
+
+    def tearDown(self):
+        with Session() as session:
+            session.query(DbSeerProjectPreference).filter(
+                DbSeerProjectPreference.project_id.in_([20, 40])
+            ).delete()
+            session.commit()
+
+    def test_create_initial_seer_project_preference_from_repos(self):
+        """Test that create_initial_seer_project_preference_from_repos writes and returns the correct preference"""
+        repos = [
+            RepoDefinition(
+                owner="owner1",
+                name="repo1",
+                external_id="id1",
+                provider="github",
+                branch_name="main",
+                instructions="instr",
+            )
+        ]
+        preference = create_initial_seer_project_preference_from_repos(
+            organization_id=10,
+            project_id=20,
+            repos=repos,
+        )
+        # Verify returned preference matches input
+        self.assertEqual(preference.organization_id, 10)
+        self.assertEqual(preference.project_id, 20)
+        self.assertEqual(preference.repositories, repos)
+        # Verify it was persisted to DB
+        with Session() as session:
+            db_model = session.get(DbSeerProjectPreference, 20)
+            self.assertIsNotNone(db_model)
+            self.assertEqual(db_model.organization_id, 10)
+            self.assertEqual(db_model.project_id, 20)
+            # Stored repositories should match model_dump of each repo
+            self.assertEqual(
+                db_model.repositories,
+                [repo.model_dump() for repo in repos],
+            )
+
+    def test_create_initial_seer_project_preference_with_empty_repos(self):
+        """Test that create_initial_seer_project_preference_from_repos writes and returns the preference with empty repos."""
+        repos: list[RepoDefinition] = []
+        preference = create_initial_seer_project_preference_from_repos(
+            organization_id=30,
+            project_id=40,
+            repos=repos,
+        )
+        self.assertEqual(preference.organization_id, 30)
+        self.assertEqual(preference.project_id, 40)
+        self.assertEqual(preference.repositories, repos)
+        with Session() as session:
+            db_model = session.get(DbSeerProjectPreference, 40)
+            self.assertIsNotNone(db_model)
+            self.assertEqual(db_model.organization_id, 30)
+            self.assertEqual(db_model.project_id, 40)
+            self.assertEqual(db_model.repositories, [])

@@ -7,7 +7,11 @@ from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, 
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
-from seer.automation.preferences import GetSeerProjectPreferenceRequest, get_seer_project_preference
+from seer.automation.preferences import (
+    GetSeerProjectPreferenceRequest,
+    create_initial_seer_project_preference_from_repos,
+    get_seer_project_preference,
+)
 from seer.automation.state import DbState, DbStateRunTypes
 
 logger = logging.getLogger(__name__)
@@ -38,9 +42,18 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     except Exception as e:
         logger.exception(e)
 
+    if not preference:
+        # No preference found, create one from our list of code mapping repos.
+        preference = create_initial_seer_project_preference_from_repos(
+            organization_id=request.organization_id,
+            project_id=main_project_id,
+            repos=request.repos,
+        )
+
     with state.update() as cur:
         if preference:
             cur.request.repos = preference.repositories
+
         try:
             for trace_connected_preference in trace_connected_preferences:
                 if trace_connected_preference:
@@ -86,29 +99,39 @@ def validate_repo_branches_exist(
 
 def create_missing_codebase_states(state: ContinuationState) -> None:
     cur_state = state.get()
+    new_codebases = {}
+
     for repo in cur_state.request.repos:
         if repo.external_id not in cur_state.codebases:
-            with state.update() as cur:
-                cur.codebases[repo.external_id] = CodebaseState(
-                    file_changes=[],
-                    repo_external_id=repo.external_id,
-                )
+            new_codebases[repo.external_id] = CodebaseState(
+                file_changes=[],
+                repo_external_id=repo.external_id,
+            )
+
+    if new_codebases:
+        with state.update() as cur:
+            cur.codebases.update(new_codebases)
 
 
 def set_accessible_repos(state: ContinuationState) -> None:
     cur_state = state.get()
+    updates = {}
+
     for repo in cur_state.request.repos:
         if repo.provider == "github":
-            if RepoClient.check_repo_read_access(repo):
-                with state.update() as cur:
-                    cur.codebases[repo.external_id].is_readable = True
-            if RepoClient.check_repo_write_access(repo):
-                with state.update() as cur:
-                    cur.codebases[repo.external_id].is_writeable = True
+            is_readable = RepoClient.check_repo_read_access(repo)
+            is_writeable = RepoClient.check_repo_write_access(repo)
+            updates[repo.external_id] = {
+                "is_readable": bool(is_readable),
+                "is_writeable": bool(is_writeable),
+            }
         else:
-            with state.update() as cur:
-                cur.codebases[repo.external_id].is_readable = False
-                cur.codebases[repo.external_id].is_writeable = False
+            updates[repo.external_id] = {"is_readable": False, "is_writeable": False}
+
+    with state.update() as cur:
+        for repo_id, update in updates.items():
+            cur.codebases[repo_id].is_readable = update["is_readable"]
+            cur.codebases[repo_id].is_writeable = update["is_writeable"]
 
 
 def update_repo_access(state: ContinuationState) -> None:
