@@ -184,7 +184,7 @@ class RootCauseStep(AutofixPipelineStep):
         )
 
     def _get_reproduction_urls(self, root_cause_output: RootCauseAnalysisOutput):
-        reproduction_urls = []
+        reproduction_urls: list[str | None] = []
         for i, timeline_item in enumerate(root_cause_output.causes[0].root_cause_reproduction):
             reproduction_urls.append(None)
             relevant_code = timeline_item.relevant_code_file

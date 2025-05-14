@@ -137,7 +137,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
                         )
 
     def _get_reproduction_urls(self, solution_output: SolutionOutput):
-        reproduction_urls = []
+        reproduction_urls: list[str | None] = []
         for solution_step in solution_output.solution_steps:
             relevant_code = solution_step.relevant_code_file
             if not relevant_code:
