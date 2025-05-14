@@ -514,10 +514,10 @@ class AutofixEventManager:
             },
         )
 
-    def send_insight(self, insight_card: InsightSharingOutput, step_id: str):
+    def send_insight(self, insight_card: InsightSharingOutput, step_id: str | None = None):
         with self.state.update() as cur:
             if insight_card:
-                cur_step = cur.find_step(id=step_id)
+                cur_step = cur.find_step(id=step_id) if step_id else cur.steps[-1]
 
                 if not cur_step or not isinstance(cur_step, DefaultStep):
                     logger.exception(
