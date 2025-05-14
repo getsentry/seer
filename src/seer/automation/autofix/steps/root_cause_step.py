@@ -107,7 +107,8 @@ class RootCauseStep(AutofixPipelineStep):
 
         # create URLs to relevant code snippets
         reproduction_urls = self._get_reproduction_urls(root_cause_output)
-        root_cause_output.causes[0].reproduction_urls = reproduction_urls
+        if root_cause_output.causes and reproduction_urls:
+            root_cause_output.causes[0].reproduction_urls = reproduction_urls
 
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
 
@@ -185,6 +186,8 @@ class RootCauseStep(AutofixPipelineStep):
 
     def _get_reproduction_urls(self, root_cause_output: RootCauseAnalysisOutput):
         reproduction_urls: list[str | None] = []
+        if not root_cause_output.causes:
+            return []
         repro_timeline = root_cause_output.causes[0].root_cause_reproduction
         if not repro_timeline:
             return []

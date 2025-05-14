@@ -1099,8 +1099,10 @@ class RepoClient:
         url = f"https://github.com/{self.repo_full_name}/blob/{self.base_commit_sha}/{file_path}"
         if start_line:
             url += f"#L{start_line}"
-        if end_line:
+        if start_line and end_line:
             url += f"-L{end_line}"
+        elif end_line:
+            url += f"#L{end_line}"
         return url
 
     def get_commit_url(self, commit_sha: str):
