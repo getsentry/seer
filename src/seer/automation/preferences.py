@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from seer.automation.models import SeerProjectPreference
+from seer.automation.models import RepoDefinition, SeerProjectPreference
 from seer.db import DbSeerProjectPreference, Session
 
 
@@ -40,3 +40,20 @@ def set_seer_project_preference(
         session.commit()
 
     return SetSeerProjectPreferenceResponse(preference=data.preference)
+
+
+def create_initial_seer_project_preference_from_repos(
+    *,
+    organization_id: int,
+    project_id: int,
+    repos: list[RepoDefinition],
+) -> SeerProjectPreference:
+    preference = SeerProjectPreference(
+        organization_id=organization_id,
+        project_id=project_id,
+        repositories=repos,
+    )
+    with Session() as session:
+        session.add(preference.to_db_model())
+        session.commit()
+    return preference

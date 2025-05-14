@@ -9,6 +9,7 @@ from seer.automation.preferences import (
     GetSeerProjectPreferenceResponse,
     SetSeerProjectPreferenceRequest,
     SetSeerProjectPreferenceResponse,
+    create_initial_seer_project_preference_from_repos,
     get_seer_project_preference,
     set_seer_project_preference,
 )
@@ -267,3 +268,40 @@ class TestSeerProjectPreferenceEndpoints(unittest.TestCase):
         # Verify function was called with correct arguments
         mock_set_preference.assert_called_once()
         self.assertEqual(mock_set_preference.call_args[0][0].preference.project_id, 456)
+
+
+class TestCreateInitialSeerProjectPreferenceFromRepos(unittest.TestCase):
+    @mock.patch("seer.automation.preferences.Session")
+    def test_create_initial_seer_project_preference_from_repos(self, mock_session):
+        """Test that create_initial_seer_project_preference_from_repos adds and returns the correct preference"""
+        # Setup mock session context
+        mock_session_instance = mock.MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_session_instance
+
+        # Prepare test data
+        repos = [
+            RepoDefinition(
+                owner="owner1",
+                name="repo1",
+                external_id="id1",
+                provider="github",
+                branch_name="main",
+                instructions="instr",
+            )
+        ]
+
+        # Call function
+        preference = create_initial_seer_project_preference_from_repos(
+            organization_id=10,
+            project_id=20,
+            repos=repos,
+        )
+
+        # Verify session add and commit called with DB model
+        mock_session_instance.add.assert_called_once()
+        mock_session_instance.commit.assert_called_once()
+
+        # Verify returned preference matches input
+        self.assertEqual(preference.organization_id, 10)
+        self.assertEqual(preference.project_id, 20)
+        self.assertEqual(preference.repositories, repos)
