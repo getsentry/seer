@@ -7,7 +7,11 @@ from seer.automation.autofix.models import AutofixContinuation, AutofixRequest, 
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
-from seer.automation.preferences import GetSeerProjectPreferenceRequest, get_seer_project_preference
+from seer.automation.preferences import (
+    GetSeerProjectPreferenceRequest,
+    create_initial_seer_project_preference_from_repos,
+    get_seer_project_preference,
+)
 from seer.automation.state import DbState, DbStateRunTypes
 
 logger = logging.getLogger(__name__)
@@ -38,9 +42,18 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     except Exception as e:
         logger.exception(e)
 
+    if not preference:
+        # No preference found, create one from our list of code mapping repos.
+        preference = create_initial_seer_project_preference_from_repos(
+            organization_id=request.organization_id,
+            project_id=main_project_id,
+            repos=request.repos,
+        )
+
     with state.update() as cur:
         if preference:
             cur.request.repos = preference.repositories
+
         try:
             for trace_connected_preference in trace_connected_preferences:
                 if trace_connected_preference:
