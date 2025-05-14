@@ -514,9 +514,15 @@ class AutofixEventManager:
             },
         )
 
-    def send_insight(self, insight_card: InsightSharingOutput):
+    def send_insight(self, insight_card: InsightSharingOutput, step_id: str | None = None):
         with self.state.update() as cur:
             if insight_card:
-                cur_step = cur.steps[-1]
-                assert isinstance(cur_step, DefaultStep)
+                cur_step = cur.find_step(id=step_id) if step_id else cur.steps[-1]
+
+                if not cur_step or not isinstance(cur_step, DefaultStep):
+                    logger.exception(
+                        f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {cur_step.key if cur_step else 'None'}"
+                    )
+                    return
+
                 cur_step.insights.append(insight_card)
