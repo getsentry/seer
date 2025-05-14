@@ -185,17 +185,20 @@ class RootCauseStep(AutofixPipelineStep):
 
     def _get_reproduction_urls(self, root_cause_output: RootCauseAnalysisOutput):
         reproduction_urls: list[str | None] = []
-        for i, timeline_item in enumerate(root_cause_output.causes[0].root_cause_reproduction):
+        repro_timeline = root_cause_output.causes[0].root_cause_reproduction
+        if not repro_timeline:
+            return []
+        for i, timeline_item in enumerate(repro_timeline):
             reproduction_urls.append(None)
             relevant_code = timeline_item.relevant_code_file
             if not relevant_code:
                 continue
-            repo_name: str | None = relevant_code.repo_name
-            repo_name = self.context.autocorrect_repo_name(repo_name)
+            repo_name = self.context.autocorrect_repo_name(relevant_code.repo_name)
             if not repo_name:
                 continue
-            file_name: str | None = relevant_code.file_path
-            file_name = self.context.autocorrect_file_path(path=file_name, repo_name=repo_name)
+            file_name = self.context.autocorrect_file_path(
+                path=relevant_code.file_path, repo_name=repo_name
+            )
             if not file_name:
                 continue
 
