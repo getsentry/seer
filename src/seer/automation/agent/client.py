@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
@@ -840,6 +841,9 @@ class AnthropicProvider:
         return message
 
 
+times_generated = 0
+
+
 @dataclass
 class GeminiProvider:
     model_name: str
@@ -1022,6 +1026,7 @@ class GeminiProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
+        global times_generated
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
@@ -1050,6 +1055,8 @@ class GeminiProvider:
 
             current_tool_call: dict[str, Any] | None = None
 
+            tokens_yielded = 0
+
             for chunk in stream:
                 # Handle function calls
                 if (
@@ -1068,6 +1075,8 @@ class GeminiProvider:
                         current_tool_call = None
                 # Handle text chunks
                 elif chunk.text is not None:
+                    if tokens_yielded > 2 and times_generated > 2:
+                        time.sleep(50)
                     yield "content", str(chunk.text)  # type: ignore[misc]
                     output_yielded = True
 
@@ -1077,6 +1086,8 @@ class GeminiProvider:
                         total_prompt_tokens = chunk.usage_metadata.prompt_token_count
                     if chunk.usage_metadata.candidates_token_count:
                         total_completion_tokens = chunk.usage_metadata.candidates_token_count
+
+                tokens_yielded += 1
 
             if not output_yielded:
                 raise LlmNoCompletionTokensError("No output returned from Gemini")
@@ -1089,6 +1100,7 @@ class GeminiProvider:
             )
             yield usage
             langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+            times_generated += 1
 
     @observe(as_type="generation", name="Gemini Generation")
     @sentry_sdk.trace
@@ -1360,6 +1372,45 @@ class GeminiProvider:
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
 
+class TimeoutChecker(threading.Thread):
+    def __init__(self, first_token_timeout: float, inactivity_timeout: float):
+        super().__init__()
+        self.first_token_timeout = first_token_timeout
+        self.inactivity_timeout = inactivity_timeout
+        self.token_received = threading.Event()
+        self.stop_event = threading.Event()
+        self.last_token_time = time.time()
+        self.daemon = True  # Thread will be terminated when main thread exits
+
+    def run(self):
+        while not self.stop_event.is_set():
+            current_time = time.time()
+            timeout_to_use = (
+                self.first_token_timeout
+                if not self.token_received.is_set()
+                else self.inactivity_timeout
+            )
+
+            if current_time - self.last_token_time > timeout_to_use:
+                if self.token_received.is_set():
+                    raise LlmStreamInactivityTimeoutError(
+                        f"Stream inactivity timeout after {timeout_to_use} seconds"
+                    )
+                else:
+                    raise LlmStreamFirstTokenTimeoutError(
+                        f"Stream time to first token timeout after {timeout_to_use} seconds"
+                    )
+            time.sleep(0.1)  # Check every 100ms
+
+    def signal_token(self):
+        self.token_received.set()
+        self.last_token_time = time.time()
+
+    def stop(self):
+        self.stop_event.set()
+
+
+@dataclass
 class LlmClient:
     @observe(name="Generate Text")
     @sentry_sdk.trace
@@ -1529,6 +1580,7 @@ class LlmClient:
         first_token_timeout: float = 40.0,  # Time to first token timeout
         inactivity_timeout: float = 20.0,  # Timeout for inactivity after first token
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
+        global times_generated
         try:
             if run_name:
                 langfuse_context.update_current_observation(
@@ -1591,31 +1643,15 @@ class LlmClient:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
 
             # Add timeout check to the stream with differentiated timeouts
-            # for first token and subsequent tokens
-            last_yield_time = time.time()
-            first_token_received = False
+            timeout_checker = TimeoutChecker(first_token_timeout, inactivity_timeout)
+            timeout_checker.start()
 
-            for item in stream_generator:
-                current_time = time.time()
-                # Use first_token_timeout for the first token, inactivity_timeout for subsequent tokens
-                timeout_to_use = (
-                    first_token_timeout if not first_token_received else inactivity_timeout
-                )
-
-                if current_time - last_yield_time > timeout_to_use:
-                    if first_token_received:
-                        raise LlmStreamInactivityTimeoutError(
-                            f"Stream inactivity timeout after {timeout_to_use} seconds"
-                        )
-                    else:
-                        raise LlmStreamFirstTokenTimeoutError(
-                            f"Stream time to first token timeout after {timeout_to_use} seconds"
-                        )
-
-                # Mark that we've received at least one token
-                first_token_received = True
-                last_yield_time = current_time
-                yield item
+            try:
+                for item in stream_generator:
+                    timeout_checker.signal_token()
+                    yield item
+            finally:
+                timeout_checker.stop()
 
         except Exception as e:
             logger.exception(
