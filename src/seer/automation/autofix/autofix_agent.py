@@ -359,9 +359,11 @@ class AutofixAgent(LlmAgent):
         step_id: str,
     ):
         step = state.get().find_step(id=step_id)
-            
+
         if not step or not isinstance(step, DefaultStep):
-            logger.exception(f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {step.key}")
+            logger.exception(
+                f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {step.key}"
+            )
             return
 
         insight_card, usage = create_insight_output(

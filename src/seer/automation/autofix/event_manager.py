@@ -518,9 +518,11 @@ class AutofixEventManager:
         with self.state.update() as cur:
             if insight_card:
                 cur_step = cur.find_step(id=step_id)
-                
+
                 if not cur_step or not isinstance(cur_step, DefaultStep):
-                    logger.exception(f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {cur_step.key}")
+                    logger.exception(
+                        f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {cur_step.key}"
+                    )
                     return
 
                 cur_step.insights.append(insight_card)
