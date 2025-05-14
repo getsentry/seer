@@ -881,7 +881,7 @@ class GeminiProvider:
         retrier = backoff_on_exception(
             GeminiProvider.is_completion_exception_retryable, max_tries=4
         )
-        client.models.generate_content = retrier(client.models.generate_content)
+        client.models.generate_content = retrier(client.models.generate_content)  # type: ignore[method-assign]
         return client
 
     @classmethod
@@ -980,7 +980,7 @@ class GeminiProvider:
         for _ in range(max_retries + 1):
             response = client.models.generate_content(
                 model=self.model_name,
-                contents=message_dicts,
+                contents=message_dicts,  # type: ignore[arg-type]
                 config=GenerateContentConfig(
                     tools=tool_dicts,
                     response_modalities=["TEXT"],
@@ -1343,10 +1343,6 @@ class GeminiProvider:
         caches = client.caches.list()
         for cache in caches:
             if cache.display_name == display_name and cache.name:
-                client.caches.update(
-                    name=cache.name,
-                    config=CreateCachedContentConfig(contents=contents, ttl=f"{ttl}s"),
-                )
                 return cache.name
 
         cache = client.caches.create(
