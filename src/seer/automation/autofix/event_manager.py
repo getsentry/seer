@@ -521,7 +521,7 @@ class AutofixEventManager:
 
                 if not cur_step or not isinstance(cur_step, DefaultStep):
                     logger.exception(
-                        f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {cur_step.key}"
+                        f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {cur_step.key if cur_step else 'None'}"
                     )
                     return
 

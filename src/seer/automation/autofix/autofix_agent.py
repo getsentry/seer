@@ -362,7 +362,7 @@ class AutofixAgent(LlmAgent):
 
         if not step or not isinstance(step, DefaultStep):
             logger.exception(
-                f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {step.key}"
+                f"Cannot add insight to step: step not found or not a DefaultStep. Step key: {step.key if step else 'None'}"
             )
             return
 
