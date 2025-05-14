@@ -144,10 +144,10 @@ jobs:
 
       - name: Set test environment flags
         run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
-          else
+          if [[ "${{ github.event_name }}" == "push" ]]; then
             echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
+          else
+            echo "EXTRA_COMPOSE_TEST_OPTIONS=-e NO_REAL_MODELS=1 -e NO_SENTRY_INTEGRATION=1 -e CI=1" >> $GITHUB_ENV
           fi
 
       - name: Test with pytest
