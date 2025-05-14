@@ -1092,3 +1092,16 @@ class RepoClient:
         branch_ref = self.repo.get_git_ref(f"heads/{branch_name}")
         branch_ref.edit(sha=new_commit.sha)
         return new_commit
+
+    def get_file_url(
+        self, file_path: str, start_line: int | None = None, end_line: int | None = None
+    ):
+        url = f"https://github.com/{self.repo_full_name}/blob/{self.base_commit_sha}/{file_path}"
+        if start_line:
+            url += f"#L{start_line}"
+        if end_line:
+            url += f"-L{end_line}"
+        return url
+
+    def get_commit_url(self, commit_sha: str):
+        return f"https://github.com/{self.repo_full_name}/commit/{commit_sha}"
