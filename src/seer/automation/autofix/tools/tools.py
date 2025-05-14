@@ -890,7 +890,8 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
+                step_id=self.context.state.get().steps[-1].id,
             )
 
             return self._apply_file_change(repo_name, file_change)
@@ -938,7 +939,8 @@ class BaseTools:
                 change_diff=file_diff,
                 generated_at_memory_index=current_memory_index,
                 type=InsightSharingType.FILE_CHANGE,
-            )
+            ),
+            step_id=self.context.state.get().steps[-1].id,
         )
 
         return self._apply_file_change(repo_name, file_change)
@@ -993,7 +995,8 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
+                step_id=self.context.state.get().steps[-1].id,
             )
 
             return self._apply_file_change(repo_name, file_change)
