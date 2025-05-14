@@ -141,14 +141,17 @@ class AutofixSolutionStep(AutofixPipelineStep):
         for solution_step in solution_output.solution_steps:
             relevant_code = solution_step.relevant_code_file
             if not relevant_code:
+                reproduction_urls.append(None)
                 continue
             repo_name = relevant_code.repo_name
             repo_name = self.context.autocorrect_repo_name(repo_name)
             if not repo_name:
+                reproduction_urls.append(None)
                 continue
             file_name = relevant_code.file_path
             file_name = self.context.autocorrect_file_path(path=file_name, repo_name=repo_name)
             if not file_name:
+                reproduction_urls.append(None)
                 continue
             repo_client = self.context.get_repo_client(repo_name)
             code_url = repo_client.get_file_url(file_name)

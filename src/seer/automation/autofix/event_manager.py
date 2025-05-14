@@ -210,10 +210,14 @@ class AutofixEventManager:
                 SolutionTimelineEvent(
                     title=solution_step.title,
                     code_snippet_and_analysis=solution_step.code_snippet_and_analysis,
-                    relevant_code_file=RelevantCodeFileWithUrl(
-                        file_path=solution_step.relevant_code_file.file_path,
-                        repo_name=solution_step.relevant_code_file.repo_name,
-                        url=reproduction_urls[i] if i < len(reproduction_urls) else None,
+                    relevant_code_file=(
+                        RelevantCodeFileWithUrl(
+                            file_path=solution_step.relevant_code_file.file_path,
+                            repo_name=solution_step.relevant_code_file.repo_name,
+                            url=reproduction_urls[i] if i < len(reproduction_urls) else None,
+                        )
+                        if solution_step.relevant_code_file
+                        else None
                     ),
                     is_most_important_event=solution_step.is_most_important,
                 )
