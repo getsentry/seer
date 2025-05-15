@@ -8,6 +8,7 @@ from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.models import RepoDefinition
 from seer.automation.preferences import (
+    MAX_REPOS_TOTAL,
     GetSeerProjectPreferenceRequest,
     create_initial_seer_project_preference_from_repos,
     get_seer_project_preference,
@@ -63,6 +64,8 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
 
         try:
             for trace_connected_preference in trace_connected_preferences:
+                if len(cur.request.repos) >= MAX_REPOS_TOTAL:
+                    break
                 if trace_connected_preference:
                     for repo in trace_connected_preference.repositories:
                         if not any(
