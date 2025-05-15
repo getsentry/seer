@@ -126,3 +126,102 @@ class TestCreateCache(unittest.TestCase):
         assert not any("tags[" in field and ",number]" in field for field in filtered_fields)
 
         mock_llm_instance.create_cache.assert_called_once()
+
+    @patch("seer.automation.assisted_query.create_cache.LlmClient")
+    def test_create_cache_no_attribute_names_response(
+        self, mock_llm_client, mock_rpc_client_call: Mock
+    ):
+        """Test creating cache when get_attribute_names returns None"""
+        mock_llm_instance = MagicMock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.get_cache.return_value = None
+        mock_llm_instance.create_cache.return_value = "new-cache-name"
+
+        mock_rpc_client_call.return_value = None
+
+        response = create_cache(self.request)
+
+        self.assertIsInstance(response, CreateCacheResponse)
+
+        mock_rpc_client_call.assert_any_call(
+            "get_attribute_names",
+            org_id=self.org_id,
+            project_ids=self.project_ids,
+            stats_period="48h",
+        )
+
+    @patch("seer.automation.assisted_query.create_cache.LlmClient")
+    def test_create_cache_missing_fields_key(self, mock_llm_client, mock_rpc_client_call: Mock):
+        """Test creating cache when get_attribute_names response is missing 'fields' key"""
+        mock_llm_instance = MagicMock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.get_cache.return_value = None
+        mock_llm_instance.create_cache.return_value = "new-cache-name"
+
+        mock_rpc_client_call.return_value = {"some_other_key": "value"}
+
+        response = create_cache(self.request)
+
+        self.assertIsInstance(response, CreateCacheResponse)
+
+        # mock_rpc_client_call.assert_any_call(
+
+        mock_rpc_client_call.assert_any_call(
+            "get_attribute_names",
+            org_id=self.org_id,
+            project_ids=self.project_ids,
+            stats_period="48h",
+        )
+
+    @patch("seer.automation.assisted_query.create_cache.LlmClient")
+    def test_create_cache_no_attribute_values_response(
+        self, mock_llm_client, mock_rpc_client_call: Mock
+    ):
+        """Test creating cache when get_attribute_values returns None"""
+        mock_llm_instance = MagicMock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.get_cache.return_value = None
+        mock_llm_instance.create_cache.return_value = "new-cache-name"
+
+        # First call returns fields, second call returns None
+        mock_rpc_client_call.side_effect = [{"fields": ["field1", "field2"]}, None]
+
+        response = create_cache(self.request)
+
+        self.assertIsInstance(response, CreateCacheResponse)
+
+        mock_rpc_client_call.assert_any_call(
+            "get_attribute_values",
+            fields=["field1", "field2"],
+            org_id=self.org_id,
+            project_ids=self.project_ids,
+            stats_period="48h",
+            limit=15,
+        )
+
+    @patch("seer.automation.assisted_query.create_cache.LlmClient")
+    def test_create_cache_missing_values_key(self, mock_llm_client, mock_rpc_client_call: Mock):
+        """Test creating cache when get_attribute_values response is missing 'values' key"""
+        mock_llm_instance = MagicMock()
+        mock_llm_client.return_value = mock_llm_instance
+        mock_llm_instance.get_cache.return_value = None
+        mock_llm_instance.create_cache.return_value = "new-cache-name"
+
+        # First call returns fields, second call returns response without 'values' key
+        mock_rpc_client_call.side_effect = [
+            {"fields": ["field1", "field2"]},
+            {"some_other_key": "value"},
+        ]
+
+        response = create_cache(self.request)
+
+        self.assertIsInstance(response, CreateCacheResponse)
+
+        mock_rpc_client_call.assert_any_call(
+            "get_attribute_values",
+            fields=["field1", "field2"],
+            org_id=self.org_id,
+            project_ids=self.project_ids,
+            stats_period="48h",
+            limit=15,
+        )

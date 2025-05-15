@@ -99,7 +99,17 @@ def create_query_from_natural_language(
         stats_period="48h",
         limit=200,
     )
-    field_values = field_values_response.get("field_values", {}) if field_values_response else {}
+
+    field_values = {}
+    if not field_values_response:
+        logger.warning("No response received from get_attribute_values call")
+    elif "values" not in field_values_response:
+        logger.warning(
+            "Response from get_attribute_values missing 'values' key. Response: %s",
+            field_values_response,
+        )
+    else:
+        field_values = field_values_response["values"]
 
     # Step 3: Generate final prompt based off of relevant fields and values
     fields_and_values_prompt = prompts.get_fields_and_values_prompt(

@@ -46,7 +46,16 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
         "get_attribute_names", org_id=org_id, project_ids=project_ids, stats_period="48h"
     )
 
-    all_fields = fields_response.get("fields", []) if fields_response else []
+    all_fields = []
+    if not fields_response:
+        logger.warning("No response received from get_attribute_names call")
+    elif "fields" not in fields_response:
+        logger.warning(
+            "Response from get_attribute_names missing 'fields' key. Response: %s",
+            fields_response,
+        )
+    else:
+        all_fields = fields_response["fields"]
 
     filtered_field_values = None
     if not no_values:
@@ -78,11 +87,16 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
             limit=15,
         )
 
-        filtered_field_values = (
-            filtered_field_values_response.get("field_values", {})
-            if filtered_field_values_response
-            else {}
-        )
+        filtered_field_values = {}
+        if not filtered_field_values_response:
+            logger.warning("No response received from get_attribute_values call")
+        elif "values" not in filtered_field_values_response:
+            logger.warning(
+                "Response from get_attribute_values missing 'values' key. Response: %s",
+                filtered_field_values_response,
+            )
+        else:
+            filtered_field_values = filtered_field_values_response["values"]
 
     cache_prompt = get_cache_prompt(
         fields=all_fields, field_values=filtered_field_values, no_values=no_values
