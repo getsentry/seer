@@ -445,8 +445,9 @@ class AnthropicProvider:
         max_retries = 8
 
         supported_models_on_global_endpoint = [
-            "claude-3-5-sonnet-v2@20241022",
-            "claude-3-7-sonnet@20250219",
+            # NOTE: disabling global endpoint while we're on provisioned throughput
+            # "claude-3-5-sonnet-v2@20241022",
+            # "claude-3-7-sonnet@20250219",
         ]
 
         if app_config.SENTRY_REGION == "de":
@@ -858,10 +859,11 @@ class GeminiProvider:
         self, use_local_endpoint: bool = False, app_config: AppConfig = injected
     ) -> genai.Client:
         supported_models_on_global_endpoint = [
-            "gemini-2.0-flash-001",
-            "gemini-2.0-flash-lite-001",
-            # "gemini-2.5-flash-preview-04-17", disabling global endpoint temporarily for INC-1163
-            "gemini-2.5-pro-preview-03-25",
+            # NOTE: disabling global endpoint while we're on provisioned throughput
+            # "gemini-2.0-flash-001",
+            # "gemini-2.0-flash-lite-001",
+            # "gemini-2.5-flash-preview-04-17",
+            # "gemini-2.5-pro-preview-03-25",
         ]
 
         region = (
