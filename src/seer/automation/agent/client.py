@@ -450,15 +450,20 @@ class AnthropicProvider:
             # "claude-3-7-sonnet@20250219",
         ]
 
-        if app_config.SENTRY_REGION == "de":
+        if app_config.DEV:
+            return anthropic.AnthropicVertex(
+                project_id=project_id,
+                region="us-east5",
+                max_retries=max_retries,
+            )
+        elif app_config.SENTRY_REGION == "de":
             return anthropic.AnthropicVertex(
                 project_id=project_id,
                 region="europe-west4",
                 max_retries=max_retries,
             )
         elif (
-            app_config.DEV
-            or app_config.SENTRY_REGION != "us"
+            app_config.SENTRY_REGION == "us"
             or self.model_name not in supported_models_on_global_endpoint
         ):
             return anthropic.AnthropicVertex(
