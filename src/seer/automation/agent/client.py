@@ -860,7 +860,7 @@ class GeminiProvider:
         supported_models_on_global_endpoint = [
             "gemini-2.0-flash-001",
             "gemini-2.0-flash-lite-001",
-            "gemini-2.5-flash-preview-04-17",
+            # "gemini-2.5-flash-preview-04-17", disabling global endpoint temporarily for INC-1163
             "gemini-2.5-pro-preview-03-25",
         ]
 
