@@ -38,6 +38,11 @@ REPO_WAIT_TIMEOUT_SECS = 120.0
 
 
 class BaseTools:
+    """
+    Base class for tools that that can be used by any component/agent.
+    See usage examples in autofix/components/solution/component.py and autofix/autofix_agent.py
+    """
+
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
     repo_managers: dict[str, RepoManager] = {}

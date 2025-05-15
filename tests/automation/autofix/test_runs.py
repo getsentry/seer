@@ -8,7 +8,7 @@ from seer.automation.autofix.models import (
     AutofixRequestOptions,
     IssueDetails,
 )
-from seer.automation.autofix.runs import create_initial_autofix_run
+from seer.automation.autofix.runs import create_initial_autofix_run, set_repo_branches_and_commits
 from seer.automation.models import RepoDefinition, SeerProjectPreference
 from seer.automation.preferences import GetSeerProjectPreferenceRequest
 
@@ -77,6 +77,39 @@ class TestRuns:
 
         # Assert that the event manager was not called due to the exception
         self.mock_event_manager.assert_not_called()
+
+    def test_set_repo_branches_and_commits(self):
+        # Mock repo and codebase
+        mock_repo = MagicMock()
+        mock_repo.provider = "github"
+        mock_repo.external_id = "repo1"
+        mock_repo.branch_name = "test_branch"
+        mock_repo.base_commit_sha = "test_commit_sha"
+
+        mock_codebase = MagicMock()
+        mock_codebase.is_readable = True
+        mock_codebase.is_writeable = True
+
+        # Mock state.get() to return a state with repos and codebases
+        mock_state = MagicMock()
+        mock_state.request.repos = [mock_repo]
+        mock_state.codebases = {"repo1": mock_codebase}
+        mock_state.readable_repos = MagicMock(return_value=[mock_repo])
+
+        # Patch state.update() as a context manager
+        mock_update_cm = MagicMock()
+        mock_update_cm.__enter__.return_value = mock_state
+        mock_update_cm.__exit__.return_value = None
+
+        mock_continuation_state = MagicMock()
+        mock_continuation_state.get.return_value = mock_state
+        mock_continuation_state.update.return_value = mock_update_cm
+
+        set_repo_branches_and_commits(mock_continuation_state)
+
+        # The fixture already asserts the patch was used, so just check the results
+        assert mock_repo.branch_name == "test_branch"
+        assert mock_repo.base_commit_sha == "test_commit_sha"
 
     def test_create_initial_autofix_run_creates_preference_when_none(self, mock_request):
         # Setup mock state

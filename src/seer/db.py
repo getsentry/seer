@@ -211,6 +211,11 @@ class DbSeerEvent(Base):
 
 
 class DbRunState(Base):
+    """
+    This is the schema of the run_state table that stores 1 row for every run of any Seer feature like autofix.
+    The value field maps to a JSON column that has all the detailed information of the autofix state.
+    """
+
     __tablename__ = "run_state"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
