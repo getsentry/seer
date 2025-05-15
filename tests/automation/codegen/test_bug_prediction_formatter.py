@@ -128,7 +128,7 @@ class TestBugPredictionFormatterComponent:
                             len(prediction.code_locations) > 0
                         ), f"Fixture {fixture_id}/{fixture_file}: code_locations should not be empty for valid predictions"
                     """
-                    
+
                     fixture_results.append(prediction.__dict__)
 
             if fixture_results:
