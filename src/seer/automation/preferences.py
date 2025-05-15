@@ -46,6 +46,8 @@ def set_seer_project_preference(
     data: SetSeerProjectPreferenceRequest,
 ) -> SetSeerProjectPreferenceResponse:
     with Session() as session:
+        if len(data.preference.repositories) > MAX_REPOS_PER_PROJECT:
+            data.preference.repositories = data.preference.repositories[:MAX_REPOS_PER_PROJECT]
         session.merge(data.preference.to_db_model())
         session.commit()
 
@@ -61,7 +63,7 @@ def create_initial_seer_project_preference_from_repos(
     preference = SeerProjectPreference(
         organization_id=organization_id,
         project_id=project_id,
-        repositories=repos,
+        repositories=repos[:MAX_REPOS_PER_PROJECT],
     )
     with Session() as session:
         session.add(preference.to_db_model())
