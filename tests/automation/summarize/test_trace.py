@@ -81,6 +81,13 @@ class TestSummarizeTrace:
 
         mock_llm_client.generate_structured.side_effect = ClientError(
             code=400,
+            response_json={
+                "error": {
+                    "code": 400,
+                    "message": "The input token count (2000000) exceeds the maximum number of tokens allowed (1000000).",
+                    "status": "INVALID_ARGUMENT",
+                }
+            },
             response=res,
         )
 
