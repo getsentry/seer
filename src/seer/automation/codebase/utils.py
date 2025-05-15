@@ -70,6 +70,7 @@ language_to_extensions = {
     "objc": [".m", ".h", ".mm"],
     "ocaml": [".ml", ".mli"],
     "pascal": [".pas", ".pp"],
+    "pegjs": [".pegjs"],
     "perl": [".pl", ".pm"],
     "php": [".php", ".phtml", ".php3", ".php4", ".php5", ".php7", ".phps", ".php-s"],
     "powershell": [".ps1", ".psm1"],
