@@ -1091,14 +1091,10 @@ class TestGetAutofixState:
         data = json.loads(response.get_data(as_text=True))
         assert data == {"group_id": None, "run_id": None, "state": None}
 
-    @mock.patch("seer.automation.autofix.runs.set_repo_branches_and_commits")
     @mock.patch("seer.app.update_repo_access_and_properties")
     @mock.patch("seer.app.get_autofix_state")
     def test_get_autofix_state_endpoint_with_check_repo_access(
-        self,
-        mock_get_autofix_state,
-        mock_update_repo_access_and_properties,
-        mock_set_repo_branches_and_commits,
+        self, mock_get_autofix_state, mock_update_repo_access_and_properties
     ):
 
         state_obj = create_initial_autofix_run(next(generate(AutofixRequest)))
