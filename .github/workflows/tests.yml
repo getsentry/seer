@@ -168,7 +168,7 @@ jobs:
           verbose: true
 
   finish:
-    name: Finish Tests
+    name: ${{ github.event_name == 'push' && 'Finish Tests (Main)' || 'Finish Tests' }}
     needs: [test, typecheck]
     runs-on: ubuntu-latest
     if: always()
