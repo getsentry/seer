@@ -453,7 +453,7 @@ class AnthropicProvider:
         if app_config.SENTRY_REGION == "de":
             return anthropic.AnthropicVertex(
                 project_id=project_id,
-                region="europe-west1",
+                region="europe-west4",
                 max_retries=max_retries,
             )
         elif (
@@ -463,7 +463,7 @@ class AnthropicProvider:
         ):
             return anthropic.AnthropicVertex(
                 project_id=project_id,
-                region="us-east5",
+                region="europe-west4",
                 max_retries=max_retries,
             )
         else:
