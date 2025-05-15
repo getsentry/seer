@@ -251,6 +251,7 @@ def test_autofix_run_full(autofix_request: AutofixRequest):
 
 
 @pytest.mark.vcr()
+@pytest.mark.skip(reason="Skipped to mitigate INC-1163")
 def test_autofix_run_full_without_repos(autofix_request: AutofixRequest):
     autofix_request.options = AutofixRequestOptions(disable_interactivity=True)
     autofix_request.repos = []

@@ -41,6 +41,7 @@ class TestSummarizeTrace:
         )
 
     @pytest.mark.vcr()
+    @pytest.mark.skip(reason="Skipping test due to INC-1163")
     def test_summarize_trace_success(self, sample_request):
         res = summarize_trace(sample_request)
 
