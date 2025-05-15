@@ -232,8 +232,10 @@ class RepoManager:
             # Clean any untracked files
             self.git_repo.git.clean("-fdx")
 
+            auth_url = self.repo_client.get_clone_url_with_auth()
+
             # Fetch only the specific commit
-            self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
+            self.git_repo.git.execute(["git", "fetch", "--depth=1", auth_url, commit_sha])
 
             # Force checkout to avoid the "local changes" error
             self.git_repo.git.checkout(commit_sha, force=True)
@@ -361,6 +363,9 @@ class RepoManager:
         logger.info("Cleaning Git repository to minimal state")
         git_repo.git.execute(["git", "reflog", "expire", "--expire=now", "--all"])
         git_repo.git.execute(["git", "gc", "--prune=now", "--aggressive"])
+
+        # Remove all remotes
+        git_repo.git.execute(["git", "remote", "remove", "origin"])
 
     @sentry_sdk.trace
     def upload_to_gcs(self):
