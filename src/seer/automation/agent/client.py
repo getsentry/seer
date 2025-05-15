@@ -1,7 +1,10 @@
+import asyncio
 import json
 import logging
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
 
@@ -54,7 +57,7 @@ from seer.automation.agent.models import (
 from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
-from seer.dependency_injection import inject, injected
+from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.utils import backoff_on_exception
 
 logger = logging.getLogger(__name__)
@@ -846,6 +849,9 @@ class AnthropicProvider:
         return message
 
 
+times_generated = 0
+
+
 @dataclass
 class GeminiProvider:
     model_name: str
@@ -1035,6 +1041,7 @@ class GeminiProvider:
         temperature: float | None = None,
         max_tokens: int | None = None,
     ) -> Iterator[str | ToolCall | Usage]:
+        global times_generated
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
             prompt=prompt,
@@ -1063,6 +1070,8 @@ class GeminiProvider:
 
             current_tool_call: dict[str, Any] | None = None
 
+            tokens_yielded = 0
+
             for chunk in stream:
                 # Handle function calls
                 if (
@@ -1083,6 +1092,8 @@ class GeminiProvider:
                         current_tool_call = None
                 # Handle text chunks
                 elif chunk.text is not None:
+                    # if tokens_yielded > 2 and times_generated > 2:
+                    #     time.sleep(50)
                     yield "content", str(chunk.text)  # type: ignore[misc]
                     output_yielded = True
 
@@ -1092,6 +1103,8 @@ class GeminiProvider:
                         total_prompt_tokens = chunk.usage_metadata.prompt_token_count
                     if chunk.usage_metadata.candidates_token_count:
                         total_completion_tokens = chunk.usage_metadata.candidates_token_count
+
+                tokens_yielded += 1
 
             if not output_yielded:
                 raise LlmNoCompletionTokensError("No output returned from Gemini")
@@ -1104,6 +1117,7 @@ class GeminiProvider:
             )
             yield usage
             langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+            times_generated += 1
 
     @observe(as_type="generation", name="Gemini Generation")
     @sentry_sdk.trace
@@ -1377,6 +1391,45 @@ class GeminiProvider:
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
 
+class TimeoutChecker(threading.Thread):
+    def __init__(self, first_token_timeout: float, inactivity_timeout: float):
+        super().__init__()
+        self.first_token_timeout = first_token_timeout
+        self.inactivity_timeout = inactivity_timeout
+        self.token_received = threading.Event()
+        self.stop_event = threading.Event()
+        self.last_token_time = time.time()
+        self.daemon = True  # Thread will be terminated when main thread exits
+
+    def run(self):
+        while not self.stop_event.is_set():
+            current_time = time.time()
+            timeout_to_use = (
+                self.first_token_timeout
+                if not self.token_received.is_set()
+                else self.inactivity_timeout
+            )
+
+            if current_time - self.last_token_time > timeout_to_use:
+                if self.token_received.is_set():
+                    raise LlmStreamInactivityTimeoutError(
+                        f"Stream inactivity timeout after {timeout_to_use} seconds"
+                    )
+                else:
+                    raise LlmStreamFirstTokenTimeoutError(
+                        f"Stream time to first token timeout after {timeout_to_use} seconds"
+                    )
+            time.sleep(0.1)  # Check every 100ms
+
+    def signal_token(self):
+        self.token_received.set()
+        self.last_token_time = time.time()
+
+    def stop(self):
+        self.stop_event.set()
+
+
+@dataclass
 class LlmClient:
     @observe(name="Generate Text")
     @sentry_sdk.trace
@@ -1546,6 +1599,7 @@ class LlmClient:
         first_token_timeout: float = 40.0,  # Time to first token timeout
         inactivity_timeout: float = 20.0,  # Timeout for inactivity after first token
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
+        global times_generated
         try:
             if run_name:
                 langfuse_context.update_current_observation(
@@ -1596,6 +1650,9 @@ class LlmClient:
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
 
+                trace_id = langfuse_context.get_current_trace_id()
+                observation_id = langfuse_context.get_current_observation_id()
+
                 stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
@@ -1603,36 +1660,43 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
                     tools=cast(list[FunctionTool], tools),
+                    langfuse_parent_trace_id=trace_id,
+                    langfuse_parent_observation_id=observation_id,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
 
-            # Add timeout check to the stream with differentiated timeouts
-            # for first token and subsequent tokens
-            last_yield_time = time.time()
-            first_token_received = False
-
-            for item in stream_generator:
-                current_time = time.time()
-                # Use first_token_timeout for the first token, inactivity_timeout for subsequent tokens
-                timeout_to_use = (
-                    first_token_timeout if not first_token_received else inactivity_timeout
-                )
-
-                if current_time - last_yield_time > timeout_to_use:
-                    if first_token_received:
-                        raise LlmStreamInactivityTimeoutError(
-                            f"Stream inactivity timeout after {timeout_to_use} seconds"
+            # Apply timeouts using asyncio.wait_for on the blocking generator next calls
+            loop = asyncio.new_event_loop()
+            # Use a ThreadPoolExecutor with dependency injection initializer
+            executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
+            loop.set_default_executor(executor)
+            try:
+                first = True
+                while True:
+                    timeout_to_use = first_token_timeout if first else inactivity_timeout
+                    try:
+                        item = loop.run_until_complete(
+                            asyncio.wait_for(
+                                asyncio.to_thread(next, stream_generator), timeout_to_use
+                            )
                         )
-                    else:
-                        raise LlmStreamFirstTokenTimeoutError(
-                            f"Stream time to first token timeout after {timeout_to_use} seconds"
-                        )
-
-                # Mark that we've received at least one token
-                first_token_received = True
-                last_yield_time = current_time
-                yield item
+                    except asyncio.TimeoutError:
+                        if first:
+                            raise LlmStreamFirstTokenTimeoutError(
+                                f"Stream time to first token timeout after {timeout_to_use} seconds"
+                            )
+                        else:
+                            raise LlmStreamInactivityTimeoutError(
+                                f"Stream inactivity timeout after {timeout_to_use} seconds"
+                            )
+                    except StopIteration:
+                        break
+                    first = False
+                    yield item
+            finally:
+                executor.shutdown(wait=False)
+                loop.close()
 
         except Exception as e:
             logger.exception(
