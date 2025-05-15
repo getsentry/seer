@@ -444,7 +444,7 @@ class AnthropicProvider:
         project_id = app_config.GOOGLE_CLOUD_PROJECT
         max_retries = 8
 
-        supported_models_on_global_endpoint = [
+        supported_models_on_global_endpoint: list[str] = [
             # NOTE: disabling global endpoint while we're on provisioned throughput
             # "claude-3-5-sonnet-v2@20241022",
             # "claude-3-7-sonnet@20250219",
@@ -858,7 +858,7 @@ class GeminiProvider:
     def get_client(
         self, use_local_endpoint: bool = False, app_config: AppConfig = injected
     ) -> genai.Client:
-        supported_models_on_global_endpoint = [
+        supported_models_on_global_endpoint: list[str] = [
             # NOTE: disabling global endpoint while we're on provisioned throughput
             # "gemini-2.0-flash-001",
             # "gemini-2.0-flash-lite-001",
