@@ -1,8 +1,10 @@
+import asyncio
 import json
 import logging
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
 
@@ -55,7 +57,7 @@ from seer.automation.agent.models import (
 from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
-from seer.dependency_injection import inject, injected
+from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.utils import backoff_on_exception
 
 logger = logging.getLogger(__name__)
@@ -1075,8 +1077,8 @@ class GeminiProvider:
                         current_tool_call = None
                 # Handle text chunks
                 elif chunk.text is not None:
-                    if tokens_yielded > 2 and times_generated > 2:
-                        time.sleep(50)
+                    # if tokens_yielded > 2 and times_generated > 2:
+                    #     time.sleep(50)
                     yield "content", str(chunk.text)  # type: ignore[misc]
                     output_yielded = True
 
@@ -1631,6 +1633,9 @@ class LlmClient:
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
 
+                trace_id = langfuse_context.get_current_trace_id()
+                observation_id = langfuse_context.get_current_observation_id()
+
                 stream_generator = model.generate_text_stream(
                     max_tokens=max_tokens,
                     messages=messages,
@@ -1638,20 +1643,43 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
                     tools=cast(list[FunctionTool], tools),
+                    langfuse_parent_trace_id=trace_id,
+                    langfuse_parent_observation_id=observation_id,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
 
-            # Add timeout check to the stream with differentiated timeouts
-            timeout_checker = TimeoutChecker(first_token_timeout, inactivity_timeout)
-            timeout_checker.start()
-
+            # Apply timeouts using asyncio.wait_for on the blocking generator next calls
+            loop = asyncio.new_event_loop()
+            # Use a ThreadPoolExecutor with dependency injection initializer
+            executor = ThreadPoolExecutor(initializer=copy_modules_initializer())
+            loop.set_default_executor(executor)
             try:
-                for item in stream_generator:
-                    timeout_checker.signal_token()
+                first = True
+                while True:
+                    timeout_to_use = first_token_timeout if first else inactivity_timeout
+                    try:
+                        item = loop.run_until_complete(
+                            asyncio.wait_for(
+                                asyncio.to_thread(next, stream_generator), timeout_to_use
+                            )
+                        )
+                    except asyncio.TimeoutError:
+                        if first:
+                            raise LlmStreamFirstTokenTimeoutError(
+                                f"Stream time to first token timeout after {timeout_to_use} seconds"
+                            )
+                        else:
+                            raise LlmStreamInactivityTimeoutError(
+                                f"Stream inactivity timeout after {timeout_to_use} seconds"
+                            )
+                    except StopIteration:
+                        break
+                    first = False
                     yield item
             finally:
-                timeout_checker.stop()
+                executor.shutdown(wait=False)
+                loop.close()
 
         except Exception as e:
             logger.exception(
