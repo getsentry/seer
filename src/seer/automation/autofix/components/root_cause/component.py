@@ -58,7 +58,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 response = agent.run(
                     run_config=RunConfig(
                         model=(
-                            AnthropicProvider.model("claude-3-5-sonnet-v2@20241022")
+                            AnthropicProvider.model("claude-3-7-sonnet-v2@20241022")
                             if config.SENTRY_REGION == "de"
                             else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
                         ),
