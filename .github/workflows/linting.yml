@@ -9,7 +9,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  linting:
+    name: Linting
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
