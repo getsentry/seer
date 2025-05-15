@@ -218,8 +218,12 @@ class AutofixContext(PipelineContext):
                 f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
             )
 
-        repo_client = self.get_repo_client(repo_name)
-        return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
+        try:
+            repo_client = self.get_repo_client(repo_name)
+            return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
+        except UnknownObjectException as e:
+            logger.warning(f"Invalid commit SHA provided: {commit_sha}. Error: {e}")
+            return None
 
     def autocorrect_file_path(self, path: str, repo_name: str) -> str | None:
         """
