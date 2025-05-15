@@ -459,7 +459,7 @@ class AnthropicProvider:
         elif app_config.SENTRY_REGION == "de":
             return anthropic.AnthropicVertex(
                 project_id=project_id,
-                region="europe-west4",
+                region="europe-west4",  # we have PT here
                 max_retries=max_retries,
             )
         elif (
@@ -468,7 +468,7 @@ class AnthropicProvider:
         ):
             return anthropic.AnthropicVertex(
                 project_id=project_id,
-                region="europe-west4",
+                region="europe-west4",  # we have PT here for US also
                 max_retries=max_retries,
             )
         else:
