@@ -84,14 +84,20 @@ class AutofixAgent(LlmAgent):
         trace_id = langfuse_context.get_current_trace_id()
         observation_id = langfuse_context.get_current_observation_id()
 
-        if cur.steps and cur.steps[-1].id:
+        target_step_id = None
+        for step in reversed(cur.steps):
+            if isinstance(step, DefaultStep) and step.id:
+                target_step_id = step.id
+                break
+
+        if target_step_id:
             self.futures.append(
                 self.executor.submit(
                     self.share_insights,
                     text,
                     self.context.state,
                     max(0, len(self.memory) - 1),
-                    cur.steps[-1].id,
+                    target_step_id,
                     langfuse_parent_trace_id=trace_id,  # type: ignore
                     langfuse_parent_observation_id=observation_id,  # type: ignore
                 )
