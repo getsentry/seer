@@ -35,6 +35,7 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                 run_config=RunConfig(
                     prompt=CodingCodeReviewPrompts.format_pr_review_plan_step(
                         diff_str=request.diff,
+                        additional_context=request.additional_context,
                     ),
                     system_prompt=CodingUnitTestPrompts.format_system_msg(),
                     model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),

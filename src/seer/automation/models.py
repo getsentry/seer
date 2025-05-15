@@ -260,6 +260,7 @@ class SentryExceptionEntry(BaseModel):
 
 
 class SentryEventData(TypedDict):
+    event_id: NotRequired[str] = Field(alias="eventID")
     title: str
     entries: list[dict]
     tags: NotRequired[list[dict[str, str | None]]]

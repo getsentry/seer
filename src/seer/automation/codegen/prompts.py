@@ -178,11 +178,14 @@ class CodingCodeReviewPrompts:
         )
 
     @staticmethod
-    def format_pr_review_plan_step(diff_str: str):
+    def format_pr_review_plan_step(diff_str: str, additional_context: str):
         return textwrap.dedent(
             """\
             You are given the below code changes as a diff:
             {diff_str}
+
+            You may also have additional context about the codebase that you can use to make your analysis:
+            {additional_context}
 
             # Your goal:
             Review the code changes in the diff and provide constructive feedback and suggestions for improvement.
@@ -214,6 +217,7 @@ class CodingCodeReviewPrompts:
             """
         ).format(
             diff_str=diff_str,
+            additional_context=additional_context,
         )
 
     @staticmethod
@@ -321,7 +325,7 @@ class StaticAnalysisSuggestionsPrompts:
         )
 
     @staticmethod
-    def format_prompt(diff_with_warnings: str, formatted_issues: str):
+    def format_prompt(diff_with_warnings: str, formatted_issues: str, additional_context: str):
         return textwrap.dedent(
             """\
             You are given a diff block annotated with static analysis warnings which may or may not be important:
@@ -330,6 +334,9 @@ class StaticAnalysisSuggestionsPrompts:
 
             You are also given a list of past Sentry issues that exist in the codebase close to the diff:
             {formatted_issues}
+
+            You may also have additional context about the codebase that you can use to make your analysis:
+            {additional_context}
 
             # Your Goal:
             Carefully review the code changes in the diff, understand the context and surface any potential bugs that might be introduced by the changes. In your review focus on actual bugs. You should IGNORE code style, nit suggestions, and anything else that is not likely to cause a production issue.
@@ -356,6 +363,7 @@ class StaticAnalysisSuggestionsPrompts:
         ).format(
             diff_with_warnings=diff_with_warnings,
             formatted_issues=formatted_issues,
+            additional_context=additional_context,
         )
 
 

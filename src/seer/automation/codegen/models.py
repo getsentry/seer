@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from seer.automation.agent.models import Message
 from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
-from seer.automation.models import FileChange, IssueDetails, RepoDefinition
+from seer.automation.models import FileChange, IssueDetails, Profile, RepoDefinition, TraceEvent
 from seer.db import DbRunMemory
 
 
@@ -187,6 +187,7 @@ class CodegenPrReviewStateResponse(BaseModel):
 
 class CodePrReviewRequest(BaseComponentRequest):
     diff: str
+    additional_context: str
 
 
 class CodePrReviewOutput(BaseComponentOutput):
@@ -207,6 +208,57 @@ class CodePrReviewOutput(BaseComponentOutput):
 
     comments: list[Comment]
     description: PrDescription | None = None
+
+
+class PrAdditionalContextComponent(BaseModel):
+    profiles: list[Profile] | None
+    traces: list[TraceEvent] | None
+
+
+class PrAdditionalContextRequest(BaseComponentRequest):
+    pr_files: list[PrFile]
+    filename_to_issues: dict[str, list[IssueDetails]]
+
+
+class PrAdditionalContextOutput(BaseComponentOutput):
+    filename_to_additional_context: dict[str, PrAdditionalContextComponent]
+
+    def to_llm_prompt(self, max_chars: int = 8000) -> str:
+        """
+        Converts the additional context to a string format suitable for LLM prompts.
+        """
+        if not self.filename_to_additional_context:
+            return ""
+
+        result = []
+        for filename, additional_context in self.filename_to_additional_context.items():
+            result.append(f"File: {filename}")
+            result.append("--------------------------------")
+
+            if additional_context.profiles:
+                result.append(
+                    "Profile Data"
+                    "(Performance profiles showing an execution tree for relevant functions in this file)"
+                    "--------------------------------"
+                )
+
+                for profile in additional_context.profiles:
+                    result.append(profile.format_profile())
+                result.append("--------------------------------")
+
+            if additional_context.transactions:
+                result.append(
+                    "Trace Data"
+                    "(Traces showing cross-service details for transactions in this file)"
+                    "--------------------------------"
+                )
+                for trace in additional_context.traces:
+                    result.append(trace.format_spans_tree())
+                result.append("--------------------------------")
+
+            result.append("--------------------------------")
+
+        return "\n".join(result)[:max_chars]
 
 
 class CodegenRelevantWarningsRequest(CodegenBaseRequest):
@@ -309,6 +361,7 @@ class CodePredictStaticAnalysisSuggestionsRequest(BaseComponentRequest):
     warning_and_pr_files: list[WarningAndPrFile]
     fixable_issues: list[IssueDetails]
     pr_files: list[PrFile]
+    additional_context: PrAdditionalContextOutput
 
 
 class CodePredictStaticAnalysisSuggestionsOutput(BaseComponentOutput):
