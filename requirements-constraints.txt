@@ -48,7 +48,7 @@ six==1.16.0
 statsmodels==0.14.0
 sympy==1.12
 threadpoolctl==3.2.0
-torch==2.2.0 # in Lightweight.Dockerfile, we have a specific command to install torch, update it there too.
+torch==2.7.0 # in Lightweight.Dockerfile, we have a specific command to install torch, update it there too.
 tqdm==4.66.3
 typing_extensions
 tzdata==2023.3
