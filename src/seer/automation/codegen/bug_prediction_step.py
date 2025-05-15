@@ -105,6 +105,7 @@ class BugPredictionStep(CodegenStep):
                 else []
             )
 
+    @observe(name="Codegen - Bug Prediction Step")
     def _invoke(self, **kwargs) -> None:
         self.logger.info("Executing Codegen - Bug Prediction Step")
         self.context.event_manager.mark_running()

@@ -368,26 +368,32 @@ class BugPredictorOutput(BaseComponentOutput):
 
 
 class FormattedBugPrediction(BaseModel):
-    title: str
-    description: str
-    affected_files: list[str]
-    suggested_fix: str
-    severity: float
-    confidence: float
-    is_valid: bool
-    code_locations: list[str]
-
-    def to_overwatch_result(self) -> RelevantWarningResult:
-        return RelevantWarningResult(
-            reasoning=self.description,
-            short_description=self.description,
-            short_justification=self.description,
-            encoded_location=self.code_locations[0] if self.code_locations else None,
-        )
+    title: str = Field(description="A concise summary of the bug prediction")
+    description: str = Field(
+        description="A detailed explanation of the potential issue. Phrase it politely as a suspicion."
+    )
+    affected_files: list[str] = Field(
+        description="List of filenames affected by this bug. Include the full path"
+    )
+    suggested_fix: str = Field(
+        description="A short, fluff-free, information-dense explanation of the suggested fix."
+    )
+    severity: float = Field(
+        description="From 0 to 1 how serious is this potential bug? 1 being 'guaranteed exception will happen and not be caught by the code'"
+    )
+    confidence: float = Field(
+        description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion."
+    )
+    is_valid: bool = Field(
+        description="Whether the prediction is valid. If it is not valid, it should be ignored."
+    )
+    code_locations: list[str] = Field(
+        description="Specific locations in the format of '/path/to/file.py:start_line~end_line'. If the line numbers are unknown, just include the full path to the file."
+    )
 
 
 class BugPredictorFormatterInput(BaseComponentRequest):
-    followups: list[str] | None = None
+    followups: list[str | None]
 
 
 class BugPredictorFormatterOutput(BaseComponentOutput):

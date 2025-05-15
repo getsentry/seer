@@ -218,7 +218,7 @@ class BugPredictionFormatterComponent(
             return BugPredictorFormatterOutput(formatted_predictions=[])
 
         response = llm_client.generate_structured(
-            prompt=BugPredictionPrompts.format_prompt_bug_prediction_formatter(request.followups),
+            prompt=BugPredictionPrompts.format_prompt_reformat_followups(request.followups),
             model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=list[FormattedBugPrediction],
             run_name="Bug Prediction Formatter",

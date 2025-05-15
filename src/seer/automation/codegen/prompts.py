@@ -615,7 +615,7 @@ class BugPredictionPrompts:
         )
 
     @classmethod
-    def format_prompt_bug_prediction_formatter(cls, followups: list[str]) -> str:
+    def format_prompt_reformat_followups(cls, followups: list[str]) -> str:
         return textwrap.dedent(
             """
             You are a helpful assistant that extracts structured information from bug prediction analyses.
@@ -625,22 +625,15 @@ class BugPredictionPrompts:
             </followups>
 
             # Your goal:
-            Review the bug prediction analyses and extract the information listed below.
+            Review the bug prediction analyses and extract the requested output information.
 
             # Guidelines:
             - Ensure all fields are properly populated based on each analysis.
-            - Use the following JSON format for each finding:
-            ```json
-            {{
-              "title": string,            // A concise summary of the bug prediction
-              "description": string,      // A detailed explanation of the potential issue. Phrase it politely as a suspicion.
-              "affected_files": string[], // List of filenames affected by this bug. Include the full path
-              "suggested_fix": string,    // Recommended approach to address the issue. Phrase it politely as a suggestion.
-              "severity": float,         // Severity level, from 0 (no issue) to 1 (critical issue)
-              "confidence": float,       // Confidence in prediction, from 0 (no confidence) to 1 (high confidence)
-              "is_valid": boolean,        // Whether this prediction should be shown to users
-              "code_locations": string[]  // Specific locations in the format of "/path/to/file.py:start_line~end_line". If the line numbers are unknown, just include the full path to the file.
-            }}
-            ```
+
+            # Focus:
+            {focus}
             """
-        ).format(followups="\n".join(followups))
+        ).format(
+            followups="\n".join(followups),
+            focus=cls._focus_on_crashes(),
+        )

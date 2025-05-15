@@ -151,3 +151,4 @@ dmypy.json
 
 # Cassettes
 tests/**/cassettes/
+tests/automation/codegen/fixtures/bug_prediction/outputs/
