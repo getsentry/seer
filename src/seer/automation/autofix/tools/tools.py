@@ -263,7 +263,7 @@ class BaseTools:
             path=file_path, repo_name=repo_name, commit_sha=commit_sha
         )
         if patch is None:
-            return "Could not find the file in the given commit. Either your hash/SHA is incorrect (it must be the 7 character SHA, found through explain_file),or the file does not exist in the given commit."
+            return "Could not find the file in the given commit. Either your hash/SHA is incorrect (it must be the 7 character SHA, found through explain_file), or the file does not exist in the given commit."
         return patch
 
     @observe(name="Explain File")
