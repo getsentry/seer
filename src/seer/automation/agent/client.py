@@ -1332,6 +1332,7 @@ class GeminiProvider:
         return message
 
     @observe(name="Create Gemini cache")
+    @sentry_sdk.trace
     def create_cache(self, contents: str, display_name: str, ttl: int = 3600) -> str | None:
         """
         Create a cache for the given content and display name. We will use the display name as the key.
