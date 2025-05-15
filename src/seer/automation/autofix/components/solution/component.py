@@ -160,7 +160,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     response = agent.run(
                         run_config=RunConfig(
                             model=(
-                                AnthropicProvider.model("claude-3-7-sonnet-v2@20241022")
+                                AnthropicProvider.model("claude-3-7-sonnet@20250219")
                                 if config.SENTRY_REGION == "de"
                                 else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
                             ),
