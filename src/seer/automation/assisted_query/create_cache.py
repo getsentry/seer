@@ -32,7 +32,9 @@ REQUIRED_FIELD_PREFIXES = [
 @inject
 @observe(name="Create assisted query cache")
 @sentry_sdk.trace
-def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> CreateCacheResponse:
+def create_cache(
+    data: CreateCacheRequest, llm_client: LlmClient = injected, rpc_client: RpcClient = injected
+) -> CreateCacheResponse:
 
     org_id = data.org_id
     project_ids = data.project_ids
@@ -40,14 +42,14 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
 
     cache_diplay_name = get_cache_display_name(org_id, project_ids, no_values)
 
-    cache_name = LlmClient().get_cache(display_name=cache_diplay_name, model=get_model_provider())
+    cache_name = llm_client.get_cache(display_name=cache_diplay_name, model=get_model_provider())
 
     if cache_name:
         return CreateCacheResponse(
             success=True, message="Cache already exists", cache_name=cache_name
         )
 
-    fields_response = client.call(
+    fields_response = rpc_client.call(
         "get_attribute_names", org_id=org_id, project_ids=project_ids, stats_period="48h"
     )
 
@@ -83,7 +85,7 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
                 if field not in filtered_fields:
                     filtered_fields.append(field)
 
-        filtered_field_values_response = client.call(
+        filtered_field_values_response = rpc_client.call(
             "get_attribute_values",
             fields=filtered_fields,
             org_id=org_id,
@@ -107,7 +109,7 @@ def create_cache(data: CreateCacheRequest, client: RpcClient = injected) -> Crea
         fields=all_fields, field_values=filtered_field_values, no_values=no_values
     )
 
-    cache_name = LlmClient().create_cache(
+    cache_name = llm_client.create_cache(
         display_name=cache_diplay_name, contents=cache_prompt, model=get_model_provider()
     )
 
