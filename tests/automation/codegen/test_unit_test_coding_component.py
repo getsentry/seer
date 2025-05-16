@@ -70,7 +70,7 @@ class TestUnitTestCodingComponent(unittest.TestCase):
         )
 
         self.mock_context.get_repo_client.assert_called_with(
-            "repo", type=RepoClientType.CODECOV_PR_REVIEW
+            repo_name="repo", type=RepoClientType.CODECOV_PR_REVIEW
         )
 
         self.assertIsNotNone(result)
@@ -114,7 +114,7 @@ class TestUnitTestCodingComponent(unittest.TestCase):
         )
 
         self.mock_context.get_repo_client.assert_called_with(
-            "repo", type=RepoClientType.CODECOV_UNIT_TEST
+            repo_name="repo", type=RepoClientType.CODECOV_UNIT_TEST
         )
 
         self.assertIsNotNone(result)
