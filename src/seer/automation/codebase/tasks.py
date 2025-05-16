@@ -40,7 +40,7 @@ def collect_all_repos_for_backfill():
     logger.info("Collecting repos for backfill")
 
     # TODO: Remove this once we have a real backfill cursor
-    backfill_project_ids = [1, 1320254, 5613870, 4507936016302080]
+    backfill_project_ids = [1, 300688, 1320254, 5613870, 4507936016302080]
 
     with Session() as session:
         backfill_state = (
