@@ -867,3 +867,39 @@ def test_iterate_with_timeouts_error_and_cleanup(monkeypatch):
             )
         )
     assert called
+
+
+@pytest.mark.vcr()
+def test_gemini_thinking_config():
+    llm_client = LlmClient()
+    model = GeminiProvider.model("gemini-2.5-flash-preview-04-17")
+
+    class TestStructure(BaseModel):
+        name: str
+        age: int
+
+    # Test with thinking budget
+    response_with_budget = llm_client.generate_structured(
+        prompt="Generate a person named John Doe aged 30",
+        model=model,
+        response_format=TestStructure,
+        thinking_budget=1024,
+    )
+
+    assert isinstance(response_with_budget, LlmGenerateStructuredResponse)
+    assert response_with_budget.parsed == TestStructure(name="John Doe", age=30)
+    assert response_with_budget.metadata.model == "gemini-2.5-flash-preview-04-17"
+    assert response_with_budget.metadata.provider_name == LlmProviderType.GEMINI
+
+    # Test without thinking budget
+    response_without_budget = llm_client.generate_structured(
+        prompt="Generate a person named Jane Doe aged 25",
+        model=model,
+        response_format=TestStructure,
+        thinking_budget=0,
+    )
+
+    assert isinstance(response_without_budget, LlmGenerateStructuredResponse)
+    assert response_without_budget.parsed == TestStructure(name="Jane Doe", age=25)
+    assert response_without_budget.metadata.model == "gemini-2.5-flash-preview-04-17"
+    assert response_without_budget.metadata.provider_name == LlmProviderType.GEMINI

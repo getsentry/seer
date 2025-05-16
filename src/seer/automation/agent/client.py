@@ -1095,7 +1095,9 @@ class GeminiProvider:
                     response_schema=response_format,
                     cached_content=cache_name,
                     thinking_config=(
-                        ThinkingConfig(thinking_budget=thinking_budget) if thinking_budget else None
+                        ThinkingConfig(thinking_budget=thinking_budget)
+                        if thinking_budget is not None
+                        else None
                     ),
                 ),
             )
