@@ -12,7 +12,7 @@ The code change modifies how the `AnthropicProvider.get_client()` method determi
 
 ### Key Findings:
 
-1. **`USE_EU_REGION` Never Existed:** 
+1. **`USE_EU_REGION` Never Existed:**
    - My search confirmed that `USE_EU_REGION` does not exist anywhere in the codebase.
    - The AppConfig class in `src/seer/configuration.py` does not have a `USE_EU_REGION` property.
    - This strongly suggests the original code was referencing a non-existent property, which would always evaluate to False, meaning the US region would always be used.

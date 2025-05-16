@@ -23,9 +23,9 @@ def encode(self, texts: str | list[str], auto_truncate: bool = True, show_progre
     is_texts_str = isinstance(texts, str)
     if is_texts_str:
         texts = [texts]  # type: ignore[list-item]
-    
+
     # ... processing ...
-    
+
     embeddings = np.array([text_to_embedding[text] for text in texts])
     if is_texts_str:
         return embeddings[0]
@@ -50,7 +50,7 @@ From examining both the implementation and the unit tests, I can determine:
 
 ## Conclusion
 
-**Not a bug.** The code pattern `model.encode([comment_body])[0]` is working as intended and is a correct usage pattern for this embedding API. Even if an unexpected error occurs when generating embeddings, the code has a catch-all exception handler that will prevent the server from crashing. 
+**Not a bug.** The code pattern `model.encode([comment_body])[0]` is working as intended and is a correct usage pattern for this embedding API. Even if an unexpected error occurs when generating embeddings, the code has a catch-all exception handler that will prevent the server from crashing.
 
 The test suite includes specific tests for both the normal operation and exception cases, and both implementations in the codebase (in `pr_review_utils.py` and `pr_closed_step.py`) use the same pattern consistently.
 
@@ -129,22 +129,22 @@ This creates a session factory using SQLAlchemy's `sessionmaker`. The potential 
 
 ### Evidence That Session Works Correctly as a Context Manager
 
-1. **Widespread Use in the Codebase**: 
+1. **Widespread Use in the Codebase**:
    My search found over 130 instances of `with Session() as session:` across the codebase. This pattern is used extensively in both application code and tests, indicating it's a well-established and working pattern.
 
-2. **SQLAlchemy's Design**: 
+2. **SQLAlchemy's Design**:
    According to SQLAlchemy's documentation (which I verified through Google searches), the `sessionmaker` class is specifically designed to support the context manager protocol. When you use `with Session() as session:`, SQLAlchemy's implementation:
    - In `__enter__`: Creates and returns a new session
    - In `__exit__`: Handles proper cleanup, including rolling back transactions if an exception occurred, and closing the session
 
-3. **Session Configuration**: 
+3. **Session Configuration**:
    The codebase correctly initializes the Session with a database engine in `initialize_database()`:
    ```python
    with app.app_context():
        Session.configure(bind=db.engine)
    ```
 
-4. **No Evidence of Failures**: 
+4. **No Evidence of Failures**:
    There are no indications in the code or comments suggesting that this pattern has caused issues.
 
 ### Conclusion

@@ -4,7 +4,7 @@ Based on my research, I'm ready to analyze whether there's a real bug in the `cr
 
 The core issue I've been investigating is whether the `branch.ref` value used in the `get_pulls()` method is in the correct format. Let's summarize what I've discovered:
 
-1. **Expected Format for `get_pulls(head=...)`**: 
+1. **Expected Format for `get_pulls(head=...)`**:
    - According to GitHub API and PyGithub documentation, the `head` parameter should be in the format `owner:branch_name` or `organization:branch_name`.
 
 2. **Actual Format of `branch.ref`**:

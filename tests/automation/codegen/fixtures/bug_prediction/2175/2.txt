@@ -23,7 +23,7 @@ GitHub API can return 422 errors for pull request creation in several different 
 
 2. **Added Safeguards**: The code has added a check for existing PRs which would prevent one common cause of 422 errors, and it now logs exceptions with `logger.exception()` which will provide more context for debugging.
 
-3. **Call Sites**: 
+3. **Call Sites**:
    - The `create_pr_from_branch` function is called in `AutofixContext.commit_changes()` and `GeneratedTestsPullRequestCreator.create_github_pull_request()`.
    - Both call sites expect a `PullRequest` object to be returned and would likely fail if an exception is raised.
 

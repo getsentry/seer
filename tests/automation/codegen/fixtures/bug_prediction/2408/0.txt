@@ -13,7 +13,7 @@ region="europe-west1" if app_config.SENTRY_REGION == "de" else "us-east5",
 
 ### Key Findings:
 
-1. **Confirmation of Missing Property**: 
+1. **Confirmation of Missing Property**:
    - I confirmed that `USE_EU_REGION` doesn't exist anywhere in the AppConfig class in `src/seer/configuration.py`.
    - A grep search across the entire repository returned no results for `USE_EU_REGION`.
 

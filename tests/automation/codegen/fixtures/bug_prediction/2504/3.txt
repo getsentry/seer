@@ -32,7 +32,7 @@ def _truncate_biggest_n_tool_messages(self, messages: list[Message], n: int) -> 
 
 ### Key Observations:
 
-1. **The empty list handling**: The code safely handles the case where `tool_messages_with_size` is empty. 
+1. **The empty list handling**: The code safely handles the case where `tool_messages_with_size` is empty.
    - If there are no tool messages with content, `tool_messages_with_size` will be an empty list.
    - Even if `n` is greater than zero, slicing an empty list (`tool_messages_with_size[:n]`) still returns an empty list.
    - This means `indices_to_truncate` will be an empty set.

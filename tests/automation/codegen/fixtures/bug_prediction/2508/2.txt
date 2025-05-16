@@ -24,7 +24,7 @@ After examining the code and related files, I can assess the likelihood of a mem
    ```python
    # We wanna ignore long lines
    cmd.extend(["--max-columns", "1024"])
-   
+
    # limit threads
    cmd.extend(["--threads", "1"])
    ```
@@ -49,7 +49,7 @@ The bug hypothesis is **partially valid but unlikely to cause crashes in practic
 
 1. The 20-second timeout
 2. The `--max-columns 1024` flag on ripgrep
-3. The single thread restriction 
+3. The single thread restriction
 
 These measures make it unlikely that ripgrep could generate enough output to cause an out-of-memory crash before the truncation logic kicks in.
 

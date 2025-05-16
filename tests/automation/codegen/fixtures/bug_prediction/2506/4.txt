@@ -47,7 +47,7 @@ If `self.repo.get_commits(sha=self.base_commit_sha)` returns an empty list:
 
 ## Conclusion
 
-**Verdict**: This is **not a bug that would cause a server crash**. 
+**Verdict**: This is **not a bug that would cause a server crash**.
 
 The method would handle an empty commit list gracefully, returning an empty list of commit titles. Python's list comprehensions are designed to handle empty iterables without raising exceptions, and the slicing operation (`commits[:max_commits]`) also works safely on empty iterables.
 

@@ -10,7 +10,7 @@ data = cast(SentryEventData, error_data)
 
 After examining the codebase, I can confirm this is a potential issue:
 
-1. **SentryEventData Structure**: 
+1. **SentryEventData Structure**:
    - `SentryEventData` is defined in `src/seer/automation/models.py` as a `TypedDict` with specific expected fields (title, entries, and optional tags).
    - The type cast doesn't perform any runtime validation that `error_data` conforms to this structure.
 
@@ -29,7 +29,7 @@ After examining the codebase, I can confirm this is a potential issue:
 
 This is a real but potentially limited bug:
 
-1. **Crash Potential**: 
+1. **Crash Potential**:
    - If the RPC endpoint returns data that doesn't match the `SentryEventData` structure, accessing expected attributes in subsequent code could lead to attribute access errors that aren't caught.
    - This would cause an unexpected runtime error and potentially crash the server.
 

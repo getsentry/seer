@@ -34,7 +34,7 @@ The concern was that in the `get_trace_event_details` method, `event.project_id`
 
 1. **Will it crash?**
    The RPC client implementations don't appear to validate their keyword arguments. If `project_id` is None:
-   
+
    - For `DummyRpcClient`: None values in kwargs would likely be handled normally without an issue
    - For `SentryRpcClient`: None values in kwargs would be serialized to JSON as `null`, which is valid JSON
 
@@ -49,7 +49,7 @@ The concern was that in the `get_trace_event_details` method, `event.project_id`
        logger.exception(f"Could not parse error event details from tool call: {e}")
        return "Could not fetch error event details."
    ```
-   
+
    If an RPC call fails due to a None `project_id`, the exception would likely be caught.
 
 3. **Related Validation:**
