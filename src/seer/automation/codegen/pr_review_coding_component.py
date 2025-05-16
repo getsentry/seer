@@ -37,7 +37,7 @@ class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOut
                         diff_str=request.diff,
                     ),
                     system_prompt=CodingUnitTestPrompts.format_system_msg(),
-                    model=AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     run_name="Generate PR review",
                 ),
             )
