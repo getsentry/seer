@@ -1481,6 +1481,7 @@ class LlmClient:
         timeout: float | None = None,
         reasoning_effort: str | None = None,
         cache_name: str | None = None,
+        thinking_budget: int | None = None,
         use_local_endpoint: bool = False,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         try:
@@ -1527,6 +1528,7 @@ class LlmClient:
                     temperature=temperature,
                     tools=cast(list[FunctionTool], tools),
                     cache_name=cache_name,
+                    thinking_budget=thinking_budget,
                     use_local_endpoint=use_local_endpoint,
                 )
             else:
