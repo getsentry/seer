@@ -385,7 +385,7 @@ class TestAutofixEventManager:
         )
         assert solution_step is not None
         assert solution_step.status == AutofixStatus.COMPLETED
-        assert len(solution_step.solution) == len(mock_solution_output.solution_steps) + 1
+        assert len(solution_step.solution) == len(mock_solution_output.solution_steps)
         for i, timeline_item in enumerate(solution_step.solution):
             if i < len(mock_solution_output.solution_steps):
                 assert timeline_item.title == mock_solution_output.solution_steps[i].title

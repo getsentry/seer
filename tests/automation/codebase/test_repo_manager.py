@@ -55,6 +55,8 @@ def test_clone_success(repo_manager, mock_repo_client):
             repo_manager.repo_path,
             progress=ANY,  # Use ANY to match any function
             depth=1,
+            filter="blob:limit=1m",
+            no_checkout=True,
         )
 
         # Verify the repo was set
@@ -86,11 +88,21 @@ def test_sync_success(repo_manager, mock_repo_client):
     mock_git_repo = MagicMock(spec=git.Repo)
     repo_manager.git_repo = mock_git_repo
 
+    mock_repo_client.get_clone_url_with_auth.return_value = (
+        "https://auth-token@github.com/test-owner/test-repo.git"
+    )
+
     repo_manager._sync_repo()
 
     # Verify git commands were called
     mock_git_repo.git.execute.assert_called_once_with(
-        ["git", "fetch", "--depth=1", "origin", mock_repo_client.base_commit_sha]
+        [
+            "git",
+            "fetch",
+            "--depth=1",
+            "https://auth-token@github.com/test-owner/test-repo.git",
+            mock_repo_client.base_commit_sha,
+        ]
     )
     mock_git_repo.git.checkout.assert_called_once_with(mock_repo_client.base_commit_sha, force=True)
 
@@ -699,6 +711,7 @@ def test_prune_repo_delete_refs(repo_manager):
         None,  # update-ref delete1
         None,  # reflog expire
         None,  # gc
+        None,  # remote remove
     ]
     mock_git.git = MagicMock()
     mock_git.git.execute.side_effect = side_effects
@@ -717,6 +730,7 @@ def test_prune_repo_show_ref_error(repo_manager):
         error,  # show-ref raises
         None,  # reflog expire
         None,  # gc
+        None,  # remote remove
     ]
     mock_git.git = MagicMock()
     mock_git.git.execute.side_effect = side_effects

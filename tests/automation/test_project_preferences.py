@@ -5,6 +5,7 @@ from unittest import mock
 from seer.app import app
 from seer.automation.models import RepoDefinition, SeerProjectPreference
 from seer.automation.preferences import (
+    MAX_REPOS_PER_PROJECT,
     GetSeerProjectPreferenceRequest,
     GetSeerProjectPreferenceResponse,
     SetSeerProjectPreferenceRequest,
@@ -150,6 +151,49 @@ class TestSeerProjectPreferenceAPI(unittest.TestCase):
         mock_session_instance.get.assert_called_once_with(DbSeerProjectPreference, 999)
 
     @mock.patch("seer.automation.preferences.Session")
+    def test_get_seer_project_preference_too_many_repos_in_db(self, mock_session):
+        """Test get_seer_project_preference when the preference in DB has too many repos"""
+        # Setup mock session
+        mock_session_instance = mock.MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_session_instance
+
+        # Create a mock DB preference with too many repos
+        repos_data = [
+            {
+                "owner": f"test-owner-{i}",
+                "name": f"test-repo-{i}",
+                "external_id": f"test-external-id-{i}",
+                "provider": "github",
+            }
+            for i in range(MAX_REPOS_PER_PROJECT + 5)
+        ]
+        mock_db_preference = DbSeerProjectPreference(
+            project_id=789,
+            organization_id=101,
+            repositories=repos_data,
+        )
+        mock_session_instance.get.return_value = mock_db_preference
+
+        # Call the function
+        request = GetSeerProjectPreferenceRequest(project_id=789)
+        response = get_seer_project_preference(request)
+
+        # Verify the response
+        self.assertIsNotNone(response.preference)
+        self.assertEqual(response.preference.project_id, 789)
+        self.assertEqual(len(response.preference.repositories), MAX_REPOS_PER_PROJECT)
+        for i in range(MAX_REPOS_PER_PROJECT):
+            self.assertEqual(response.preference.repositories[i].name, f"test-repo-{i}")
+
+        # Verify the session was used correctly
+        mock_session_instance.get.assert_called_once_with(DbSeerProjectPreference, 789)
+        mock_session_instance.merge.assert_called_once()
+        merged_arg = mock_session_instance.merge.call_args[0][0]
+        self.assertIsInstance(merged_arg, DbSeerProjectPreference)
+        self.assertEqual(len(merged_arg.repositories), MAX_REPOS_PER_PROJECT)
+        mock_session_instance.commit.assert_called_once()
+
+    @mock.patch("seer.automation.preferences.Session")
     def test_set_seer_project_preference(self, mock_session):
         """Test set_seer_project_preference functionality"""
         # Setup mock session
@@ -181,6 +225,49 @@ class TestSeerProjectPreferenceAPI(unittest.TestCase):
 
         # Verify the session was used correctly
         mock_session_instance.merge.assert_called_once()
+        mock_session_instance.commit.assert_called_once()
+
+    @mock.patch("seer.automation.preferences.Session")
+    def test_set_seer_project_preference_caps_repos(self, mock_session):
+        """Test set_seer_project_preference caps repositories to MAX_REPOS_PER_PROJECT."""
+        # Setup mock session
+        mock_session_instance = mock.MagicMock()
+        mock_session.return_value.__enter__.return_value = mock_session_instance
+
+        # Create test data with too many repos
+        repos = [
+            RepoDefinition(
+                owner=f"test-owner-{i}",
+                name=f"test-repo-{i}",
+                external_id=f"test-external-id-{i}",
+                provider="github",
+                branch_name="main",
+            )
+            for i in range(MAX_REPOS_PER_PROJECT + 3)
+        ]
+        preference = SeerProjectPreference(
+            organization_id=777,
+            project_id=888,
+            repositories=repos,
+        )
+
+        # Call the function
+        request = SetSeerProjectPreferenceRequest(preference=preference)
+        response = set_seer_project_preference(request)
+
+        # Verify the response preference has capped repos (important as it's returned to caller)
+        self.assertEqual(len(response.preference.repositories), MAX_REPOS_PER_PROJECT)
+
+        # Verify the session was used correctly
+        mock_session_instance.merge.assert_called_once()
+        merged_db_model = mock_session_instance.merge.call_args[0][0]
+        self.assertIsInstance(merged_db_model, DbSeerProjectPreference)
+        self.assertEqual(merged_db_model.organization_id, 777)
+        self.assertEqual(merged_db_model.project_id, 888)
+        self.assertEqual(len(merged_db_model.repositories), MAX_REPOS_PER_PROJECT)
+        for i in range(MAX_REPOS_PER_PROJECT):
+            self.assertEqual(merged_db_model.repositories[i]["name"], f"test-repo-{i}")
+
         mock_session_instance.commit.assert_called_once()
 
 
@@ -272,17 +359,17 @@ class TestSeerProjectPreferenceEndpoints(unittest.TestCase):
 
 class TestCreateInitialSeerProjectPreferenceFromRepos(unittest.TestCase):
     def setUp(self):
-        # Clean up any existing test records for project_ids 20 and 40
+        # Clean up any existing test records for project_ids 20, 40, and 60
         with Session() as session:
             session.query(DbSeerProjectPreference).filter(
-                DbSeerProjectPreference.project_id.in_([20, 40])
+                DbSeerProjectPreference.project_id.in_([20, 40, 60])
             ).delete()
             session.commit()
 
     def tearDown(self):
         with Session() as session:
             session.query(DbSeerProjectPreference).filter(
-                DbSeerProjectPreference.project_id.in_([20, 40])
+                DbSeerProjectPreference.project_id.in_([20, 40, 60])
             ).delete()
             session.commit()
 
@@ -336,3 +423,41 @@ class TestCreateInitialSeerProjectPreferenceFromRepos(unittest.TestCase):
             self.assertEqual(db_model.organization_id, 30)
             self.assertEqual(db_model.project_id, 40)
             self.assertEqual(db_model.repositories, [])
+
+    def test_create_initial_seer_project_preference_caps_repos(self):
+        """Test that create_initial_seer_project_preference_from_repos caps repos to MAX_REPOS_PER_PROJECT."""
+        repos = [
+            RepoDefinition(
+                owner=f"owner{i}",
+                name=f"repo{i}",
+                external_id=f"id{i}",
+                provider="github",
+                branch_name="main",
+                instructions=f"instr{i}",
+            )
+            for i in range(MAX_REPOS_PER_PROJECT + 5)
+        ]
+        preference = create_initial_seer_project_preference_from_repos(
+            organization_id=50,
+            project_id=60,
+            repos=repos,
+        )
+        # Verify returned preference has capped repos
+        self.assertEqual(preference.organization_id, 50)
+        self.assertEqual(preference.project_id, 60)
+        self.assertEqual(len(preference.repositories), MAX_REPOS_PER_PROJECT)
+        for i in range(MAX_REPOS_PER_PROJECT):
+            self.assertEqual(preference.repositories[i].name, f"repo{i}")
+
+        # Verify it was persisted to DB with capped repos
+        with Session() as session:
+            db_model = session.get(DbSeerProjectPreference, 60)
+            self.assertIsNotNone(db_model)
+            self.assertEqual(db_model.organization_id, 50)
+            self.assertEqual(db_model.project_id, 60)
+            self.assertEqual(len(db_model.repositories), MAX_REPOS_PER_PROJECT)
+            # Stored repositories should match model_dump of each repo in the capped list
+            self.assertEqual(
+                db_model.repositories,
+                [repo.model_dump() for repo in repos[:MAX_REPOS_PER_PROJECT]],
+            )

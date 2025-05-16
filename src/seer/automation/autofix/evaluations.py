@@ -75,7 +75,7 @@ def sync_run_evaluation_on_item(item: DatasetItemClient) -> AutofixContinuation:
     request = AutofixRequest.model_validate(input_data["request"])
 
     request.options = AutofixRequestOptions(
-        disable_codebase_indexing=True, disable_interactivity=True
+        disable_codebase_indexing=True, disable_interactivity=True, force_use_repos=True
     )
 
     state = create_initial_autofix_run(request)

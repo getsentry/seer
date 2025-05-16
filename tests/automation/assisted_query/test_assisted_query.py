@@ -56,7 +56,7 @@ class TestAssistedQuery:
                     sort="-count",
                 ),
                 metadata=LlmResponseMetadata(
-                    model="gemini-2.0-flash-001",
+                    model="gemini-2.5-flash-preview-04-17",
                     provider_name=LlmProviderType.GEMINI,
                     usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
                 ),
@@ -111,7 +111,7 @@ class TestAssistedQuery:
                 confidence_score=0.95,
             ),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
@@ -139,7 +139,7 @@ class TestAssistedQuery:
         first_call = LlmGenerateStructuredResponse(
             RelevantFieldsResponse(fields=["span.op", "span.description"]),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
@@ -161,7 +161,7 @@ class TestAssistedQuery:
                 confidence_score=0.95,
             ),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
@@ -214,4 +214,121 @@ class TestAssistedQuery:
             project_ids=[1, 2],
             stats_period="48h",
             limit=200,
+        )
+
+    @patch("seer.automation.assisted_query.assisted_query.RpcClient")
+    @patch("seer.automation.agent.client.LlmClient")
+    def test_create_query_from_natural_language_no_field_values(
+        self, mock_rpc_client_class, mock_llm_client_class
+    ):
+        mock_rpc_client = MagicMock()
+        mock_llm_client = MagicMock()
+
+        # Create responses for both test cases
+        first_call_response = LlmGenerateStructuredResponse(
+            RelevantFieldsResponse(fields=["span.op", "span.description"]),
+            metadata=LlmResponseMetadata(
+                model="gemini-2.5-flash-preview-04-17",
+                provider_name=LlmProviderType.GEMINI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        second_call_response = LlmGenerateStructuredResponse(
+            ModelResponse(
+                explanation="This is a test explanation",
+                query="error",
+                stats_period="24h",
+                group_by=["project"],
+                visualization=[
+                    Chart(
+                        chart_type=1,
+                        y_axes=["Test y-axis 1", "Test y-axis 2"],
+                    )
+                ],
+                sort="-count",
+                confidence_score=0.95,
+            ),
+            metadata=LlmResponseMetadata(
+                model="gemini-2.5-flash-preview-04-17",
+                provider_name=LlmProviderType.GEMINI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        # Set up responses for both test cases (4 total calls)
+        mock_llm_client.generate_structured.side_effect = [
+            first_call_response,
+            second_call_response,
+            first_call_response,
+            second_call_response,
+        ]
+
+        mock_llm_client_class.return_value = mock_llm_client
+        mock_rpc_client_class.return_value = mock_rpc_client
+
+        # Test case 1: field_values_response is None
+        mock_rpc_client.call.return_value = None
+
+        response = create_query_from_natural_language(
+            natural_language_query="Show me the slowest database operations in the last 24 hours",
+            cache_name="test-cache",
+            org_id=1,
+            project_ids=[1, 2],
+            rpc_client=mock_rpc_client,
+            llm_client=mock_llm_client,
+        )
+
+        assert isinstance(response, LlmGenerateStructuredResponse)
+        assert response.parsed == ModelResponse(
+            explanation="This is a test explanation",
+            query="error",
+            stats_period="24h",
+            group_by=["project"],
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
+            sort="-count",
+            confidence_score=0.95,
+        )
+
+        # Verify that get_attribute_values was called with correct parameters
+        mock_rpc_client.call.assert_any_call(
+            "get_attribute_values",
+            org_id=1,
+            fields=["span.op", "span.description", "transaction"],
+            project_ids=[1, 2],
+            stats_period="48h",
+            limit=200,
+        )
+
+        # Test case 2: field_values_response is missing 'values' key
+        mock_rpc_client.call.return_value = {"some_other_key": "value"}
+
+        response = create_query_from_natural_language(
+            natural_language_query="Show me the slowest database operations in the last 24 hours",
+            cache_name="test-cache",
+            org_id=1,
+            project_ids=[1, 2],
+            rpc_client=mock_rpc_client,
+            llm_client=mock_llm_client,
+        )
+
+        assert isinstance(response, LlmGenerateStructuredResponse)
+        assert response.parsed == ModelResponse(
+            explanation="This is a test explanation",
+            query="error",
+            stats_period="24h",
+            group_by=["project"],
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
+            sort="-count",
+            confidence_score=0.95,
         )

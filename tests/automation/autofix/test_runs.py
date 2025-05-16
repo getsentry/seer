@@ -8,7 +8,10 @@ from seer.automation.autofix.models import (
     AutofixRequestOptions,
     IssueDetails,
 )
-from seer.automation.autofix.runs import create_initial_autofix_run
+from seer.automation.autofix.runs import (
+    create_initial_autofix_run,
+    update_repo_access_and_properties,
+)
 from seer.automation.models import RepoDefinition, SeerProjectPreference
 from seer.automation.preferences import GetSeerProjectPreferenceRequest
 
@@ -122,3 +125,65 @@ class TestRuns:
         # Verify that state.update was used to set repos to created preference
         ctx = mock_state.update.return_value.__enter__.return_value
         assert ctx.request.repos == sample_repos
+
+    def test_update_repo_access_and_properties(self):
+        # Mock repo and codebase
+        mock_repo = MagicMock()
+        mock_repo.provider = "github"
+        mock_repo.external_id = "repo1"
+        mock_repo.branch_name = None
+        mock_repo.base_commit_sha = None
+
+        mock_codebase = MagicMock()
+        mock_codebase.is_readable = None
+        mock_codebase.is_writeable = None
+
+        # Mock state.get() to return a state with repos and codebases
+        mock_state = MagicMock()
+        mock_state.request.repos = [mock_repo]
+        mock_state.codebases = {"repo1": mock_codebase}
+        mock_state.readable_repos = MagicMock(return_value=[mock_repo])
+
+        # Patch state.update() as a context manager
+        mock_update_cm = MagicMock()
+        mock_update_cm.__enter__.return_value = mock_state
+        mock_update_cm.__exit__.return_value = None
+
+        mock_continuation_state = MagicMock()
+        mock_continuation_state.get.return_value = mock_state
+        mock_continuation_state.update.return_value = mock_update_cm
+
+        # Patch RepoClient methods
+        with (
+            patch(
+                "seer.automation.codebase.repo_client.RepoClient.check_repo_read_access",
+                return_value=True,
+            ) as mock_read_access,
+            patch(
+                "seer.automation.codebase.repo_client.RepoClient.check_repo_write_access",
+                return_value=True,
+            ) as mock_write_access,
+            patch(
+                "seer.automation.codebase.repo_client.RepoClient.from_repo_definition"
+            ) as mock_from_repo_definition,
+        ):
+            mock_repo_client = MagicMock()
+            mock_repo_client.base_branch = "main"
+            mock_repo_client.base_commit_sha = "abc123"
+            mock_from_repo_definition.return_value = mock_repo_client
+
+            update_repo_access_and_properties(
+                mock_continuation_state, set_branches_and_commits=True
+            )
+
+            # Assert RepoClient methods were called
+            mock_read_access.assert_called_once_with(mock_repo)
+            mock_write_access.assert_called_once_with(mock_repo)
+            mock_from_repo_definition.assert_called_once_with(mock_repo, "read")
+
+            # Assert repo properties were set
+            assert mock_repo.branch_name == "main"
+            assert mock_repo.base_commit_sha == "abc123"
+            # Assert codebase state updated
+            assert mock_state.codebases["repo1"].is_readable is True
+            assert mock_state.codebases["repo1"].is_writeable is True

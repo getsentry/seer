@@ -37,6 +37,11 @@ REPO_WAIT_TIMEOUT_SECS = 120.0
 
 
 class BaseTools:
+    """
+    Base class for tools that that can be used by any component/agent.
+    See usage examples in autofix/components/solution/component.py and autofix/autofix_agent.py
+    """
+
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
     repo_managers: dict[str, RepoManager] = {}
@@ -246,7 +251,7 @@ class BaseTools:
             path=file_path, repo_name=repo_name, commit_sha=commit_sha
         )
         if patch is None:
-            return "Could not find the file in the given commit. Either your hash is incorrect or the file does not exist in the given commit."
+            return "Could not find the file in the given commit. Either your hash/SHA is incorrect (it must be the 7 character SHA, found through explain_file), or the file does not exist in the given commit."
         return patch
 
     @observe(name="Explain File")

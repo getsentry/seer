@@ -470,8 +470,10 @@ class RepoClient:
         valid_file_extensions = get_all_supported_extensions()
 
         for file in tree.tree:
-            if file.type == "blob" and any(
-                file.path.endswith(ext) for ext in valid_file_extensions
+            if (
+                file.type == "blob"
+                and any(file.path.endswith(ext) for ext in valid_file_extensions)
+                and file.size <= 1024 * 1024  # 1MB
             ):
                 valid_file_paths.add(file.path)
 

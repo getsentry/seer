@@ -255,6 +255,11 @@ class AutofixFeedback(BaseModel):
 
 
 class AutofixGroupState(BaseModel):
+    """
+    This class maps to the JSON keys inside the "value" column of the run_state table.
+    This class stores almost the whole state of autofix run.
+    """
+
     run_id: int = -1
     steps: list[Step] = Field(default_factory=list)
     status: AutofixStatus = AutofixStatus.PROCESSING
@@ -316,9 +321,16 @@ class AutofixRequestOptions(BaseModel):
     comment_on_pr_with_url: str | None = None
     disable_interactivity: bool = False
     auto_run_source: str | None = None
+    force_use_repos: bool = False
 
 
 class AutofixRequest(BaseModel):
+    """
+    This class is used to store the request JSON for an autofix run. It contains repository information,
+    issue details, and other information needed to start an autofix run.
+    This class maps to the JSON key "request" inside the "value" column of the run_state table.
+    """
+
     organization_id: Annotated[int, Examples(specialized.unsigned_ints)]
     project_id: Annotated[int, Examples(specialized.unsigned_ints)]
     repos: list[RepoDefinition]

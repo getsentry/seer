@@ -596,7 +596,7 @@ class TestViewDiff:
         )
         assert (
             result
-            == "Could not find the file in the given commit. Either your hash is incorrect or the file does not exist in the given commit."
+            == "Could not find the file in the given commit. Either your hash/SHA is incorrect (it must be the 7 character SHA, found through explain_file), or the file does not exist in the given commit."
         )
 
     def test_view_diff_non_autofix_context(self, autofix_tools: BaseTools):

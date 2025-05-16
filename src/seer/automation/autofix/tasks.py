@@ -153,12 +153,22 @@ def run_autofix_root_cause(
     request: AutofixRequest,
     app_config: AppConfig = injected,
 ):
+    """
+    Runs the root cause analysis step for an Autofix request.
+    Returns the existing run ID for auto-runs if present; otherwise, creates a new run, validates repositories, and enqueues the root cause analysis task.
+    Args:
+        request (AutofixRequest): The autofix request containing issue and project details.
+        app_config (AppConfig, optional): Application configuration, including Celery queue.
+    Returns:
+        int or None: The run ID of the autofix process, or None if not started.
+    """
     if request.options.auto_run_source:  # don't let auto-runs overwrite existing runs
         existing_run = get_autofix_state(group_id=request.issue.id)
         if existing_run:
             existing_state = existing_run.get()
             return existing_state.run_id
 
+    # Create a new autofix run since there is no existing run
     state = create_initial_autofix_run(request)
 
     cur_state = state.get()

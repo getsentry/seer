@@ -62,6 +62,7 @@ class RepoManager:
         organization_id: int | None = None,
         project_id: int | None = None,
         trigger_liveness_probe: Callable[[], None] | None = None,
+        force_gcs: bool = False,
     ):
         """
         Initialize the local git client.
@@ -83,7 +84,23 @@ class RepoManager:
 
         self._use_gcs = (
             organization_id == 1 and project_id == 6178942
-        )  # TODO: Hardcoded ONLY for Seer
+        ) or force_gcs  # TODO: Hardcoded ONLY for Seer and for backfill calls
+
+    @staticmethod
+    def make_blob_name(
+        organization_id: int, provider: str, repo_owner: str, repo_name: str, repo_external_id: str
+    ):
+        return (
+            f"repos/{organization_id}/{provider}/{repo_owner}/{repo_name}_{repo_external_id}.tar.gz"
+        )
+
+    @staticmethod
+    @inject
+    def get_bucket_name(config: AppConfig = injected):
+        if not config.CODEBASE_GCS_STORAGE_BUCKET:
+            raise RepoInitializationError("CODEBASE_GCS_STORAGE_BUCKET is not set, can't use GCS")
+
+        return config.CODEBASE_GCS_STORAGE_BUCKET
 
     @property
     def is_available(self):
@@ -91,18 +108,13 @@ class RepoManager:
 
     @property
     def blob_name(self):
-        if self.organization_id is None:
-            raise RepoInitializationError("Organization ID is not set, can't get blob name")
-
-        # Segmented by organization
-        return f"repos/{self.organization_id}/{self.repo_client.provider}/{self.repo_client.repo_owner}/{self.repo_client.repo_name}_{self.repo_client.repo_external_id}.tar.gz"
-
-    @inject
-    def get_bucket_name(self, config: AppConfig = injected):
-        if not config.CODEBASE_GCS_STORAGE_BUCKET:
-            raise RepoInitializationError("CODEBASE_GCS_STORAGE_BUCKET is not set, can't use GCS")
-
-        return config.CODEBASE_GCS_STORAGE_BUCKET
+        return self.make_blob_name(
+            self.organization_id,
+            self.repo_client.provider,
+            self.repo_client.repo_owner,
+            self.repo_client.repo_name,
+            self.repo_client.repo_external_id,
+        )
 
     def initialize_in_background(self):
         logger.info(f"Creating initialize task for repo {self.repo_client.repo_full_name}")
@@ -182,6 +194,19 @@ class RepoManager:
             if self.is_cancelled:
                 self.cleanup()
 
+    def initialize_archive_for_backfill(self):
+        try:
+            self._clone_repo()
+            self._sync_repo()
+            self.upload_to_gcs()
+        except Exception:
+            logger.exception(
+                "Failed to initialize repo archive during backfill",
+                extra={"repo": self.repo_client.repo_full_name},
+            )
+            self.cleanup()
+            raise
+
     @sentry_sdk.trace
     def _clone_repo(self) -> str:
         """
@@ -202,6 +227,8 @@ class RepoManager:
                 self.repo_path,
                 progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
                 depth=1,
+                filter="blob:limit=1m",  # Limit to 1MB file size
+                no_checkout=True,
             )
             end_time = time.time()
             logger.info(
@@ -232,10 +259,13 @@ class RepoManager:
             # Clean any untracked files
             self.git_repo.git.clean("-fdx")
 
+            auth_url = self.repo_client.get_clone_url_with_auth()
+
             # Fetch only the specific commit
-            self.git_repo.git.execute(["git", "fetch", "--depth=1", "origin", commit_sha])
+            self.git_repo.git.execute(["git", "fetch", "--depth=1", auth_url, commit_sha])
 
             # Force checkout to avoid the "local changes" error
+            logger.info(f"Checking out commit {commit_sha}")
             self.git_repo.git.checkout(commit_sha, force=True)
 
             end_time = time.time()
@@ -361,6 +391,9 @@ class RepoManager:
         logger.info("Cleaning Git repository to minimal state")
         git_repo.git.execute(["git", "reflog", "expire", "--expire=now", "--all"])
         git_repo.git.execute(["git", "gc", "--prune=now", "--aggressive"])
+
+        # Remove all remotes
+        git_repo.git.execute(["git", "remote", "remove", "origin"])
 
     @sentry_sdk.trace
     def upload_to_gcs(self):
