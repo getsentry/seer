@@ -5,6 +5,9 @@ import shutil
 import tarfile
 import tempfile
 import textwrap
+import threading
+import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from typing import Any, Dict, List, Literal
@@ -160,6 +163,29 @@ class CompleteGitTree:
         self.tree.extend(items)
 
 
+class RateLimiter:
+    def __init__(self, max_calls: int, period: float) -> None:
+        self.max_calls = max_calls
+        self.period = period
+        self.calls = deque()
+        self.lock = threading.Lock()
+
+    def wait(self) -> None:
+        while True:
+            with self.lock:
+                now = time.monotonic()
+                # Remove timestamps older than the period
+                while self.calls and now - self.calls[0] >= self.period:
+                    self.calls.popleft()
+                if len(self.calls) < self.max_calls:
+                    self.calls.append(now)
+                    return
+                earliest = self.calls[0]
+                sleep_time = self.period - (now - earliest)
+            # Sleep outside the lock
+            time.sleep(sleep_time)
+
+
 class RepoClient:
     # TODO: Support other git providers later
     github_auth: Auth.Token | Auth.AppInstallationAuth
@@ -193,10 +219,7 @@ class RepoClient:
             self.github_auth = get_github_app_auth_and_installation(
                 app_id, private_key, repo_definition.owner, repo_definition.name
             )[0]
-            self.github = Github(
-                auth=self.github_auth,
-                retry=retry,
-            )
+            self.github = Github(auth=self.github_auth, retry=retry, pool_size=16)
         else:
             token_auth = get_github_token_auth()
 
@@ -206,7 +229,7 @@ class RepoClient:
                 )
 
             self.github_auth = token_auth
-            self.github = Github(auth=self.github_auth, retry=retry)
+            self.github = Github(auth=self.github_auth, retry=retry, pool_size=16)
 
         try:
             with sentry_sdk.start_span(
@@ -247,6 +270,9 @@ class RepoClient:
             self._get_commit_patch_for_file
         )
         self.get_git_tree = functools.lru_cache(maxsize=8)(self._get_git_tree)
+
+        # Initialize a rate limiter for get_git_tree API calls (10 calls per second)
+        self._git_tree_rate_limiter = RateLimiter(10, 1)
 
     @staticmethod
     def check_repo_write_access(repo: RepoDefinition):
@@ -678,12 +704,14 @@ class RepoClient:
             A CompleteGitTree with all items from all subtrees
         """
         commit = self.repo.get_git_commit(commit_sha)
+        self._git_tree_rate_limiter.wait()
         tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=True)
 
         if not tree.raw_data.get("truncated", False):
             return CompleteGitTree(tree)
 
         complete_tree = CompleteGitTree()
+        self._git_tree_rate_limiter.wait()
         root_tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=False)
 
         for key, value in root_tree.raw_data.items():
@@ -716,11 +744,13 @@ class RepoClient:
             A list of all tree items from this subtree and its nested subtrees
         """
         items = []
+        self._git_tree_rate_limiter.wait()
         subtree = self.repo.get_git_tree(sha=sha, recursive=True)
 
         if not subtree.raw_data.get("truncated", False):
             return subtree.tree
 
+        self._git_tree_rate_limiter.wait()
         non_recursive_subtree = self.repo.get_git_tree(sha=sha, recursive=False)
 
         nested_tree_items = [item for item in non_recursive_subtree.tree if item.type == "tree"]
