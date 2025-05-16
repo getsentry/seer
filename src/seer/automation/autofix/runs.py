@@ -52,7 +52,7 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     except Exception as e:
         logger.exception(e)
 
-    if not preference:
+    if not request.options.force_use_repos and not preference:
         # No preference found, create one from our list of code mapping repos.
         preference = create_initial_seer_project_preference_from_repos(
             organization_id=request.organization_id,
@@ -60,23 +60,24 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
             repos=request.repos,
         )
 
-    with state.update() as cur:
-        if preference:
-            cur.request.repos = preference.repositories
+    if not request.options.force_use_repos:
+        with state.update() as cur:
+            if preference:
+                cur.request.repos = preference.repositories
 
-        try:
-            for trace_connected_preference in trace_connected_preferences:
-                if len(cur.request.repos) >= MAX_REPOS_TOTAL:
-                    break
-                if trace_connected_preference:
-                    for repo in trace_connected_preference.repositories:
-                        if not any(
-                            existing_repo.external_id == repo.external_id
-                            for existing_repo in cur.request.repos
-                        ):
-                            cur.request.repos.append(repo)
-        except Exception as e:
-            logger.exception(e)
+            try:
+                for trace_connected_preference in trace_connected_preferences:
+                    if len(cur.request.repos) >= MAX_REPOS_TOTAL:
+                        break
+                    if trace_connected_preference:
+                        for repo in trace_connected_preference.repositories:
+                            if not any(
+                                existing_repo.external_id == repo.external_id
+                                for existing_repo in cur.request.repos
+                            ):
+                                cur.request.repos.append(repo)
+            except Exception as e:
+                logger.exception(e)
 
     continuation_state = ContinuationState(state.id)
 
