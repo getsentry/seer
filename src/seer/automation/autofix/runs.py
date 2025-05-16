@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from github import GithubException
 
@@ -14,6 +15,7 @@ from seer.automation.preferences import (
     get_seer_project_preference,
 )
 from seer.automation.state import DbState, DbStateRunTypes
+from seer.dependency_injection import copy_modules_initializer
 
 logger = logging.getLogger(__name__)
 
@@ -128,23 +130,34 @@ def update_repo_access_and_properties(
             )
 
     # Set accesible repos and set branch_name and base_commit_sha if accessible.
-    updates = {}
-    for repo in cur_state.request.repos:
+    def _process_repo(repo):
         if repo.provider == "github":
             is_readable = RepoClient.check_repo_read_access(repo)
             is_writeable = RepoClient.check_repo_write_access(repo)
-            updates[repo.external_id] = {
-                "is_readable": bool(is_readable),
-                "is_writeable": bool(is_writeable),
-            }
             if set_branches_and_commits:
                 if is_readable and not repo.branch_name:
                     repo_client = RepoClient.from_repo_definition(repo, "read")
                     repo.branch_name = repo_client.base_branch
                     if not repo.base_commit_sha:
                         repo.base_commit_sha = repo_client.base_commit_sha
+            update = {
+                "is_readable": bool(is_readable),
+                "is_writeable": bool(is_writeable),
+            }
         else:
-            updates[repo.external_id] = {"is_readable": False, "is_writeable": False}
+            update = {"is_readable": False, "is_writeable": False}
+        return repo.external_id, update
+
+    repos = cur_state.request.repos
+    if len(repos) > 1:
+        with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+            results = list(executor.map(_process_repo, repos))
+        updates = dict(results)
+    else:
+        updates = {}
+        for repo in repos:
+            repo_id, update = _process_repo(repo)
+            updates[repo_id] = update
 
     # Write updated state to postgres db.
     with state.update() as cur:
