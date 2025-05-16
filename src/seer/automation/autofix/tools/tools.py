@@ -503,7 +503,7 @@ class BaseTools:
         exclude_pattern: str | None = None,
         case_sensitive: bool = False,
         repo_name: str | None = None,
-        use_regex: bool = False,
+        use_regex: bool = True,
     ) -> str:
         if repo_name:
             fixed_repo_name = (
@@ -1115,7 +1115,7 @@ class BaseTools:
                     FunctionTool(
                         name="grep_search",
                         fn=self.run_ripgrep,
-                        description="Runs a ripgrep command over the codebase to find what you're looking for. Use this as your main tool for searching codebases. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
+                        description="Runs a ripgrep command over the codebase to find what you're looking for. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
                         parameters=[
                             {
                                 "name": "include_pattern",
@@ -1135,7 +1135,7 @@ class BaseTools:
                             {
                                 "name": "use_regex",
                                 "type": "boolean",
-                                "description": "Set this to true to search for a regex pattern. By default set to false.",
+                                "description": "Set this to false to search for a literal string pattern. By default set to true and interprets your query as a regex pattern.",
                             },
                             {
                                 "name": "repo_name",
@@ -1145,7 +1145,7 @@ class BaseTools:
                             {
                                 "name": "query",
                                 "type": "string",
-                                "description": "The precise query you're searching for. By default interpreted as a literal string, so no escaping is needed. Set use_regex=true to use regex pattern matching.",
+                                "description": "The precise query you're searching for. By default interpreted as a regex pattern. Set use_regex=false to search for a literal string pattern.",
                             },
                         ],
                         required=["query"],
