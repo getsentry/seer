@@ -421,8 +421,8 @@ class OpenAiProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
-        first_token_timeout: float = 40.0,
-        inactivity_timeout: float = 20.0,
+        first_token_timeout: float,
+        inactivity_timeout: float,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
@@ -812,8 +812,8 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
-        first_token_timeout: float = 40.0,
-        inactivity_timeout: float = 20.0,
+        first_token_timeout: float,
+        inactivity_timeout: float,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
@@ -1135,8 +1135,8 @@ class GeminiProvider:
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        first_token_timeout: float = 40.0,
-        inactivity_timeout: float = 20.0,
+        first_token_timeout: float,
+        inactivity_timeout: float,
     ) -> Iterator[str | ToolCall | Usage]:
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
