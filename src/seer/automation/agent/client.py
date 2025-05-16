@@ -1,9 +1,11 @@
 import json
 import logging
+import queue
 import re
+import threading
 import time
 from dataclasses import dataclass
-from typing import Any, ClassVar, Iterable, Iterator, Tuple, Type, Union, cast
+from typing import Any, Callable, ClassVar, Iterable, Iterator, Tuple, Type, TypeVar, Union, cast
 
 import anthropic
 import sentry_sdk
@@ -59,6 +61,81 @@ from seer.dependency_injection import inject, injected
 from seer.utils import backoff_on_exception
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+def _iterate_with_timeouts(
+    stream_generator: Iterator[T],
+    first_token_timeout: float,
+    inactivity_timeout: float,
+    on_cleanup: Callable[[], None] | None = None,
+) -> Iterator[T]:
+    """Helper to iterate over a blocking stream with timeouts for first token and inactivity.
+
+    Args:
+        stream_generator: The stream to iterate over
+        first_token_timeout: Timeout in seconds for receiving the first token
+        inactivity_timeout: Timeout in seconds between subsequent tokens
+        on_cleanup: Optional callback to clean up resources when done
+    """
+    cancel_event = threading.Event()
+    q: queue.Queue[tuple[str, Any]] = queue.Queue()
+    last_yield_time = time.time()
+    first_token_received = False
+
+    def producer():
+        try:
+            for item in stream_generator:
+                if cancel_event.is_set():
+                    break
+                q.put(("data", item))
+            q.put(("end", None))
+        except Exception as e:
+            q.put(("error", e))
+        finally:
+            if on_cleanup:
+                try:
+                    on_cleanup()
+                except Exception:
+                    pass
+
+    thread = threading.Thread(target=producer, daemon=True)
+    thread.start()
+
+    try:
+        while True:
+            timeout_to_use = first_token_timeout if not first_token_received else inactivity_timeout
+            try:
+                msg_type, item = q.get(timeout=timeout_to_use)
+
+            except queue.Empty:
+                cancel_event.set()
+                if first_token_received:
+
+                    raise LlmStreamInactivityTimeoutError(
+                        f"Stream inactivity timeout after {timeout_to_use} seconds"
+                    )
+                else:
+
+                    raise LlmStreamFirstTokenTimeoutError(
+                        f"Stream time to first token timeout after {timeout_to_use} seconds"
+                    )
+
+            if msg_type == "data":
+                first_token_received = True
+                last_yield_time = time.time()
+                if time.time() - last_yield_time > inactivity_timeout:
+                    raise LlmStreamInactivityTimeoutError(
+                        f"Stream inactivity timeout after {timeout_to_use} seconds"
+                    )
+                yield item
+            elif msg_type == "error":
+                raise item
+            elif msg_type == "end":
+                break
+    finally:
+        cancel_event.set()
 
 
 @dataclass
@@ -347,6 +424,8 @@ class OpenAiProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
+        first_token_timeout: float = 40.0,
+        inactivity_timeout: float = 20.0,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         message_dicts, tool_dicts = self._prep_message_and_tools(
             messages=messages,
@@ -374,48 +453,56 @@ class OpenAiProvider:
             reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
         )
 
-        try:
-            current_tool_call: dict[str, Any] | None = None
-            current_tool_call_index = 0
+        current_tool_call: dict[str, Any] | None = None
+        current_tool_call_index = 0
 
-            for chunk in stream:
-                if not chunk.choices and chunk.usage:
-                    usage = Usage(
-                        completion_tokens=chunk.usage.completion_tokens,
-                        prompt_tokens=chunk.usage.prompt_tokens,
-                        total_tokens=chunk.usage.total_tokens,
-                    )
-                    yield usage
-                    langfuse_context.update_current_observation(model=self.model_name, usage=usage)
-                    break
+        def cleanup():
+            try:
+                stream.response.close()
+            except Exception:
+                pass
 
-                delta = chunk.choices[0].delta
-                if delta.tool_calls:
-                    tool_call = delta.tool_calls[0]
+        for chunk in _iterate_with_timeouts(
+            stream,
+            first_token_timeout=first_token_timeout,
+            inactivity_timeout=inactivity_timeout,
+            on_cleanup=cleanup,
+        ):
+            if not chunk.choices and chunk.usage:
+                usage = Usage(
+                    completion_tokens=chunk.usage.completion_tokens,
+                    prompt_tokens=chunk.usage.prompt_tokens,
+                    total_tokens=chunk.usage.total_tokens,
+                )
+                yield usage
+                langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+                break
 
-                    if (
-                        not current_tool_call or current_tool_call_index != tool_call.index
-                    ):  # Start of new tool call
-                        current_tool_call_index = tool_call.index
-                        if current_tool_call:
-                            yield ToolCall(**current_tool_call)
-                        current_tool_call = None
-                        current_tool_call = {
-                            "id": tool_call.id,
-                            "function": tool_call.function.name if tool_call.function.name else "",
-                            "args": (
-                                tool_call.function.arguments if tool_call.function.arguments else ""
-                            ),
-                        }
-                    else:
-                        if tool_call.function.arguments:
-                            current_tool_call["args"] += tool_call.function.arguments
-                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
-                    yield ToolCall(**current_tool_call)
-                if delta.content:
-                    yield "content", delta.content
-        finally:
-            stream.response.close()
+            delta = chunk.choices[0].delta
+            if delta.tool_calls:
+                tool_call = delta.tool_calls[0]
+
+                if (
+                    not current_tool_call or current_tool_call_index != tool_call.index
+                ):  # Start of new tool call
+                    current_tool_call_index = tool_call.index
+                    if current_tool_call:
+                        yield ToolCall(**current_tool_call)
+                    current_tool_call = None
+                    current_tool_call = {
+                        "id": tool_call.id,
+                        "function": tool_call.function.name if tool_call.function.name else "",
+                        "args": (
+                            tool_call.function.arguments if tool_call.function.arguments else ""
+                        ),
+                    }
+                else:
+                    if tool_call.function.arguments:
+                        current_tool_call["args"] += tool_call.function.arguments
+            if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
+                yield ToolCall(**current_tool_call)
+            if delta.content:
+                yield "content", delta.content
 
     def construct_message_from_stream(
         self, content_chunks: list[str], tool_calls: list[ToolCall]
@@ -728,6 +815,8 @@ class AnthropicProvider:
         max_tokens: int | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
+        first_token_timeout: float = 40.0,
+        inactivity_timeout: float = 20.0,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
             messages=messages,
@@ -771,7 +860,18 @@ class AnthropicProvider:
 
             yielded_content = False
 
-            for chunk in stream:
+            def cleanup():
+                try:
+                    stream.response.close()
+                except Exception:
+                    pass
+
+            for chunk in _iterate_with_timeouts(
+                stream,
+                first_token_timeout=first_token_timeout,
+                inactivity_timeout=inactivity_timeout,
+                on_cleanup=cleanup,
+            ):
                 if chunk.type == "message_start" and chunk.message.usage:
                     if chunk.message.usage.cache_creation_input_tokens:
                         total_input_write_tokens += chunk.message.usage.cache_creation_input_tokens
@@ -824,7 +924,6 @@ class AnthropicProvider:
             langfuse_context.update_current_observation(
                 model=self.model_name, usage=usage.to_langfuse_usage()
             )
-            stream.response.close()
 
     def construct_message_from_stream(
         self,
@@ -1039,6 +1138,8 @@ class GeminiProvider:
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        first_token_timeout: float = 40.0,
+        inactivity_timeout: float = 20.0,
     ) -> Iterator[str | ToolCall | Usage]:
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -1068,7 +1169,18 @@ class GeminiProvider:
 
             current_tool_call: dict[str, Any] | None = None
 
-            for chunk in stream:
+            def cleanup():
+                try:
+                    stream.response.close()
+                except Exception:
+                    pass
+
+            for chunk in _iterate_with_timeouts(
+                stream,
+                first_token_timeout=first_token_timeout,
+                inactivity_timeout=inactivity_timeout,
+                on_cleanup=cleanup,
+            ):
                 # Handle function calls
                 if (
                     chunk.candidates
@@ -1552,8 +1664,8 @@ class LlmClient:
         run_name: str | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
-        first_token_timeout: float = 40.0,  # Time to first token timeout
-        inactivity_timeout: float = 20.0,  # Timeout for inactivity after first token
+        first_token_timeout: float = 40.0,
+        inactivity_timeout: float = 20.0,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
         try:
             if run_name:
@@ -1586,6 +1698,8 @@ class LlmClient:
                     tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
+                    first_token_timeout=first_token_timeout,
+                    inactivity_timeout=inactivity_timeout,
                 )
             elif model.provider_name == LlmProviderType.ANTHROPIC:
                 model = cast(AnthropicProvider, model)
@@ -1598,6 +1712,8 @@ class LlmClient:
                     tools=tools,
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
+                    first_token_timeout=first_token_timeout,
+                    inactivity_timeout=inactivity_timeout,
                 )
             elif model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
@@ -1612,35 +1728,13 @@ class LlmClient:
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
                     tools=cast(list[FunctionTool], tools),
+                    first_token_timeout=first_token_timeout,
+                    inactivity_timeout=inactivity_timeout,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
 
-            # Add timeout check to the stream with differentiated timeouts
-            # for first token and subsequent tokens
-            last_yield_time = time.time()
-            first_token_received = False
-
             for item in stream_generator:
-                current_time = time.time()
-                # Use first_token_timeout for the first token, inactivity_timeout for subsequent tokens
-                timeout_to_use = (
-                    first_token_timeout if not first_token_received else inactivity_timeout
-                )
-
-                if current_time - last_yield_time > timeout_to_use:
-                    if first_token_received:
-                        raise LlmStreamInactivityTimeoutError(
-                            f"Stream inactivity timeout after {timeout_to_use} seconds"
-                        )
-                    else:
-                        raise LlmStreamFirstTokenTimeoutError(
-                            f"Stream time to first token timeout after {timeout_to_use} seconds"
-                        )
-
-                # Mark that we've received at least one token
-                first_token_received = True
-                last_yield_time = current_time
                 yield item
 
         except Exception as e:
