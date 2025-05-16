@@ -321,6 +321,7 @@ class AutofixRequestOptions(BaseModel):
     comment_on_pr_with_url: str | None = None
     disable_interactivity: bool = False
     auto_run_source: str | None = None
+    force_use_repos: bool = False
 
 
 class AutofixRequest(BaseModel):
