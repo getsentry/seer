@@ -59,13 +59,10 @@ def collect_all_repos_for_backfill():
         # current timestamp, rounded to the nearest 30 minutes
         current_cron_iteration = str(round(time.time() / 1800))
 
-        print(f"current_cron_iteration: {current_cron_iteration}")
-        print(f"task_taken_key: {task_taken_key}, {task_taken_key == current_cron_iteration}")
-
-        # if task_taken_key == current_cron_iteration:
-        #     # don't do anything, we've already run this cron iteration
-        #     logger.info("Already ran this cron iteration, skipping")
-        #     return
+        if task_taken_key == current_cron_iteration:
+            # don't do anything, we've already run this cron iteration
+            logger.info("Already ran this cron iteration, skipping")
+            return
 
         # update the task taken key
         if backfill_state:
