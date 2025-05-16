@@ -4,7 +4,7 @@ from enum import Enum
 from functools import cached_property
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from seer.automation.agent.models import Message
 from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
@@ -321,6 +321,50 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
     """
 
     relevant_warning_results: list[RelevantWarningResult]
+
+
+class FilterFilesRequest(BaseComponentRequest):
+    pr_files: list[PrFile]
+    pr_title: str
+    pr_body: str
+    shuffle_files: bool = True
+    num_files_desired: int = 5
+
+
+class FilterFilesOutput(BaseComponentOutput):
+    pr_files: list[PrFile]
+
+
+class BugPredictorRequest(BaseComponentRequest):
+    pr_files: list[PrFile]
+    repo_full_name: str
+    pr_title: str
+    pr_body: str
+    max_num_concurrent_calls: int = 6
+
+
+class BugPredictorHypothesis(BaseModel):
+    content: str = Field(
+        description="Include all the information collected about the potential bug here"
+    )
+
+
+class BugPredictorOutput(BaseComponentOutput):
+    hypotheses_unstructured: str
+    hypotheses: list[BugPredictorHypothesis]
+    followups: list[str | None]
+    "None indicates that the verification agent errored out"
+
+    @field_validator("followups")
+    @classmethod
+    def validate_lists_same_length(
+        cls, v: list[str | None], info: ValidationInfo
+    ) -> list[str | None]:
+        hypotheses_data = info.data.get("hypotheses")
+        if hypotheses_data is not None:
+            if len(hypotheses_data) != len(v):
+                raise ValueError("hypotheses and followups must be the same length")
+        return v
 
 
 class CodecovTaskRequest(BaseModel):

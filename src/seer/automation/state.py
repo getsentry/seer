@@ -20,6 +20,7 @@ class DbStateRunTypes(str, Enum):
     UNIT_TEST = "unit-test"
     PR_REVIEW = "pr-review"
     RELEVANT_WARNINGS = "relevant-warnings"
+    BUG_PREDICTION = "bug-prediction"
     PR_CLOSED = "pr-closed"
     UNIT_TESTS_RETRY = "unit-test-retry"
 

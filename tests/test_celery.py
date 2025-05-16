@@ -28,6 +28,7 @@ def test_detected_celery_jobs():
                 "seer.automation.codegen.unittest_step.unittest_task",
                 "seer.automation.codegen.pr_review_step.pr_review_task",
                 "seer.automation.codegen.relevant_warnings_step.relevant_warnings_task",
+                "seer.automation.codegen.bug_prediction_step.bug_prediction_task",
                 "seer.automation.codegen.retry_unittest_step.retry_unittest_task",
                 "seer.automation.tasks.delete_data_for_ttl",
                 "seer.smoke_test.smoke_test",

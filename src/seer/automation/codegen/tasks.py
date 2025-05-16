@@ -1,3 +1,4 @@
+from seer.automation.codegen.bug_prediction_step import BugPredictionStep, BugPredictionStepRequest
 from seer.automation.codegen.models import (
     CodegenBaseRequest,
     CodegenContinuation,
@@ -69,6 +70,23 @@ def create_initial_relevant_warnings_run(
         CodegenContinuation(request=request),
         group_id=request.pr_id,
         t=DbStateRunTypes.RELEVANT_WARNINGS,
+    )
+
+    with state.update() as cur:
+        cur.status = CodegenStatus.PENDING
+        cur.signals = []
+        cur.mark_triggered()
+
+    return state
+
+
+def create_initial_bug_prediction_run(
+    request: CodegenRelevantWarningsRequest,
+) -> DbState[CodegenContinuation]:
+    state = CodegenContinuationState.new(
+        CodegenContinuation(request=request),
+        group_id=request.pr_id,
+        t=DbStateRunTypes.BUG_PREDICTION,
     )
 
     with state.update() as cur:
@@ -180,6 +198,32 @@ def codegen_relevant_warnings(
 
     RelevantWarningsStep.get_signature(
         relevant_warnings_request, queue=app_config.CELERY_WORKER_QUEUE
+    ).apply_async()
+
+    return CodegenRelevantWarningsResponse(run_id=cur_state.run_id)
+
+
+@inject
+def codegen_bug_prediction(
+    request: CodegenRelevantWarningsRequest, app_config: AppConfig = injected
+):
+    state = create_initial_bug_prediction_run(request)
+
+    cur_state = state.get()
+
+    bug_prediction_request = BugPredictionStepRequest(
+        repo=request.repo,
+        pr_id=request.pr_id,
+        callback_url=request.callback_url,
+        organization_id=request.organization_id,
+        warnings=request.warnings,
+        commit_sha=request.commit_sha,
+        run_id=cur_state.run_id,
+        should_post_to_overwatch=True,
+    )
+
+    BugPredictionStep.get_signature(
+        bug_prediction_request, queue=app_config.CELERY_WORKER_QUEUE
     ).apply_async()
 
     return CodegenRelevantWarningsResponse(run_id=cur_state.run_id)
