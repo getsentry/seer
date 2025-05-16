@@ -159,6 +159,7 @@ class TestSyncRunEvaluationOnItem:
         request_copy.options = request_copy.options.model_copy()
         request_copy.options.disable_codebase_indexing = True
         request_copy.options.disable_interactivity = True
+        request_copy.options.force_use_repos = True
         self.mock_create_initial_run.assert_called_once_with(request_copy)
 
         assert self.mock_root_cause_step.get_signature.called
