@@ -1,0 +1,54 @@
+Based on my investigation of the potential `TypeError` when checking `self.message not in self.title`, I can now provide a thorough analysis:
+
+# Investigation of Potential Bug
+
+The code change in `src/seer/automation/models.py` introduces a new validation in the `format_event()` and `format_event_without_breadcrumbs()` methods:
+
+```python
+message = self.message if self.message and self.message not in self.title else ""
+```
+
+## Key Findings
+
+1. **Nature of the Check**:
+   - The code checks if `self.message` exists (not None or empty) AND if it's not already contained within `self.title`.
+   - If both conditions are met, it uses `self.message`; otherwise, it uses an empty string.
+
+2. **Python's Behavior with `None in string`**:
+   - In Python, when you attempt to check if `None` is in a string using `None in some_string`, it will actually **not** raise a TypeError.
+   - Python evaluates this as checking if the `None` object is a substring of the string, which is always `False`.
+   - This is different from other operations like `None + string` or `None.method()` which would raise a TypeError.
+
+3. **The Short-Circuit Logic**:
+   - The code uses a logical AND (`and`) operator between `self.message` and `self.message not in self.title`.
+   - Python's short-circuit evaluation means that if `self.message` evaluates to `False` (which would be the case if it's `None` or an empty string), then the second part (`self.message not in self.title`) will not be evaluated at all.
+
+4. **Model Definition**:
+   - The `EventDetails` class defines `message` as: `message: str | None = None`
+   - This confirms that `message` can indeed be `None`, but the conditional check safely handles this.
+
+## Verification of Logical Operators
+
+Looking at the actual implementation:
+
+```python
+# In format_event() method:
+message = self.message if self.message and self.message not in self.title else ""
+
+# In format_event_without_breadcrumbs() method:
+message = self.message if self.message and self.message not in self.title else ""
+```
+
+In both cases, the check `self.message and self.message not in self.title` correctly uses short-circuit evaluation. If `self.message` is `None`, the entire condition evaluates to `False` without evaluating the second part.
+
+## Conclusion
+
+**No bug exists.** The code change is correctly implemented and will not cause a TypeError:
+
+1. If `self.message` is `None`, the first condition (`self.message`) evaluates to `False`, and due to short-circuit evaluation, `self.message not in self.title` will never be evaluated.
+
+2. Even if Python didn't have short-circuit evaluation (which it does), checking `None in some_string` does not raise a TypeError - it simply returns `False`.
+
+3. The usage pattern appears consistently in both methods, suggesting it's an intentional pattern rather than a mistake.
+
+This code change is safe and properly handles cases where `self.message` could be `None`. The potential bug I initially hypothesized will not occur in practice.

@@ -95,6 +95,28 @@ class StaticAnalysisSuggestion(BaseModel):
         return f"{self.short_description}\n{self.justification}\n<location>{self.path}:{self.line}</location>"
 
 
+class BugPrediction(BaseModel):
+    title: str = Field(description="A concise summary title of the bug prediction. Max 10 words.")
+    short_description: str = Field(
+        description="A concise, technical explanation of the potential bug that identifies the specific risk and affected code. Phrase it politely as a suspicion. Max 75 words."
+    )
+    description: str = Field(
+        description="A detailed technical analysis of the bug that explains: 1) The exact failure mechanism, 2) The conditions that trigger it, 3) Why the current code is problematic, 4) Which specific code paths are affected, and 5) What could go wrong if this bug isn't fixed. Include concrete examples of variable states that would cause failure and ideally a short code snippet example. Max 350 words."
+    )
+    suggested_fix: str = Field(
+        description="A short, fluff-free, information-dense explanation of the suggested fix. Max 100 words."
+    )
+    encoded_location: str = Field(
+        description="Specific locations in the format of '/path/to/file.py:start_line~end_line'. If the line numbers are unknown, just include the full path to the file."
+    )
+    severity: float = Field(
+        description="From 0 to 1 how serious is this potential bug? Score this as if you are a developer who would have to respond to an incident caused by this bug. 1 being 'guaranteed production crash'"
+    )
+    confidence: float = Field(
+        description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion."
+    )
+
+
 class CodegenState(BaseModel):
     run_id: int = -1
     file_changes: list[FileChange] = Field(default_factory=list)
@@ -323,6 +345,10 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
     relevant_warning_results: list[RelevantWarningResult]
 
 
+class CodeBugPredictionsOutput(BaseComponentOutput):
+    predictions: list[BugPrediction]
+
+
 class FilterFilesRequest(BaseComponentRequest):
     pr_files: list[PrFile]
     pr_title: str
@@ -367,37 +393,12 @@ class BugPredictorOutput(BaseComponentOutput):
         return v
 
 
-class FormattedBugPrediction(BaseModel):
-    title: str = Field(description="A concise summary of the bug prediction")
-    description: str = Field(
-        description="A detailed explanation of the potential issue. Phrase it politely as a suspicion."
-    )
-    affected_files: list[str] = Field(
-        description="List of filenames affected by this bug. Include the full path"
-    )
-    suggested_fix: str = Field(
-        description="A short, fluff-free, information-dense explanation of the suggested fix."
-    )
-    severity: float = Field(
-        description="From 0 to 1 how serious is this potential bug? 1 being 'guaranteed exception will happen and not be caught by the code'"
-    )
-    confidence: float = Field(
-        description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion."
-    )
-    is_valid: bool = Field(
-        description="Whether the prediction is valid. If it is not valid, it should be ignored."
-    )
-    code_locations: list[str] = Field(
-        description="Specific locations in the format of '/path/to/file.py:start_line~end_line'. If the line numbers are unknown, just include the full path to the file."
-    )
-
-
 class BugPredictorFormatterInput(BaseComponentRequest):
     followups: list[str | None]
 
 
 class BugPredictorFormatterOutput(BaseComponentOutput):
-    formatted_predictions: list[FormattedBugPrediction]
+    bug_predictions: list[BugPrediction]
 
 
 class CodecovTaskRequest(BaseModel):
