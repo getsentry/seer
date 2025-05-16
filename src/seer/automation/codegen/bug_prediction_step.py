@@ -6,22 +6,19 @@ from langfuse.decorators import observe
 
 from celery_app.app import celery_app
 from integrations.codecov.codecov_auth import get_codecov_auth_header
+from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 from seer.automation.codebase.models import PrFile
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.bug_prediction_component import (
-    BugPredictorComponent,
-    FilterFilesComponent,
-)
+from seer.automation.codegen.bug_prediction_component import BugPredictorFormatterComponent
 from seer.automation.codegen.models import (
-    BugPredictorRequest,
+    BugPredictorFormatterInput,
+    CodeBugPredictionsOutput,
     CodegenRelevantWarningsRequest,
     CodePredictStaticAnalysisSuggestionsOutput,
-    FilterFilesRequest,
-    StaticAnalysisSuggestion,
 )
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -58,7 +55,7 @@ class BugPredictionStep(CodegenStep):
     @inject
     def _post_results_to_overwatch(
         self,
-        llm_suggestions: CodePredictStaticAnalysisSuggestionsOutput | None,
+        bug_predictions: CodeBugPredictionsOutput | None,
         diagnostics: list | None,
         config: AppConfig = injected,
     ):
@@ -66,20 +63,9 @@ class BugPredictionStep(CodegenStep):
             self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
-        # This should be a temporary solution until we can update
-        # Overwatch to accept the new format.
-        suggestions_to_overwatch_expected_format = (
-            [
-                suggestion.to_overwatch_format().model_dump()
-                for suggestion in llm_suggestions.suggestions
-            ]
-            if llm_suggestions
-            else []
-        )
-
         request = {
             "run_id": self.context.run_id,
-            "results": suggestions_to_overwatch_expected_format,
+            "results": bug_predictions.bug_predictions,
             "diagnostics": diagnostics or [],
         }
         request_data = json.dumps(request, separators=(",", ":")).encode("utf-8")
@@ -96,19 +82,17 @@ class BugPredictionStep(CodegenStep):
 
     def _complete_run(
         self,
-        static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput | None,
+        bug_predictions_output: CodeBugPredictionsOutput | None,
         diagnostics: list | None,
     ):
         try:
-            self._post_results_to_overwatch(static_analysis_suggestions_output, diagnostics)
+            self._post_results_to_overwatch(bug_predictions_output, diagnostics)
         except Exception:
             self.logger.exception("Error posting relevant warnings results to Overwatch")
             raise
         finally:
             self.context.event_manager.mark_completed_and_extend_static_analysis_suggestions(
-                static_analysis_suggestions_output.suggestions
-                if static_analysis_suggestions_output
-                else []
+                bug_predictions_output.bug_predictions if bug_predictions_output else []
             )
 
     @observe(name="Codegen - Bug Prediction Step")
@@ -116,6 +100,7 @@ class BugPredictionStep(CodegenStep):
         self.logger.info("Executing Codegen - Bug Prediction Step")
         self.context.event_manager.mark_running()
 
+        """
         # 1. Read the PR.
         if self.request.repo.base_commit_sha is None:
             self.request.repo.base_commit_sha = self.request.commit_sha
@@ -153,24 +138,44 @@ class BugPredictionStep(CodegenStep):
                 pr_body=pr.body,
             )
         )
+        """
+
+        # TODO - add here for local testing
+        followups = temp_get_followups_inputs(2198)
+        llm_client = LlmClient()
+        # end TODO
 
         # 4. Post-process each analysis—either into a presentable bug prediction if it's verified, else nothing.
-        verified_bug_predictions = bug_predictor_output.followups
-        # TODO: filter and summarize followups. Re-using StaticAnalysisSuggestion for now.
-        bug_predictions = CodePredictStaticAnalysisSuggestionsOutput(
-            suggestions=[
-                StaticAnalysisSuggestion(
-                    path="",
-                    line=0,
-                    short_description=verified_bug_prediction,
-                    justification="",
-                    missing_evidence=[],
-                    severity_score=0.0,
-                    confidence_score=0.0,
-                )
-                for verified_bug_prediction in verified_bug_predictions
-            ]
+        bug_prediction_formatter = BugPredictorFormatterComponent(self.context)
+        bug_predictions = bug_prediction_formatter.invoke(
+            request=BugPredictorFormatterInput(followups=followups),
+            llm_client=llm_client,
         )
+
+        bug_predictions = CodeBugPredictionsOutput(bug_predictions=bug_predictions.bug_predictions)
+
+        print(bug_predictions)
 
         # 5. Save results.
         self._complete_run(bug_predictions, diagnostics=None)
+
+
+# TODO - remove this once we have a real flow
+def temp_get_followups_inputs(pr_id: int):
+    from pathlib import Path
+
+    # Go up to the main directory
+    base_dir = Path(__file__).resolve().parents[4]  # Go up 4 levels from the current file
+    followups_dir = base_dir / "tests" / "automation" / "codegen" / "fixtures" / "bug_prediction"
+    followups = []
+
+    if followups_dir.exists() and followups_dir.is_dir():
+        # Look for the specific PR ID directory
+        pr_dir = followups_dir / str(pr_id)
+        if pr_dir.exists() and pr_dir.is_dir():
+            # Read all text files in the PR ID directory
+            for file_path in sorted(pr_dir.glob("*.txt")):
+                with open(file_path, "r") as f:
+                    followups.append(f.read())
+
+    return followups

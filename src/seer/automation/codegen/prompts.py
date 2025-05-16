@@ -613,3 +613,35 @@ class BugPredictionPrompts:
             hypothesis=hypothesis,
             focus=cls._focus_on_crashes(),
         )
+
+    @classmethod
+    def format_prompt_reformat_followups(cls, followups: list[str]) -> str:
+        followups_as_xml = "\n\n".join(
+            f'<followup id="{i+1}">\n{followup}\n</followup>'
+            for i, followup in enumerate(followups)
+        )
+
+        return textwrap.dedent(
+            """
+            You are a helpful assistant that extracts structured information from bug prediction analyses.
+            You are given the following bug prediction analyses for a pull request.
+            <followups>
+            {followups}
+            </followups>
+
+            # Your goal:
+            Review the bug prediction analyses and extract the requested output information.
+
+            # Guidelines:
+            - Ensure all fields are properly populated based on each analysis.
+            - Filter the output to only include bugs introduced by the new code in the pull request, not bugs that existed in the previous version of the code or bugs that are fixed by the new code. Pay special attention to the timing of bugs: if the analysis refers to "previous code", this indicates the bug existed in an older version and should be filtered out.
+            - Filter the output to only include predicted bugs that are fatal or critical such as one that would crash a server. To determine if the bug is fatal or critical, read the bug prediction analysis carefully and focus on the conclusion of the analysis.
+            - Deduplicate bug predictions that reflect the same core issue. Consolidate any that are related to the same bug.
+
+            # Focus:
+            {focus}
+            """
+        ).format(
+            followups=followups_as_xml,
+            focus=cls._focus_on_crashes(),
+        )
