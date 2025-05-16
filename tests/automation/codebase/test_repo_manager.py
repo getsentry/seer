@@ -55,6 +55,8 @@ def test_clone_success(repo_manager, mock_repo_client):
             repo_manager.repo_path,
             progress=ANY,  # Use ANY to match any function
             depth=1,
+            filter="blob:limit=1m",
+            no_checkout=True,
         )
 
         # Verify the repo was set
