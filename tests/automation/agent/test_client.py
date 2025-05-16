@@ -9,6 +9,7 @@ from seer.automation.agent.client import (
     GeminiProvider,
     LlmClient,
     OpenAiProvider,
+    _iterate_with_timeouts,
 )
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
@@ -735,201 +736,6 @@ def test_gemini_generate_text_from_web_search():
     assert "2025" in response
 
 
-@pytest.mark.parametrize(
-    "provider_class,model_name",
-    [
-        (OpenAiProvider, "gpt-3.5-turbo"),
-        (AnthropicProvider, "claude-3-5-sonnet@20240620"),
-        (GeminiProvider, "gemini-2.0-flash-001"),
-    ],
-)
-def test_generate_text_stream_with_first_token_timeout(provider_class, model_name, monkeypatch):
-    """Test that first token timeout is correctly applied."""
-    llm_client = LlmClient()
-    model = provider_class.model(model_name)
-
-    def mock_stream_gen_with_first_token_delay(*args, **kwargs):
-        # Simulate delay before yielding first token
-        time.sleep(0.1)
-        yield "First token"
-
-        # Subsequent tokens come quickly
-        for i in range(3):
-            yield f"Token {i+2}"
-
-        # Yield usage info at the end
-        yield Usage(completion_tokens=5, prompt_tokens=5, total_tokens=10)
-
-    monkeypatch.setattr(model, "generate_text_stream", mock_stream_gen_with_first_token_delay)
-
-    # Should complete successfully with reasonable timeout values
-    stream_items = list(
-        llm_client.generate_text_stream(
-            prompt="test",
-            model=model,
-            first_token_timeout=0.5,  # Long enough for our simulated delay
-            inactivity_timeout=0.5,
-        )
-    )
-
-    assert len(stream_items) == 5  # 4 tokens + usage info
-    assert stream_items[0] == "First token"
-
-    # Should timeout with too short first token timeout
-    with pytest.raises(LlmStreamFirstTokenTimeoutError, match="time to first token timeout"):
-        list(
-            llm_client.generate_text_stream(
-                prompt="test",
-                model=model,
-                first_token_timeout=0.05,  # Too short for our simulated delay
-                inactivity_timeout=1.0,
-            )
-        )
-
-
-@pytest.mark.parametrize(
-    "provider_class,model_name",
-    [
-        (OpenAiProvider, "gpt-3.5-turbo"),
-        (AnthropicProvider, "claude-3-5-sonnet@20240620"),
-        (GeminiProvider, "gemini-2.0-flash-001"),
-    ],
-)
-def test_generate_text_stream_with_inactivity_timeout(provider_class, model_name, monkeypatch):
-    """Test that inactivity timeout is correctly applied after first token."""
-    llm_client = LlmClient()
-    model = provider_class.model(model_name)
-
-    def mock_stream_gen_with_inactivity_delay(*args, **kwargs):
-        # First token comes quickly
-        yield "First token"
-
-        # Simulate delay between first and second token
-        time.sleep(0.2)
-        yield "Second token"
-
-        # More tokens come at normal speed
-        for i in range(2):
-            yield f"Token {i+3}"
-
-        # Yield usage info at the end
-        yield Usage(completion_tokens=5, prompt_tokens=5, total_tokens=10)
-
-    monkeypatch.setattr(model, "generate_text_stream", mock_stream_gen_with_inactivity_delay)
-
-    # Should complete successfully with reasonable timeout values
-    stream_items = list(
-        llm_client.generate_text_stream(
-            prompt="test",
-            model=model,
-            first_token_timeout=1.0,
-            inactivity_timeout=0.5,  # Long enough for our simulated delay
-        )
-    )
-
-    assert len(stream_items) == 5  # 4 tokens + usage info
-    assert stream_items[0] == "First token"
-    assert stream_items[1] == "Second token"
-
-    # Should timeout with too short inactivity timeout
-    with pytest.raises(LlmStreamInactivityTimeoutError, match="inactivity timeout"):
-        list(
-            llm_client.generate_text_stream(
-                prompt="test",
-                model=model,
-                first_token_timeout=1.0,
-                inactivity_timeout=0.1,  # Too short for our simulated delay
-            )
-        )
-
-
-def test_generate_text_stream_different_timeouts(monkeypatch):
-    """Test that first token and inactivity timeouts are correctly differentiated."""
-    llm_client = LlmClient()
-    model = OpenAiProvider.model("gpt-3.5-turbo")
-
-    tokens_generated = []
-    start_time = time.time()
-
-    def mock_stream_gen(*args, **kwargs):
-        nonlocal tokens_generated, start_time
-
-        # Record when this generator is first called
-        start_time = time.time()
-
-        # First token takes 0.3 seconds
-        time.sleep(0.3)
-        # Record token only after it would be yielded (after timeout check)
-        yield_token = "First token"
-        yield yield_token
-        tokens_generated.append(("first", time.time() - start_time))
-
-        # Second token takes 0.2 seconds after first token
-        time.sleep(0.2)
-        yield_token = "Second token"
-        yield yield_token
-        tokens_generated.append(("second", time.time() - start_time))
-
-        # Remaining tokens come quickly
-        for i in range(3):
-            time.sleep(0.05)
-            yield_token = f"Token {i+3}"
-            yield yield_token
-            tokens_generated.append((f"token{i+3}", time.time() - start_time))
-
-        # Yield usage info at the end
-        yield Usage(completion_tokens=5, prompt_tokens=5, total_tokens=10)
-
-    monkeypatch.setattr(model, "generate_text_stream", mock_stream_gen)
-
-    # Should complete successfully with first token timeout > 0.3s and inactivity timeout > 0.2s
-    tokens_generated = []
-    stream_items = list(
-        llm_client.generate_text_stream(
-            prompt="test",
-            model=model,
-            first_token_timeout=0.5,
-            inactivity_timeout=0.3,
-        )
-    )
-
-    assert len(stream_items) == 6  # 5 tokens + usage info
-    assert len(tokens_generated) == 5  # 5 tokens were generated
-    assert tokens_generated[0][0] == "first"
-    assert tokens_generated[1][0] == "second"
-
-    # Should timeout on first token if first token timeout is too low
-    tokens_generated = []
-    with pytest.raises(LlmStreamFirstTokenTimeoutError, match="time to first token timeout"):
-        list(
-            llm_client.generate_text_stream(
-                prompt="test",
-                model=model,
-                first_token_timeout=0.2,  # Too short for first token (0.3s)
-                inactivity_timeout=0.3,
-            )
-        )
-
-    # First token should not have been generated since timeout occurred before yield
-    assert len(tokens_generated) == 0
-
-    # Should timeout on inactivity if inactivity timeout is too low
-    tokens_generated = []
-    with pytest.raises(LlmStreamInactivityTimeoutError, match="inactivity timeout"):
-        list(
-            llm_client.generate_text_stream(
-                prompt="test",
-                model=model,
-                first_token_timeout=0.5,  # Enough for first token
-                inactivity_timeout=0.1,  # Too short for second token (0.2s)
-            )
-        )
-
-    # Only first token should have been generated before timeout
-    assert len(tokens_generated) == 1
-    assert tokens_generated[0][0] == "first"
-
-
 @pytest.mark.vcr()
 def test_gemini_create_cache():
     llm_client = LlmClient()
@@ -1002,3 +808,62 @@ def test_gemini_get_cache():
     retrieved_cache = llm_client.get_cache(display_name="test_cache_get", model=model)
 
     assert original_cache == retrieved_cache
+
+
+def test_iterate_with_timeouts_success_and_timeouts():
+
+    # No delays: should yield all items
+    def gen_quick():
+        yield "x"
+        yield "y"
+
+    assert list(
+        _iterate_with_timeouts(gen_quick(), first_token_timeout=0.1, inactivity_timeout=0.1)
+    ) == ["x", "y"]
+
+    # Delay before first token: should timeout
+    def gen_slow_first():
+        time.sleep(0.2)
+        yield "x"
+
+    with pytest.raises(LlmStreamFirstTokenTimeoutError):
+        list(
+            _iterate_with_timeouts(
+                gen_slow_first(), first_token_timeout=0.1, inactivity_timeout=0.1
+            )
+        )
+
+    # Delay between tokens: should timeout on inactivity
+    def gen_slow_inactivity():
+        yield "x"
+        time.sleep(0.2)
+        yield "y"
+
+    with pytest.raises(LlmStreamInactivityTimeoutError):
+        list(
+            _iterate_with_timeouts(
+                gen_slow_inactivity(), first_token_timeout=0.1, inactivity_timeout=0.1
+            )
+        )
+
+
+def test_iterate_with_timeouts_error_and_cleanup(monkeypatch):
+    from seer.automation.agent.client import _iterate_with_timeouts
+
+    called = False
+
+    def on_cleanup():
+        nonlocal called
+        called = True
+
+    def gen_error():
+        raise RuntimeError("fail")
+        yield
+
+    with pytest.raises(RuntimeError):
+        list(
+            _iterate_with_timeouts(
+                gen_error(), first_token_timeout=0.1, inactivity_timeout=0.1, on_cleanup=on_cleanup
+            )
+        )
+    assert called
