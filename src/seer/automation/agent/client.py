@@ -108,16 +108,13 @@ def _iterate_with_timeouts(
             timeout_to_use = first_token_timeout if not first_token_received else inactivity_timeout
             try:
                 msg_type, item = q.get(timeout=timeout_to_use)
-
             except queue.Empty:
                 cancel_event.set()
                 if first_token_received:
-
                     raise LlmStreamInactivityTimeoutError(
                         f"Stream inactivity timeout after {timeout_to_use} seconds"
                     )
                 else:
-
                     raise LlmStreamFirstTokenTimeoutError(
                         f"Stream time to first token timeout after {timeout_to_use} seconds"
                     )
