@@ -1163,6 +1163,7 @@ class GeminiProvider:
                     response_modalities=["TEXT"],
                     temperature=temperature or 0.0,
                     max_output_tokens=max_tokens or 8192,
+                    thinking_config=ThinkingConfig(include_thoughts=True),
                 ),
             )
 
