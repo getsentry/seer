@@ -79,6 +79,7 @@ def create_query_from_natural_language(
         model=model,
         cache_name=cache_name,
         response_format=RelevantFieldsResponse,
+        thinking_budget=0,
         use_local_endpoint=True,
     )
 
@@ -120,6 +121,7 @@ def create_query_from_natural_language(
         model=model,
         cache_name=cache_name,
         response_format=ModelResponse,
+        thinking_budget=0,
         use_local_endpoint=True,
     )
 

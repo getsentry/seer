@@ -29,7 +29,7 @@ class TestCreateCache(unittest.TestCase):
 
         self.mock_llm_client.get_cache.assert_called_once_with(
             display_name="1_1-2-3",
-            model=GeminiProvider.model("gemini-2.0-flash-001"),
+            model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
         )
         self.mock_rpc_client.call.assert_not_called()
 
@@ -54,7 +54,7 @@ class TestCreateCache(unittest.TestCase):
 
         self.mock_llm_client.get_cache.assert_called_once_with(
             display_name="1_1-2-3",
-            model=GeminiProvider.model("gemini-2.0-flash-001"),
+            model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
         )
 
         self.mock_rpc_client.call.assert_any_call(

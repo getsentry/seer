@@ -56,7 +56,7 @@ class TestAssistedQuery:
                     sort="-count",
                 ),
                 metadata=LlmResponseMetadata(
-                    model="gemini-2.0-flash-001",
+                    model="gemini-2.5-flash-preview-04-17",
                     provider_name=LlmProviderType.GEMINI,
                     usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
                 ),
@@ -111,7 +111,7 @@ class TestAssistedQuery:
                 confidence_score=0.95,
             ),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
@@ -139,7 +139,7 @@ class TestAssistedQuery:
         first_call = LlmGenerateStructuredResponse(
             RelevantFieldsResponse(fields=["span.op", "span.description"]),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
@@ -161,7 +161,7 @@ class TestAssistedQuery:
                 confidence_score=0.95,
             ),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
@@ -228,7 +228,7 @@ class TestAssistedQuery:
         first_call_response = LlmGenerateStructuredResponse(
             RelevantFieldsResponse(fields=["span.op", "span.description"]),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),
@@ -250,7 +250,7 @@ class TestAssistedQuery:
                 confidence_score=0.95,
             ),
             metadata=LlmResponseMetadata(
-                model="gemini-2.0-flash-001",
+                model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
                 usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
             ),

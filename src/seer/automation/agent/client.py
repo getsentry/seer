@@ -27,6 +27,7 @@ from google.genai.types import (
     GenerateContentResponse,
     GoogleSearch,
     Part,
+    ThinkingConfig,
 )
 from google.genai.types import Tool as GeminiTool
 from langfuse.decorators import langfuse_context, observe
@@ -972,6 +973,7 @@ class GeminiProvider:
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
         cache_name: str | None = None,
+        thinking_budget: int | None = None,
         use_local_endpoint: bool = False,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
@@ -996,6 +998,9 @@ class GeminiProvider:
                     max_output_tokens=max_tokens or 8192,
                     response_schema=response_format,
                     cached_content=cache_name,
+                    thinking_config=(
+                        ThinkingConfig(thinking_budget=thinking_budget) if thinking_budget else None
+                    ),
                 ),
             )
             if response.parsed is not None:

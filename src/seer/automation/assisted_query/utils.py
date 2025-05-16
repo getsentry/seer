@@ -8,4 +8,4 @@ def get_cache_display_name(org_id: int, project_ids: list[int], no_values: bool 
 
 
 def get_model_provider():
-    return GeminiProvider.model("gemini-2.0-flash-001")
+    return GeminiProvider.model("gemini-2.5-flash-preview-04-17")
