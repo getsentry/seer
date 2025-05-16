@@ -133,8 +133,9 @@ class TestRepoClient:
     def test_get_valid_file_paths(self, repo_client, mock_github):
         mock_tree = MagicMock()
         mock_tree.tree = [
-            MagicMock(path="file1.py", type="blob"),
-            MagicMock(path="file2.py", type="blob"),
+            MagicMock(path="file1.py", type="blob", size=1024 * 512),
+            MagicMock(path="file2.py", type="blob", size=1024 * 1024),
+            MagicMock(path="file3.py", type="blob", size=1024 * 1024 * 20),
         ]
         mock_tree.raw_data = {"truncated": False}
         mock_github.get_repo.return_value.get_git_tree.return_value = mock_tree

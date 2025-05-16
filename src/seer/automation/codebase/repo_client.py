@@ -473,7 +473,7 @@ class RepoClient:
             if (
                 file.type == "blob"
                 and any(file.path.endswith(ext) for ext in valid_file_extensions)
-                and file.size < 1024 * 1024  # 1MB
+                and file.size <= 1024 * 1024  # 1MB
             ):
                 valid_file_paths.add(file.path)
 
