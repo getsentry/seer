@@ -937,3 +937,54 @@ class TestRepoClient:
         repo_client.repo.get_git_ref.assert_called_once_with("heads/test-branch")
         dummy_branch_ref.edit.assert_called_once_with(sha="new_commit_sha")
         assert new_commit == dummy_new_commit
+
+    def test_get_git_tree_full_paths(self, repo_client, mock_github):
+        # Simulate a repo with nested directories and files
+        # root
+        # ├── file1.py
+        # └── dir1/
+        #     ├── file2.py
+        #     └── dir2/
+        #         └── file3.py
+
+        # Mock the root tree (recursive=False)
+        root_tree = MagicMock()
+        root_tree.raw_data = {"truncated": True}
+        file1 = MagicMock(path="file1.py", type="blob", size=100)
+        dir1 = MagicMock(path="dir1", type="tree", size=None, sha="sha_dir1")
+        root_tree.tree = [file1, dir1]
+
+        # Mock dir1 tree (recursive=False)
+        dir1_tree = MagicMock()
+        dir1_tree.raw_data = {"truncated": True}
+        file2 = MagicMock(path="file2.py", type="blob", size=200)
+        dir2 = MagicMock(path="dir2", type="tree", size=None, sha="sha_dir2")
+        dir1_tree.tree = [file2, dir2]
+
+        # Mock dir2 tree (recursive=True, not truncated)
+        dir2_tree = MagicMock()
+        dir2_tree.raw_data = {"truncated": False}
+        file3 = MagicMock(path="file3.py", type="blob", size=300)
+        dir2_tree.tree = [file3]
+
+        # Setup get_git_commit and get_git_tree mocks
+        mock_github.get_repo.return_value.get_git_commit.return_value.tree.sha = "sha_root"
+
+        def get_git_tree_side_effect(sha, recursive):
+            if sha == "sha_root":
+                return root_tree
+            elif sha == "sha_dir1":
+                return dir1_tree
+            elif sha == "sha_dir2":
+                return dir2_tree
+            else:
+                raise Exception(f"Unknown sha: {sha}")
+
+        mock_github.get_repo.return_value.get_git_tree.side_effect = get_git_tree_side_effect
+
+        # Call the method under test
+        tree = repo_client.get_git_tree("test_sha")
+        # Collect all file paths
+        file_paths = sorted([item.path for item in tree.tree if item.type == "blob"])
+        # Should include all files with correct full paths
+        assert file_paths == ["dir1/dir2/file3.py", "dir1/file2.py", "file1.py"]
