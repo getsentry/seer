@@ -38,6 +38,7 @@ class PrReviewStep(CodegenStep):
     """
 
     name = "PrReviewStep"
+    request: PrReviewStepRequest
     max_retries = 2
 
     @staticmethod
@@ -54,7 +55,9 @@ class PrReviewStep(CodegenStep):
         self.logger.info("Executing Codegen - PR Review Step")
         self.context.event_manager.mark_running()
 
-        repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_PR_REVIEW)
+        repo_client = self.context.get_repo_client(
+            repo_name=self.request.repo_definition.full_name, type=RepoClientType.CODECOV_PR_REVIEW
+        )
         pr = repo_client.repo.get_pull(self.request.pr_id)
         diff_content = repo_client.get_pr_diff_content(pr.url)
 

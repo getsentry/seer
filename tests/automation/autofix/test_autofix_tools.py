@@ -1100,6 +1100,7 @@ class TestClaudeTools:
             "123": mock_codebase,
         }
         mock_state.request.repos = [mock_repo]
+        mock_state.readable_repos = [mock_repo]
 
         autofix_tools.context.state.get.return_value = mock_state
 
@@ -1563,14 +1564,17 @@ class TestExpandDocument:
         # Mock autocorrect_repo_name to return the repo name
         autofix_tools.context.autocorrect_repo_name.return_value = None
 
-        autofix_tools.context.repos = [
-            RepoDefinition(
-                provider="github",
-                owner="valid",
-                name="repo",
-                external_id="123",
-            )
-        ]
+        # Create a mock state with the valid repo
+        valid_repo = RepoDefinition(
+            provider="github",
+            owner="valid",
+            name="repo",
+            external_id="123",
+        )
+        mock_state = MagicMock()
+        mock_state.request.repos = [valid_repo]
+        mock_state.readable_repos = [valid_repo]
+        autofix_tools.context.state.get.return_value = mock_state
 
         result = autofix_tools.expand_document(file_path, repo_name)
 
