@@ -686,7 +686,7 @@ class RepoClient:
             return CompleteGitTree(tree)
 
         # Helper to hold file info with full path
-        TreeItem = namedtuple("TreeItem", ["path", "type", "size", "_orig"])
+        TreeItem = namedtuple("TreeItem", ["path", "type", "size", "orig"])
 
         def get_subtree_items(sha, parent_path=""):
             subtree = self.repo.get_git_tree(sha=sha, recursive=True)
@@ -729,7 +729,7 @@ class RepoClient:
         # by creating shallow copies with the correct path if needed
         fixed_elements = []
         for ti in all_items:
-            orig = ti._orig
+            orig = ti.orig
             # Only fix path if needed
             if getattr(orig, "path", None) != ti.path:
                 # Create a shallow copy with the correct path
