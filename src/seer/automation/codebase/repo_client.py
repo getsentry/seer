@@ -1,3 +1,4 @@
+import copy
 import functools
 import logging
 import os
@@ -5,6 +6,7 @@ import shutil
 import tarfile
 import tempfile
 import textwrap
+from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 from typing import Any, Dict, List, Literal
@@ -683,61 +685,67 @@ class RepoClient:
         if not tree.raw_data.get("truncated", False):
             return CompleteGitTree(tree)
 
-        complete_tree = CompleteGitTree()
-        root_tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=False)
+        # Helper to hold file info with full path
+        TreeItem = namedtuple("TreeItem", ["path", "type", "size", "_orig"])
 
+        def get_subtree_items(sha, parent_path=""):
+            subtree = self.repo.get_git_tree(sha=sha, recursive=True)
+            if not subtree.raw_data.get("truncated", False):
+                return [
+                    TreeItem(
+                        os.path.join(parent_path, item.path) if parent_path else item.path,
+                        item.type,
+                        getattr(item, "size", None),
+                        item,
+                    )
+                    for item in subtree.tree
+                ]
+            # If still truncated, fall back to recursive=False and recurse into subtrees
+            subtree = self.repo.get_git_tree(sha=sha, recursive=False)
+            items = []
+            for item in subtree.tree:
+                full_path = os.path.join(parent_path, item.path) if parent_path else item.path
+                if item.type == "tree":
+                    items.extend(get_subtree_items(item.sha, full_path))
+                    # Also add the directory itself
+                    items.append(TreeItem(full_path, "tree", None, item))
+                else:
+                    items.append(TreeItem(full_path, item.type, getattr(item, "size", None), item))
+            return items
+
+        root_tree = self.repo.get_git_tree(sha=commit.tree.sha, recursive=False)
+        all_items = [
+            TreeItem(item.path, item.type, getattr(item, "size", None), item)
+            for item in root_tree.tree
+        ]
+        tree_items = [item for item in root_tree.tree if item.type == "tree"]
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor() as executor:
+            for subitems in executor.map(lambda i: get_subtree_items(i.sha, i.path), tree_items):
+                all_items.extend(subitems)
+
+        # Now, convert TreeItems back to GitTreeElement with correct full path
+        # by creating shallow copies with the correct path if needed
+        fixed_elements = []
+        for ti in all_items:
+            orig = ti._orig
+            # Only fix path if needed
+            if getattr(orig, "path", None) != ti.path:
+                # Create a shallow copy with the correct path
+                fixed = copy.copy(orig)
+                object.__setattr__(fixed, "path", ti.path)
+                fixed_elements.append(fixed)
+            else:
+                fixed_elements.append(orig)
+
+        complete_tree = CompleteGitTree()
+        for item in fixed_elements:
+            complete_tree.add_item(item)
         for key, value in root_tree.raw_data.items():
             if key != "tree" and key != "truncated":
                 complete_tree.raw_data[key] = value
-
-        for item in root_tree.tree:
-            complete_tree.add_item(item)
-
-        tree_items = [item for item in root_tree.tree if item.type == "tree"]
-        with ThreadPoolExecutor() as executor:
-            subtree_results = []
-            for item in tree_items:
-                subtree_results.append(executor.submit(self._get_git_subtree, item.sha))
-
-            for future in subtree_results:
-                subtree_items = future.result()
-                complete_tree.add_items(subtree_items)
-
         return complete_tree
-
-    def _get_git_subtree(self, sha: str) -> list:
-        """
-        Process a subtree and return all its items for parallel execution.
-
-        Args:
-            sha: The SHA of the subtree
-
-        Returns:
-            A list of all tree items from this subtree and its nested subtrees
-        """
-        items = []
-        subtree = self.repo.get_git_tree(sha=sha, recursive=True)
-
-        if not subtree.raw_data.get("truncated", False):
-            return subtree.tree
-
-        non_recursive_subtree = self.repo.get_git_tree(sha=sha, recursive=False)
-
-        nested_tree_items = [item for item in non_recursive_subtree.tree if item.type == "tree"]
-        non_tree_items = [item for item in non_recursive_subtree.tree if item.type != "tree"]
-
-        items.extend(non_tree_items)
-
-        if nested_tree_items:
-            with ThreadPoolExecutor() as executor:
-                subtree_futures = [
-                    executor.submit(self._get_git_subtree, item.sha) for item in nested_tree_items
-                ]
-
-                for future in subtree_futures:
-                    items.extend(future.result())
-
-        return items
 
     def process_one_file_for_git_commit(
         self, *, branch_ref: str, patch: FilePatch | None = None, change: FileChange | None = None
