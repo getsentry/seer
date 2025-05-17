@@ -11,7 +11,7 @@ from seer.automation.autofix.tools.ripgrep_search import (
 
 
 class DummyCompletedProcess:
-    def __init__(self, returncode, stdout="", stderr=""):
+    def __init__(self, returncode, stdout=b"", stderr=b""):
         self.returncode = returncode
         self.stdout = stdout
         self.stderr = stderr
@@ -20,11 +20,11 @@ class DummyCompletedProcess:
 def test_run_ripgrep_in_repo_success(monkeypatch):
     captured = {}
 
-    def fake_run(cmd, cwd, shell, stdout, stderr, text, timeout):
+    def fake_run(cmd, cwd, shell, stdout, stderr, timeout):
         captured["cmd"] = cmd
         captured["cwd"] = cwd
         # Simulate one match line
-        return DummyCompletedProcess(returncode=0, stdout=f"{cwd}/file.txt:1:hello\n")
+        return DummyCompletedProcess(returncode=0, stdout=f"{cwd}/file.txt:1:hello\n".encode())
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -36,7 +36,7 @@ def test_run_ripgrep_in_repo_success(monkeypatch):
 
 
 def test_run_ripgrep_in_repo_no_results(monkeypatch):
-    def fake_run(cmd, cwd, shell, stdout, stderr, text, timeout):
+    def fake_run(cmd, cwd, shell, stdout, stderr, timeout):
         return DummyCompletedProcess(returncode=1)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -46,8 +46,8 @@ def test_run_ripgrep_in_repo_no_results(monkeypatch):
 
 
 def test_run_ripgrep_in_repo_error_exit_code(monkeypatch):
-    def fake_run(cmd, cwd, shell, stdout, stderr, text, timeout):
-        return DummyCompletedProcess(returncode=2, stderr="bad pattern")
+    def fake_run(cmd, cwd, shell, stdout, stderr, timeout):
+        return DummyCompletedProcess(returncode=2, stderr=b"bad pattern")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -59,7 +59,7 @@ def test_run_ripgrep_in_repo_error_exit_code(monkeypatch):
 
 
 def test_run_ripgrep_in_repo_timeout(monkeypatch):
-    def fake_run(cmd, cwd, shell, stdout, stderr, text, timeout):
+    def fake_run(cmd, cwd, shell, stdout, stderr, timeout):
         raise subprocess.TimeoutExpired(cmd, timeout)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -72,9 +72,9 @@ def test_run_ripgrep_in_repo_timeout(monkeypatch):
 def test_long_line_truncation(monkeypatch):
     # Create a single line exceeding max line length
     long_line = "A" * (MAX_RIPGREP_LINE_CHARACTER_LENGTH + 10)
-    expected_stdout = long_line + "\n"
+    expected_stdout = (long_line + "\n").encode()
 
-    def fake_run(cmd, cwd, shell, stdout, stderr, text, timeout):
+    def fake_run(cmd, cwd, shell, stdout, stderr, timeout):
         # Return our long stdout regardless of PIPE args
         return DummyCompletedProcess(returncode=0, stdout=expected_stdout)
 
@@ -88,9 +88,9 @@ def test_total_output_truncation(monkeypatch):
     # Generate output exceeding total results character limit
     line = "file.txt:1:match\n"
     repeat = (TOTAL_RIPGREP_RESULTS_CHARACTER_LENGTH // len(line)) + 10
-    expected_stdout = line * repeat
+    expected_stdout = (line * repeat).encode()
 
-    def fake_run(cmd, cwd, shell, stdout, stderr, text, timeout):
+    def fake_run(cmd, cwd, shell, stdout, stderr, timeout):
         # Return our large stdout regardless of args
         return DummyCompletedProcess(returncode=0, stdout=expected_stdout)
 
