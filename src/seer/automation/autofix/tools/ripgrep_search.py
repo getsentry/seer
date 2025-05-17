@@ -25,14 +25,13 @@ def run_ripgrep_in_repo(
             shell=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
             timeout=timeout,
         )
 
         # ripgrep returns 1 when it finds *nothing* (not an error),
         # >1 for real errors (bad pattern, etc.)
         if result.returncode not in (0, 1):
-            stderr = result.stderr.strip()
+            stderr = result.stderr.decode('utf-8', errors='replace').strip()
             if "regex parse error" in stderr and "--fixed-strings" not in cmd:
                 # try again with fixed strings on a regex parse error
                 cmd.insert(1, "--fixed-strings")
@@ -41,7 +40,7 @@ def run_ripgrep_in_repo(
                 f"Ran ripgrep with command: `{prepared_cmd}`\n\nripgrep Error (exit {result.returncode}):\n{stderr}"
             )
 
-        output = result.stdout
+        output = result.stdout.decode('utf-8', errors='replace')
 
         if result.returncode == 1 or not output:
             try:
