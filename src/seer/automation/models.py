@@ -1156,8 +1156,8 @@ class Hunk(BaseModel):
 
 def annotate_hunks(hunks: list[Hunk]) -> list[str]:
     """
-    Hunks annotated with line numbers for the source and target, like you see in GitHub.
-    Join via `"\\n\\n"` to get the full annotated patch.
+    Hunks annotated with line numbers for the source and target.
+    Join via `"\\n\\n"` to get the full annotated patch, like you see in GitHub.
     """
     if not hunks:
         return []

@@ -6,7 +6,7 @@ from typing import Any, Literal, NotRequired, TypedDict
 from pydantic import BaseModel, ConfigDict, model_serializer
 from pydantic_xml import attr
 
-from seer.automation.models import FilePatch, Hunk, PromptXmlModel, RepoDefinition
+from seer.automation.models import FilePatch, Hunk, PromptXmlModel, RepoDefinition, annotate_hunks
 
 
 class DocumentPromptXml(PromptXmlModel, tag="document", skip_empty=True):
@@ -108,7 +108,8 @@ class PrFile(BaseModel):
     status: Literal["added", "removed", "modified", "renamed", "copied", "changed", "unchanged"]
     changes: int
     sha: str
-    previous_filename: str | None = None
+    previous_filename: str
+    repo_full_name: str
 
     @cached_property
     def hunks(self) -> list[Hunk]:
@@ -125,6 +126,40 @@ class PrFile(BaseModel):
             for idx, (hunk_start, hunk_end) in enumerate(hunk_ranges)
             if start_line <= hunk_end and hunk_start <= end_line
         ]
+
+    def should_show_hunks(self) -> bool:
+        if self.status == "removed":
+            return False
+        return self.changes > 0
+
+    def format_hunks(self) -> str:
+        return "\n\n".join(annotate_hunks(self.hunks))
+
+    def format(self) -> str:
+        tag_start = f"<file><filename>{self.filename}</filename>"
+
+        if self.status == "renamed":
+            title = f"File {self.previous_filename} was renamed to {self.filename}"
+        elif self.status == "removed":
+            title = f"File {self.filename} was removed"
+        else:
+            title = f"Here are the changes made to file {self.filename}"
+        repo_name_addendum = f" in repo {self.repo_full_name}" if self.repo_full_name else ""
+        title = title + repo_name_addendum
+
+        if self.should_show_hunks():
+            formatted_hunks = self.format_hunks()
+        else:
+            formatted_hunks = ""
+
+        tag_end = "</file>"
+
+        return "\n\n".join((tag_start, title, formatted_hunks, tag_end))
+
+
+def format_diff(pr_files: list[PrFile]) -> str:
+    body = "\n\n".join(pr_file.format() for pr_file in pr_files)
+    return f"<diff>\n\n{body}\n\n</diff>"
 
 
 # Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py

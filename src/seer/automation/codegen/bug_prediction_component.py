@@ -9,6 +9,7 @@ from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.autofix.prompts import format_repo_prompt
 from seer.automation.autofix.tools.tools import BaseTools
+from seer.automation.codebase.models import format_diff
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
@@ -35,7 +36,14 @@ class FilterFilesComponent(BaseComponent[FilterFilesRequest, FilterFilesOutput])
     def invoke(
         self, request: FilterFilesRequest, llm_client: LlmClient = injected
     ) -> FilterFilesOutput:
-        if len(request.pr_files) <= request.num_files_desired:
+        pr_files_filterable = [
+            pr_file for pr_file in request.pr_files if pr_file.should_show_hunks()
+        ]
+        pr_files_not_filterable = [
+            pr_file for pr_file in request.pr_files if not pr_file.should_show_hunks()
+        ]  # We can include these basically for free as context
+
+        if len(pr_files_filterable) <= request.num_files_desired:
             # In this case, we could still filter out inconsequential files, e.g., test files.
             # Choosing to leave them in b/c they may be useful context for the draft agent.
             # Can eval this choice to see if it causes the draft agent to under-scrutinize files
@@ -44,15 +52,14 @@ class FilterFilesComponent(BaseComponent[FilterFilesRequest, FilterFilesOutput])
 
         if request.shuffle_files:
             # Avoid bias for files that are near the top of the list, usually alphabetical.
-            pr_files = request.pr_files.copy()
-            random.Random(42).shuffle(pr_files)
+            random.Random(42).shuffle(pr_files_filterable)
 
-        filenames = tuple(pr_file.filename for pr_file in pr_files)
+        filenames = tuple(pr_file.filename for pr_file in pr_files_filterable)
         FilenameFromThisPR: TypeAlias = Literal[filenames]  # type: ignore[valid-type]
 
         response = llm_client.generate_structured(
-            prompt=BugPredictionPrompts.format_file_filter_prompt(
-                pr_files, num_files_desired=request.num_files_desired
+            prompt=BugPredictionPrompts.format_prompt_file_filter(
+                pr_files_filterable, num_files_desired=request.num_files_desired
             ),
             model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=list[FilenameFromThisPR],
@@ -60,17 +67,17 @@ class FilterFilesComponent(BaseComponent[FilterFilesRequest, FilterFilesOutput])
 
         if response.parsed is None:
             self.logger.warning(
-                "Failed to filter files intelligently. Picking arbitrarily.",
+                "Failed to filter files intelligently.",
             )
-            pr_files_picked = pr_files[: request.num_files_desired]
+            pr_files_picked = pr_files_filterable
         else:
             filenames_picked = response.parsed
             pr_files_picked = [
-                pr_file for pr_file in pr_files if pr_file.filename in filenames_picked
+                pr_file for pr_file in pr_files_filterable if pr_file.filename in filenames_picked
             ]
-            pr_files_picked = pr_files_picked[: request.num_files_desired]
 
-        return FilterFilesOutput(pr_files=pr_files_picked)
+        pr_files_picked = pr_files_picked[: request.num_files_desired]
+        return FilterFilesOutput(pr_files=pr_files_picked + pr_files_not_filterable)
 
 
 class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutput]):
@@ -126,11 +133,8 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
         langfuse_parent_trace_id = langfuse_context.get_current_trace_id()
         langfuse_parent_observation_id = langfuse_context.get_current_observation_id()
 
-        repos_str = format_repo_prompt(readable_repos=[self.context.repo])
-        # TODO(kddubey): change to readable_repos=self.context.state.get().readable_repos
-        diff = BugPredictionPrompts.format_diff(
-            pr_files=request.pr_files, repo_full_name=request.repo_full_name
-        )
+        repos_str = format_repo_prompt(readable_repos=self.context.state.get().readable_repos)
+        diff = format_diff(pr_files=request.pr_files)
 
         self.logger.info(f"Follow along at {langfuse_context.get_current_trace_url()}")
 
@@ -140,7 +144,9 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
             hypotheses_unstructured = agent.run(
                 run_config=RunConfig(
                     system_prompt=BugPredictionPrompts.format_system_msg(),
-                    prompt=BugPredictionPrompts.format_prompt(repos_str=repos_str, diff=diff),
+                    prompt=BugPredictionPrompts.format_prompt_draft_hypotheses(
+                        repos_str=repos_str, diff=diff
+                    ),
                     max_iterations=32,
                     model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     temperature=0.0,

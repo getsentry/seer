@@ -149,6 +149,8 @@ class RelevantWarningsStep(CodegenStep):
                 status=file.status,
                 changes=file.changes,
                 sha=file.sha,
+                previous_filename=file.previous_filename,
+                repo_full_name=self.request.repo.full_name,
             )
             for file in pr_files
             if file.patch
