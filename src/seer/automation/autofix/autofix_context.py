@@ -176,9 +176,14 @@ class AutofixContext(PipelineContext):
             logger.warning(f"Invalid commit SHA provided: {commit_sha}. Error: {e}")
             return None
 
-    def autocorrect_file_path(self, path: str, repo_name: str) -> str | None:
+    def autocorrect_file_path(self, path: str, repo_name: str, files_only: bool = False) -> str | None:
         """
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
+        
+        Args:
+            path: The path to autocorrect
+            repo_name: The name of the repository to use for validation
+            files_only: If True, only return valid file paths, not directory paths
         """
         repo_client = self.get_repo_client(repo_name=repo_name)
         all_files = repo_client.get_valid_file_paths()
@@ -191,7 +196,7 @@ class AutofixContext(PipelineContext):
             if p.endswith(normalized_path):
                 # is a valid file path
                 return p
-            if p.startswith(normalized_path):
+            if not files_only and p.startswith(normalized_path):
                 # is a valid directory path
                 return normalized_path
 
