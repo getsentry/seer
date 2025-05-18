@@ -13,6 +13,7 @@ from seer.automation.codegen.bug_prediction_step import BugPredictionStep
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     BugPredictorHypothesis,
+    BugPredictorLocation,
     BugPredictorOutput,
     BugPredictorRequest,
     FilterFilesOutput,
@@ -169,13 +170,23 @@ class TestBugPredictorComponent:
     @pytest.fixture
     def mock_hypotheses(self):
         return [
-            BugPredictorHypothesis(content="Hypothesis 1"),
-            BugPredictorHypothesis(content="Hypothesis 2"),
+            BugPredictorHypothesis(
+                content="Hypothesis 1",
+                location=BugPredictorLocation(
+                    filename="src/main.py", start_line_num=1, end_line_num=2
+                ),
+            ),
+            BugPredictorHypothesis(
+                content="Hypothesis 2",
+                location=BugPredictorLocation(
+                    filename="src/utils.py", start_line_num=3, end_line_num=4
+                ),
+            ),
         ]
 
     @pytest.fixture
     def mock_hypotheses_unstructured(self):
-        return "Some hypotheses and questions to answer."
+        return "Some bug hypotheses, locations, and further questions to answer."
 
     @pytest.fixture
     def mock_followup_prefix(self):
@@ -285,7 +296,14 @@ def test_bug_prediction_step_invoke(
     bug_predictor_followups = ["Potential bug: Off-by-one error in array access"]
     mock_invoke_bug_predictor_component.return_value = BugPredictorOutput(
         hypotheses_unstructured="Hypothesis text",
-        hypotheses=[BugPredictorHypothesis(content="Hypothesis content")],
+        hypotheses=[
+            BugPredictorHypothesis(
+                content="Hypothesis content",
+                location=BugPredictorLocation(
+                    filename="src/main.py", start_line_num=1, end_line_num=2
+                ),
+            )
+        ],
         followups=bug_predictor_followups,
     )
 

@@ -483,7 +483,7 @@ class BugPredictionPrompts:
 
             We need you to narrow down the list of files we want to analyze for finding bugs.
             Return the top {num_files_desired} unique files we should analyze.
-            We don't care to predict bugs for code that won't be run in production, e.g., test files. So please filter out test files. We want to predict bugs for files that might contain error-prone, untested code that could cause a production crash.
+            We don't care to predict bugs for code that won't be run in production, e.g., test files. So please filter out test files. We want to predict bugs for files that might contain error-prone, untested code that could cause a crash in production.
             For context, this is just a preprocessing step. You'll have the chance to do an extensive code search and analysis of this code change later. For now, we just want you to filter down the list of files to a more manageable number."""
         ).format(
             diff=format_diff(pr_files),
@@ -499,7 +499,10 @@ class BugPredictionPrompts:
 
             It is important that you determine if the code change is making new assumptions.
             Feel free to hypothesize about a few things that might cause the code to crash.
-            Also, for each potential bug you find, state what you need to know to investigate whether the code change is correct or incorrect.
+            Also, for each potential bug you find, clearly state:
+              - Important things you need to investigate to determine whether the code change is correct or incorrect
+              - The full file path and line range in the codebase indicating where the potential production-crashing bug is, e.g., src/some/path/to/file_with_bug.py:239~242.
+                This location should be a file that would be run in production.
 
             <available_repos>
             {repos_str}
@@ -525,7 +528,7 @@ class BugPredictionPrompts:
             {hypothesis_unstructured}
             </what_you_said>
 
-            Please separate this information into a list of potential bugs. If some bugs seem inter-dependent, make sure to put them in the same element of the list.
+            Please separate this information into a list of potential bugs. If some bugs seem inter-dependent, consider them the same bug.
             """
         ).format(
             hypothesis_unstructured=hypothesis_unstructured,
