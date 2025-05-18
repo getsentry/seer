@@ -212,7 +212,7 @@ class BaseTools:
             dir_path = self._attempt_fix_path(file_path, repo_name, files_only=False)
             if dir_path and dir_path == file_path.lstrip("./").lstrip("/"):
                 return f"Error: The path `{file_path}` is a directory, not a file. Use the tree tool to view its contents."
-            
+
             other_paths = self._get_potential_abs_paths(file_path, repo_name)
             return f"Error: The file path `{file_path}` doesn't exist in `{repo_name}`.\n{other_paths}".strip()
         file_path = valid_file_path
@@ -345,7 +345,7 @@ class BaseTools:
     def _attempt_fix_path(self, path: str, repo_name: str, files_only: bool = False) -> str | None:
         """
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
-        
+
         Args:
             path: The path to autocorrect
             repo_name: The name of the repository to use for validation
