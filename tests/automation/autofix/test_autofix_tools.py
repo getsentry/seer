@@ -1,5 +1,5 @@
 from concurrent.futures import Future
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 import pytest
 
@@ -1548,7 +1548,12 @@ class TestExpandDocument:
 
         # Verify behavior
         autofix_tools.context.autocorrect_repo_name.assert_called_once_with(repo_name)
-        autofix_tools._attempt_fix_path.assert_called_once_with(invalid_path, repo_name)
+        autofix_tools._attempt_fix_path.assert_has_calls(
+            [
+                call(invalid_path, repo_name, files_only=True),
+                call(invalid_path, repo_name, files_only=False),
+            ]
+        )
 
         # Assert that an error message is returned
         assert "Error: The file path" in result
