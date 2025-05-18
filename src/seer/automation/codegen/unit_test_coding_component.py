@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOutput]):
     context: CodegenContext
 
+    def _get_client_type(self, is_codecov_request: bool) -> RepoClientType:
+        """Helper method to determine the appropriate repo client type based on the request type."""
+        return (
+            RepoClientType.CODECOV_PR_REVIEW
+            if is_codecov_request
+            else RepoClientType.CODECOV_UNIT_TEST
+        )
+
     @observe(name="Generate unit tests")
     @ai_track(description="Generate unit tests")
     @inject
@@ -37,7 +45,10 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
         is_codecov_request: bool,
         llm_client: LlmClient = injected,
     ) -> CodeUnitTestOutput | None:
-        with BaseTools(self.context, repo_client_type=RepoClientType.CODECOV_UNIT_TEST) as tools:
+        with BaseTools(
+            self.context,
+            repo_client_type=self._get_client_type(is_codecov_request),
+        ) as tools:
             agent = LlmAgent(
                 tools=tools.get_tools(),
                 config=AgentConfig(interactive=False),
@@ -100,13 +111,9 @@ class UnitTestCodingComponent(BaseComponent[CodeUnitTestRequest, CodeUnitTestOut
         if not coding_output.tasks:
             raise ValueError("No tasks found in coding output")
         file_changes: list[FileChange] = []
-        client_type = (
-            RepoClientType.CODECOV_PR_REVIEW
-            if is_codecov_request
-            else RepoClientType.CODECOV_UNIT_TEST
-        )
+        client_type = self._get_client_type(is_codecov_request)
         for task in coding_output.tasks:
-            repo_client = self.context.get_repo_client(task.repo_name, type=client_type)
+            repo_client = self.context.get_repo_client(repo_name=task.repo_name, type=client_type)
             if task.type == "file_change":
                 file_content, _ = repo_client.get_file_content(task.file_path)
                 if not file_content:

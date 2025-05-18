@@ -38,6 +38,7 @@ class UnittestStep(CodegenStep):
     """
 
     name = "UnittestStep"
+    request: UnittestStepRequest
     max_retries = 2
 
     @staticmethod
@@ -59,7 +60,9 @@ class UnittestStep(CodegenStep):
             else RepoClientType.CODECOV_UNIT_TEST  # CODECOV_UNIT_TEST is the autofix app
         )
 
-        repo_client = self.context.get_repo_client(type=client_type)
+        repo_client = self.context.get_repo_client(
+            repo_name=self.request.repo_definition.full_name, type=client_type
+        )
         pr = repo_client.repo.get_pull(self.request.pr_id)
         diff_content = repo_client.get_pr_diff_content(pr.url)
 

@@ -35,6 +35,7 @@ class RootCauseAnalysisItem(BaseModel):
     description: str | None = (
         None  # TODO: this is for backwards compatability with old runs, should remove soon
     )
+    reproduction_urls: list[str | None] = []
 
     def to_markdown_string(self) -> str:
         markdown = "# Root Cause\n\n"

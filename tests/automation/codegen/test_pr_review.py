@@ -1,8 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
-from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
+from seer.automation.codegen.models import CodePrReviewRequest
 from seer.automation.codegen.pr_review_step import PrReviewStep, PrReviewStepRequest
 from seer.automation.models import RepoDefinition
 

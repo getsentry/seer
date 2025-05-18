@@ -138,7 +138,9 @@ class RelevantWarningsStep(CodegenStep):
         diagnostics = []
 
         # 1. Read the PR.
-        repo_client = self.context.get_repo_client(type=RepoClientType.READ)
+        repo_client = self.context.get_repo_client(
+            repo_name=self.request.repo.full_name, type=RepoClientType.READ
+        )
         pr_files = repo_client.repo.get_pull(self.request.pr_id).get_files()
         pr_files = [
             PrFile(

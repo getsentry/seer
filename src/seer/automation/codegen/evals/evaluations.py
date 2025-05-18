@@ -46,14 +46,6 @@ def sync_run_evaluation_on_item(
         type=DbStateRunTypes.RELEVANT_WARNINGS,
     )
 
-    # Mock parts of the pipeline depending on the extra info saved in the EvalItem.
-    # If it's not mocked we will reach out to GitHub at evaluation time.
-    if item.pr_files:
-        # Mock the repo client to return the pr_files
-        mock_repo_client = mock.Mock()
-        mock_repo_client.repo.get_pull.return_value.get_files.return_value = item.pr_files
-        relevant_warnings_step.context.get_repo_client = mock.Mock(return_value=mock_repo_client)  # type: ignore [method-assign]
-
     # Mock FilterIssuesComponent to return the issues
     # Ignoring the filename_to_issues part of the output.
     mock.patch(
@@ -100,8 +92,12 @@ def evaluate_suggestions(
 
     <reasoning_rules>
     When evaluating the suggested bugs, consider:
-    1. is the suggestion a _good match_ for an actual bug? Focus on the core concepts that cause the bug.
-    2. is this suggestion not accurately describing the actual bug it was matched to?
+    1. is the suggestion a _good match_ for an actual bug?
+      - Focus on matching the content of the suggestion with the actual bug.
+    2. is this suggestion accurately describing the actual bug it was matched to?
+      - Focus on the core concepts that cause the bug.
+      - The suggestion should lead a developer reading it to be able to find the actual bug.
+      - If the content is not related to an actual bug, the suggestion should not be matched.
     </reasoning_rules>
 
     <output_format>

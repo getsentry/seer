@@ -356,8 +356,14 @@ class TestAutofixEventManager:
     def test_send_solution_result(self, event_manager, state):
         # Create a mock solution output
         mock_solution_output = next(generate(SolutionOutput))
+        mock_code_urls = []
+        for step in mock_solution_output.solution_steps:
+            if step.relevant_code_file:
+                mock_code_urls.append(next(generate(str)))
+            else:
+                mock_code_urls.append(None)
 
-        event_manager.send_solution_result(mock_solution_output)
+        event_manager.send_solution_result(mock_solution_output, mock_code_urls)
 
         state_obj = state.get()
         # Check solution processing step
@@ -379,7 +385,14 @@ class TestAutofixEventManager:
         )
         assert solution_step is not None
         assert solution_step.status == AutofixStatus.COMPLETED
-        assert len(solution_step.solution) > 0
+        assert len(solution_step.solution) == len(mock_solution_output.solution_steps)
+        for i, timeline_item in enumerate(solution_step.solution):
+            if i < len(mock_solution_output.solution_steps):
+                assert timeline_item.title == mock_solution_output.solution_steps[i].title
+                if not mock_solution_output.solution_steps[i].relevant_code_file:
+                    assert mock_code_urls[i] is None
+                else:
+                    assert timeline_item.relevant_code_file.url == mock_code_urls[i]
         assert state_obj.status == AutofixStatus.NEED_MORE_INFORMATION
 
     def test_set_selected_solution(self, event_manager, state):
@@ -392,7 +405,7 @@ class TestAutofixEventManager:
             ]
         )
 
-        event_manager.send_solution_result(SolutionOutput(solution_steps=[], summary=""))
+        event_manager.send_solution_result(SolutionOutput(solution_steps=[], summary=""), [])
         event_manager.set_selected_solution(payload)
 
         state_obj = state.get()

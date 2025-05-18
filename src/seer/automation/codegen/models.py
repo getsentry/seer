@@ -112,8 +112,15 @@ class CodeUnitTestOutput(BaseComponentOutput):
 
 class CodegenBaseRequest(BaseModel):
     repo: RepoDefinition
-    pr_id: int  # The PR number
+    "The repo containing the code/PR to analyze"
+
+    pr_id: int
+    "The PR number"
+
     codecov_status: dict[str, str] | None = None
+
+    more_readable_repos: list[RepoDefinition] = Field(default_factory=list)
+    "A list of other repos that are related to the repo. Useful for code search."
 
 
 class CodegenUnitTestsRequest(CodegenBaseRequest):
@@ -130,6 +137,17 @@ class CodegenPrClosedRequest(CodegenBaseRequest):
 
 class CodegenContinuation(CodegenState):
     request: CodegenBaseRequest
+
+    @property
+    def readable_repos(self) -> list[RepoDefinition]:
+        """
+        All readable repos, including the repo containing the code/PR to analyze.
+        """
+        return [self.request.repo] + self.request.more_readable_repos
+
+    @property
+    def unreadable_repos(self) -> list[RepoDefinition]:
+        return []
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()
@@ -221,19 +239,6 @@ class CodegenRelevantWarningsRequest(CodegenBaseRequest):
 
 class CodegenRelevantWarningsResponse(CodegenBaseResponse):
     pass
-
-
-class CodegenRelevantWarningsStateRequest(BaseModel):
-    run_id: int
-
-
-class CodegenRelevantWarningsStateResponse(BaseModel):
-    run_id: int
-    status: CodegenStatus
-    relevant_warning_results: list[RelevantWarningResult]
-    triggered_at: datetime.datetime
-    updated_at: datetime.datetime
-    completed_at: datetime.datetime | None = None
 
 
 class FilterWarningsRequest(BaseComponentRequest):
@@ -368,16 +373,9 @@ class BugPredictorOutput(BaseComponentOutput):
 
 
 class CodecovTaskRequest(BaseModel):
-    data: (
-        CodegenUnitTestsRequest
-        | CodegenPrReviewRequest
-        | CodegenRelevantWarningsRequest
-        | CodegenPrClosedRequest
-    )
+    data: CodegenUnitTestsRequest | CodegenPrReviewRequest | CodegenPrClosedRequest
     external_owner_id: str
-    request_type: Literal[
-        "unit-tests", "pr-review", "relevant-warnings", "pr-closed", "retry-unit-tests"
-    ]
+    request_type: Literal["unit-tests", "pr-review", "pr-closed", "retry-unit-tests"]
 
 
 class UnitTestRunMemory(BaseModel):

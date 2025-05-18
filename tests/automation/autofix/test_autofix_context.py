@@ -339,7 +339,7 @@ class TestAutofixContext(unittest.TestCase):
         assert self.autofix_context.autocorrect_repo_name("short") == "org/short"
         assert self.autofix_context.autocorrect_repo_name("org") == "org/short"
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_process_stacktrace_paths_unknown_object_exception(self, mock_RepoClient):
         mock_RepoClient.from_repo_definition.side_effect = UnknownObjectException(status=404)
         mock_RepoClient.supported_providers = ["github"]
@@ -366,7 +366,7 @@ class TestAutofixContext(unittest.TestCase):
             should_completely_error=True,
         )
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_process_stacktrace_paths_ignores_unsupported_providers(self, mock_RepoClient):
         mock_RepoClient.from_repo_definition.side_effect = UnknownObjectException(status=404)
         mock_RepoClient.supported_providers = ["github"]
@@ -408,7 +408,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         self.autofix_context = AutofixContext(self.state, MagicMock())
         self.autofix_context.get_org_slug = MagicMock(return_value="slug")
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_commit_changes(self, mock_RepoClient):
         mock_repo_client = MagicMock()
         mock_branch_ref = MagicMock(ref="test_branch")
@@ -487,7 +487,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         if changes_step.changes[0].pull_request:
             self.assertEqual(changes_step.changes[0].pull_request.pr_number, 1)
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_commit_changes_with_draft_branch_name(self, mock_RepoClient):
         """Test that draft_branch_name is used when provided."""
         mock_repo_client = MagicMock()
@@ -554,7 +554,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
         changes_step = cast(ChangesStep, state.find_step(key="changes"))
         self.assertEqual(changes_step.changes[0].branch_name, "draft_test_branch")
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_commit_changes_skip_branch_creation(self, mock_RepoClient):
         """Test that branch creation is skipped when branch_name already exists."""
         mock_repo_client = MagicMock()
@@ -665,7 +665,7 @@ class TestGetFileContents(unittest.TestCase):
                 ),
             }
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_single_repo(self, mock_RepoClient):
         # Setup
         mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
@@ -680,7 +680,7 @@ class TestGetFileContents(unittest.TestCase):
         self.assertEqual(result, "file content")
         self.mock_repo_client.get_file_content.assert_called_once_with("test.py")
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_multiple_repos_with_name(self, mock_RepoClient):
         # Setup
         mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
@@ -708,7 +708,7 @@ class TestGetFileContents(unittest.TestCase):
         self.assertEqual(result, "file content")
         self.mock_repo_client.get_file_content.assert_called_once_with("test.py")
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_multiple_repos_no_name(self, mock_RepoClient):
         # Setup
         mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
@@ -737,7 +737,7 @@ class TestGetFileContents(unittest.TestCase):
             str(context.exception), "Repo name is required when there are multiple repos."
         )
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_repo_not_found(self, mock_RepoClient):
         # Setup
         mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
@@ -766,7 +766,7 @@ class TestGetFileContents(unittest.TestCase):
             str(context.exception), "Repo 'nonexistent/repo' not found in the list of repos."
         )
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_with_local_changes(self, mock_RepoClient):
         # Setup
         mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
@@ -796,7 +796,7 @@ class TestGetFileContents(unittest.TestCase):
             result = self.autofix_context.get_file_contents("test.py")
             self.assertEqual(result, "modified file content")
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_ignore_local_changes(self, mock_RepoClient):
         # Setup
         mock_RepoClient.from_repo_definition.return_value = self.mock_repo_client
@@ -827,7 +827,7 @@ class TestGetFileContents(unittest.TestCase):
         # FileChange.apply should not be called, and original content should be returned
         self.assertEqual(result, "file content")
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_file_not_found(self, mock_RepoClient):
         # Setup
         mock_client = MagicMock()
@@ -847,7 +847,7 @@ class TestGetFileContents(unittest.TestCase):
         self.assertIsNone(result)
         mock_client.get_file_content.assert_called_once_with("non_existent_file.py")
 
-    @patch("seer.automation.autofix.autofix_context.RepoClient")
+    @patch("seer.automation.codebase.repo_client.RepoClient")
     def test_get_file_contents_missing_repo_changes(self, mock_RepoClient):
         # Setup
         mock_client = MagicMock()

@@ -41,6 +41,7 @@ class TestSummarizeTrace:
         )
 
     @pytest.mark.vcr()
+    @pytest.mark.skip(reason="Skipping test due to INC-1163")
     def test_summarize_trace_success(self, sample_request):
         res = summarize_trace(sample_request)
 
@@ -80,6 +81,13 @@ class TestSummarizeTrace:
 
         mock_llm_client.generate_structured.side_effect = ClientError(
             code=400,
+            response_json={
+                "error": {
+                    "code": 400,
+                    "message": "The input token count (2000000) exceeds the maximum number of tokens allowed (1000000).",
+                    "status": "INVALID_ARGUMENT",
+                }
+            },
             response=res,
         )
 

@@ -280,4 +280,6 @@ class TestUnittestStep(unittest.TestCase):
         step.context = mock_context
 
         step.invoke()
-        mock_context.get_repo_client.assert_called_once_with(type=RepoClientType.CODECOV_PR_REVIEW)
+        mock_context.get_repo_client.assert_called_once_with(
+            repo_name=request.repo_definition.full_name, type=RepoClientType.CODECOV_PR_REVIEW
+        )
