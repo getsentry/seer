@@ -85,10 +85,25 @@ def collect_all_repos_for_backfill():
     logger.info(f"Found {len(project_preferences)} project preferences to backfill")
 
     backfill_jobs: list[BackfillJob] = []
+    processed_repos = set()  # Tracks (org_id, repo_provider, repo_external_id)
 
     for project_preference in project_preferences:
         for repo in project_preference.repositories:
             repo_definition = RepoDefinition.model_validate(repo)
+
+            # Create a unique key for this repository
+            repo_key = (
+                project_preference.organization_id,
+                repo_definition.provider,
+                repo_definition.external_id,
+            )
+
+            # Skip if we've already processed this repository
+            if repo_key in processed_repos:
+                logger.info(
+                    f"Repository {repo_definition.full_name} for org {project_preference.organization_id} already added to backfill jobs, skipping."
+                )
+                continue
 
             with Session() as session:
                 # existing_archive = (
@@ -134,6 +149,7 @@ def collect_all_repos_for_backfill():
                     repo_definition=repo_definition,
                 )
             )
+            processed_repos.add(repo_key)
 
             # if not existing_archive:
             #     backfill_jobs.append(
