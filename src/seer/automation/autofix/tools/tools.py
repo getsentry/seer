@@ -206,8 +206,13 @@ class BaseTools:
             return self._make_repo_not_found_error_message(repo_name)
         repo_name = fixed_repo_name
 
-        valid_file_path = self._attempt_fix_path(file_path, repo_name)
+        valid_file_path = self._attempt_fix_path(file_path, repo_name, files_only=True)
         if valid_file_path is None:
+            # Try again without files_only to check if it's a directory
+            dir_path = self._attempt_fix_path(file_path, repo_name, files_only=False)
+            if dir_path and dir_path == file_path.lstrip("./").lstrip("/"):
+                return f"Error: The path `{file_path}` is a directory, not a file. Use the tree tool to view its contents."
+
             other_paths = self._get_potential_abs_paths(file_path, repo_name)
             return f"Error: The file path `{file_path}` doesn't exist in `{repo_name}`.\n{other_paths}".strip()
         file_path = valid_file_path
@@ -337,9 +342,14 @@ class BaseTools:
         joined = "\n".join(unique_parents)
         return f"<did you mean>\n{joined}\n</did you mean>"
 
-    def _attempt_fix_path(self, path: str, repo_name: str) -> str | None:
+    def _attempt_fix_path(self, path: str, repo_name: str, files_only: bool = False) -> str | None:
         """
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
+
+        Args:
+            path: The path to autocorrect
+            repo_name: The name of the repository to use for validation
+            files_only: If True, only return valid file paths, not directory paths
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_files = repo_client.get_valid_file_paths()
@@ -352,7 +362,7 @@ class BaseTools:
             if p.endswith(normalized_path):
                 # is a valid file path
                 return p
-            if p.startswith(normalized_path):
+            if not files_only and p.startswith(normalized_path):
                 # is a valid directory path
                 return normalized_path
 

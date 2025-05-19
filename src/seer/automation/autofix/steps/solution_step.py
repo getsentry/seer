@@ -106,7 +106,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
         self.context.event_manager.add_log("Here is Autofix's proposed solution.")
 
         # confidence evaluation
-        if not self.context.state.get().request.options.disable_interactivity:
+        if not state.request.options.disable_interactivity:
             run_memory = self.context.get_memory("solution")
             confidence_output = ConfidenceComponent(self.context).invoke(
                 ConfidenceRequest(
@@ -148,7 +148,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
                 reproduction_urls.append(None)
                 continue
             file_name = self.context.autocorrect_file_path(
-                path=relevant_code.file_path, repo_name=repo_name
+                path=relevant_code.file_path, repo_name=repo_name, files_only=True
             )
             if not file_name:
                 reproduction_urls.append(None)

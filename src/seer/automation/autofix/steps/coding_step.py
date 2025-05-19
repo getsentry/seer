@@ -126,7 +126,7 @@ class AutofixCodingStep(AutofixPipelineStep):
         self.context.event_manager.send_coding_result()
 
         # confidence evaluation
-        if not self.context.state.get().request.options.disable_interactivity:
+        if state.request.options.disable_interactivity:
             run_memory = self.context.get_memory("code")
             confidence_output = ConfidenceComponent(self.context).invoke(
                 ConfidenceRequest(

@@ -72,7 +72,7 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
         )
         data = output.parsed
 
-        data.branch_name = f"autofix/{data.branch_name}"
+        data.branch_name = f"seer/{data.branch_name}"
 
         with self.context.state.update() as cur:
             cur.usage += output.metadata.usage

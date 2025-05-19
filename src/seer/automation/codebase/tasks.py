@@ -122,9 +122,36 @@ def collect_all_repos_for_backfill():
                     )
                 )
             else:
-                logger.info(
-                    f"Repo {repo_definition.full_name} for org {project_preference.organization_id} already exists in archive with id {existing_archive.id}, skipping."
+                # TODO: For dev purposes, this will make our backfill jobs run every 30 minutes, which is ok as long as we maintain the hardcoded list of project ids
+                with Session() as session:
+                    existing_backfill_job = (
+                        session.query(DbSeerBackfillJob)
+                        .filter(
+                            DbSeerBackfillJob.organization_id == project_preference.organization_id,
+                            DbSeerBackfillJob.repo_provider == repo_definition.provider,
+                            DbSeerBackfillJob.repo_external_id == repo_definition.external_id,
+                        )
+                        .first()
+                    )
+
+                    if existing_backfill_job:
+                        session.delete(existing_backfill_job)
+                        session.commit()
+
+                backfill_jobs.append(
+                    BackfillJob(
+                        organization_id=project_preference.organization_id,
+                        repo_definition=repo_definition,
+                    )
                 )
+
+                logger.info(
+                    f"DEBUG: Will be running backfill for {repo_definition.full_name} of org {project_preference.organization_id}"
+                )
+
+                # logger.info(
+                #     f"Repo {repo_definition.full_name} for org {project_preference.organization_id} already exists in archive with id {existing_archive.id}, skipping."
+                # )
 
     logger.info(f"Collected {len(backfill_jobs)} repos for backfill")
 
@@ -159,8 +186,8 @@ def run_backfill_task(app_config: AppConfig = injected):
 
 
 @celery_app.task(
-    soft_time_limit=timedelta(minutes=15).total_seconds(),
-    time_limit=timedelta(minutes=17).total_seconds(),
+    soft_time_limit=timedelta(minutes=20).total_seconds(),
+    time_limit=timedelta(minutes=22).total_seconds(),
 )
 def run_backfill(backfill_job_dict: dict):
     backfill_job = BackfillJob.model_validate(backfill_job_dict)
@@ -238,8 +265,8 @@ def run_backfill(backfill_job_dict: dict):
 
 
 @celery_app.task(
-    soft_time_limit=timedelta(minutes=10).total_seconds(),
-    time_limit=timedelta(minutes=12).total_seconds(),
+    soft_time_limit=timedelta(minutes=15).total_seconds(),
+    time_limit=timedelta(minutes=17).total_seconds(),
 )
 def run_test_download_and_verify_backfill(backfill_job_dict: dict):
     backfill_job = BackfillJob.model_validate(backfill_job_dict)

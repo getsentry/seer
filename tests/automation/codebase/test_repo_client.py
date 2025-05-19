@@ -451,29 +451,29 @@ class TestRepoClient:
     @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
     def test_create_branch_from_changes(self, mock_create_branch, repo_client, mock_github):
         mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
-        mock_create_branch.return_value = MagicMock(ref="autofix/test-pr")
+        mock_create_branch.return_value = MagicMock(ref="seer/test-pr")
 
         result = repo_client.create_branch_from_changes(
-            pr_title="autofix/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+            pr_title="seer/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
         )
         assert result is not None
-        mock_create_branch.assert_called_with("autofix/test-pr", False)
+        mock_create_branch.assert_called_with("seer/test-pr", False)
 
     @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
     def test_create_branch_from_changes_from_base_sha(
         self, mock_create_branch, repo_client, mock_github
     ):
         mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
-        mock_create_branch.return_value = MagicMock(ref="autofix/test-pr")
+        mock_create_branch.return_value = MagicMock(ref="seer/test-pr")
 
         result = repo_client.create_branch_from_changes(
-            pr_title="autofix/Test PR",
+            pr_title="seer/Test PR",
             file_patches=[next(generate(FileChange))],
             file_changes=[],
             from_base_sha=True,
         )
         assert result is not None
-        mock_create_branch.assert_called_with("autofix/test-pr", True)
+        mock_create_branch.assert_called_with("seer/test-pr", True)
 
     @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
     def test_create_branch_from_changes_branch_already_exists(
@@ -482,14 +482,14 @@ class TestRepoClient:
         mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
         mock_create_branch.side_effects = [
             GithubException(409, "Conflict", None, "Branch already exists"),
-            MagicMock(ref="autofix/test-pr/123456"),
+            MagicMock(ref="seer/test-pr/123456"),
         ]
 
         result = repo_client.create_branch_from_changes(
-            pr_title="autofix/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+            pr_title="seer/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
         )
         assert result is not None
-        assert mock_create_branch.calls[0].args[0].startswith("autofix/test-pr/")
+        assert mock_create_branch.calls[0].args[0].startswith("seer/test-pr/")
 
     @pytest.mark.parametrize(
         "input_type,input_data",
@@ -937,3 +937,54 @@ class TestRepoClient:
         repo_client.repo.get_git_ref.assert_called_once_with("heads/test-branch")
         dummy_branch_ref.edit.assert_called_once_with(sha="new_commit_sha")
         assert new_commit == dummy_new_commit
+
+    def test_get_git_tree_full_paths(self, repo_client, mock_github):
+        # Simulate a repo with nested directories and files
+        # root
+        # ├── file1.py
+        # └── dir1/
+        #     ├── file2.py
+        #     └── dir2/
+        #         └── file3.py
+
+        # Mock the root tree (recursive=False)
+        root_tree = MagicMock()
+        root_tree.raw_data = {"truncated": True}
+        file1 = MagicMock(path="file1.py", type="blob", size=100)
+        dir1 = MagicMock(path="dir1", type="tree", size=None, sha="sha_dir1")
+        root_tree.tree = [file1, dir1]
+
+        # Mock dir1 tree (recursive=False)
+        dir1_tree = MagicMock()
+        dir1_tree.raw_data = {"truncated": True}
+        file2 = MagicMock(path="file2.py", type="blob", size=200)
+        dir2 = MagicMock(path="dir2", type="tree", size=None, sha="sha_dir2")
+        dir1_tree.tree = [file2, dir2]
+
+        # Mock dir2 tree (recursive=True, not truncated)
+        dir2_tree = MagicMock()
+        dir2_tree.raw_data = {"truncated": False}
+        file3 = MagicMock(path="file3.py", type="blob", size=300)
+        dir2_tree.tree = [file3]
+
+        # Setup get_git_commit and get_git_tree mocks
+        mock_github.get_repo.return_value.get_git_commit.return_value.tree.sha = "sha_root"
+
+        def get_git_tree_side_effect(sha, recursive):
+            if sha == "sha_root":
+                return root_tree
+            elif sha == "sha_dir1":
+                return dir1_tree
+            elif sha == "sha_dir2":
+                return dir2_tree
+            else:
+                raise Exception(f"Unknown sha: {sha}")
+
+        mock_github.get_repo.return_value.get_git_tree.side_effect = get_git_tree_side_effect
+
+        # Call the method under test
+        tree = repo_client.get_git_tree("test_sha")
+        # Collect all file paths
+        file_paths = sorted([item.path for item in tree.tree if item.type == "blob"])
+        # Should include all files with correct full paths
+        assert file_paths == ["dir1/dir2/file3.py", "dir1/file2.py", "file1.py"]

@@ -21,7 +21,7 @@ from seer.automation.codebase.repo_client import RepoClient
 def mock_context():
     context = MagicMock()
     context.autocorrect_repo_name.side_effect = lambda x: x
-    context.autocorrect_file_path.side_effect = lambda path, repo_name: path
+    context.autocorrect_file_path.side_effect = lambda path, repo_name, files_only: path
 
     repo_client = MagicMock()
     repo_client.provider = "github"

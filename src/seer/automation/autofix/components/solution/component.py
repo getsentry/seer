@@ -56,7 +56,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     continue
 
                 corrected_file_path = self.context.autocorrect_file_path(
-                    path=file["file_path"], repo_name=corrected_repo_name
+                    path=file["file_path"], repo_name=corrected_repo_name, files_only=True
                 )
                 if not corrected_file_path:
                     continue
