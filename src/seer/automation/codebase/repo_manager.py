@@ -227,7 +227,6 @@ class RepoManager:
                 self.repo_path,
                 progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
                 depth=1,
-                filter="blob:limit=1m",  # Limit to 1MB file size
                 no_checkout=True,
             )
             end_time = time.time()
