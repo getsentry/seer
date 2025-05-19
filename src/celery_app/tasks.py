@@ -10,6 +10,7 @@ from seer.anomaly_detection.tasks import (  # noqa: F401
     cleanup_timeseries_and_predict,
 )
 from seer.automation.autofix.tasks import check_and_mark_recent_autofix_runs
+from seer.automation.codebase.tasks import collect_all_repos_for_backfill
 from seer.automation.tasks import delete_data_for_ttl
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -30,6 +31,12 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             crontab(minute="0", hour="0"),  # run once a day
             delete_data_for_ttl.signature(kwargs={}, queue=config.CELERY_WORKER_QUEUE),
             name="Delete old Automation runs for 30 day time-to-live",
+        )
+
+        sender.add_periodic_task(
+            crontab(minute="*/30", hour="*"),  # run once every 30 minutes
+            collect_all_repos_for_backfill.signature(kwargs={}, queue=config.CELERY_WORKER_QUEUE),
+            name="Collect all repos for backfill every 30 minutes",
         )
 
     if config.GRPC_SERVER_ENABLE:

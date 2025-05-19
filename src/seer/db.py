@@ -211,6 +211,11 @@ class DbSeerEvent(Base):
 
 
 class DbRunState(Base):
+    """
+    This is the schema of the run_state table that stores 1 row for every run of any Seer feature like autofix.
+    The value field maps to a JSON column that has all the detailed information of the autofix state.
+    """
+
     __tablename__ = "run_state"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     group_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
@@ -286,6 +291,58 @@ class DbSeerProjectPreference(Base):
     repositories: Mapped[List[dict]] = mapped_column(JSON, nullable=False)
 
     __table_args__ = (UniqueConstraint("organization_id", "project_id"),)
+
+
+class DbSeerBackfillState(Base):
+    __tablename__ = "seer_backfill_state"
+    id: Mapped[int] = mapped_column(Integer, nullable=False, primary_key=True)
+    backfill_cursor: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    task_taken_key: Mapped[str] = mapped_column(String, nullable=True)
+
+
+class DbSeerBackfillJob(Base):
+    __tablename__ = "seer_backfill_job"
+    id: Mapped[int] = mapped_column(Integer, nullable=False, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    repo_provider: Mapped[str] = mapped_column(String, nullable=False)
+    repo_external_id: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
+    started_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True, default=None)
+    completed_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True, default=None)
+    verified_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True, default=None)
+    failed_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True, default=None)
+
+    __table_args__ = (UniqueConstraint("organization_id", "repo_provider", "repo_external_id"),)
+
+
+class DbSeerRepoArchive(Base):
+    __tablename__ = "seer_repo_archive"
+    id: Mapped[int] = mapped_column(BigInteger, nullable=False, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    bucket_name: Mapped[str] = mapped_column(String, nullable=False)
+    blob_path: Mapped[str] = mapped_column(String, nullable=False)
+    commit_sha: Mapped[str] = mapped_column(String, nullable=False)
+
+    upload_locked_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=True, default=None
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "bucket_name",
+            "blob_path",
+        ),
+        Index(
+            "ix_seer_repo_archive_org_id_bucket_name_blob_path",
+            "organization_id",
+            "bucket_name",
+            "blob_path",
+        ),
+    )
 
 
 def create_grouping_partition(target: Any, connection: Connection, **kw: Any) -> None:

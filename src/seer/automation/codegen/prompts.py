@@ -3,9 +3,8 @@ import textwrap
 from pydantic import BaseModel
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
-from seer.automation.codebase.models import PrFile
+from seer.automation.codebase.models import PrFile, format_diff
 from seer.automation.codegen.models import StaticAnalysisSuggestion
-from seer.automation.models import FilePatch, annotate_hunks
 
 
 class CodingUnitTestPrompts:
@@ -438,8 +437,8 @@ class RetryUnitTestPrompts:
 
 
 class BugPredictionPrompts:
-    @classmethod
-    def _focus_on_crashes(cls) -> str:
+    @staticmethod
+    def _focus_on_crashes() -> str:
         return textwrap.dedent(
             """\
             IMPORTANT: we are **not** looking for:
@@ -452,8 +451,8 @@ class BugPredictionPrompts:
             Be careful about interpreting a code change that *intentionally* raises an error."""
         )
 
-    @classmethod
-    def format_system_msg(cls) -> str:
+    @staticmethod
+    def format_system_msg() -> str:
         # Lightly edited from:
         # src/seer/automation/autofix/components/root_cause/prompts.py
         return textwrap.dedent(
@@ -466,52 +465,13 @@ class BugPredictionPrompts:
             # Guidelines:
             - Your job is to simply gather all information needed to understand the code change and find critical bugs, not to propose fixes.
             - You are not able to search in external libraries. Do not attempt to search in external libraries.
-            If you don't know how an external library works, either use the Google search tool, or just say you don't know how the external library works."""
+            If you don't know how an external library works, either use the web search tool, or just say you don't know how the external library works."""
         ).format(
-            focus=cls._focus_on_crashes(),
+            focus=BugPredictionPrompts._focus_on_crashes(),
         )
 
-    @classmethod
-    def _format_hunks(cls, pr_file: PrFile) -> str:
-        hunks = FilePatch.to_hunks(pr_file.patch)
-        hunks_with_line_numbers = "\n\n".join(annotate_hunks(hunks))
-        return hunks_with_line_numbers
-
-    @classmethod
-    def _format_diff_file(
-        cls, pr_file: PrFile, formatted_hunks: str | None = None, repo_full_name: str | None = None
-    ) -> str:
-        tag_start = f"<file><filename>{pr_file.filename}</filename>"
-        tag_end = "</file>"
-
-        repo_name_added = f" in repo {repo_full_name}" if repo_full_name is not None else ""
-
-        if pr_file.status == "renamed":
-            title = f"File {pr_file.previous_filename} was renamed to {pr_file.filename}{repo_name_added}"
-            if formatted_hunks is None and pr_file.changes > 0:
-                formatted_hunks = cls._format_hunks(pr_file)
-            else:
-                formatted_hunks = ""
-        elif pr_file.status == "removed":
-            title = f"File {pr_file.filename} was removed{repo_name_added}"
-            formatted_hunks = ""
-        else:
-            title = f"Here are the changes made to file {pr_file.filename}{repo_name_added}"
-            if formatted_hunks is None:
-                formatted_hunks = cls._format_hunks(pr_file)
-
-        return "\n\n".join((tag_start, title, formatted_hunks, tag_end))
-
-    @classmethod
-    def format_diff(cls, pr_files: list[PrFile], repo_full_name: str | None = None) -> str:
-        body = "\n\n".join(
-            cls._format_diff_file(pr_file, repo_full_name=repo_full_name) for pr_file in pr_files
-        )
-        return f"<diff>\n\n{body}\n\n</diff>"
-
-    @classmethod
-    def format_file_filter_prompt(
-        cls,
+    @staticmethod
+    def format_prompt_file_filter(
         pr_files: list[PrFile],
         num_files_desired: int = 5,
     ) -> str:
@@ -523,15 +483,15 @@ class BugPredictionPrompts:
 
             We need you to narrow down the list of files we want to analyze for finding bugs.
             Return the top {num_files_desired} unique files we should analyze.
-            We don't care to predict bugs for code that won't be run in production, e.g., test files. So please filter out test files. We want to predict bugs for files that might contain error-prone, untested code that could cause a production crash.
+            We don't care to predict bugs for code that won't be run in production, e.g., test files. So please filter out test files. We want to predict bugs for files that might contain error-prone, untested code that could cause a crash in production.
             For context, this is just a preprocessing step. You'll have the chance to do an extensive code search and analysis of this code change later. For now, we just want you to filter down the list of files to a more manageable number."""
         ).format(
-            diff=cls.format_diff(pr_files),
+            diff=format_diff(pr_files),
             num_files_desired=num_files_desired,
         )
 
-    @classmethod
-    def format_prompt(cls, repos_str: str, diff: str) -> str:
+    @staticmethod
+    def format_prompt_draft_hypotheses(repos_str: str, diff: str) -> str:
         return textwrap.dedent(
             """
             You'll be given a code change. We're looking for bugs that might cause errors in production. We don't know if there are any. After all, most code changes are safe.
@@ -539,7 +499,10 @@ class BugPredictionPrompts:
 
             It is important that you determine if the code change is making new assumptions.
             Feel free to hypothesize about a few things that might cause the code to crash.
-            Also, for each potential bug you find, state what you need to know to investigate whether the code change is correct or incorrect.
+            Also, for each potential bug you find, clearly state:
+              - Important things you need to investigate to determine whether the code change is safe or unsafe
+              - The full file path and line range in the code change indicating where the potential production-crashing bug is, e.g., src/some/path/to/file_with_bug.py:239~242.
+                This location should be a file that would be run in production.
 
             <available_repos>
             {repos_str}
@@ -552,11 +515,11 @@ class BugPredictionPrompts:
         ).format(
             repos_str=repos_str,
             diff=diff,
-            focus=cls._focus_on_crashes(),
+            focus=BugPredictionPrompts._focus_on_crashes(),
         )
 
-    @classmethod
-    def format_prompt_structured_hypothesis(cls, hypothesis_unstructured: str) -> str:
+    @staticmethod
+    def format_prompt_structured_hypothesis(hypothesis_unstructured: str) -> str:
         return textwrap.dedent(
             """
             You were given a code change and asked to hypothesize about potential bugs. Here's what you said:
@@ -565,15 +528,15 @@ class BugPredictionPrompts:
             {hypothesis_unstructured}
             </what_you_said>
 
-            Please separate this information into a list of potential bugs. If some bugs seem inter-dependent, make sure to put them in the same element of the list.
-            """
+            Please separate this information into a list of potential bugs. If some bugs seem inter-dependent, consider them the same bug and put them in the same list item.
+            """  # TODO: add _focus_on_crashes()?
         ).format(
             hypothesis_unstructured=hypothesis_unstructured,
         )
 
-    @classmethod
+    @staticmethod
     def format_prompt_followup(
-        cls, repos_str: str, diff: str, hypothesis_unstructured: str, hypothesis: str
+        repos_str: str, diff: str, hypothesis_unstructured: str, hypothesis: str
     ) -> str:
         return textwrap.dedent(
             """
@@ -594,7 +557,7 @@ class BugPredictionPrompts:
             </hypothesis>
 
             Please search the codebase to see if there's evidence for this potential bug. Reference relevant parts of the codebase.
-            You should have a pretty high bar for determining that a bug is a real threat to the system.
+            You should have a pretty high bar of evidence for determining that a bug is a real threat to the system.
             Please be clear about what couldn't quite be verified, despite your best efforts.
 
             Make sure to think before making your conclusion.
@@ -611,7 +574,7 @@ class BugPredictionPrompts:
             diff=diff,
             hypothesis_unstructured=hypothesis_unstructured,
             hypothesis=hypothesis,
-            focus=cls._focus_on_crashes(),
+            focus=BugPredictionPrompts._focus_on_crashes(),
         )
 
     @classmethod

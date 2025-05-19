@@ -7,16 +7,18 @@ from seer.automation.models import RepoDefinition
 
 
 class DummyRequest:
-    def __init__(self, repo):
+    def __init__(self, repo, more_readable_repos=None):
         self.repo = repo
+        self.more_readable_repos = more_readable_repos or []
 
 
 class DummyContinuation:
-    def __init__(self, run_id, request, file_changes=None, signals=None):
+    def __init__(self, run_id, request: DummyRequest, file_changes=None, signals=None):
         self.run_id = run_id
         self.request = request
         self.file_changes = file_changes or []
         self.signals = signals or []
+        self.readable_repos = [self.request.repo] + self.request.more_readable_repos
 
 
 class DummyCodegenContinuationState:

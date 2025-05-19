@@ -8,7 +8,12 @@ from seer.automation.autofix.models import (
     AutofixRequestOptions,
     IssueDetails,
 )
-from seer.automation.autofix.runs import create_initial_autofix_run
+from seer.automation.autofix.runs import (
+    create_initial_autofix_run,
+    update_repo_access_and_properties,
+)
+from seer.automation.models import RepoDefinition, SeerProjectPreference
+from seer.automation.preferences import GetSeerProjectPreferenceRequest
 
 
 @pytest.fixture
@@ -33,6 +38,13 @@ class TestRuns:
         ).start()
         self.mock_autofix_continuation = patch(
             "seer.automation.autofix.runs.AutofixContinuation"
+        ).start()
+        # Patch preference retrieval and creation
+        self.mock_get_pref = patch(
+            "seer.automation.autofix.runs.get_seer_project_preference"
+        ).start()
+        self.mock_create_initial_pref = patch(
+            "seer.automation.autofix.runs.create_initial_seer_project_preference_from_repos"
         ).start()
         yield
         patch.stopall()
@@ -68,3 +80,110 @@ class TestRuns:
 
         # Assert that the event manager was not called due to the exception
         self.mock_event_manager.assert_not_called()
+
+    def test_create_initial_autofix_run_creates_preference_when_none(self, mock_request):
+        # Setup mock state
+        mock_state = MagicMock()
+        self.mock_continuation_state.new.return_value = mock_state
+
+        # No existing preference
+        self.mock_get_pref.return_value = MagicMock(preference=None)
+        # Prepare sample repos
+        sample_repos = [
+            RepoDefinition(
+                owner="ownerX",
+                name="repoX",
+                external_id="extX",
+                provider="github",
+            )
+        ]
+        # Ensure request.repos is initial list
+        mock_request.repos = [
+            RepoDefinition(owner="initial", name="repo", external_id="extInit", provider="github")
+        ]
+        # Setup creation return
+        pref = SeerProjectPreference(
+            organization_id=mock_request.organization_id,
+            project_id=mock_request.project_id,
+            repositories=sample_repos,
+        )
+        self.mock_create_initial_pref.return_value = pref
+
+        # Call the function
+        create_initial_autofix_run(mock_request)
+
+        # Verify preference retrieval was attempted
+        self.mock_get_pref.assert_called_once_with(
+            GetSeerProjectPreferenceRequest(project_id=mock_request.project_id)
+        )
+        # Verify new preference creation was called
+        self.mock_create_initial_pref.assert_called_once_with(
+            organization_id=mock_request.organization_id,
+            project_id=mock_request.project_id,
+            repos=mock_request.repos,
+        )
+        # Verify that state.update was used to set repos to created preference
+        ctx = mock_state.update.return_value.__enter__.return_value
+        assert ctx.request.repos == sample_repos
+
+    def test_update_repo_access_and_properties(self):
+        # Mock repo and codebase
+        mock_repo = MagicMock()
+        mock_repo.provider = "github"
+        mock_repo.external_id = "repo1"
+        mock_repo.branch_name = None
+        mock_repo.base_commit_sha = None
+
+        mock_codebase = MagicMock()
+        mock_codebase.is_readable = None
+        mock_codebase.is_writeable = None
+
+        # Mock state.get() to return a state with repos and codebases
+        mock_state = MagicMock()
+        mock_state.request.repos = [mock_repo]
+        mock_state.codebases = {"repo1": mock_codebase}
+        mock_state.readable_repos = MagicMock(return_value=[mock_repo])
+
+        # Patch state.update() as a context manager
+        mock_update_cm = MagicMock()
+        mock_update_cm.__enter__.return_value = mock_state
+        mock_update_cm.__exit__.return_value = None
+
+        mock_continuation_state = MagicMock()
+        mock_continuation_state.get.return_value = mock_state
+        mock_continuation_state.update.return_value = mock_update_cm
+
+        # Patch RepoClient methods
+        with (
+            patch(
+                "seer.automation.codebase.repo_client.RepoClient.check_repo_read_access",
+                return_value=True,
+            ) as mock_read_access,
+            patch(
+                "seer.automation.codebase.repo_client.RepoClient.check_repo_write_access",
+                return_value=True,
+            ) as mock_write_access,
+            patch(
+                "seer.automation.codebase.repo_client.RepoClient.from_repo_definition"
+            ) as mock_from_repo_definition,
+        ):
+            mock_repo_client = MagicMock()
+            mock_repo_client.base_branch = "main"
+            mock_repo_client.base_commit_sha = "abc123"
+            mock_from_repo_definition.return_value = mock_repo_client
+
+            update_repo_access_and_properties(
+                mock_continuation_state, set_branches_and_commits=True
+            )
+
+            # Assert RepoClient methods were called
+            mock_read_access.assert_called_once_with(mock_repo)
+            mock_write_access.assert_called_once_with(mock_repo)
+            mock_from_repo_definition.assert_called_once_with(mock_repo, "read")
+
+            # Assert repo properties were set
+            assert mock_repo.branch_name == "main"
+            assert mock_repo.base_commit_sha == "abc123"
+            # Assert codebase state updated
+            assert mock_state.codebases["repo1"].is_readable is True
+            assert mock_state.codebases["repo1"].is_writeable is True

@@ -153,6 +153,7 @@ def test_run_iteration_with_insight_sharing(
                 status=AutofixStatus.NEED_MORE_INFORMATION,
                 key="root_cause_analysis_processing",
                 title="Test",
+                id="id",
             )
         ]
 
@@ -193,11 +194,14 @@ def test_share_insights_no_new_insights(autofix_agent):
                 key="root_cause_analysis_processing",
                 title="Fixing a bug",
                 insights=[next(generate(InsightSharingOutput))],
+                id="id",
             )
         ]
 
     initial_insights_count = len(autofix_agent.context.state.get().steps[-1].insights)
-    autofix_agent.share_insights("Thinking about the solution", 0, autofix_agent.context.state, 0)
+    autofix_agent.share_insights(
+        "Thinking about the solution", autofix_agent.context.state, 0, "id"
+    )
     final_insights_count = len(autofix_agent.context.state.get().steps[-1].insights)
 
     assert initial_insights_count == final_insights_count

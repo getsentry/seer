@@ -25,7 +25,6 @@ from seer.automation.codebase.models import BaseDocument
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codegen.codegen_context import CodegenContext
-from seer.automation.codegen.models import CodegenBaseRequest
 from seer.automation.models import EventDetails, FileChange, Profile, SentryEventData
 from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.langfuse import append_langfuse_observation_metadata
@@ -38,6 +37,11 @@ REPO_WAIT_TIMEOUT_SECS = 120.0
 
 
 class BaseTools:
+    """
+    Base class for tools that that can be used by any component/agent.
+    See usage examples in autofix/components/solution/component.py and autofix/autofix_agent.py
+    """
+
     context: AutofixContext | CodegenContext
     retrieval_top_k: int
     repo_managers: dict[str, RepoManager] = {}
@@ -61,12 +65,19 @@ class BaseTools:
         if not repo_names:
             return
 
+        request = self.context.state.get().request
+
         for repo_name in repo_names:
             repo_client = self.context.get_repo_client(
                 repo_name=repo_name, type=self.repo_client_type
             )
             repo_manager = RepoManager(
-                repo_client, trigger_liveness_probe=self._trigger_liveness_probe
+                repo_client,
+                trigger_liveness_probe=self._trigger_liveness_probe,
+                organization_id=(
+                    request.organization_id if isinstance(request, AutofixRequest) else None
+                ),
+                project_id=(request.project_id if isinstance(request, AutofixRequest) else None),
             )
             repo_manager.initialize_in_background()
             self.repo_managers[repo_name] = repo_manager
@@ -86,16 +97,20 @@ class BaseTools:
                       If None, waits for all repos to be downloaded.
         """
         if repo_name:
+            if repo_name not in self.repo_managers:
+                raise ValueError(f"Repository {repo_name} not found")
             repo_managers_to_wait_for = (
                 [self.repo_managers[repo_name]]
-                if not self.repo_managers[repo_name].is_available
+                if (not self.repo_managers[repo_name].is_available)
+                and (not self.repo_managers[repo_name].is_cancelled)
                 else []
             )
         else:
             repo_managers_to_wait_for = [
                 self.repo_managers[rn]
                 for rn in self._get_repo_names()
-                if not self.repo_managers[rn].is_available
+                if (not self.repo_managers[rn].is_available)
+                and (not self.repo_managers[rn].is_cancelled)
             ]
 
         if not repo_managers_to_wait_for:
@@ -129,8 +144,11 @@ class BaseTools:
             future = repo_manager.initialization_future
             if future in not_done:
                 repo_manager.mark_as_timed_out()
-                logger.warning(
-                    f"Repository {repo_manager.repo_client.repo_full_name} timed out after {REPO_WAIT_TIMEOUT_SECS} seconds"
+                logger.error(
+                    f"Repository download timed out after {REPO_WAIT_TIMEOUT_SECS} seconds",
+                    extra={
+                        "repo": repo_manager.repo_client.repo_full_name,
+                    },
                 )
             elif future.exception():
                 repo_manager.mark_as_timed_out()
@@ -155,19 +173,12 @@ class BaseTools:
                 logger.exception(f"Error shutting down executor: {e}")
 
     def _get_repo_names(self) -> list[str]:
-        if isinstance(self.context, AutofixContext):
-            return [repo.full_name for repo in self.context.state.get().readable_repos]
-        elif isinstance(self.context, CodegenContext):
-            return [self.context.repo.full_name]
-        else:
-            raise ValueError(f"Unsupported context type: {type(self.context)}")
+        return [repo.full_name for repo in self.context.state.get().readable_repos]
 
     def _make_repo_not_found_error_message(self, repo_name: str) -> str:
-        return f"Error: Repo '{repo_name}' not found." + (
-            f" Available repos: {', '.join([repo.full_name for repo in self.context.repos if isinstance(self.context, AutofixContext)])}"
-            if isinstance(self.context, AutofixContext)
-            else ""
-        )
+        available_repos = self.context.state.get().readable_repos
+        available_repos_str = ", ".join([repo.full_name for repo in available_repos])
+        return f"Error: Repo '{repo_name}' not found. Available repos: {available_repos_str}"
 
     def _make_repo_unavailable_error_message(self, repo_name: str) -> str:
         return f"Error: We had an issue loading the repository `{repo_name}`. This tool is unavailable for this repository, you must stop using it for this repository `{repo_name}`."
@@ -190,11 +201,7 @@ class BaseTools:
     @observe(name="Expand Document")
     @sentry_sdk.trace
     def expand_document(self, file_path: str, repo_name: str):
-        fixed_repo_name = (
-            self.context.autocorrect_repo_name(repo_name)
-            if isinstance(self.context, AutofixContext)
-            else repo_name
-        )
+        fixed_repo_name = self.context.autocorrect_repo_name(repo_name)
         if not fixed_repo_name:
             return self._make_repo_not_found_error_message(repo_name)
         repo_name = fixed_repo_name
@@ -244,7 +251,7 @@ class BaseTools:
             path=file_path, repo_name=repo_name, commit_sha=commit_sha
         )
         if patch is None:
-            return "Could not find the file in the given commit. Either your hash is incorrect or the file does not exist in the given commit."
+            return "Could not find the file in the given commit. Either your hash/SHA is incorrect (it must be the 7 character SHA, found through explain_file), or the file does not exist in the given commit."
         return patch
 
     @observe(name="Explain File")
@@ -486,6 +493,16 @@ class BaseTools:
         repo_name: str | None = None,
         use_regex: bool = False,
     ) -> str:
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
+
         self._ensure_repos_downloaded(repo_name)
 
         if not query:
@@ -501,6 +518,9 @@ class BaseTools:
 
         if not use_regex:
             cmd.append("--fixed-strings")
+
+        if "\n" in query:
+            cmd.append("--multiline")
 
         if not case_sensitive:
             cmd.append("--ignore-case")
@@ -569,6 +589,16 @@ class BaseTools:
         command = command.replace("\\'", "'")  # un-escape escaped single quotes
         command = command.replace("\\\\", "\\")  # un-escape escaped backslashes
 
+        if repo_name:
+            fixed_repo_name = (
+                self.context.autocorrect_repo_name(repo_name)
+                if isinstance(self.context, AutofixContext)
+                else repo_name
+            )
+            if not fixed_repo_name:
+                return self._make_repo_not_found_error_message(repo_name)
+            repo_name = fixed_repo_name
+
         self.context.event_manager.add_log(f"Searching files with `{command}`...")
 
         self._ensure_repos_downloaded(repo_name)
@@ -628,7 +658,7 @@ class BaseTools:
 
     def _append_file_change(self, repo_name: str, file_change: FileChange):
         with self.context.state.update() as cur:
-            for repo in cur.request.repos:
+            for repo in cur.readable_repos:
                 if repo.full_name == repo_name:
                     cur.codebases[repo.external_id].file_changes.append(file_change)
 
@@ -709,11 +739,7 @@ class BaseTools:
         tool_call_id = kwargs.get("tool_call_id", None)
         current_memory_index = kwargs.get("current_memory_index", -1)
 
-        fixed_repo_name = (
-            self.context.autocorrect_repo_name(repo_name)
-            if isinstance(self.context, AutofixContext)
-            else repo_name
-        )
+        fixed_repo_name = self.context.autocorrect_repo_name(repo_name)
         if not fixed_repo_name:
             return self._make_repo_not_found_error_message(repo_name)
         repo_name = fixed_repo_name
@@ -853,7 +879,7 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
             )
 
             return self._apply_file_change(repo_name, file_change)
@@ -901,7 +927,7 @@ class BaseTools:
                 change_diff=file_diff,
                 generated_at_memory_index=current_memory_index,
                 type=InsightSharingType.FILE_CHANGE,
-            )
+            ),
         )
 
         return self._apply_file_change(repo_name, file_change)
@@ -956,7 +982,7 @@ class BaseTools:
                     change_diff=file_diff,
                     generated_at_memory_index=current_memory_index,
                     type=InsightSharingType.FILE_CHANGE,
-                )
+                ),
             )
 
             return self._apply_file_change(repo_name, file_change)
@@ -969,15 +995,10 @@ class BaseTools:
         self, kwargs: dict[str, Any], repo_name: str, path: str, **extra_kwargs: Any
     ) -> str:
         """Handles the undo edit command to remove file changes."""
-        external_id = None
         cur_state = self.context.state.get()
-        if isinstance(cur_state.request, AutofixRequest):
-            repos = cur_state.request.repos
-        elif isinstance(cur_state.request, CodegenBaseRequest):
-            repos = [cur_state.request.repo]
-        else:
-            raise ValueError("Invalid request type")
+        repos = cur_state.readable_repos
 
+        external_id = None
         for repo in repos:
             if repo.full_name == repo_name:
                 external_id = repo.external_id

@@ -449,6 +449,7 @@ class AnomalyDetection(BaseModel):
                 ad_config.time_period
             ],
         )
+
         if time_budget_ms is not None:
             time_elapsed = datetime.datetime.now(datetime.timezone.utc) - time_start
             time_budget_ms = time_budget_ms - (time_elapsed.microseconds // 1000)
@@ -615,7 +616,7 @@ class AnomalyDetection(BaseModel):
         self,
         request: StoreDataRequest,
         alert_data_accessor: AlertDataAccessor = injected,
-        time_budget_ms: int = 4500,  # Allocating 4.5 seconds as alerting system timesout after 5 seconds
+        time_budget_ms: int = 9500,  # Allocating 9.5 seconds as alerting system timesout after 10 seconds
     ) -> StoreDataResponse:
         """
         Main entry point for storing time series data for an alert.

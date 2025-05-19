@@ -56,6 +56,7 @@ class AppConfig(BaseModel):
     DATABASE_MIGRATIONS_URL: str | None = None
     IS_DB_MIGRATION: ParseBool = False
     CELERY_BROKER_URL: str
+
     GITHUB_TOKEN: str | None = None
     GITHUB_APP_ID: str = ""
     GITHUB_PRIVATE_KEY: str = ""
@@ -65,6 +66,7 @@ class AppConfig(BaseModel):
     GITHUB_CODECOV_UNIT_TEST_PRIVATE_KEY: str | None = None
     GITHUB_CODECOV_PR_REVIEW_APP_ID: str | None = None
     GITHUB_CODECOV_PR_REVIEW_PRIVATE_KEY: str | None = None
+
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = ""
@@ -78,6 +80,8 @@ class AppConfig(BaseModel):
     DEV: ParseBool = False
 
     GOOGLE_CLOUD_PROJECT: str = ""
+
+    CODEBASE_GCS_STORAGE_BUCKET: str = ""
 
     SMOKE_CHECK: ParseBool = False
 

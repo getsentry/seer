@@ -41,6 +41,8 @@ def mock_pr_files():
             status="modified",
             changes=1,
             sha="sha1",
+            previous_filename="src/main.py",
+            repo_full_name="getsentry/seer",
         ),
         PrFile(
             filename="src/utils.py",
@@ -55,14 +57,17 @@ def mock_pr_files():
             status="modified",
             changes=1,
             sha="sha2",
+            previous_filename="src/utils.py",
+            repo_full_name="getsentry/seer",
         ),
         PrFile(
             filename="src/renamed_file.py",
-            previous_filename="src/old_name.py",
             patch="",
             status="renamed",
             changes=0,
             sha="sha3",
+            previous_filename="src/old_name.py",
+            repo_full_name="getsentry/seer",
         ),
         PrFile(
             filename="src/removed_file.py",
@@ -79,6 +84,8 @@ def mock_pr_files():
             status="removed",
             changes=5,
             sha="sha4",
+            previous_filename="src/removed_file.py",
+            repo_full_name="getsentry/seer",
         ),
     ]
 
@@ -130,10 +137,7 @@ class TestFilterFilesComponent:
             pr_files=mock_pr_files[:1], pr_title="Title", pr_body="Body", num_files_desired=2
         )
         output = component.invoke(request)
-
-        assert isinstance(output, FilterFilesOutput)
-        assert output.pr_files == mock_pr_files[:1]
-        assert len(output.pr_files) == 1
+        assert output.pr_files == [mock_pr_files[0]]
 
     def test_invoke_with_filtering(
         self, component: FilterFilesComponent, mock_pr_files, patch_generate_structured
@@ -142,10 +146,8 @@ class TestFilterFilesComponent:
             pr_files=mock_pr_files, pr_title="Title", pr_body="Body", num_files_desired=1
         )
         output = component.invoke(request)
-
-        assert isinstance(output, FilterFilesOutput)
-        assert len(output.pr_files) == 1
-        assert output.pr_files[0].filename == "src/main.py"
+        assert output.pr_files == [mock_pr_files[pr_idx] for pr_idx in [0, 2, 3]]
+        # 0 b/c of mock. 2 and 3 b/c their hunks won't be shown
 
     @pytest.fixture
     def patch_generate_structured_failure(self, monkeypatch: pytest.MonkeyPatch):
@@ -266,13 +268,23 @@ class TestBugPredictorComponent:
     @pytest.fixture
     def mock_hypotheses(self):
         return [
-            BugPredictorHypothesis(content="Hypothesis 1"),
-            BugPredictorHypothesis(content="Hypothesis 2"),
+            BugPredictorHypothesis(
+                content="Hypothesis 1",
+                location_filename="src/main.py",
+                location_start_line_num=1,
+                location_end_line_num=2,
+            ),
+            BugPredictorHypothesis(
+                content="Hypothesis 2",
+                location_filename="src/utils.py",
+                location_start_line_num=3,
+                location_end_line_num=4,
+            ),
         ]
 
     @pytest.fixture
     def mock_hypotheses_unstructured(self):
-        return "Some hypotheses and questions to answer."
+        return "Some bug hypotheses, locations, and further questions to answer."
 
     @pytest.fixture
     def mock_followup_prefix(self):
@@ -364,6 +376,8 @@ def test_bug_prediction_step_invoke(
             status="modified",
             changes=1,
             sha="abc123",
+            previous_filename="src/main.py",
+            repo_full_name="owner1/repo1",
         )
     ]
     mock_filtered_pr_files = mock_pr_files[:1]
@@ -382,7 +396,14 @@ def test_bug_prediction_step_invoke(
     bug_predictor_followups = ["Potential bug: Off-by-one error in array access"]
     mock_invoke_bug_predictor_component.return_value = BugPredictorOutput(
         hypotheses_unstructured="Hypothesis text",
-        hypotheses=[BugPredictorHypothesis(content="Hypothesis content")],
+        hypotheses=[
+            BugPredictorHypothesis(
+                content="Hypothesis content",
+                location_filename="src/main.py",
+                location_start_line_num=1,
+                location_end_line_num=2,
+            )
+        ],
         followups=bug_predictor_followups,
     )
 

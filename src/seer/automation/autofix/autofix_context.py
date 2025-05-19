@@ -1,7 +1,8 @@
 import functools
 import logging
 import textwrap
-from typing import Mapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Mapping, Set, Tuple
 
 import sentry_sdk
 from github import UnknownObjectException
@@ -18,7 +19,12 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
-from seer.automation.codebase.repo_client import RepoClient, RepoClientType
+from seer.automation.codebase.repo_client import (
+    RepoClient,
+    RepoClientType,
+    autocorrect_repo_name,
+    get_repo_client,
+)
 from seer.automation.codebase.utils import potential_frame_match
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
 from seer.automation.pipeline import PipelineContext
@@ -26,7 +32,7 @@ from seer.automation.state import State
 from seer.automation.summarize.issue import IssueSummaryWithScores
 from seer.automation.utils import AgentError
 from seer.db import DbIssueSummary, DbPrIdToAutofixRunIdMapping, DbRunMemory, Session
-from seer.dependency_injection import inject, injected
+from seer.dependency_injection import copy_modules_initializer, inject, injected
 from seer.rpc import RpcClient
 
 logger = logging.getLogger(__name__)
@@ -111,68 +117,14 @@ class AutofixContext(PipelineContext):
         repo_external_id: str | None = None,
         type: RepoClientType = RepoClientType.READ,
     ) -> RepoClient:
-        """
-        Gets a repo client for the current single repo or for a given repo name.
-        If there are more than 1 repos, a repo name must be provided.
-        """
-        repo: RepoDefinition | None = None
-        if len(self.repos) == 1:
-            repo = self.repos[0]
-        elif repo_name:
-            repo = next((r for r in self.repos if r.full_name == repo_name), None)
-        elif repo_external_id:
-            repo = next((r for r in self.repos if r.external_id == repo_external_id), None)
-
-        if not repo:
-            raise AgentError() from ValueError(
-                "Repo not found. Please provide a valid repo name or external ID."
-            )
-
-        return RepoClient.from_repo_definition(repo, type)
+        return get_repo_client(
+            repos=self.repos, repo_name=repo_name, repo_external_id=repo_external_id, type=type
+        )
 
     def autocorrect_repo_name(self, repo_name: str) -> str | None:
-        """
-        Attempts to autocorrect a repository name by finding the closest match among available repositories.
-
-        Args:
-            repo_name: The repository name to autocorrect
-
-        Returns:
-            The corrected repository name if a match is found, or None if no match is found
-        """
-        readable_repos = self.state.get().readable_repos
-        repo_names = [
-            repo.full_name
-            for repo in readable_repos
-            if repo.provider in RepoClient.supported_providers
-        ]
-        if repo_name and repo_name in repo_names:
-            return repo_name
-        elif repo_name and repo_name not in repo_names:
-            # No exact match, try to autocorrect
-            matching_full_names = [r for r in repo_names if repo_name.lower() in r.lower()]
-            names_without_owner = [
-                r.split("/")[-1] for r in matching_full_names if len(r.split("/")) > 1
-            ]  # the repo names without the orgs, e.g. "seer", not "getsentry/seer"
-            matching_names_without_owner = [
-                r for r in names_without_owner if repo_name.lower() == r.lower()
-            ]
-            if matching_names_without_owner:
-                repo_name_without_owner = matching_names_without_owner[0]
-                repo_name = next(
-                    (r for r in matching_full_names if f"/{repo_name_without_owner}" in r), ""
-                )
-                if not repo_name:
-                    return None
-            elif matching_full_names:
-                repo_name = min(
-                    matching_full_names, key=lambda x: abs(len(x) - len(repo_name or ""))
-                )
-            else:
-                return None
-            return repo_name
-        else:
-            return None
+        return autocorrect_repo_name(
+            readable_repos=self.state.get().readable_repos, repo_name=repo_name
+        )
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
@@ -217,8 +169,12 @@ class AutofixContext(PipelineContext):
                 f"Repo '{repo_name}' not found. Available repos: {', '.join([repo.full_name for repo in self.repos])}"
             )
 
-        repo_client = self.get_repo_client(repo_name)
-        return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
+        try:
+            repo_client = self.get_repo_client(repo_name)
+            return repo_client.get_commit_patch_for_file(path, commit_sha, autocorrect=True)
+        except UnknownObjectException as e:
+            logger.warning(f"Invalid commit SHA provided: {commit_sha}. Error: {e}")
+            return None
 
     def autocorrect_file_path(self, path: str, repo_name: str) -> str | None:
         """
@@ -245,32 +201,56 @@ class AutofixContext(PipelineContext):
         """
         Annotate a stacktrace with the correct repo each frame is pointing to and fix the filenames
         """
-        for repo in self.repos:
-            if repo.provider not in RepoClient.supported_providers:
-                continue
+        supported_repos = [
+            repo for repo in self.repos if repo.provider in RepoClient.supported_providers
+        ]
 
+        repo_data: dict[str, Tuple[RepoClient, Set[str]]] = {}
+
+        def get_repo_data(repo):
             try:
                 repo_client = self.get_repo_client(
                     repo_external_id=repo.external_id, type=RepoClientType.READ
                 )
+                valid_file_paths = repo_client.get_valid_file_paths()
+                return repo.external_id, (repo_client, valid_file_paths)
             except UnknownObjectException:
                 self.event_manager.on_error(
                     error_msg=f"Autofix does not have access to the `{repo.full_name}` repo. Please give permission through the Sentry GitHub integration, or remove the repo from your code mappings.",
                     should_completely_error=True,
                 )
-                return
+                return None
 
-            valid_file_paths = repo_client.get_valid_file_paths()
-            for frame in stacktrace.frames:
-                if frame.in_app and frame.repo_name is None:
+        with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+            future_to_repo = {
+                executor.submit(get_repo_data, repo): repo for repo in supported_repos
+            }
+
+            for future in as_completed(future_to_repo):
+                result = future.result()
+                if result:
+                    repo_external_id, data = result
+                    repo_data[repo_external_id] = data
+
+        for frame in stacktrace.frames:
+            if frame.in_app and frame.repo_name is None:
+                for repo in supported_repos:
+                    if repo.external_id not in repo_data:
+                        continue
+
+                    _, valid_file_paths = repo_data[repo.external_id]
+
                     if frame.filename in valid_file_paths:
                         frame.repo_name = repo.full_name
+                        break
                     else:
                         for valid_path in valid_file_paths:
                             if potential_frame_match(valid_path, frame):
                                 frame.repo_name = repo.full_name
                                 frame.filename = valid_path
                                 break
+                        if frame.repo_name:
+                            break
 
     def process_event_paths(self, event: EventDetails):
         """
@@ -525,21 +505,37 @@ class AutofixContext(PipelineContext):
     def make_file_patches(
         self, file_changes: list[FileChange], repo_name: str
     ) -> tuple[list[FilePatch], str]:
-        document_paths = list(set([file_change.path for file_change in file_changes]))
+        changes_by_path: dict[str, list[FileChange]] = {}
+        for change in file_changes:
+            if change.path not in changes_by_path:
+                changes_by_path[change.path] = []
+            changes_by_path[change.path].append(change)
 
-        if not document_paths:
+        if not changes_by_path.keys():
             return [], ""
 
-        original_documents = [
-            BaseDocument(
-                path=path,
-                text=self.get_file_contents(path, repo_name=repo_name, ignore_local_changes=True)
-                or "",
-            )
-            for path in document_paths
-        ]
+        original_documents = []
+        for path, changes in changes_by_path.items():
+            is_new_file = all(change.change_type == "create" for change in changes)
+            if not is_new_file:
+                original_documents.append(
+                    BaseDocument(
+                        path=path,
+                        text=self.get_file_contents(
+                            path, repo_name=repo_name, ignore_local_changes=True
+                        )
+                        or "",
+                    )
+                )
+            else:
+                original_documents.append(
+                    BaseDocument(
+                        path=path,
+                        text="",
+                    )
+                )
 
-        return make_file_patches(file_changes, document_paths, original_documents)
+        return make_file_patches(file_changes, list(changes_by_path.keys()), original_documents)
 
     def store_memory(self, key: str, memory: list[Message]):
         with Session() as session:

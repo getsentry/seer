@@ -14,6 +14,7 @@ import pytest
 import requests
 from google.genai.errors import ClientError
 from johen import generate
+from requests.structures import CaseInsensitiveDict
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import (
@@ -145,10 +146,16 @@ OpenAiProviderFlaky = flakify(
 )
 
 gemini_exhausted_response = requests.Response()
+gemini_exhausted_response.status_code = 429
 gemini_exhausted_response._content = b"429 RESOURCE_EXHAUSTED."
+gemini_exhausted_response.headers = CaseInsensitiveDict({"Content-Type": "text/plain"})
 GeminiProviderFlaky = flakify(
     GeminiProvider,
-    retryable_exception=ClientError(code=429, response=gemini_exhausted_response),
+    retryable_exception=ClientError(
+        code=429,
+        response=gemini_exhausted_response,
+        response_json={"error": {"code": 429, "message": "429 RESOURCE_EXHAUSTED"}},
+    ),
     # https://sentry.sentry.io/issues/6301072208
     get_obj_with_create_stream_method_from_client=lambda client: client.models,
     create_stream_method_name="generate_content_stream",

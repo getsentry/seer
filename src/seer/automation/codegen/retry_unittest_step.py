@@ -41,6 +41,7 @@ class RetryUnittestStep(CodegenStep):
     """
 
     name = "RetryUnittestStep"
+    request: RetryUnittestStepRequest
     max_retries = 2
     MAX_ITERATIONS = 4
 
@@ -60,7 +61,8 @@ class RetryUnittestStep(CodegenStep):
 
         try:
             repo_client = self.context.get_repo_client(
-                type=RepoClientType.CODECOV_PR_REVIEW
+                repo_name=self.request.repo_definition.full_name,
+                type=RepoClientType.CODECOV_PR_REVIEW,
             )  # Codecov AI GH app
             pr = repo_client.repo.get_pull(self.request.pr_id)
             previous_run_context = self._get_previous_run_context()

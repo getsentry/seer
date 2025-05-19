@@ -56,6 +56,7 @@ class PrClosedStep(CodegenStep):
     """
 
     name = "PrClosedStep"
+    request: PrClosedStepRequest
     max_retries = 2
 
     @staticmethod
@@ -131,7 +132,9 @@ class PrClosedStep(CodegenStep):
         self.logger.info("Executing Codegen - PR Closed Step")
         self.context.event_manager.mark_running()
 
-        repo_client = self.context.get_repo_client(type=RepoClientType.CODECOV_PR_CLOSED)
+        repo_client = self.context.get_repo_client(
+            repo_name=self.request.repo_definition.full_name, type=RepoClientType.CODECOV_PR_CLOSED
+        )
         pr = repo_client.repo.get_pull(self.request.pr_id)
 
         try:

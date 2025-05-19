@@ -8,7 +8,7 @@ from celery_app.app import celery_app
 from seer.automation.agent.models import Message
 from seer.automation.autofix.components.confidence import ConfidenceComponent, ConfidenceRequest
 from seer.automation.autofix.components.solution.component import SolutionComponent
-from seer.automation.autofix.components.solution.models import SolutionRequest
+from seer.automation.autofix.components.solution.models import SolutionOutput, SolutionRequest
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
@@ -98,8 +98,11 @@ class AutofixSolutionStep(AutofixPipelineStep):
         if make_kill_signal() in state.signals:
             return
 
+        # create URLs to relevant code snippets
+        reproduction_urls = self._get_reproduction_urls(solution_output)
+
         # send solution result
-        self.context.event_manager.send_solution_result(solution_output)
+        self.context.event_manager.send_solution_result(solution_output, reproduction_urls)
         self.context.event_manager.add_log("Here is Autofix's proposed solution.")
 
         # confidence evaluation
@@ -132,3 +135,25 @@ class AutofixSolutionStep(AutofixPipelineStep):
                                 Message(role="assistant", content=confidence_output.question)
                             ],
                         )
+
+    def _get_reproduction_urls(self, solution_output: SolutionOutput):
+        reproduction_urls: list[str | None] = []
+        for solution_step in solution_output.solution_steps:
+            relevant_code = solution_step.relevant_code_file
+            if not relevant_code:
+                reproduction_urls.append(None)
+                continue
+            repo_name = self.context.autocorrect_repo_name(relevant_code.repo_name)
+            if not repo_name:
+                reproduction_urls.append(None)
+                continue
+            file_name = self.context.autocorrect_file_path(
+                path=relevant_code.file_path, repo_name=repo_name
+            )
+            if not file_name:
+                reproduction_urls.append(None)
+                continue
+            repo_client = self.context.get_repo_client(repo_name)
+            code_url = repo_client.get_file_url(file_name)
+            reproduction_urls.append(code_url)
+        return reproduction_urls

@@ -31,13 +31,14 @@ from seer.automation.autofix.utils import generate_random_string, sanitize_branc
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.utils import get_all_supported_extensions
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
-from seer.automation.utils import detect_encoding
+from seer.automation.utils import AgentError, detect_encoding
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
 
+@functools.lru_cache(maxsize=8)
 def get_github_app_auth_and_installation(
     app_id: int | str, private_key: str, repo_owner: str, repo_name: str
 ):
@@ -171,6 +172,7 @@ class RepoClient:
     repo_external_id: str
     base_commit_sha: str
     base_branch: str
+    repo_definition: RepoDefinition
 
     supported_providers = ["github"]
 
@@ -237,6 +239,7 @@ class RepoClient:
         self.base_commit_sha = repo_definition.base_commit_sha or self.get_branch_head_sha(
             self.base_branch
         )
+        self.repo_definition = repo_definition
 
         self.get_valid_file_paths = functools.lru_cache(maxsize=8)(self._get_valid_file_paths)
         self.get_commit_history = functools.lru_cache(maxsize=16)(self._get_commit_history)
@@ -433,6 +436,12 @@ class RepoClient:
         if sha is None:
             sha = self.base_commit_sha
 
+        # Normalize the path by removing leading slashes
+        if path.startswith("/"):
+            path = path[1:]
+        if path.startswith("./"):
+            path = path[2:]
+
         try:
             contents = self.repo.get_contents(path, ref=sha)
 
@@ -461,8 +470,10 @@ class RepoClient:
         valid_file_extensions = get_all_supported_extensions()
 
         for file in tree.tree:
-            if file.type == "blob" and any(
-                file.path.endswith(ext) for ext in valid_file_extensions
+            if (
+                file.type == "blob"
+                and any(file.path.endswith(ext) for ext in valid_file_extensions)
+                and file.size <= 1024 * 1024  # 1MB
             ):
                 valid_file_paths.add(file.path)
 
@@ -969,6 +980,17 @@ class RepoClient:
         data.raise_for_status()  # Raise an exception for HTTP errors
         return data.json()["head"]["sha"]
 
+    def get_current_commit_info(self, sha: str | None):
+        if sha is None:
+            sha = self.base_commit_sha
+
+        commit = self.repo.get_commit(sha)
+
+        return {
+            "sha": commit.sha,
+            "timestamp": commit.commit.author.date,
+        }
+
     def post_unit_test_reference_to_original_pr(self, original_pr_url: str, unit_test_pr_url: str):
         original_pr_id = int(original_pr_url.split("/")[-1])
         repo_name = original_pr_url.split("github.com/")[1].split("/pull")[0]
@@ -1072,3 +1094,85 @@ class RepoClient:
         branch_ref = self.repo.get_git_ref(f"heads/{branch_name}")
         branch_ref.edit(sha=new_commit.sha)
         return new_commit
+
+    def get_file_url(
+        self, file_path: str, start_line: int | None = None, end_line: int | None = None
+    ):
+        url = f"https://github.com/{self.repo_full_name}/blob/{self.base_commit_sha}/{file_path}"
+        if start_line:
+            url += f"#L{start_line}"
+        if start_line and end_line:
+            url += f"-L{end_line}"
+        elif end_line:
+            url += f"#L{end_line}"
+        return url
+
+    def get_commit_url(self, commit_sha: str):
+        return f"https://github.com/{self.repo_full_name}/commit/{commit_sha}"
+
+
+def get_repo_client(
+    repos: list[RepoDefinition],
+    repo_name: str | None = None,
+    repo_external_id: str | None = None,
+    type: RepoClientType = RepoClientType.READ,
+) -> RepoClient:
+    """
+    Gets a repo client for the current single repo or for a given repo name.
+    If there are more than 1 repos, a repo name must be provided.
+    """
+    repo: RepoDefinition | None = None
+    if len(repos) == 1:
+        repo = repos[0]
+    elif repo_name:
+        repo = next((r for r in repos if r.full_name == repo_name), None)
+    elif repo_external_id:
+        repo = next((r for r in repos if r.external_id == repo_external_id), None)
+
+    if not repo:
+        raise AgentError() from ValueError(
+            "Repo not found. Please provide a valid repo name or external ID."
+        )
+
+    return RepoClient.from_repo_definition(repo, type)
+
+
+def autocorrect_repo_name(readable_repos: list[RepoDefinition], repo_name: str) -> str | None:
+    """
+    Attempts to autocorrect a repository name by finding the closest match among available repositories.
+
+    Args:
+        readable_repos: The list of readable repositories
+        repo_name: The repository name to autocorrect
+
+    Returns:
+        The corrected repository name if a match is found, or None if no match is found
+    """
+    repo_names = [
+        repo.full_name for repo in readable_repos if repo.provider in RepoClient.supported_providers
+    ]
+    if repo_name and repo_name in repo_names:
+        return repo_name
+    elif repo_name and repo_name not in repo_names:
+        # No exact match, try to autocorrect
+        matching_full_names = [r for r in repo_names if repo_name.lower() in r.lower()]
+        names_without_owner = [
+            r.split("/")[-1] for r in matching_full_names if len(r.split("/")) > 1
+        ]  # the repo names without the orgs, e.g. "seer", not "getsentry/seer"
+        matching_names_without_owner = [
+            r for r in names_without_owner if repo_name.lower() == r.lower()
+        ]
+        if matching_names_without_owner:
+            repo_name_without_owner = matching_names_without_owner[0]
+            repo_name = next(
+                (r for r in matching_full_names if f"/{repo_name_without_owner}" in r), ""
+            )
+            if not repo_name:
+                return None
+        elif matching_full_names:
+            repo_name = min(matching_full_names, key=lambda x: abs(len(x) - len(repo_name or "")))
+        else:
+            return None
+        return repo_name
+    else:
+        return None

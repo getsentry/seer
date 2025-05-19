@@ -33,7 +33,10 @@ class FlagsAndScores(BaseModel):
         default=[],
         description="The algorithm types used to detect the anomalies",
     )
-
+    prophet_mismatch: bool = Field(
+        default=False,
+        description="Whether the prophet model used to detect the anomalies has mismatched timestamps",
+    )
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
     )
