@@ -96,25 +96,25 @@ class StaticAnalysisSuggestion(BaseModel):
 
 
 class BugPrediction(BaseModel):
-    title: str = Field(description="A concise summary title of the bug prediction. Max 10 words.")
-    short_description: str = Field(
-        description="A concise, technical explanation of the potential bug that identifies the specific risk and affected code. Phrase it politely as a suspicion. Max 75 words."
-    )
     description: str = Field(
         description="A detailed technical analysis of the bug that explains: 1) The exact failure mechanism, 2) The conditions that trigger it, 3) Why the current code is problematic, 4) Which specific code paths are affected, and 5) What could go wrong if this bug isn't fixed. Include concrete examples of variable states that would cause failure and ideally a short code snippet example. Max 350 words."
+    )
+    short_description: str = Field(
+        description="A concise, technical explanation of the potential bug that identifies the specific risk and affected code. Phrase it politely as a suspicion. Max 75 words."
     )
     suggested_fix: str = Field(
         description="A short, fluff-free, information-dense explanation of the suggested fix. Max 100 words."
     )
     encoded_location: str = Field(
-        description="Specific locations in the format of '/path/to/file.py:start_line~end_line'. If the line numbers are unknown, just include the full path to the file."
+        description="Specific location of the bug in the format of 'path/to/file.py:start_line~end_line'"
     )
     severity: float = Field(
-        description="From 0 to 1 how serious is this potential bug? Score this as if you are a developer who would have to respond to an incident caused by this bug. 1 being 'guaranteed production crash'"
+        description="From 0 to 1 how serious is this potential bug? Score this as if you are a developer who would have to respond to an incident caused by this bug. 1 being 'guaranteed production crash'. Score lower if the bug requires very specific conditions to be met. The score should be very granular, e.g., 0.432."
     )
     confidence: float = Field(
-        description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion."
+        description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion. The score should be very granular, e.g., 0.432."
     )
+    title: str = Field(description="A concise summary title of the bug prediction. Max 10 words.")
 
 
 class CodegenState(BaseModel):
@@ -390,6 +390,19 @@ class BugPredictorHypothesis(BaseModel):
         )
     )
 
+    def to_encoded_location(self) -> str:
+        location = Location(
+            filename=self.location_filename,
+            start_line=str(self.location_start_line_num),
+            end_line=str(self.location_end_line_num),
+        )
+        return location.encode()
+
+
+class LocatedBugPredictionFollowup(BaseModel):
+    followup: str
+    encoded_location: str
+
 
 class BugPredictorOutput(BaseComponentOutput):
     hypotheses_unstructured: str
@@ -408,9 +421,18 @@ class BugPredictorOutput(BaseComponentOutput):
                 raise ValueError("hypotheses and followups must be the same length")
         return v
 
+    def get_located_followups(self) -> list[LocatedBugPredictionFollowup]:
+        return [
+            LocatedBugPredictionFollowup(
+                followup=followup, encoded_location=hypothesis.to_encoded_location()
+            )
+            for followup, hypothesis in zip(self.followups, self.hypotheses)
+            if followup is not None
+        ]
+
 
 class FormatterRequest(BaseComponentRequest):
-    followups: list[str | None]
+    located_followups: list[LocatedBugPredictionFollowup]
 
 
 class FormatterOutput(BaseComponentOutput):

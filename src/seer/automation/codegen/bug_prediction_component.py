@@ -226,28 +226,20 @@ class FormatterComponent(BaseComponent[FormatterRequest, FormatterOutput]):
     def invoke(
         self, request: FormatterRequest, llm_client: LlmClient = injected
     ) -> FormatterOutput:
-        followups: list[str] = [
-            followup for followup in request.followups if followup is not None and followup != ""
-        ]
-        if not followups:
-            self.logger.info("No valid followups found to format into bug predictions")
+        if not request.located_followups:
+            self.logger.info("No followups found to format into bug predictions")
             return FormatterOutput(bug_predictions=[])
 
-        try:
-            response = llm_client.generate_structured(
-                prompt=BugPredictionPrompts.format_prompt_reformat_followups(followups),
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
-                response_format=list[BugPrediction],
-                run_name="Bug Prediction Formatter",
-                max_tokens=8192,
-            )
+        response = llm_client.generate_structured(
+            prompt=BugPredictionPrompts.format_prompt_reformat_followups(request.located_followups),
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
+            response_format=list[BugPrediction],
+            run_name="Bug Prediction Formatter",
+            max_tokens=8192,
+        )
 
-            if response.parsed is None:
-                self.logger.warning("Failed to extract structured information from bug prediction")
-                return FormatterOutput(bug_predictions=[])
-
-            return FormatterOutput(bug_predictions=response.parsed)
-
-        except Exception as e:
-            self.logger.error(f"Error formatting bug predictions: {e}")
+        if response.parsed is None:
+            self.logger.warning("Failed to extract structured information from bug prediction")
             return FormatterOutput(bug_predictions=[])
+
+        return FormatterOutput(bug_predictions=response.parsed)

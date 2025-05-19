@@ -21,6 +21,7 @@ from seer.automation.codegen.models import (
     FilterFilesRequest,
     FormatterOutput,
     FormatterRequest,
+    LocatedBugPredictionFollowup,
 )
 from seer.automation.models import RepoDefinition
 
@@ -206,27 +207,29 @@ class TestFormatterComponent:
         mock_bug_predictions,
         patch_generate_structured,
     ):
-        followups = [
-            "Some ~200-500 word followups from the agent",
-            "Another ~200-500 word followup from the agent",
-            "A third ~200-500 word followup from the agent",
+        located_followups = [
+            LocatedBugPredictionFollowup(
+                followup="Some ~200-500 word followups from the agent",
+                encoded_location="src/main.py:1~2",
+            ),
+            LocatedBugPredictionFollowup(
+                followup="Another ~200-500 word followup from the agent",
+                encoded_location="src/utils.py:3~4",
+            ),
+            LocatedBugPredictionFollowup(
+                followup="A third ~200-500 word followup from the agent",
+                encoded_location="src/renamed_file.py:5~6",
+            ),
         ]
 
-        request = FormatterRequest(followups=followups)
+        request = FormatterRequest(located_followups=located_followups)
         result = component.invoke(request)
 
         assert isinstance(result, FormatterOutput)
         assert result.bug_predictions == mock_bug_predictions
 
     def test_invoke_with_empty_followups(self, component):
-        request = FormatterRequest(followups=[])
-        result = component.invoke(request)
-
-        assert isinstance(result, FormatterOutput)
-        assert len(result.bug_predictions) == 0
-
-    def test_invoke_with_none_followups(self, component):
-        request = FormatterRequest(followups=[None, ""])
+        request = FormatterRequest(located_followups=[])
         result = component.invoke(request)
 
         assert isinstance(result, FormatterOutput)
@@ -245,7 +248,14 @@ class TestFormatterComponent:
         )
 
     def test_invoke_with_parsing_failure(self, component, patch_generate_structured_failure):
-        request = FormatterRequest(followups=["Test prediction"])
+        request = FormatterRequest(
+            located_followups=[
+                LocatedBugPredictionFollowup(
+                    followup="Test prediction",
+                    encoded_location="src/main.py:1~2",
+                ),
+            ]
+        )
         result = component.invoke(request)
 
         assert isinstance(result, FormatterOutput)
@@ -394,7 +404,7 @@ def test_bug_prediction_step_invoke(
     )
 
     bug_predictor_followups = ["Potential bug: Off-by-one error in array access"]
-    mock_invoke_bug_predictor_component.return_value = BugPredictorOutput(
+    bug_predictor_output = BugPredictorOutput(
         hypotheses_unstructured="Hypothesis text",
         hypotheses=[
             BugPredictorHypothesis(
@@ -406,6 +416,7 @@ def test_bug_prediction_step_invoke(
         ],
         followups=bug_predictor_followups,
     )
+    mock_invoke_bug_predictor_component.return_value = bug_predictor_output
 
     bug_predictions = [
         BugPrediction(
@@ -453,7 +464,7 @@ def test_bug_prediction_step_invoke(
 
     mock_invoke_formatter_component.assert_called_once()
     formatter_input = mock_invoke_formatter_component.call_args[0][0]
-    assert formatter_input.followups == bug_predictor_followups
+    assert formatter_input.located_followups == bug_predictor_output.get_located_followups()
 
     mock_post_results_to_overwatch.assert_called_once()
     assert mock_post_results_to_overwatch.call_args[0][0].bug_predictions == bug_predictions

@@ -150,7 +150,9 @@ class BugPredictionStep(CodegenStep):
         # 4. Post-process each analysis—either into a presentable bug prediction if it's verified, else nothing.
         formatter = FormatterComponent(self.context)
         formatter_output = formatter.invoke(
-            FormatterRequest(followups=bug_predictor_output.followups),
+            FormatterRequest(
+                located_followups=bug_predictor_output.get_located_followups(),
+            ),
         )
         bug_predictions = CodeBugPredictionsOutput(bug_predictions=formatter_output.bug_predictions)
 
