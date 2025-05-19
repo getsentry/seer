@@ -465,7 +465,7 @@ class BugPredictionPrompts:
             # Guidelines:
             - Your job is to simply gather all information needed to understand the code change and find critical bugs, not to propose fixes.
             - You are not able to search in external libraries. Do not attempt to search in external libraries.
-            If you don't know how an external library works, either use the Google search tool, or just say you don't know how the external library works."""
+            If you don't know how an external library works, either use the web search tool, or just say you don't know how the external library works."""
         ).format(
             focus=BugPredictionPrompts._focus_on_crashes(),
         )
@@ -500,8 +500,8 @@ class BugPredictionPrompts:
             It is important that you determine if the code change is making new assumptions.
             Feel free to hypothesize about a few things that might cause the code to crash.
             Also, for each potential bug you find, clearly state:
-              - Important things you need to investigate to determine whether the code change is correct or incorrect
-              - The full file path and line range in the codebase indicating where the potential production-crashing bug is, e.g., src/some/path/to/file_with_bug.py:239~242.
+              - Important things you need to investigate to determine whether the code change is safe or unsafe
+              - The full file path and line range in the code change indicating where the potential production-crashing bug is, e.g., src/some/path/to/file_with_bug.py:239~242.
                 This location should be a file that would be run in production.
 
             <available_repos>
@@ -528,8 +528,8 @@ class BugPredictionPrompts:
             {hypothesis_unstructured}
             </what_you_said>
 
-            Please separate this information into a list of potential bugs. If some bugs seem inter-dependent, consider them the same bug.
-            """
+            Please separate this information into a list of potential bugs. If some bugs seem inter-dependent, consider them the same bug and put them in the same list item.
+            """  # TODO: add _focus_on_crashes()?
         ).format(
             hypothesis_unstructured=hypothesis_unstructured,
         )
@@ -557,7 +557,7 @@ class BugPredictionPrompts:
             </hypothesis>
 
             Please search the codebase to see if there's evidence for this potential bug. Reference relevant parts of the codebase.
-            You should have a pretty high bar for determining that a bug is a real threat to the system.
+            You should have a pretty high bar of evidence for determining that a bug is a real threat to the system.
             Please be clear about what couldn't quite be verified, despite your best efforts.
 
             Make sure to think before making your conclusion.

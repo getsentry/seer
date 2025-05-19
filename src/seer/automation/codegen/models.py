@@ -348,18 +348,18 @@ class BugPredictorRequest(BaseComponentRequest):
     max_num_concurrent_calls: int = 6
 
 
-class BugPredictorLocation(BaseModel):
-    filename: str
-    start_line_num: int
-    end_line_num: int
-
-
 class BugPredictorHypothesis(BaseModel):
     content: str = Field(description="Description of the specific bug.")
-    location: BugPredictorLocation = Field(
+    location_filename: str = Field(
+        description="The full file path in the code change indicating the potential bug's location."
+    )
+    location_start_line_num: int = Field(
+        description="The starting line number in the code change indicating the potential bug's location."
+    )
+    location_end_line_num: int = Field(
         description=(
-            "The full file path and line range in the codebase indicating the potential bug's "
-            "location. If the bug is at one line, the end line should be the same as the start line."
+            "The ending line number in the code change indicating the potential bug's location. "
+            "If the bug is at one line, the end line should be the same as the start line."
         )
     )
 

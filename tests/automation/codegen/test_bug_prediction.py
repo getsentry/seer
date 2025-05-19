@@ -13,7 +13,6 @@ from seer.automation.codegen.bug_prediction_step import BugPredictionStep
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
     BugPredictorHypothesis,
-    BugPredictorLocation,
     BugPredictorOutput,
     BugPredictorRequest,
     FilterFilesOutput,
@@ -172,15 +171,15 @@ class TestBugPredictorComponent:
         return [
             BugPredictorHypothesis(
                 content="Hypothesis 1",
-                location=BugPredictorLocation(
-                    filename="src/main.py", start_line_num=1, end_line_num=2
-                ),
+                location_filename="src/main.py",
+                location_start_line_num=1,
+                location_end_line_num=2,
             ),
             BugPredictorHypothesis(
                 content="Hypothesis 2",
-                location=BugPredictorLocation(
-                    filename="src/utils.py", start_line_num=3, end_line_num=4
-                ),
+                location_filename="src/utils.py",
+                location_start_line_num=3,
+                location_end_line_num=4,
             ),
         ]
 
@@ -299,9 +298,9 @@ def test_bug_prediction_step_invoke(
         hypotheses=[
             BugPredictorHypothesis(
                 content="Hypothesis content",
-                location=BugPredictorLocation(
-                    filename="src/main.py", start_line_num=1, end_line_num=2
-                ),
+                location_filename="src/main.py",
+                location_start_line_num=1,
+                location_end_line_num=2,
             )
         ],
         followups=bug_predictor_followups,

@@ -130,7 +130,7 @@ class BugPredictionStep(CodegenStep):
                 status=file.status,
                 changes=file.changes,
                 sha=file.sha,
-                previous_filename=file.previous_filename,
+                previous_filename=file.previous_filename or file.filename,
                 repo_full_name=self.request.repo.full_name,
             )
             for file in pr.get_files()

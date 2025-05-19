@@ -113,7 +113,7 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
                     model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     temperature=0.0,
                     run_name=f"Follow up hypothesis {hypothesis_num}",
-                    reasoning_effort="low",
+                    reasoning_effort="medium",
                 ),
             )
         except Exception:
@@ -139,7 +139,7 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
         self.logger.info(f"Follow along at {langfuse_context.get_current_trace_url()}")
 
         with BaseTools(self.context, repo_client_type=RepoClientType.READ) as tools:
-            # Step 1a: draft hypotheses + further research requests.
+            # Step 1a: draft hypotheses + further research questions.
             agent = LlmAgent(config=AgentConfig(interactive=False), tools=tools.get_tools())
             hypotheses_unstructured = agent.run(
                 run_config=RunConfig(
@@ -166,6 +166,7 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
                 model=GeminiProvider.model("gemini-2.0-flash-001"),
                 response_format=list[BugPredictorHypothesis],
                 max_tokens=8192,
+                run_name="Separate into list of hypotheses",
             )
             hypotheses = formatted_response.parsed
 
