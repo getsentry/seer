@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
 from seer.automation.codebase.models import PrFile, format_diff
-from seer.automation.codegen.models import StaticAnalysisSuggestion
+from seer.automation.codegen.models import LocatedBugPredictionFollowup, StaticAnalysisSuggestion
 
 
 class CodingUnitTestPrompts:
@@ -574,5 +574,40 @@ class BugPredictionPrompts:
             diff=diff,
             hypothesis_unstructured=hypothesis_unstructured,
             hypothesis=hypothesis,
+            focus=BugPredictionPrompts._focus_on_crashes(),
+        )
+
+    @staticmethod
+    def format_prompt_reformat_followups(
+        located_followups: list[LocatedBugPredictionFollowup],
+    ) -> str:
+        followups_xml = "\n\n".join(
+            f'<followup id="{i+1}" encoded_location="{located_followup.encoded_location}">\n{located_followup.followup}\n</followup>'
+            for i, located_followup in enumerate(located_followups)
+        )
+
+        return textwrap.dedent(
+            """
+            You are a helpful assistant that extracts structured information from bug prediction analyses.
+            You are given the following bug prediction analyses for a pull request.
+            <followups_with_location>
+            {followups}
+            </followups_with_location>
+
+            # Your goal:
+            Review the bug prediction analyses and extract the requested output information.
+
+            # Guidelines:
+            - Ensure all fields are properly populated based on each analysis.
+            - Filter the output to only include bugs introduced by the new code in the pull request, not bugs that existed in the previous version of the code or bugs that are fixed by the new code. Pay special attention to the timing of bugs: if the analysis refers to "previous code", this indicates the bug existed in an older version and should be filtered out.
+            - Filter the output to only include predicted bugs that are fatal or critical such as one that would crash a server. To determine if the bug is fatal or critical, read the bug prediction analysis carefully and focus on the conclusion of the analysis.
+            - Deduplicate bug predictions that reflect the same core issue. Consolidate any that are related to the same bug.
+            - Use the provided encoded location on each followup to report the encoded location of the bug in the codebase.
+
+            # Focus:
+            {focus}
+            """
+        ).format(
+            followups=followups_xml,
             focus=BugPredictionPrompts._focus_on_crashes(),
         )

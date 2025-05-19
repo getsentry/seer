@@ -1,7 +1,7 @@
 import dataclasses
 from datetime import datetime
 
-from seer.automation.codegen.models import CodegenStatus, StaticAnalysisSuggestion
+from seer.automation.codegen.models import BugPrediction, CodegenStatus, StaticAnalysisSuggestion
 from seer.automation.codegen.state import CodegenContinuationState
 from seer.automation.models import FileChange
 
@@ -31,6 +31,12 @@ class CodegenEventManager:
     ):
         with self.state.update() as cur:
             cur.static_analysis_suggestions.extend(static_analysis_suggestions)
+            cur.completed_at = datetime.now()
+            cur.status = CodegenStatus.COMPLETED
+
+    def mark_completed_and_extend_bug_predictions(self, bug_predictions: list[BugPrediction]):
+        with self.state.update() as cur:
+            cur.bug_predictions.extend(bug_predictions)
             cur.completed_at = datetime.now()
             cur.status = CodegenStatus.COMPLETED
 

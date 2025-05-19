@@ -81,6 +81,7 @@ from seer.automation.codegen.models import (
     CodegenUnitTestsStateResponse,
 )
 from seer.automation.codegen.tasks import (
+    codegen_bug_prediction,
     codegen_pr_closed,
     codegen_pr_review,
     codegen_relevant_warnings,
@@ -357,6 +358,13 @@ def codegen_relevant_warnings_evaluation_start_endpoint(
     result = run_relevant_warnings_evaluation(data)
 
     return result
+
+
+@json_api(blueprint, "/v1/automation/codegen/bug-prediction")
+def codegen_bug_prediction_endpoint(
+    data: CodegenRelevantWarningsRequest,
+) -> CodegenRelevantWarningsResponse:
+    return codegen_bug_prediction(data)
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")
