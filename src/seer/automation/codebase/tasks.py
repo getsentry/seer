@@ -90,14 +90,14 @@ def collect_all_repos_for_backfill():
     for project_preference in project_preferences:
         for repo in project_preference.repositories:
             repo_definition = RepoDefinition.model_validate(repo)
-            
+
             # Create a unique key for this repository
             repo_key = (
                 project_preference.organization_id,
                 repo_definition.provider,
-                repo_definition.external_id
+                repo_definition.external_id,
             )
-            
+
             # Skip if we've already processed this repository
             if repo_key in processed_repos:
                 logger.info(
