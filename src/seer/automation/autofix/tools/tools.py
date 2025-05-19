@@ -33,7 +33,7 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
-REPO_WAIT_TIMEOUT_SECS = 120.0
+REPO_WAIT_TIMEOUT_SECS = 240.0
 
 
 class BaseTools:

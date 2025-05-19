@@ -237,7 +237,7 @@ class TestEnsureReposDownloaded:
         args, kwargs = mock_wait.call_args
         assert len(args[0]) == 1
         assert args[0][0] == futures[specific_repo_name]
-        assert kwargs["timeout"] == 120.0
+        assert kwargs["timeout"] == 240.0
         assert kwargs["return_when"] == FIRST_EXCEPTION
 
         # Verify that event_manager.add_log was called
@@ -488,7 +488,7 @@ class TestEnsureReposDownloaded:
         assert len(args[0]) == 1
         assert args[0][0] == normal_future
         assert cancelled_future not in args[0]
-        assert kwargs["timeout"] == 120.0
+        assert kwargs["timeout"] == 240.0
         assert kwargs["return_when"] == FIRST_EXCEPTION
 
     @patch("seer.automation.autofix.tools.tools.wait")
