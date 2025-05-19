@@ -32,6 +32,10 @@ class TranslateResponse(BaseModel):
     sort: str
 
 
+class TranslateResponses(BaseModel):
+    responses: list[TranslateResponse]
+
+
 class ModelResponse(BaseModel):
     explanation: str
     query: str

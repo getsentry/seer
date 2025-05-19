@@ -333,13 +333,17 @@ def select_relevant_fields_prompt(natural_language_query: str) -> str:
     """
 
 
-def get_fields_and_values_prompt(
-    natural_language_query: str, relevant_fields: list[str], field_values: dict[str, list[str]]
+def get_final_query_prompt(
+    natural_language_query: str,
+    relevant_fields: list[str],
+    field_values: dict[str, list[str]],
 ) -> str:
+
     return f"""
         ## Final Query Construction Guidelines
 
-        Based on the user's natural language query and the search guidelines provided, construct 3 options for the final query using the field names and appropriate values from the possible values.
+        Based on the user's natural language query and the search guidelines provided, construct a MAXIMUM of 3 options for the final query using the field names and appropriate values from the possible values.
+        We want to potentially return multiple queries to the user to give them a range of options to choose from since the user's intent may be captured in different ways.
         You MUST use the values from the <available_values> section to construct the query. Follow these steps carefully for each query option:
 
         1. Deeply analyze the available values for each field to identify patterns
@@ -356,7 +360,16 @@ def get_fields_and_values_prompt(
         - Why you chose to use (or not use) wildcards
         - How the query matches the user's intent
 
-        Finally, select the best query option from the 3 options you have created. You should combine the best portions from each query you have generated if applicable.
+        Return a maximum of 3 options for the final query, but only if you are confident they provide distinct value.
+        Each option must:
+        1. Honor the user's intent
+        2. Be a valid query
+        3. Provide a meaningfully different approach from other options
+        4. Have a confidence score that justifies its inclusion
+
+        Only return additional options if you are absolutely confident they will provide unique value to the user.
+        Return options in order of confidence score from highest to lowest.
+        DO NOT RETURN MORE THAN 3 OPTIONS NO MATTER WHAT.
 
         ## We have identified the following fields as most relevant to the user's query:
 
