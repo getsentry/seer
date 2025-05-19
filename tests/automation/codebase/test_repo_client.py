@@ -451,29 +451,29 @@ class TestRepoClient:
     @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
     def test_create_branch_from_changes(self, mock_create_branch, repo_client, mock_github):
         mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
-        mock_create_branch.return_value = MagicMock(ref="autofix/test-pr")
+        mock_create_branch.return_value = MagicMock(ref="seer/test-pr")
 
         result = repo_client.create_branch_from_changes(
-            pr_title="autofix/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+            pr_title="seer/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
         )
         assert result is not None
-        mock_create_branch.assert_called_with("autofix/test-pr", False)
+        mock_create_branch.assert_called_with("seer/test-pr", False)
 
     @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
     def test_create_branch_from_changes_from_base_sha(
         self, mock_create_branch, repo_client, mock_github
     ):
         mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
-        mock_create_branch.return_value = MagicMock(ref="autofix/test-pr")
+        mock_create_branch.return_value = MagicMock(ref="seer/test-pr")
 
         result = repo_client.create_branch_from_changes(
-            pr_title="autofix/Test PR",
+            pr_title="seer/Test PR",
             file_patches=[next(generate(FileChange))],
             file_changes=[],
             from_base_sha=True,
         )
         assert result is not None
-        mock_create_branch.assert_called_with("autofix/test-pr", True)
+        mock_create_branch.assert_called_with("seer/test-pr", True)
 
     @patch("seer.automation.codebase.repo_client.RepoClient._create_branch")
     def test_create_branch_from_changes_branch_already_exists(
@@ -482,14 +482,14 @@ class TestRepoClient:
         mock_github.get_repo.return_value.compare.return_value = MagicMock(ahead_by=1)
         mock_create_branch.side_effects = [
             GithubException(409, "Conflict", None, "Branch already exists"),
-            MagicMock(ref="autofix/test-pr/123456"),
+            MagicMock(ref="seer/test-pr/123456"),
         ]
 
         result = repo_client.create_branch_from_changes(
-            pr_title="autofix/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
+            pr_title="seer/Test PR", file_patches=[next(generate(FileChange))], file_changes=[]
         )
         assert result is not None
-        assert mock_create_branch.calls[0].args[0].startswith("autofix/test-pr/")
+        assert mock_create_branch.calls[0].args[0].startswith("seer/test-pr/")
 
     @pytest.mark.parametrize(
         "input_type,input_data",
