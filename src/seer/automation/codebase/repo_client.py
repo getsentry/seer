@@ -1,4 +1,3 @@
-import copy
 import functools
 import logging
 import os
@@ -137,6 +136,36 @@ class RepoClientType(str, Enum):
     CODECOV_PR_CLOSED = "codecov_pr_closed"
 
 
+class GitTreeElementWithPath:
+    """
+    A minimal wrapper around GitTreeElement that provides a custom path
+    while delegating all other attribute access to the original element.
+    """
+
+    def __init__(self, original: GitTreeElement, path: str):
+        self._original = original
+        self._path = path
+
+    @property
+    def path(self) -> str:
+        """Return our custom path instead of the original's immutable path"""
+        return self._path
+
+    @property
+    def type(self) -> str:
+        """Pass through the type property"""
+        return self._original.type
+
+    @property
+    def size(self) -> int:
+        """Pass through the size attribute if it exists"""
+        return int(getattr(self._original, "size", 0))
+
+    def __getattr__(self, name):
+        """Delegate all other attribute access to the original object"""
+        return getattr(self._original, name)
+
+
 class CompleteGitTree:
     """
     A custom class that mimics the interface of github.GitTree
@@ -144,20 +173,20 @@ class CompleteGitTree:
     """
 
     def __init__(self, github_tree: GitTree | None = None) -> None:
-        self.tree: List[GitTreeElement] = []
+        self.tree: List[GitTreeElementWithPath] = []
         self.raw_data: Dict[str, Any] = {"truncated": False}
 
         if github_tree:
-            self.add_items(github_tree.tree)
+            self.add_items([GitTreeElementWithPath(item, item.path) for item in github_tree.tree])
             for key, value in github_tree.raw_data.items():
                 if key != "truncated":  # We always set truncated to False for our complete tree
                     self.raw_data[key] = value
 
-    def add_item(self, item: GitTreeElement) -> None:
+    def add_item(self, item: GitTreeElementWithPath) -> None:
         """Add a tree item to this collection"""
         self.tree.append(item)
 
-    def add_items(self, items: List[GitTreeElement]) -> None:
+    def add_items(self, items: List[GitTreeElementWithPath]) -> None:
         """Add multiple tree items to this collection"""
         self.tree.extend(items)
 
@@ -725,19 +754,12 @@ class RepoClient:
             for subitems in executor.map(lambda i: get_subtree_items(i.sha, i.path), tree_items):
                 all_items.extend(subitems)
 
-        # Now, convert TreeItems back to GitTreeElement with correct full path
-        # by creating shallow copies with the correct path if needed
-        fixed_elements = []
+        # Now, convert TreeItems back to GitTreeElementWithPath
+        # This will implicitly handle path corrections
+        fixed_elements: List[GitTreeElementWithPath] = []
         for ti in all_items:
             orig = ti.orig
-            # Only fix path if needed
-            if getattr(orig, "path", None) != ti.path:
-                # Create a shallow copy with the correct path
-                fixed = copy.copy(orig)
-                object.__setattr__(fixed, "path", ti.path)
-                fixed_elements.append(fixed)
-            else:
-                fixed_elements.append(orig)
+            fixed_elements.append(GitTreeElementWithPath(orig, ti.path))
 
         complete_tree = CompleteGitTree()
         for item in fixed_elements:
