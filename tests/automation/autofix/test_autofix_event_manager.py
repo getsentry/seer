@@ -178,6 +178,7 @@ class TestAutofixEventManager:
         # Test case 4: Timeout while waiting for steps to be killed
         with patch.object(state, "get", wraps=state.get) as mock_get:
             mock_get.return_value = MagicMock(signals=[make_kill_signal()])
+            mock_time.reset_mock()
             mock_time.side_effect = [None] * 6  # Simulate timeout
             result = event_manager.reset_steps_to_point(0, None)
 
