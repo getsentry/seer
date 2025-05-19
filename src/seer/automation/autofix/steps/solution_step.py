@@ -148,7 +148,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
                 reproduction_urls.append(None)
                 continue
             file_name = self.context.autocorrect_file_path(
-                path=relevant_code.file_path, repo_name=repo_name
+                path=relevant_code.file_path, repo_name=repo_name, files_only=True
             )
             if not file_name:
                 reproduction_urls.append(None)
