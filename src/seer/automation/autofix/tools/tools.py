@@ -368,12 +368,6 @@ class BaseTools:
 
         return None
 
-    def _does_file_exist(self, path: str, repo_name: str) -> bool:
-        repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
-        all_files = repo_client.get_valid_file_paths()
-        normalized_path = path.lstrip("./").lstrip("/")
-        return any(p == normalized_path for p in all_files)
-
     def _normalize_path(self, path: str) -> str:
         """
         Ensures paths don't start with a slash, but do end in one, such as example/path/
@@ -917,7 +911,8 @@ class BaseTools:
         if not file_text:
             return "Error: file_text is required for create command"
 
-        already_exists = self._does_file_exist(path=path, repo_name=repo_name)
+        repo_client = self.context.get_repo_client(repo_name=repo_name)
+        already_exists = repo_client.does_file_exist(path)
         if already_exists:
             return f"Error: Cannot create file '{path}' because it already exists."
 
