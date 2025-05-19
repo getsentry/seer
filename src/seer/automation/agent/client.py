@@ -1106,13 +1106,21 @@ class GeminiProvider:
 
         usage = Usage(
             completion_tokens=(
-                response.usage_metadata.candidates_token_count if response.usage_metadata and response.usage_metadata.candidates_token_count is not None else 0
+                response.usage_metadata.candidates_token_count
+                if response.usage_metadata
+                and response.usage_metadata.candidates_token_count is not None
+                else 0
             ),
             prompt_tokens=(
-                response.usage_metadata.prompt_token_count if response.usage_metadata and response.usage_metadata.prompt_token_count is not None else 0
+                response.usage_metadata.prompt_token_count
+                if response.usage_metadata
+                and response.usage_metadata.prompt_token_count is not None
+                else 0
             ),
             total_tokens=(
-                response.usage_metadata.total_token_count if response.usage_metadata and response.usage_metadata.total_token_count is not None else 0
+                response.usage_metadata.total_token_count
+                if response.usage_metadata and response.usage_metadata.total_token_count is not None
+                else 0
             ),
         )
         langfuse_context.update_current_observation(model=self.model_name, usage=usage)
@@ -1257,13 +1265,21 @@ class GeminiProvider:
 
         usage = Usage(
             completion_tokens=(
-                response.usage_metadata.candidates_token_count if response.usage_metadata and response.usage_metadata.candidates_token_count is not None else 0
+                response.usage_metadata.candidates_token_count
+                if response.usage_metadata
+                and response.usage_metadata.candidates_token_count is not None
+                else 0
             ),
             prompt_tokens=(
-                response.usage_metadata.prompt_token_count if response.usage_metadata and response.usage_metadata.prompt_token_count is not None else 0
+                response.usage_metadata.prompt_token_count
+                if response.usage_metadata
+                and response.usage_metadata.prompt_token_count is not None
+                else 0
             ),
             total_tokens=(
-                response.usage_metadata.total_token_count if response.usage_metadata and response.usage_metadata.total_token_count is not None else 0
+                response.usage_metadata.total_token_count
+                if response.usage_metadata and response.usage_metadata.total_token_count is not None
+                else 0
             ),
         )
 
