@@ -584,7 +584,7 @@ def restart_from_point_with_feedback(
     log_seer_event(
         SeerEventNames.AUTOFIX_RESTARTED_FROM_POINT,
         {
-            "run_id": state.get().run_id,
+            "run_id": request.run_id,
             "restarting_step": step.key,
         },
     )
@@ -679,7 +679,7 @@ def restart_from_point_with_feedback(
     if is_coding_step:
         AutofixCodingStep.get_signature(
             AutofixCodingStepRequest(
-                run_id=state.get().run_id,
+                run_id=request.run_id,
                 initial_memory=memory,
             ),
             queue=app_config.CELERY_WORKER_QUEUE,
@@ -687,7 +687,7 @@ def restart_from_point_with_feedback(
     elif is_solution_step:
         AutofixSolutionStep.get_signature(
             AutofixSolutionStepRequest(
-                run_id=state.get().run_id,
+                run_id=request.run_id,
                 initial_memory=memory,
             ),
             queue=app_config.CELERY_WORKER_QUEUE,
@@ -695,7 +695,7 @@ def restart_from_point_with_feedback(
     else:
         RootCauseStep.get_signature(
             RootCauseStepRequest(
-                run_id=state.get().run_id,
+                run_id=request.run_id,
                 initial_memory=memory,
             ),
             queue=app_config.CELERY_WORKER_QUEUE,

@@ -60,7 +60,7 @@ class AutofixPipelineStep(PipelineChain, PipelineStep):
                 "organization_id": self.context.organization_id,
                 "org_slug": self.context.get_org_slug(self.context.organization_id),
                 "project": self.context.project_id,
-                "run_id": self.context.state.get().run_id,
+                "run_id": state.run_id,
                 "num_repos": len(autofix_request.repos),
                 "has_trace_tree": autofix_request.trace_tree is not None
                 and len(autofix_request.trace_tree.events) > 1,

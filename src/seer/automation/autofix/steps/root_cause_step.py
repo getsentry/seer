@@ -113,7 +113,7 @@ class RootCauseStep(AutofixPipelineStep):
         self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
 
         # confidence evaluation
-        if not self.context.state.get().request.options.disable_interactivity:
+        if not state.request.options.disable_interactivity:
             run_memory = self.context.get_memory("root_cause_analysis")
             confidence_output = ConfidenceComponent(self.context).invoke(
                 ConfidenceRequest(
