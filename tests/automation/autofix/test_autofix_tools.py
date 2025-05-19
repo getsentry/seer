@@ -969,8 +969,10 @@ class TestClaudeTools:
 
     def test_handle_create_command(self, autofix_tools: BaseTools):
         # Setup
+        mock_repo_client = MagicMock()
+        mock_repo_client.does_file_exist.return_value = False
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
         kwargs = {"file_text": "new file content"}
-        autofix_tools.context.get_file_contents.return_value = None
 
         # Setup proper request.repos structure
         mock_repo = MagicMock(full_name="test/repo", external_id="123")
@@ -1241,6 +1243,9 @@ class TestClaudeTools:
         new_path = "new/path/to/create.py"
         file_text = "This is the new file content."
         kwargs = {"command": "create", "path": new_path, "file_text": file_text}
+        mock_repo_client = MagicMock()
+        mock_repo_client.does_file_exist.return_value = False
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
 
         # Mock autocorrect_repo_name to return the repo name
         autofix_tools.context.autocorrect_repo_name.return_value = repo_name
@@ -1249,8 +1254,6 @@ class TestClaudeTools:
         # Mock _attempt_fix_path to return None, simulating the path not existing
         # Note: This mock is on the context, as that's where _get_repo_name_and_path calls it
         autofix_tools._attempt_fix_path = MagicMock(return_value=None)
-        # Mock get_file_contents to return None (as the file shouldn't exist yet)
-        autofix_tools.context.get_file_contents = MagicMock(return_value=None)
         # Mock _append_file_change to simulate successful application
         autofix_tools._append_file_change = MagicMock(return_value=True)
         # Mock make_file_patches to return a proper FilePatch for file creation
@@ -1286,19 +1289,11 @@ class TestClaudeTools:
             result = autofix_tools.handle_claude_tools(**kwargs)
 
             # Assert
-            # 1. Check that _attempt_fix_path was called for the new path (it should be)
             autofix_tools._attempt_fix_path.assert_called_once_with(new_path, repo_name)
-            # 2. Check that get_file_contents was called (by _handle_create_command)
-            autofix_tools.context.get_file_contents.assert_called_once_with(
-                new_path, repo_name=repo_name
-            )
-            # 3. Check that make_file_patches was called
+            autofix_tools.context.get_repo_client.assert_called_once_with(repo_name=repo_name)
             mock_make_patches.assert_called_once()
-            # 4. Check that _append_file_change was called
             autofix_tools._append_file_change.assert_called_once()
-            # 5. Check that the result indicates success (not a path error)
             assert "Change applied successfully" in result
-            # 6. Check event manager logs and insights were called
             autofix_tools.context.event_manager.add_log.assert_called()
             autofix_tools.context.event_manager.send_insight.assert_called_once()
 

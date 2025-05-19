@@ -510,6 +510,14 @@ class RepoClient:
 
         return valid_file_paths
 
+    def does_file_exist(self, path: str, sha: str | None = None) -> bool:
+        if sha is None:
+            sha = self.base_commit_sha
+
+        all_files = self.get_valid_file_paths(sha)
+        normalized_path = path.lstrip("./").lstrip("/")
+        return normalized_path in all_files
+
     def get_example_commit_titles(self, max_commits: int = 5) -> list[str]:
         commits = self.repo.get_commits(sha=self.base_commit_sha)
         commit_list = list(commits[:max_commits])
