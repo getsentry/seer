@@ -159,7 +159,7 @@ class GitTreeElementWithPath:
     @property
     def size(self) -> int:
         """Pass through the size attribute if it exists"""
-        return getattr(self._original, "size", None)
+        return int(getattr(self._original, "size", 0))
 
     def __getattr__(self, name):
         """Delegate all other attribute access to the original object"""
@@ -177,7 +177,7 @@ class CompleteGitTree:
         self.raw_data: Dict[str, Any] = {"truncated": False}
 
         if github_tree:
-            self.add_items(github_tree.tree)
+            self.add_items([GitTreeElementWithPath(item, item.path) for item in github_tree.tree])
             for key, value in github_tree.raw_data.items():
                 if key != "truncated":  # We always set truncated to False for our complete tree
                     self.raw_data[key] = value
