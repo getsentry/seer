@@ -121,6 +121,7 @@ class CodegenState(BaseModel):
     run_id: int = -1
     file_changes: list[FileChange] = Field(default_factory=list)
     static_analysis_suggestions: list[StaticAnalysisSuggestion] = Field(default_factory=list)
+    bug_predictions: list[BugPrediction] = Field(default_factory=list)
     status: CodegenStatus = CodegenStatus.PENDING
     last_triggered_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
@@ -346,7 +347,7 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
 
 
 class CodeBugPredictionsOutput(BaseComponentOutput):
-    predictions: list[BugPrediction]
+    bug_predictions: list[BugPrediction]
 
 
 class FilterFilesRequest(BaseComponentRequest):
@@ -393,11 +394,11 @@ class BugPredictorOutput(BaseComponentOutput):
         return v
 
 
-class BugPredictorFormatterInput(BaseComponentRequest):
+class FormatterRequest(BaseComponentRequest):
     followups: list[str | None]
 
 
-class BugPredictorFormatterOutput(BaseComponentOutput):
+class FormatterOutput(BaseComponentOutput):
     bug_predictions: list[BugPrediction]
 
 

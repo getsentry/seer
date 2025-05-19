@@ -6,19 +6,23 @@ from langfuse.decorators import observe
 
 from celery_app.app import celery_app
 from integrations.codecov.codecov_auth import get_codecov_auth_header
-from seer.automation.agent.client import GeminiProvider, LlmClient
 from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
 from seer.automation.codebase.models import PrFile
 from seer.automation.codebase.repo_client import RepoClientType
-from seer.automation.codegen.bug_prediction_component import BugPredictorFormatterComponent
+from seer.automation.codegen.bug_prediction_component import (
+    BugPredictorComponent,
+    FilterFilesComponent,
+    FormatterComponent,
+)
 from seer.automation.codegen.models import (
-    BugPredictorFormatterInput,
+    BugPredictorRequest,
     CodeBugPredictionsOutput,
     CodegenRelevantWarningsRequest,
-    CodePredictStaticAnalysisSuggestionsOutput,
+    FilterFilesRequest,
+    FormatterRequest,
 )
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -63,9 +67,13 @@ class BugPredictionStep(CodegenStep):
             self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
+        bug_predictions_json = (
+            [bp.model_dump() for bp in bug_predictions.bug_predictions] if bug_predictions else []
+        )
+
         request = {
             "run_id": self.context.run_id,
-            "results": bug_predictions.bug_predictions,
+            "results": bug_predictions_json,
             "diagnostics": diagnostics or [],
         }
         request_data = json.dumps(request, separators=(",", ":")).encode("utf-8")
@@ -91,7 +99,7 @@ class BugPredictionStep(CodegenStep):
             self.logger.exception("Error posting relevant warnings results to Overwatch")
             raise
         finally:
-            self.context.event_manager.mark_completed_and_extend_static_analysis_suggestions(
+            self.context.event_manager.mark_completed_and_extend_bug_predictions(
                 bug_predictions_output.bug_predictions if bug_predictions_output else []
             )
 
@@ -100,13 +108,8 @@ class BugPredictionStep(CodegenStep):
         self.logger.info("Executing Codegen - Bug Prediction Step")
         self.context.event_manager.mark_running()
 
-        """
         # 1. Read the PR.
-        if self.request.repo.base_commit_sha is None:
-            self.request.repo.base_commit_sha = self.request.commit_sha
-        repo_client = self.context.get_repo_client(
-            repo_name=self.request.repo.full_name, type=RepoClientType.READ
-        )
+        repo_client = self.context.get_repo_client(type=RepoClientType.READ)
         pr = repo_client.repo.get_pull(self.request.pr_id)
         pr_files = [
             PrFile(
@@ -138,44 +141,13 @@ class BugPredictionStep(CodegenStep):
                 pr_body=pr.body,
             )
         )
-        """
-
-        # TODO - add here for local testing
-        followups = temp_get_followups_inputs(2198)
-        llm_client = LlmClient()
-        # end TODO
 
         # 4. Post-process each analysis—either into a presentable bug prediction if it's verified, else nothing.
-        bug_prediction_formatter = BugPredictorFormatterComponent(self.context)
-        bug_predictions = bug_prediction_formatter.invoke(
-            request=BugPredictorFormatterInput(followups=followups),
-            llm_client=llm_client,
+        formatter = FormatterComponent(self.context)
+        formatter_output = formatter.invoke(
+            FormatterRequest(followups=bug_predictor_output.followups),
         )
-
-        bug_predictions = CodeBugPredictionsOutput(bug_predictions=bug_predictions.bug_predictions)
-
-        print(bug_predictions)
+        bug_predictions = CodeBugPredictionsOutput(bug_predictions=formatter_output.bug_predictions)
 
         # 5. Save results.
         self._complete_run(bug_predictions, diagnostics=None)
-
-
-# TODO - remove this once we have a real flow
-def temp_get_followups_inputs(pr_id: int):
-    from pathlib import Path
-
-    # Go up to the main directory
-    base_dir = Path(__file__).resolve().parents[4]  # Go up 4 levels from the current file
-    followups_dir = base_dir / "tests" / "automation" / "codegen" / "fixtures" / "bug_prediction"
-    followups = []
-
-    if followups_dir.exists() and followups_dir.is_dir():
-        # Look for the specific PR ID directory
-        pr_dir = followups_dir / str(pr_id)
-        if pr_dir.exists() and pr_dir.is_dir():
-            # Read all text files in the PR ID directory
-            for file_path in sorted(pr_dir.glob("*.txt")):
-                with open(file_path, "r") as f:
-                    followups.append(f.read())
-
-    return followups

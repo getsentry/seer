@@ -8,15 +8,19 @@ from seer.automation.codebase.models import PrFile
 from seer.automation.codegen.bug_prediction_component import (
     BugPredictorComponent,
     FilterFilesComponent,
+    FormatterComponent,
 )
 from seer.automation.codegen.bug_prediction_step import BugPredictionStep
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
+    BugPrediction,
     BugPredictorHypothesis,
     BugPredictorOutput,
     BugPredictorRequest,
     FilterFilesOutput,
     FilterFilesRequest,
+    FormatterOutput,
+    FormatterRequest,
 )
 from seer.automation.models import RepoDefinition
 
@@ -75,6 +79,30 @@ def mock_pr_files():
             status="removed",
             changes=5,
             sha="sha4",
+        ),
+    ]
+
+
+@pytest.fixture
+def mock_bug_predictions():
+    return [
+        BugPrediction(
+            title="IndexError in root_cause_step.py can crash the server",
+            short_description="The code in `root_cause_step.py` might crash the server due to an `IndexError` when accessing `root_cause_output.causes[0].id` without checking if `root_cause_output.causes` is empty.",
+            description="In `root_cause_step.py`, the code directly accesses `root_cause_output.causes[0].id` without verifying that `root_cause_output.causes` is not empty. If the root cause analysis returns an empty list of causes, accessing the first element will raise an `IndexError`, which is not caught and can crash the server. This scenario occurs when the automated root cause analysis fails to identify any potential causes. The `event_manager.send_root_cause_analysis_result` method and other parts of the codebase already handle the empty causes case, indicating that this condition is expected and should be handled gracefully. Failing to do so in `root_cause_step.py` introduces a critical vulnerability.",
+            suggested_fix="Add a check to ensure `root_cause_output.causes` is not empty before accessing `root_cause_output.causes[0].id`. If it's empty, handle the case gracefully, possibly by skipping the subsequent steps or logging an error.",
+            encoded_location="root_cause_step.py",
+            severity=0.9,
+            confidence=0.9,
+        ),
+        BugPrediction(
+            title="Potential null reference in `resolve_comment_thread` could crash server",
+            short_description="The code might crash due to accessing `.id` on a potentially null `active_comment_thread` in `resolve_comment_thread`. This could happen if a thread is resolved multiple times.",
+            description="The `resolve_comment_thread` function attempts to access `cur.steps[step_index].active_comment_thread.id` without checking if `active_comment_thread` is None. If `active_comment_thread` is None, this will raise an AttributeError, crashing the request. This can occur if a thread is resolved multiple times, or if there's a race condition. For example, if `active_comment_thread` is already None due to a previous resolve operation, accessing `.id` will cause a crash.",
+            suggested_fix="Add a null check before accessing the `id` property of `active_comment_thread`. Change `elif request.payload.thread_id == cur.steps[step_index].active_comment_thread.id:` to `elif cur.steps[step_index].active_comment_thread and request.payload.thread_id == cur.steps[step_index].active_comment_thread.id:`",
+            encoded_location="src/seer/automation/autofix/tasks.py",
+            severity=0.9,
+            confidence=0.9,
         ),
     ]
 
@@ -149,6 +177,77 @@ class TestFilterFilesComponent:
         assert isinstance(output, FilterFilesOutput)
         assert len(output.pr_files) == request.num_files_desired
         assert output.pr_files == mock_pr_files
+
+
+class TestFormatterComponent:
+    @pytest.fixture
+    def component(self):
+        return FormatterComponent(context=MagicMock())
+
+    @pytest.fixture
+    def patch_generate_structured(
+        self, monkeypatch: pytest.MonkeyPatch, mock_bug_predictions: list[BugPrediction]
+    ):
+        def mock_generate_structured(*args, **kwargs):
+            completion = MagicMock(spec=LlmGenerateStructuredResponse)
+            completion.parsed = mock_bug_predictions
+            return completion
+
+        monkeypatch.setattr(
+            "seer.automation.codegen.bug_prediction_component.LlmClient.generate_structured",
+            mock_generate_structured,
+        )
+
+    def test_invoke_with_valid_prediction(
+        self,
+        component: FormatterComponent,
+        mock_bug_predictions,
+        patch_generate_structured,
+    ):
+        followups = [
+            "Some ~200-500 word followups from the agent",
+            "Another ~200-500 word followup from the agent",
+            "A third ~200-500 word followup from the agent",
+        ]
+
+        request = FormatterRequest(followups=followups)
+        result = component.invoke(request)
+
+        assert isinstance(result, FormatterOutput)
+        assert result.bug_predictions == mock_bug_predictions
+
+    def test_invoke_with_empty_followups(self, component):
+        request = FormatterRequest(followups=[])
+        result = component.invoke(request)
+
+        assert isinstance(result, FormatterOutput)
+        assert len(result.bug_predictions) == 0
+
+    def test_invoke_with_none_followups(self, component):
+        request = FormatterRequest(followups=[None, ""])
+        result = component.invoke(request)
+
+        assert isinstance(result, FormatterOutput)
+        assert len(result.bug_predictions) == 0
+
+    @pytest.fixture
+    def patch_generate_structured_failure(self, monkeypatch: pytest.MonkeyPatch):
+        def mock_generate_structured(*args, **kwargs):
+            completion = MagicMock(spec=LlmGenerateStructuredResponse)
+            completion.parsed = None
+            return completion
+
+        monkeypatch.setattr(
+            "seer.automation.codegen.bug_prediction_component.LlmClient.generate_structured",
+            mock_generate_structured,
+        )
+
+    def test_invoke_with_parsing_failure(self, component, patch_generate_structured_failure):
+        request = FormatterRequest(followups=["Test prediction"])
+        result = component.invoke(request)
+
+        assert isinstance(result, FormatterOutput)
+        assert len(result.bug_predictions) == 0
 
 
 class TestBugPredictorComponent:
@@ -242,6 +341,7 @@ class TestBugPredictorComponent:
         ]
 
 
+@patch("seer.automation.codegen.bug_prediction_component.FormatterComponent.invoke")
 @patch("seer.automation.codegen.bug_prediction_component.BugPredictorComponent.invoke")
 @patch("seer.automation.codegen.bug_prediction_component.FilterFilesComponent.invoke")
 @patch("seer.automation.codegen.step.CodegenStep._instantiate_context", new_callable=MagicMock)
@@ -253,6 +353,7 @@ def test_bug_prediction_step_invoke(
     mock_instantiate_context: Mock,
     mock_invoke_filter_files_component: Mock,
     mock_invoke_bug_predictor_component: Mock,
+    mock_invoke_formatter_component: Mock,
 ):
     mock_repo_client = MagicMock()
     mock_pr = MagicMock()
@@ -285,6 +386,19 @@ def test_bug_prediction_step_invoke(
         followups=bug_predictor_followups,
     )
 
+    bug_predictions = [
+        BugPrediction(
+            title="Bug prediction 1",
+            description="Bug prediction 1 description",
+            short_description="Bug prediction 1 short description",
+            suggested_fix="Bug prediction 1 suggested fix",
+            encoded_location="Bug prediction 1 encoded location",
+            severity=0.5,
+            confidence=0.5,
+        )
+    ]
+    mock_invoke_formatter_component.return_value = FormatterOutput(bug_predictions=bug_predictions)
+
     request = {
         "repo": {
             "name": "repo1",
@@ -316,4 +430,9 @@ def test_bug_prediction_step_invoke(
     assert bug_predictor_request.pr_title == "Test PR"
     assert bug_predictor_request.pr_body == "Test PR description"
 
+    mock_invoke_formatter_component.assert_called_once()
+    formatter_input = mock_invoke_formatter_component.call_args[0][0]
+    assert formatter_input.followups == bug_predictor_followups
+
     mock_post_results_to_overwatch.assert_called_once()
+    assert mock_post_results_to_overwatch.call_args[0][0].bug_predictions == bug_predictions
