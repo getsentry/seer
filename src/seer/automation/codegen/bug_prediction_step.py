@@ -15,13 +15,14 @@ from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.bug_prediction_component import (
     BugPredictorComponent,
     FilterFilesComponent,
+    FormatterComponent,
 )
 from seer.automation.codegen.models import (
     BugPredictorRequest,
+    CodeBugPredictionsOutput,
     CodegenRelevantWarningsRequest,
-    CodePredictStaticAnalysisSuggestionsOutput,
     FilterFilesRequest,
-    StaticAnalysisSuggestion,
+    FormatterRequest,
 )
 from seer.automation.codegen.step import CodegenStep
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -58,7 +59,7 @@ class BugPredictionStep(CodegenStep):
     @inject
     def _post_results_to_overwatch(
         self,
-        llm_suggestions: CodePredictStaticAnalysisSuggestionsOutput | None,
+        bug_predictions: CodeBugPredictionsOutput | None,
         diagnostics: list | None,
         config: AppConfig = injected,
     ):
@@ -66,20 +67,13 @@ class BugPredictionStep(CodegenStep):
             self.logger.info("Skipping posting relevant warnings results to Overwatch.")
             return
 
-        # This should be a temporary solution until we can update
-        # Overwatch to accept the new format.
-        suggestions_to_overwatch_expected_format = (
-            [
-                suggestion.to_overwatch_format().model_dump()
-                for suggestion in llm_suggestions.suggestions
-            ]
-            if llm_suggestions
-            else []
+        bug_predictions_json = (
+            [bp.model_dump() for bp in bug_predictions.bug_predictions] if bug_predictions else []
         )
 
         request = {
             "run_id": self.context.run_id,
-            "results": suggestions_to_overwatch_expected_format,
+            "results": bug_predictions_json,
             "diagnostics": diagnostics or [],
         }
         request_data = json.dumps(request, separators=(",", ":")).encode("utf-8")
@@ -96,19 +90,17 @@ class BugPredictionStep(CodegenStep):
 
     def _complete_run(
         self,
-        static_analysis_suggestions_output: CodePredictStaticAnalysisSuggestionsOutput | None,
+        bug_predictions_output: CodeBugPredictionsOutput | None,
         diagnostics: list | None,
     ):
         try:
-            self._post_results_to_overwatch(static_analysis_suggestions_output, diagnostics)
+            self._post_results_to_overwatch(bug_predictions_output, diagnostics)
         except Exception:
             self.logger.exception("Error posting relevant warnings results to Overwatch")
             raise
         finally:
-            self.context.event_manager.mark_completed_and_extend_static_analysis_suggestions(
-                static_analysis_suggestions_output.suggestions
-                if static_analysis_suggestions_output
-                else []
+            self.context.event_manager.mark_completed_and_extend_bug_predictions(
+                bug_predictions_output.bug_predictions if bug_predictions_output else []
             )
 
     @observe(name="Codegen - Bug Prediction Step")
@@ -156,22 +148,13 @@ class BugPredictionStep(CodegenStep):
         )
 
         # 4. Post-process each analysis—either into a presentable bug prediction if it's verified, else nothing.
-        verified_bug_predictions = bug_predictor_output.followups
-        # TODO: filter and summarize followups. Re-using StaticAnalysisSuggestion for now.
-        bug_predictions = CodePredictStaticAnalysisSuggestionsOutput(
-            suggestions=[
-                StaticAnalysisSuggestion(
-                    path="",
-                    line=0,
-                    short_description=verified_bug_prediction,
-                    justification="",
-                    missing_evidence=[],
-                    severity_score=0.0,
-                    confidence_score=0.0,
-                )
-                for verified_bug_prediction in verified_bug_predictions
-            ]
+        formatter = FormatterComponent(self.context)
+        formatter_output = formatter.invoke(
+            FormatterRequest(
+                located_followups=bug_predictor_output.get_located_followups(),
+            ),
         )
+        bug_predictions = CodeBugPredictionsOutput(bug_predictions=formatter_output.bug_predictions)
 
         # 5. Save results.
         self._complete_run(bug_predictions, diagnostics=None)
