@@ -20,7 +20,7 @@ class Anomaly(BaseModel):
 
 class TimeSeriesPoint(BaseModel):
     timestamp: float
-    value: float
+    value: Optional[float]
     anomaly: Optional[Anomaly] = None
 
 

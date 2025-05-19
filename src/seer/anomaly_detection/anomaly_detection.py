@@ -222,6 +222,12 @@ class AnomalyDetection(BaseModel):
         logger.info(f"Detecting anomalies for alert ID: {alert.id}")
         ts_external: List[TimeSeriesPoint] = []
         if alert.cur_window:
+            if alert.cur_window.value is None:
+                sentry_sdk.capture_message(
+                    "time_series_point_has_none_value",
+                    level="warning",
+                )
+                raise ClientError("Time series point has None value")
             ts_external.append(
                 TimeSeriesPoint(
                     timestamp=alert.cur_window.timestamp,
