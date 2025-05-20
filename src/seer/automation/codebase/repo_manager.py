@@ -341,8 +341,12 @@ class RepoManager:
         """
         Copy the repository to a new directory.
         """
+        logger.info(f"Copying repository from {self.repo_path} to {self.tmp_dir}/{target_folder}")
+        start_time = time.time()
         target_path = os.path.join(self.tmp_dir, target_folder)
         shutil.copytree(self.repo_path, target_path, symlinks=True)
+        end_time = time.time()
+        logger.info(f"Copied repository in {end_time - start_time} seconds")
         return target_path
 
     def _prune_repo(self, *, repo_path: str | None = None):
@@ -389,7 +393,7 @@ class RepoManager:
         # Clean up completely - expire reflog, remove unreachable objects
         logger.info("Cleaning Git repository to minimal state")
         git_repo.git.execute(["git", "reflog", "expire", "--expire=now", "--all"])
-        git_repo.git.execute(["git", "gc", "--prune=now", "--aggressive"])
+        git_repo.git.execute(["git", "gc", "--prune=now"])
 
         # Remove all remotes
         git_repo.git.execute(["git", "remote", "remove", "origin"])
