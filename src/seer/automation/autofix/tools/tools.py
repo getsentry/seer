@@ -17,7 +17,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingOutput,
     InsightSharingType,
 )
-from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.models import AutofixContinuation, AutofixRequest
 from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
@@ -358,7 +358,11 @@ class BaseTools:
 
         if not ignore_local_changes:
             cur_state = self.context.state.get()
-            repo_file_changes = cur_state.codebases[repo_client.repo_external_id].file_changes
+            repo_file_changes = (
+                cur_state.codebases[repo_client.repo_external_id].file_changes
+                if isinstance(cur_state, AutofixContinuation)
+                else cur_state.file_changes
+            )
             new_file_paths = {x.path for x in repo_file_changes if x.change_type == "create"}
             all_files.update(new_file_paths)
 
