@@ -403,7 +403,7 @@ class RepoManager:
         """
         Upload the repository from the cloned tmp directory to GCS.
         This method uses a thread to perform the upload without blocking.
-        
+
         Args:
             copy_repo: Whether to copy the repository before uploading. Defaults to True.
                        Set to False for backfill initialization to avoid unnecessary copying.
@@ -469,7 +469,11 @@ class RepoManager:
                     os.unlink(temp_tarfile)
 
                 # Clean up the copied repo if we made one
-                if copy_repo and os.path.exists(repo_path_to_use) and repo_path_to_use != self.repo_path:
+                if (
+                    copy_repo
+                    and os.path.exists(repo_path_to_use)
+                    and repo_path_to_use != self.repo_path
+                ):
                     shutil.rmtree(repo_path_to_use)
 
     def get_db_archive_entry(self, session: SQLAlchemySession):
