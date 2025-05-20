@@ -17,7 +17,7 @@ from seer.automation.autofix.components.insight_sharing.models import (
     InsightSharingOutput,
     InsightSharingType,
 )
-from seer.automation.autofix.models import AutofixRequest
+from seer.automation.autofix.models import AutofixContinuation, AutofixRequest
 from seer.automation.autofix.tools.read_file_contents import read_file_contents
 from seer.automation.autofix.tools.ripgrep_search import run_ripgrep_in_repo
 from seer.automation.codebase.file_patches import make_file_patches
@@ -33,7 +33,7 @@ from seer.rpc import RpcClient
 logger = logging.getLogger(__name__)
 
 MAX_FILES_IN_TREE = 100
-REPO_WAIT_TIMEOUT_SECS = 120.0
+REPO_WAIT_TIMEOUT_SECS = 240.0
 
 
 class BaseTools:
@@ -342,7 +342,9 @@ class BaseTools:
         joined = "\n".join(unique_parents)
         return f"<did you mean>\n{joined}\n</did you mean>"
 
-    def _attempt_fix_path(self, path: str, repo_name: str, files_only: bool = False) -> str | None:
+    def _attempt_fix_path(
+        self, path: str, repo_name: str, files_only: bool = False, ignore_local_changes: bool = True
+    ) -> str | None:
         """
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
 
@@ -353,6 +355,16 @@ class BaseTools:
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_files = repo_client.get_valid_file_paths()
+
+        if not ignore_local_changes:
+            cur_state = self.context.state.get()
+            repo_file_changes = (
+                cur_state.codebases[repo_client.repo_external_id].file_changes
+                if isinstance(cur_state, AutofixContinuation)
+                else cur_state.file_changes
+            )
+            new_file_paths = {x.path for x in repo_file_changes if x.change_type == "create"}
+            all_files.update(new_file_paths)
 
         normalized_path = path.lstrip("./").lstrip("/")
         if not normalized_path:
@@ -703,7 +715,7 @@ class BaseTools:
             repo_name = repos[0]
             path = path_args
 
-        fixed_path = self._attempt_fix_path(path, repo_name)
+        fixed_path = self._attempt_fix_path(path, repo_name, ignore_local_changes=False)
         if not fixed_path:
             if allow_nonexistent_paths:
                 return None, repo_name, path
@@ -911,8 +923,10 @@ class BaseTools:
         if not file_text:
             return "Error: file_text is required for create command"
 
-        existing_content = self.context.get_file_contents(path, repo_name=repo_name)
-        if existing_content is not None:
+        already_exists = self.context.does_file_exist(
+            path=path, repo_name=repo_name, ignore_local_changes=False
+        )
+        if already_exists:
             return f"Error: Cannot create file '{path}' because it already exists."
 
         file_change = self._create_file_change(

@@ -408,6 +408,18 @@ class TestAnomalyDetection(unittest.TestCase):
         assert isinstance(response.timeseries[0], TimeSeriesPoint)
         assert response.timeseries[0].timestamp == new_timestamp
 
+    def test_detect_anomalies_online_none_value(self):
+
+        new_timestamp = len(self.ts_values) + datetime.now().timestamp() + 1
+        context = AlertInSeer(id=0, cur_window=TimeSeriesPoint(timestamp=new_timestamp, value=None))
+
+        request = DetectAnomaliesRequest(
+            organization_id=0, project_id=0, config=self.config_15, context=context
+        )
+        with self.assertRaises(ClientError) as e:
+            AnomalyDetection().detect_anomalies(request=request)
+        assert "Time series point has None value" in str(e.exception)
+
     def test_detect_anomalies_combo(self):
 
         loaded_synthetic_data = convert_synthetic_ts(

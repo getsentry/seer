@@ -988,3 +988,18 @@ class TestRepoClient:
         file_paths = sorted([item.path for item in tree.tree if item.type == "blob"])
         # Should include all files with correct full paths
         assert file_paths == ["dir1/dir2/file3.py", "dir1/file2.py", "file1.py"]
+
+    def test_does_file_exist(self, repo_client, mock_github):
+        repo_client.get_valid_file_paths = MagicMock(
+            return_value=["file1.py", "dir1/file2.py", "dir1/dir2/file3.py"]
+        )
+
+        file_path_1 = "file1.py"
+        file_path_2 = "/dir1/file2.py"
+        file_path_3 = "./dir1/dir2/file3.py"
+        file_path_4 = "dir1/dir2/file4.py"
+
+        assert repo_client.does_file_exist(file_path_1)
+        assert repo_client.does_file_exist(file_path_2)
+        assert repo_client.does_file_exist(file_path_3)
+        assert not repo_client.does_file_exist(file_path_4)

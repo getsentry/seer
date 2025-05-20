@@ -10,13 +10,7 @@ from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.models import RepoDefinition
 from seer.configuration import AppConfig
-from seer.db import (
-    DbSeerBackfillJob,
-    DbSeerBackfillState,
-    DbSeerProjectPreference,
-    DbSeerRepoArchive,
-    Session,
-)
+from seer.db import DbSeerBackfillJob, DbSeerBackfillState, DbSeerProjectPreference, Session
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
@@ -91,67 +85,84 @@ def collect_all_repos_for_backfill():
     logger.info(f"Found {len(project_preferences)} project preferences to backfill")
 
     backfill_jobs: list[BackfillJob] = []
+    processed_repos = set()  # Tracks (org_id, repo_provider, repo_external_id)
 
     for project_preference in project_preferences:
         for repo in project_preference.repositories:
             repo_definition = RepoDefinition.model_validate(repo)
 
-            with Session() as session:
-                existing_archive = (
-                    session.query(DbSeerRepoArchive)
-                    .filter(
-                        DbSeerRepoArchive.organization_id == project_preference.organization_id,
-                        DbSeerRepoArchive.bucket_name == RepoManager.get_bucket_name(),
-                        DbSeerRepoArchive.blob_path
-                        == RepoManager.make_blob_name(
-                            project_preference.organization_id,
-                            repo_definition.provider,
-                            repo_definition.owner,
-                            repo_definition.name,
-                            repo_definition.external_id,
-                        ),
-                    )
-                    .first()
-                )
+            # Create a unique key for this repository
+            repo_key = (
+                project_preference.organization_id,
+                repo_definition.provider,
+                repo_definition.external_id,
+            )
 
-            if not existing_archive:
-                backfill_jobs.append(
-                    BackfillJob(
-                        organization_id=project_preference.organization_id,
-                        repo_definition=repo_definition,
-                    )
-                )
-            else:
-                # TODO: For dev purposes, this will make our backfill jobs run every 30 minutes, which is ok as long as we maintain the hardcoded list of project ids
-                with Session() as session:
-                    existing_backfill_job = (
-                        session.query(DbSeerBackfillJob)
-                        .filter(
-                            DbSeerBackfillJob.organization_id == project_preference.organization_id,
-                            DbSeerBackfillJob.repo_provider == repo_definition.provider,
-                            DbSeerBackfillJob.repo_external_id == repo_definition.external_id,
-                        )
-                        .first()
-                    )
-
-                    if existing_backfill_job:
-                        session.delete(existing_backfill_job)
-                        session.commit()
-
-                backfill_jobs.append(
-                    BackfillJob(
-                        organization_id=project_preference.organization_id,
-                        repo_definition=repo_definition,
-                    )
-                )
-
+            # Skip if we've already processed this repository
+            if repo_key in processed_repos:
                 logger.info(
-                    f"DEBUG: Will be running backfill for {repo_definition.full_name} of org {project_preference.organization_id}"
+                    f"Repository {repo_definition.full_name} for org {project_preference.organization_id} already added to backfill jobs, skipping."
+                )
+                continue
+
+            with Session() as session:
+                # existing_archive = (
+                #     session.query(DbSeerRepoArchive)
+                #     .filter(
+                #         DbSeerRepoArchive.organization_id == project_preference.organization_id,
+                #         DbSeerRepoArchive.bucket_name == RepoManager.get_bucket_name(),
+                #         DbSeerRepoArchive.blob_path
+                #         == RepoManager.make_blob_name(
+                #             project_preference.organization_id,
+                #             repo_definition.provider,
+                #             repo_definition.owner,
+                #             repo_definition.name,
+                #             repo_definition.external_id,
+                #         ),
+                #     )
+                #     .first()
+                # )
+
+                # TODO: For dev purposes, this will make our backfill jobs run every 30 minutes, which is ok as long as we maintain the hardcoded list of project ids
+                existing_backfill_jobs = (
+                    session.query(DbSeerBackfillJob)
+                    .filter(
+                        DbSeerBackfillJob.organization_id == project_preference.organization_id,
+                        DbSeerBackfillJob.repo_provider == repo_definition.provider,
+                        DbSeerBackfillJob.repo_external_id == repo_definition.external_id,
+                    )
+                    .all()
                 )
 
-                # logger.info(
-                #     f"Repo {repo_definition.full_name} for org {project_preference.organization_id} already exists in archive with id {existing_archive.id}, skipping."
-                # )
+                if existing_backfill_jobs:
+                    for existing_backfill_job in existing_backfill_jobs:
+                        session.delete(existing_backfill_job)
+                    session.commit()
+
+            logger.info(
+                f"DEBUG: Will be running backfill for {repo_definition.full_name} of org {project_preference.organization_id}"
+            )
+
+            backfill_jobs.append(
+                BackfillJob(
+                    organization_id=project_preference.organization_id,
+                    repo_definition=repo_definition,
+                )
+            )
+            processed_repos.add(repo_key)
+
+            # if not existing_archive:
+            #     backfill_jobs.append(
+            #         BackfillJob(
+            #             organization_id=project_preference.organization_id,
+            #             repo_definition=repo_definition,
+            #         )
+            #     )
+            # else:
+
+            #     logger.info(
+            #         f"Repo {repo_definition.full_name} for org {project_preference.organization_id} already exists in archive with id {existing_archive.id}, skipping."
+            #     )
 
     logger.info(f"Collected {len(backfill_jobs)} repos for backfill")
 
