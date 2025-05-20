@@ -691,7 +691,7 @@ class RepoClient:
 
         return matching_file.patch
 
-    def _create_branch(self, branch_name, from_base_sha=True):
+    def _create_branch(self, branch_name, from_base_sha=False):
         ref = self.repo.create_git_ref(
             ref=f"refs/heads/{branch_name}",
             sha=(
@@ -842,7 +842,7 @@ class RepoClient:
         file_patches: list[FilePatch] | None = None,
         file_changes: list[FileChange] | None = None,
         branch_name: str | None = None,
-        from_base_sha: bool = True,
+        from_base_sha: bool = False,
     ) -> GitRef | None:
         """
         Create a new branch based from the base_commit_sha for the changes suggested by Autofix.
@@ -900,8 +900,8 @@ class RepoClient:
             self.get_branch_head_sha(self.base_branch), branch_ref.object.sha
         )
 
-        # Remove the branch if there are no changes
         if comparison.ahead_by < 1:
+            # Remove the branch if there are no changes
             try:
                 branch_ref.delete()
             except UnknownObjectException:
