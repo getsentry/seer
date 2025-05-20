@@ -736,4 +736,4 @@ def test_prune_repo_show_ref_error(repo_manager):
     with patch("seer.automation.codebase.repo_manager.git.Repo", return_value=mock_git):
         repo_manager._prune_repo()
         mock_git.git.execute.assert_any_call(["git", "reflog", "expire", "--expire=now", "--all"])
-        mock_git.git.execute.assert_any_call(["git", "gc", "--prune=now", "--aggressive"])
+        mock_git.git.execute.assert_any_call(["git", "gc", "--prune=now"])
