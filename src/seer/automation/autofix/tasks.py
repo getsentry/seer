@@ -1017,7 +1017,6 @@ def run_autofix_evaluation_on_item(
     dataset_item_trace_id = None
     with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
         dataset_item_trace_id = trace_id
-        logger.info("Hi there -----------------------------------------------")
         try:
             final_state = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
         except Exception as e:
