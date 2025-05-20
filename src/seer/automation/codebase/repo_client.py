@@ -877,21 +877,19 @@ class RepoClient:
                 except Exception as e:
                     logger.exception(f"Error processing file change: {e}")
         # latest commit is the head of new branch
-        new_branch_latest_commit = self.repo.get_git_commit(
-            self.get_branch_head_sha(new_branch_name)
-        )
-        base_tree = new_branch_latest_commit.tree
+        latest_commit = self.repo.get_git_commit(self.get_branch_head_sha(new_branch_name))
+        base_tree = latest_commit.tree
         new_tree = self.repo.create_git_tree(tree_elements, base_tree)
 
         new_commit = self.repo.create_git_commit(
-            message=pr_title, tree=new_tree, parents=[new_branch_latest_commit]
+            message=pr_title, tree=new_tree, parents=[latest_commit]
         )
 
         branch_ref.edit(sha=new_commit.sha)
 
         # Check that the changes were made
         comparison = self.repo.compare(
-            self.get_branch_head_sha(self.base_branch), new_branch_latest_commit.sha
+            self.get_branch_head_sha(self.base_branch), latest_commit.sha
         )
 
         # Remove the branch if there are no changes
