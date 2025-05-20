@@ -359,8 +359,8 @@ class BaseTools:
         if not ignore_local_changes:
             cur_state = self.context.state.get()
             repo_file_changes = cur_state.codebases[repo_client.repo_external_id].file_changes
-            new_file_paths = [x.path for x in repo_file_changes if x.change_type == "create"]
-            all_files.extend(new_file_paths)
+            new_file_paths = {x.path for x in repo_file_changes if x.change_type == "create"}
+            all_files.update(new_file_paths)
 
         normalized_path = path.lstrip("./").lstrip("/")
         if not normalized_path:

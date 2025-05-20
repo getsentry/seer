@@ -1145,8 +1145,13 @@ class TestClaudeTools:
 
     def test_handle_claude_tools_with_error(self, autofix_tools: BaseTools):
         # Setup
-        autofix_tools.context._get_repo_names = MagicMock(return_value=["test/repo"])
-        autofix_tools.context._attempt_fix_path = MagicMock(return_value=None)
+        mock_repo_client = MagicMock()
+        mock_repo_client.get_valid_file_paths.return_value = set()
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.context.state.get.return_value = MagicMock(
+            request=MagicMock(codebases={"123": MagicMock(file_changes=[])}),
+            readable_repos=[MagicMock(full_name="test/repo")],
+        )
 
         # Test
         result = autofix_tools.handle_claude_tools(command="view", path="invalid/path")
