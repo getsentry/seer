@@ -91,6 +91,32 @@ class CodegenContext(PipelineContext):
 
         return file_contents
 
+    def does_file_exist(
+        self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
+    ) -> bool:
+        if len(self.repos) > 1:
+            if not repo_name:
+                raise ValueError("Repo name is required when there are multiple repos.")
+
+            if repo_name not in [repo.full_name for repo in self.repos]:
+                raise ValueError(f"Repo '{repo_name}' not found in the list of repos.")
+
+        repo_client = self.get_repo_client(repo_name)
+        does_exist_on_remote = repo_client.does_file_exist(path)
+        if does_exist_on_remote:
+            return True
+
+        if not ignore_local_changes:
+            cur_state = self.state.get()
+            repo_file_changes = cur_state.codebases[repo_client.repo_external_id].file_changes
+            current_file_changes = list(
+                filter(lambda x: x.path == path and x.change_type == "create", repo_file_changes)
+            )
+            if current_file_changes:
+                return True
+
+        return False
+
     def store_memory(self, key: str, memory: list[Message]):
         with Session() as session:
             memory_record = (

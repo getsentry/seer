@@ -875,6 +875,156 @@ class TestGetFileContents(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.autofix_context.get_file_contents("test.py")
 
+    def test_does_file_exist(self):
+        pass
+
+    def test_does_file_exist_remote_exists(self):
+        # Setup
+        self.mock_repo_client.does_file_exist.return_value = True
+        self.autofix_context.get_repo_client = MagicMock(return_value=self.mock_repo_client)
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+
+        result = self.autofix_context.does_file_exist("test.py")
+        self.assertTrue(result)
+        self.mock_repo_client.does_file_exist.assert_called_once_with("test.py")
+
+    def test_does_file_exist_local_create_no_ignore(self):
+        # Setup
+        self.mock_repo_client.does_file_exist.return_value = False
+        self.autofix_context.get_repo_client = MagicMock(return_value=self.mock_repo_client)
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+        with self.state.update() as cur:
+            cur.codebases["123"].file_changes = [
+                FileChange(
+                    path="test.py",
+                    change_type="create",
+                    new_snippet="content",
+                    description="desc",
+                    reference_snippet="",
+                )
+            ]
+
+        result = self.autofix_context.does_file_exist("test.py", ignore_local_changes=False)
+        self.assertTrue(result)
+        self.mock_repo_client.does_file_exist.assert_called_once_with("test.py")
+
+    def test_does_file_exist_local_create_with_ignore(self):
+        # Setup
+        self.mock_repo_client.does_file_exist.return_value = False
+        self.autofix_context.get_repo_client = MagicMock(return_value=self.mock_repo_client)
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+        with self.state.update() as cur:
+            cur.codebases["123"].file_changes = [
+                FileChange(
+                    path="test.py",
+                    change_type="create",
+                    new_snippet="content",
+                    description="desc",
+                    reference_snippet="",
+                )
+            ]
+
+        result = self.autofix_context.does_file_exist("test.py", ignore_local_changes=True)
+        self.assertFalse(result)
+        self.mock_repo_client.does_file_exist.assert_called_once_with("test.py")
+
+    def test_does_file_exist_not_exists_no_local(self):
+        # Setup
+        self.mock_repo_client.does_file_exist.return_value = False
+        self.autofix_context.get_repo_client = MagicMock(return_value=self.mock_repo_client)
+        self.autofix_context.repos = [
+            RepoDefinition(provider="github", owner="test", name="repo", external_id="123")
+        ]
+        # Ensure no local changes for this path
+        with self.state.update() as cur:
+            cur.codebases["123"].file_changes = [
+                FileChange(
+                    path="other.py",
+                    change_type="create",
+                    new_snippet="content",
+                    description="desc",
+                    reference_snippet="",
+                )
+            ]
+
+        result = self.autofix_context.does_file_exist("test.py")
+        self.assertFalse(result)
+        self.mock_repo_client.does_file_exist.assert_called_once_with("test.py")
+
+    def test_does_file_exist_multiple_repos_no_name(self):
+        # Setup
+        self.autofix_context.repos = [
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo1",
+                external_id="123",
+                full_name="test/repo1",
+            ),
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo2",
+                external_id="456",
+                full_name="test/repo2",
+            ),
+        ]
+
+        with self.assertRaises(ValueError) as context:
+            self.autofix_context.does_file_exist("test.py")
+        self.assertEqual(
+            str(context.exception), "Repo name is required when there are multiple repos."
+        )
+
+    def test_does_file_exist_multiple_repos_repo_not_found(self):
+        # Setup
+        self.autofix_context.repos = [
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo1",
+                external_id="123",
+                full_name="test/repo1",
+            ),
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo2",
+                external_id="456",
+                full_name="test/repo2",
+            ),
+        ]
+
+        with self.assertRaises(ValueError) as context:
+            self.autofix_context.does_file_exist("test.py", repo_name="nonexistent/repo")
+        self.assertEqual(
+            str(context.exception), "Repo 'nonexistent/repo' not found in the list of repos."
+        )
+
+    def test_does_file_exist_single_repo_correct_behavior(self):
+        # Setup
+        self.mock_repo_client.does_file_exist.return_value = True
+        self.autofix_context.get_repo_client = MagicMock(return_value=self.mock_repo_client)
+        self.autofix_context.repos = [
+            RepoDefinition(
+                provider="github",
+                owner="test",
+                name="repo",
+                external_id="123",
+                full_name="test/repo1",
+            )
+        ]
+
+        result = self.autofix_context.does_file_exist("test.py")  # No repo_name needed
+        self.assertTrue(result)
+        self.mock_repo_client.does_file_exist.assert_called_once_with("test.py")
+
 
 if __name__ == "__main__":
     unittest.main()

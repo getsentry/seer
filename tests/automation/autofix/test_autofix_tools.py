@@ -972,6 +972,7 @@ class TestClaudeTools:
         mock_repo_client = MagicMock()
         mock_repo_client.does_file_exist.return_value = False
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.context.does_file_exist.return_value = False
         kwargs = {"file_text": "new file content"}
 
         # Setup proper request.repos structure
@@ -1246,7 +1247,7 @@ class TestClaudeTools:
         mock_repo_client = MagicMock()
         mock_repo_client.does_file_exist.return_value = False
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
-
+        autofix_tools.context.does_file_exist.return_value = False
         # Mock autocorrect_repo_name to return the repo name
         autofix_tools.context.autocorrect_repo_name.return_value = repo_name
         # Mock _get_repo_names to return a single repo
@@ -1290,7 +1291,9 @@ class TestClaudeTools:
 
             # Assert
             autofix_tools._attempt_fix_path.assert_called_once_with(new_path, repo_name)
-            autofix_tools.context.get_repo_client.assert_called_once_with(repo_name=repo_name)
+            autofix_tools.context.does_file_exist.assert_called_once_with(
+                path=new_path, repo_name=repo_name, ignore_local_changes=False
+            )
             mock_make_patches.assert_called_once()
             autofix_tools._append_file_change.assert_called_once()
             assert "Change applied successfully" in result
