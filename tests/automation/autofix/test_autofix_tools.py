@@ -972,6 +972,7 @@ class TestClaudeTools:
         mock_repo_client = MagicMock()
         mock_repo_client.does_file_exist.return_value = False
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.context.does_file_exist.return_value = False
         kwargs = {"file_text": "new file content"}
 
         # Setup proper request.repos structure
@@ -1144,8 +1145,13 @@ class TestClaudeTools:
 
     def test_handle_claude_tools_with_error(self, autofix_tools: BaseTools):
         # Setup
-        autofix_tools.context._get_repo_names = MagicMock(return_value=["test/repo"])
-        autofix_tools.context._attempt_fix_path = MagicMock(return_value=None)
+        mock_repo_client = MagicMock()
+        mock_repo_client.get_valid_file_paths.return_value = set()
+        autofix_tools.context.get_repo_client.return_value = mock_repo_client
+        autofix_tools.context.state.get.return_value = MagicMock(
+            request=MagicMock(codebases={"123": MagicMock(file_changes=[])}),
+            readable_repos=[MagicMock(full_name="test/repo")],
+        )
 
         # Test
         result = autofix_tools.handle_claude_tools(command="view", path="invalid/path")
@@ -1246,7 +1252,7 @@ class TestClaudeTools:
         mock_repo_client = MagicMock()
         mock_repo_client.does_file_exist.return_value = False
         autofix_tools.context.get_repo_client.return_value = mock_repo_client
-
+        autofix_tools.context.does_file_exist.return_value = False
         # Mock autocorrect_repo_name to return the repo name
         autofix_tools.context.autocorrect_repo_name.return_value = repo_name
         # Mock _get_repo_names to return a single repo
@@ -1289,8 +1295,12 @@ class TestClaudeTools:
             result = autofix_tools.handle_claude_tools(**kwargs)
 
             # Assert
-            autofix_tools._attempt_fix_path.assert_called_once_with(new_path, repo_name)
-            autofix_tools.context.get_repo_client.assert_called_once_with(repo_name=repo_name)
+            autofix_tools._attempt_fix_path.assert_called_once_with(
+                new_path, repo_name, ignore_local_changes=False
+            )
+            autofix_tools.context.does_file_exist.assert_called_once_with(
+                path=new_path, repo_name=repo_name, ignore_local_changes=False
+            )
             mock_make_patches.assert_called_once()
             autofix_tools._append_file_change.assert_called_once()
             assert "Change applied successfully" in result
@@ -1314,7 +1324,9 @@ class TestClaudeTools:
 
         # Assert
         # Check that _attempt_fix_path was called
-        autofix_tools._attempt_fix_path.assert_called_once_with(nonexistent_path, repo_name)
+        autofix_tools._attempt_fix_path.assert_called_once_with(
+            nonexistent_path, repo_name, ignore_local_changes=False
+        )
         # Check that the result is the expected path error message
         assert (
             f"Error: The path you provided '{nonexistent_path}' does not exist in the repository '{repo_name}'."
