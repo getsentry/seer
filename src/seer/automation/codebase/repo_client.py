@@ -691,6 +691,17 @@ class RepoClient:
 
         return matching_file.patch
 
+    def _create_branch(self, branch_name, from_base_sha=True):
+        ref = self.repo.create_git_ref(
+            ref=f"refs/heads/{branch_name}",
+            sha=(
+                self.base_commit_sha
+                if from_base_sha
+                else self.get_branch_head_sha(self.base_branch)
+            ),
+        )
+        return ref
+
     def _get_git_tree(self, commit_sha: str) -> CompleteGitTree:
         """
         Get the git tree for a specific sha, handling truncation with divide and conquer.
@@ -831,6 +842,7 @@ class RepoClient:
         file_patches: list[FilePatch] | None = None,
         file_changes: list[FileChange] | None = None,
         branch_name: str | None = None,
+        from_base_sha: bool = True,
     ) -> GitRef | None:
         """
         Create a new branch based from the base_commit_sha for the changes suggested by Autofix.
@@ -841,16 +853,12 @@ class RepoClient:
         new_branch_name = sanitize_branch_name(branch_name or pr_title)
 
         try:
-            branch_ref = self.repo.create_git_ref(
-                ref=f"refs/heads/{new_branch_name}", sha=self.base_commit_sha
-            )
+            branch_ref = self._create_branch(new_branch_name, from_base_sha)
         except GithubException as e:
             # only use the random suffix if the branch already exists
             if e.status == 409 or e.status == 422:
                 new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
-                branch_ref = self.repo.create_git_ref(
-                    ref=f"refs/heads/{new_branch_name}", sha=self.base_commit_sha
-                )
+                branch_ref = self._create_branch(new_branch_name, from_base_sha)
             else:
                 raise e
 
