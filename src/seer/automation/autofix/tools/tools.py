@@ -384,6 +384,10 @@ class BaseTools:
         """
         Ensures paths don't start with a slash, but do end in one, such as example/path/
         """
+        if (
+            path == "." or path == "./" or path == ""
+        ):  # different ways to represent the root directory
+            return ""
         normalized_path = path.strip("/") + "/" if path.strip("/") else ""
         return normalized_path
 
