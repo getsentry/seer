@@ -242,8 +242,8 @@ def get_cache_prompt(
           - timestamp:+7d (timestamp is before 7 days ago)
         - Use absolute time with comparison operators:
           - timestamp:>2025-05-12 (date)
-          - timestamp:>2025-05-12T00:00:00Z (date and time in UTC)
-          - timestamp:>2025-05-12T00:00:00+00:00 (date, time, and specific timezone)
+          - timestamp:<=2025-05-12T00:00:00Z (date and time in UTC)
+          - timestamp:>=2025-05-12T00:00:00+00:00 (date, time, and specific timezone)
 
         ## Visualization Guidelines
 
