@@ -1,7 +1,6 @@
 import logging
 
 import sentry_sdk
-from langfuse.decorators import observe
 
 from seer.automation.agent.client import LlmClient
 from seer.automation.assisted_query.models import CreateCacheRequest, CreateCacheResponse
@@ -30,7 +29,6 @@ REQUIRED_FIELD_PREFIXES = [
 
 
 @inject
-@observe(name="Create assisted query cache")
 @sentry_sdk.trace
 def create_cache(
     data: CreateCacheRequest, llm_client: LlmClient = injected, rpc_client: RpcClient = injected

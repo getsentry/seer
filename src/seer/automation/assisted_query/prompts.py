@@ -11,8 +11,8 @@ def get_cache_prompt(
     fields_with_definitions = _get_fields_with_definitions(fields=fields)
 
     prompt = textwrap.dedent(
-        f"""You are a principal performance engineer who is the leading expert in Sentry's Trace Explorer page which is a tool for analyzing hundres of thousands of traces and spans.
-        There is a lot of data on the page, so you need to be able to select the right fields and functions to visualize the data in a way that is most useful to the user so they can find the answers to their questionsas fast as possible.
+        f"""You are a principal performance engineer who is the leading expert in Sentry's Trace Explorer page which is a tool for analyzing hundreds of thousands of traces and spans.
+        There is a lot of data on the page, so you need to be able to select the right fields and functions to visualize the data in a way that is most useful to the user so they can find the answers to their questions as fast as possible.
 
         ## Your Overall Tasks:
         1. Translate a user's natural language query into a valid Sentry search query.
@@ -52,16 +52,17 @@ def get_cache_prompt(
 
         Search queries are constructed using a key:value pattern.
         Each key:value pair is a token.
-        The key:value pair tokens are treated as issue or event properties.
+        The key:value pair tokens are treated as trace or span properties.
+        If a value is a string, it should be enclosed in double quotes. This is important because if there are spaces in the value, it should be treated as a single value.
 
         For example:
-        - is:resolved user.username:"Jane Doe" server:web-8
-        In the example above, there are three keys (is:, user.username:, server:)
+        - user.username:"Jane Doe" server:web-8
+        In the example above, there are two keys (user.username:, server:)
+        Notice how "Jane Doe" is enclosed in double quotes because there are spaces in the value so it is treated as a single value.
 
-        - is:resolved
         - user.username:"Jane Doe"
         - server:web-8
-        The tokens is:resolved and user.username:"Jane Doe" are standard search tokens because both use reserved keywords.
+        The token user.username:"Jane Doe" is a standard search token because it uses reserved keywords.
         The token server:web-8 is pointing to a custom tag sent by the Sentry SDK.
 
         ### Comparison Operators
@@ -80,6 +81,7 @@ def get_cache_prompt(
         - event.timestamp:>2023-09-28T00:00:00-07:00
         - count_dead_clicks:<=10
         - transaction.duration:>5s
+        - span.duration:>500ms
 
         ### Using OR and AND
 
@@ -103,13 +105,14 @@ def get_cache_prompt(
 
         You can search multiple values for the same key by putting the values in a list.
         For example, "x:[value1, value2]" will find the the same results as "x:value1 OR x:value2".
-        When you do this, the search returns issues/events that match any search term.
+        When you do this, the search returns spans that match any search term.
 
         An example of searching on the same key with a list of values:
 
         - release:[12.0, 13.0]
+        - span.op:[http.client, db]
 
-        Currently, you can't use this type of search on the keyword is and you can't use wildcards with this type of search.
+        Currently, you can't use this type of search on the keyword "is" and you can not use wildcards with this type of search.
 
         ### Explicit Tag Syntax
 
@@ -124,13 +127,13 @@ def get_cache_prompt(
 
         ### Exclusion
 
-        By default, search terms use the AND operator; that is, they return the intersection of issues/events that match all search terms.
+        By default, search terms use the AND operator; that is, they return the intersection of spans that match all search terms.
 
-        To change this, you can use the negation operator ! to exclude a search parameter.
+        To change this, you can use the negation operator ! to exclude a search parameter. You must place the negation operator ! before the search parameter.
 
-        - is:unresolved !user.email:example@customer.com
+        - !user.email:example@customer.com
 
-        In the example above, the search query returns all Issues that are unresolved and have not affected the user with the email address example@customer.com.
+        In the example above, the search query returns all spans that do not include the user with the email address example@customer.com.
 
         ### Wildcards
 
@@ -154,7 +157,13 @@ def get_cache_prompt(
              - youtube.com/video1
              - youtube.com/video2
              - youtube.com/video3
+             - https://www.youtube.com/watch?v=dQw4w9WgXcQ
            - Use span.description:*youtube.com* to match all YouTube URLs
+           - You can also use wildcards in the middle of the string to match a pattern:
+             - /api/123/users
+             - /api/456/users
+             - /api/789/users
+           - Use span.description:*/api/*/users* to match all API URLs
 
         3. Field-Specific Guidelines:
            - For fields like span.description that often contain URLs or paths:
@@ -187,22 +196,22 @@ def get_cache_prompt(
         Lets start with a simple query and build up from there.
 
         **Simple Query**:
-        is:unresolved
+        user.username:"Jane Doe"
 
         **Adding a Filter**:
-        is:unresolved browser:Chrome
+        user.username:"Jane Doe" browser:Chrome
 
         **Adding an Exclusion**:
-        is:unresolved browser:Chrome !user.email:*@example.com
+        user.username:"Jane Doe" browser:Chrome !user.email:*@example.com
 
-        **Using Comparison Operators**:
-        is:unresolved browser:Chrome !user.email:*@example.com transaction.duration:>500ms
+        **Using Comparison and Exclusion Operators**:
+        user.username:"Jane Doe" browser:Chrome transaction.duration:>500ms !user.email:*@example.com
 
         **Complex Query with Parentheses to Group Conditions**:
-        is:unresolved (browser:Chrome OR browser:Firefox) transaction.duration:>500ms !user.email:*@example.com
+        user.username:"Jane Doe" (browser:Chrome OR browser:Firefox) transaction.duration:>500ms !user.email:"*@example.com"
 
         ## Examples of Valid Queries
-        1. is:resolved user.username:"Jane Doe" server:web-8 example error
+        1. user.username:"Jane Doe" server:web-8 example error
         2. span.op:http.client AND span.description:"users" AND span.duration:>50ms
         3. browser:Chrome OR browser:Opera
         4. "" (empty string when no query is necessary)
@@ -225,6 +234,17 @@ def get_cache_prompt(
 
         When creating a query, do not include any escape tokens. Return it as directly as possible
 
+        ## Time-Based Queries
+
+        Sentry supports time-based queries to filter data by time.
+        - Use relative time
+          - timestamp:-24h (timestamp is after 24 hours ago)
+          - timestamp:+7d (timestamp is before 7 days ago)
+        - Use absolute time with comparison operators:
+          - timestamp:>2025-05-12 (date)
+          - timestamp:>2025-05-12T00:00:00Z (date and time in UTC)
+          - timestamp:>2025-05-12T00:00:00+00:00 (date, time, and specific timezone)
+
         ## Visualization Guidelines
 
         You must also select the right chart type and y-axes for the query.
@@ -240,13 +260,13 @@ def get_cache_prompt(
 
         The y-axes are a list of strings, each representing a function to aggregate the data by.
 
-        Select from the following functions: [avg, count, p50, p75, p95, p99, p100, sum, min, max] and any of the available fields.
+        Select from the following functions: [avg, count, count_unique, p50, p75, p90, p95, p99, p100, sum, min, max] and any of the available fields.
         Return as many functions as you need to visualize the data with a field. OTHER THAN COUNT, A FUNCTION MUST HAVE A FIELD TO AGGREGATE BY.
-        For example, if you want to visualize the average span duration AND the p90 of span duration, you should return it as a list: ["avg(span.duration)", "p90(span.duration)"]
+        For example, if you want to visualize the average span duration AND the p90 of span duration in the same chart, you should return it as a list: ["avg(span.duration)", "p90(span.duration)"]
 
         If you are grouping by a field, you should return a visualization for each function you want to visualize such that each chart has each group visible.
 
-        For example, if you are grouping by "user.geo.country_code" and want to visualize both the p50 and the avg, then you should return a list of 2 visualizations:
+        For example, if you are grouping by "user.geo.country_code" and want to visualize both the p50 and the avg, then you should return a list of 2 visualizations so they are each on their own chart:
 
         [
             Chart(
@@ -300,7 +320,7 @@ def _get_fields_with_definitions(fields: list[str]) -> str:
             if field in all_properties_map:
                 available_blocks[field] = all_properties_map[field]
             else:
-                available_blocks[field] = "..."
+                available_blocks[field] = "no def"
 
     # XXX: Commented out for now, will include functions once we have them formalized
     # for function in available_functions:
@@ -314,7 +334,7 @@ def _get_fields_with_definitions(fields: list[str]) -> str:
 
     formatted_available_blocks = ""
     for key, value in available_blocks.items():
-        formatted_available_blocks += f"- {key} -> {value}\n"
+        formatted_available_blocks += f"{key}: {value}\n"
 
     return formatted_available_blocks
 
