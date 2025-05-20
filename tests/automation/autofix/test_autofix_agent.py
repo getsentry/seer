@@ -384,3 +384,47 @@ def test_get_completion_retries_truncates_anthropic_input_too_long(
     ), "Second call did not use the correctly truncated memory"
 
     assert result == mock_success_response, "Final result should be the success response"
+
+
+def test_run_iteration_skips_duplicate_tool_calls(autofix_agent, run_config):
+    """
+    If a tool call with the same function and args was already called, AutofixAgent should not call it again,
+    and should append a message indicating the tool was not called again.
+    """
+    # Prepare memory with a previous tool call result
+    prev_tool_call = ToolCall(id="t1", function="fix_bug", args='{"line": 42}')
+    autofix_agent.memory = [
+        Message(role="user", content="Please fix the bug on line 42."),
+        Message(role="assistant", content="Calling fix_bug tool", tool_calls=[prev_tool_call]),
+        Message(role="tool", content="Bug fixed!", tool_call_id="t1", tool_call_function="fix_bug"),
+    ]
+    # Prepare a completion that tries to call the same tool with the same args
+    duplicate_tool_call = ToolCall(id="t2", function="fix_bug", args='{"line": 42}')
+    completion_message = Message(
+        role="assistant",
+        content="Calling fix_bug tool again",
+        tool_calls=[duplicate_tool_call],
+    )
+    completion = LlmGenerateTextResponse(
+        message=completion_message,
+        metadata=LlmResponseMetadata(
+            model=run_config.model.model_name,
+            provider_name=run_config.model.provider_name,
+            usage=Usage(completion_tokens=1, prompt_tokens=1, total_tokens=2),
+        ),
+    )
+    autofix_agent.get_completion = lambda rc: completion
+    autofix_agent.call_tool = MagicMock()
+
+    with autofix_agent.context.state.update() as state:
+        state.steps = [DefaultStep(status=AutofixStatus.PROCESSING, key="test", title="Test")]
+    with autofix_agent.manage_run():
+        autofix_agent.run_iteration(run_config)
+    # The duplicate tool call should not have triggered call_tool
+    autofix_agent.call_tool.assert_not_called()
+    # The last message should indicate the tool was not called again
+    assert autofix_agent.memory[-1].role == "tool"
+    assert (
+        "not called again" in autofix_agent.memory[-1].content
+        and "already called" in autofix_agent.memory[-1].content
+    )

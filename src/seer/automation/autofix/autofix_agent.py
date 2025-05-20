@@ -303,7 +303,26 @@ class AutofixAgent(LlmAgent):
         # call any tools the model wants to use
         if completion.message.tool_calls:
             for i, tool_call in enumerate(completion.message.tool_calls):
-                if i < MAX_PARALLEL_TOOL_CALLS:  # only allowing up to 3 simultaneous tool calls
+                duplicate_found = False
+                for msg in self.memory:
+                    if msg.tool_calls:
+                        if any(
+                            tool_call.function == existing_tool_call.function
+                            and tool_call.args == existing_tool_call.args
+                            for existing_tool_call in msg.tool_calls
+                        ):
+                            duplicate_found = True
+                            break
+                if duplicate_found:
+                    self.memory.append(
+                        Message(
+                            role="tool",
+                            content="You've already called this tool with the same arguments, so it was not called again. Please refer to your old results. If you are struggling to find what you need, try using a different tool.",
+                            tool_call_id=tool_call.id,
+                            tool_call_function=tool_call.function,
+                        )
+                    )
+                elif i < MAX_PARALLEL_TOOL_CALLS:  # only allowing up to 3 simultaneous tool calls
                     tool_response = self.call_tool(tool_call)
                     self.memory.append(tool_response)
                 else:
