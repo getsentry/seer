@@ -691,17 +691,6 @@ class RepoClient:
 
         return matching_file.patch
 
-    def _create_branch(self, branch_name, from_base_sha=False):
-        ref = self.repo.create_git_ref(
-            ref=f"refs/heads/{branch_name}",
-            sha=(
-                self.base_commit_sha
-                if from_base_sha
-                else self.get_branch_head_sha(self.base_branch)
-            ),
-        )
-        return ref
-
     def _get_git_tree(self, commit_sha: str) -> CompleteGitTree:
         """
         Get the git tree for a specific sha, handling truncation with divide and conquer.
@@ -842,20 +831,26 @@ class RepoClient:
         file_patches: list[FilePatch] | None = None,
         file_changes: list[FileChange] | None = None,
         branch_name: str | None = None,
-        from_base_sha: bool = False,
     ) -> GitRef | None:
+        """
+        Create a new branch based from the base_commit_sha for the changes suggested by Autofix.
+        """
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
 
         new_branch_name = sanitize_branch_name(branch_name or pr_title)
 
         try:
-            branch_ref = self._create_branch(new_branch_name, from_base_sha)
+            branch_ref = self.repo.create_git_ref(
+                ref=f"refs/heads/{new_branch_name}", sha=self.base_commit_sha
+            )
         except GithubException as e:
             # only use the random suffix if the branch already exists
             if e.status == 409 or e.status == 422:
                 new_branch_name = f"{new_branch_name}-{generate_random_string(n=6)}"
-                branch_ref = self._create_branch(new_branch_name, from_base_sha)
+                branch_ref = self.repo.create_git_ref(
+                    ref=f"refs/heads/{new_branch_name}", sha=self.base_commit_sha
+                )
             else:
                 raise e
 
@@ -882,23 +877,25 @@ class RepoClient:
                 except Exception as e:
                     logger.exception(f"Error processing file change: {e}")
         # latest commit is the head of new branch
-        latest_commit = self.repo.get_git_commit(self.get_branch_head_sha(new_branch_name))
-        base_tree = latest_commit.tree
+        new_branch_latest_commit = self.repo.get_git_commit(
+            self.get_branch_head_sha(new_branch_name)
+        )
+        base_tree = new_branch_latest_commit.tree
         new_tree = self.repo.create_git_tree(tree_elements, base_tree)
 
         new_commit = self.repo.create_git_commit(
-            message=pr_title, tree=new_tree, parents=[latest_commit]
+            message=pr_title, tree=new_tree, parents=[new_branch_latest_commit]
         )
 
         branch_ref.edit(sha=new_commit.sha)
 
         # Check that the changes were made
         comparison = self.repo.compare(
-            self.get_branch_head_sha(self.base_branch), branch_ref.object.sha
+            self.get_branch_head_sha(self.base_branch), new_branch_latest_commit.sha
         )
 
+        # Remove the branch if there are no changes
         if comparison.ahead_by < 1:
-            # Remove the branch if there are no changes
             try:
                 branch_ref.delete()
             except UnknownObjectException:

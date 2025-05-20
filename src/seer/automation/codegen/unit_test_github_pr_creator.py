@@ -36,7 +36,6 @@ class GeneratedTestsPullRequestCreator:
             pr_title=pr_title,
             file_changes=self.file_changes_payload,
             branch_name=branch_name,
-            from_base_sha=True,
         )
 
         if not branch_ref:
