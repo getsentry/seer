@@ -309,6 +309,7 @@ class AutofixAgent(LlmAgent):
                         if any(
                             tool_call.function == existing_tool_call.function
                             and tool_call.args == existing_tool_call.args
+                            and tool_call.id != existing_tool_call.id
                             for existing_tool_call in msg.tool_calls
                         ):
                             duplicate_found = True
