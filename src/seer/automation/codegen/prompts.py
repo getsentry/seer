@@ -3,7 +3,8 @@ import textwrap
 from pydantic import BaseModel
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
-from seer.automation.codegen.models import StaticAnalysisSuggestion
+from seer.automation.codebase.models import PrFile, format_diff
+from seer.automation.codegen.models import LocatedBugPredictionFollowup, StaticAnalysisSuggestion
 
 
 class CodingUnitTestPrompts:
@@ -432,4 +433,181 @@ class RetryUnitTestPrompts:
         ).format(
             code_coverage_info=code_coverage_info,
             test_result_info=test_result_info,
+        )
+
+
+class BugPredictionPrompts:
+    @staticmethod
+    def _focus_on_crashes() -> str:
+        return textwrap.dedent(
+            """\
+            IMPORTANT: we are **not** looking for:
+            - silent failures
+            - gracefully handled failures
+            - security concerns
+            - performance concerns.
+
+            Focus exclusively on bugs that will cause the server to unexpectedly crash.
+            Be careful about interpreting a code change that *intentionally* raises an error."""
+        )
+
+    @staticmethod
+    def format_system_msg() -> str:
+        # Lightly edited from:
+        # src/seer/automation/autofix/components/root_cause/prompts.py
+        return textwrap.dedent(
+            """\
+            You are an exceptional AI detective that is amazing at digging deep into code changes.
+            {focus}
+
+            You have tools to search repos to gather relevant information across the codebase. Please use the tools as many times as you want to gather relevant information.
+
+            # Guidelines:
+            - Your job is to simply gather all information needed to understand the code change and find critical bugs, not to propose fixes.
+            - You are not able to search in external libraries. Do not attempt to search in external libraries.
+            If you don't know how an external library works, either use the web search tool, or just say you don't know how the external library works."""
+        ).format(
+            focus=BugPredictionPrompts._focus_on_crashes(),
+        )
+
+    @staticmethod
+    def format_prompt_file_filter(
+        pr_files: list[PrFile],
+        num_files_desired: int = 5,
+    ) -> str:
+        return textwrap.dedent(
+            """\
+            Here's a code change.
+
+            {diff}
+
+            We need you to narrow down the list of files we want to analyze for finding bugs.
+            Return the top {num_files_desired} unique files we should analyze.
+            We don't care to predict bugs for code that won't be run in production, e.g., test files. So please filter out test files. We want to predict bugs for files that might contain error-prone, untested code that could cause a crash in production.
+            For context, this is just a preprocessing step. You'll have the chance to do an extensive code search and analysis of this code change later. For now, we just want you to filter down the list of files to a more manageable number."""
+        ).format(
+            diff=format_diff(pr_files),
+            num_files_desired=num_files_desired,
+        )
+
+    @staticmethod
+    def format_prompt_draft_hypotheses(repos_str: str, diff: str) -> str:
+        return textwrap.dedent(
+            """
+            You'll be given a code change. We're looking for bugs that might cause errors in production. We don't know if there are any. After all, most code changes are safe.
+            {focus}
+
+            It is important that you determine if the code change is making new assumptions.
+            Feel free to hypothesize about a few things that might cause the code to crash.
+            Also, for each potential bug you find, clearly state:
+              - Important things you need to investigate to determine whether the code change is safe or unsafe
+              - The full file path and line range in the code change indicating where the potential production-crashing bug is, e.g., src/some/path/to/file_with_bug.py:239~242.
+                This location should be a file that would be run in production.
+
+            <available_repos>
+            {repos_str}
+            </available_repos>
+
+            Here's the code change in question:
+
+            {diff}
+            """
+        ).format(
+            repos_str=repos_str,
+            diff=diff,
+            focus=BugPredictionPrompts._focus_on_crashes(),
+        )
+
+    @staticmethod
+    def format_prompt_structured_hypothesis(hypothesis_unstructured: str) -> str:
+        return textwrap.dedent(
+            """
+            You were given a code change and asked to hypothesize about potential bugs. Here's what you said:
+
+            <what_you_said>
+            {hypothesis_unstructured}
+            </what_you_said>
+
+            Please separate this information into a list of potential bugs. If some bugs seem inter-dependent, consider them the same bug and put them in the same list item.
+            """  # TODO: add _focus_on_crashes()?
+        ).format(
+            hypothesis_unstructured=hypothesis_unstructured,
+        )
+
+    @staticmethod
+    def format_prompt_followup(
+        repos_str: str, diff: str, hypothesis_unstructured: str, hypothesis: str
+    ) -> str:
+        return textwrap.dedent(
+            """
+            You were given a code change:
+
+            {diff}
+
+            You were asked to hypothesize about potential bugs. Here's what you said:
+
+            <what_you_said>
+            {hypothesis_unstructured}
+            </what_you_said>
+
+            For now, focus on this potential bug:
+
+            <hypothesis>
+            {hypothesis}
+            </hypothesis>
+
+            Please search the codebase to see if there's evidence for this potential bug. Reference relevant parts of the codebase.
+            You should have a pretty high bar of evidence for determining that a bug is a real threat to the system.
+            Please be clear about what couldn't quite be verified, despite your best efforts.
+
+            Make sure to think before making your conclusion.
+            If, while investigating or explaining the bug, you realize that you can't actually verify it, that's totally fine. Just say so. We don't want you to over-promise.
+
+            {focus}
+
+            <available_repos>
+            {repos_str}
+            </available_repos>
+            """
+        ).format(
+            repos_str=repos_str,
+            diff=diff,
+            hypothesis_unstructured=hypothesis_unstructured,
+            hypothesis=hypothesis,
+            focus=BugPredictionPrompts._focus_on_crashes(),
+        )
+
+    @staticmethod
+    def format_prompt_reformat_followups(
+        located_followups: list[LocatedBugPredictionFollowup],
+    ) -> str:
+        followups_xml = "\n\n".join(
+            f'<followup id="{i+1}" encoded_location="{located_followup.encoded_location}">\n{located_followup.followup}\n</followup>'
+            for i, located_followup in enumerate(located_followups)
+        )
+
+        return textwrap.dedent(
+            """
+            You are a helpful assistant that extracts structured information from bug prediction analyses.
+            You are given the following bug prediction analyses for a pull request.
+            <followups_with_location>
+            {followups}
+            </followups_with_location>
+
+            # Your goal:
+            Review the bug prediction analyses and extract the requested output information.
+
+            # Guidelines:
+            - Ensure all fields are properly populated based on each analysis.
+            - Filter the output to only include bugs introduced by the new code in the pull request, not bugs that existed in the previous version of the code or bugs that are fixed by the new code. Pay special attention to the timing of bugs: if the analysis refers to "previous code", this indicates the bug existed in an older version and should be filtered out.
+            - Filter the output to only include predicted bugs that are fatal or critical such as one that would crash a server. To determine if the bug is fatal or critical, read the bug prediction analysis carefully and focus on the conclusion of the analysis.
+            - Deduplicate bug predictions that reflect the same core issue. Consolidate any that are related to the same bug.
+            - Use the provided encoded location on each followup to report the encoded location of the bug in the codebase.
+
+            # Focus:
+            {focus}
+            """
+        ).format(
+            followups=followups_xml,
+            focus=BugPredictionPrompts._focus_on_crashes(),
         )

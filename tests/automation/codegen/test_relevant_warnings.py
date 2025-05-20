@@ -234,6 +234,8 @@ def warning_and_pr_file():
         status="modified",
         changes=1,
         sha="abc123",
+        previous_filename="src/main.py",
+        repo_full_name="getsentry/seer",
     )
     warning_and_pr_file = WarningAndPrFile(warning=warning, pr_file=pr_file)
     return warning_and_pr_file
@@ -282,6 +284,8 @@ class TestWarningAndPrFile:
             status="modified",
             changes=1,
             sha="abc123",
+            previous_filename="path/to/file.py",
+            repo_full_name="getsentry/seer",
         )
         warning_and_pr_file = WarningAndPrFile(warning=warning, pr_file=pr_file)
         assert warning_and_pr_file.overlapping_hunk_idxs == expected
@@ -330,7 +334,17 @@ class TestFilterWarningsComponent:
         ):
             component._matching_pr_files(
                 warning,
-                [PrFile(filename="file1.py", patch="", status="modified", changes=1, sha="abc")],
+                [
+                    PrFile(
+                        filename="file1.py",
+                        patch="",
+                        status="modified",
+                        changes=1,
+                        sha="abc",
+                        previous_filename="file1.py",
+                        repo_full_name="getsentry/seer",
+                    )
+                ],
             )
 
     class _TestInvokeTestCase(BaseModel):
@@ -379,6 +393,8 @@ class TestFilterWarningsComponent:
                         status="modified",
                         changes=1,
                         sha="sha1",
+                        previous_filename="src/seer/anomaly_detection/detectors/mp_boxcox_scorer.py",
+                        repo_full_name="getsentry/seer",
                     ),
                 ],
                 encoded_location_to_pr_file_match={
@@ -423,6 +439,8 @@ class TestFilterWarningsComponent:
                         status="modified",
                         changes=1,
                         sha="sha1",
+                        previous_filename="app/tools/seer_signature/generate_signature.py",
+                        repo_full_name="codecov/overwatch",
                     ),
                     PrFile(
                         filename="processor/tests/services/test_envelope.py",
@@ -443,6 +461,8 @@ class TestFilterWarningsComponent:
                         status="modified",
                         changes=1,
                         sha="sha1",
+                        previous_filename="processor/tests/services/test_envelope.py",
+                        repo_full_name="codecov/overwatch",
                     ),
                     PrFile(
                         filename="app/app/Livewire/Actions/Logout.php",
@@ -456,6 +476,8 @@ class TestFilterWarningsComponent:
                         status="modified",
                         changes=1,
                         sha="sha1",
+                        previous_filename="app/app/Livewire/Actions/Logout.php",
+                        repo_full_name="codecov/overwatch",
                     ),
                 ],
                 encoded_location_to_pr_file_match={
@@ -548,9 +570,33 @@ class TestFetchIssuesComponent:
     ):
         assert component.context.repo.provider_raw is not None
         pr_files = [
-            PrFile(filename="fine.py", patch="patch1", status="modified", changes=100, sha="sha1"),
-            PrFile(filename="big.py", patch="patch2", status="modified", changes=1_000, sha="sha2"),
-            PrFile(filename="added.py", patch="patch3", status="added", changes=100, sha="sha3"),
+            PrFile(
+                filename="fine.py",
+                patch="patch1",
+                status="modified",
+                changes=100,
+                sha="sha1",
+                previous_filename="fine.py",
+                repo_full_name="getsentry/seer",
+            ),
+            PrFile(
+                filename="big.py",
+                patch="patch2",
+                status="modified",
+                changes=1_000,
+                sha="sha2",
+                previous_filename="big.py",
+                repo_full_name="getsentry/seer",
+            ),
+            PrFile(
+                filename="added.py",
+                patch="patch3",
+                status="added",
+                changes=100,
+                sha="sha3",
+                previous_filename="added.py",
+                repo_full_name="getsentry/seer",
+            ),
         ]
 
         pr_filename_to_issues = {"fine.py": [next(generate(IssueDetails)).model_dump()]}
@@ -881,6 +927,8 @@ def test_relevant_warnings_step_invoke(
     mock_repo_client = MagicMock()
     mock_pr = MagicMock()
     mock_pr_files = next(generate(list[PrFile]))
+    for pr_file in mock_pr_files:
+        object.__setattr__(pr_file, "repo_full_name", "owner1/repo1")
     mock_context = MagicMock()
     mock_context.get_repo_client.return_value = mock_repo_client
     mock_repo_client.repo.get_pull.return_value = mock_pr
@@ -1098,6 +1146,8 @@ class TestStaticAnalysisSuggestionsComponent:
                 status="modified",
                 changes=1,
                 sha="sha1",
+                previous_filename="test/path/file.py",
+                repo_full_name="getsentry/seer",
             )
         ]
         warnings = [_mock_static_analysis_warning() for _ in range(2)]
@@ -1146,6 +1196,8 @@ class TestStaticAnalysisSuggestionsComponent:
                 status="modified",
                 changes=1,
                 sha="sha1",
+                previous_filename="test/path/file.py",
+                repo_full_name="getsentry/seer",
             )
         ]
         warnings = [_mock_static_analysis_warning() for _ in range(2)]

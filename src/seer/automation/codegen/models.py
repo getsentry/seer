@@ -4,7 +4,7 @@ from enum import Enum
 from functools import cached_property
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from seer.automation.agent.models import Message
 from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
@@ -95,10 +95,33 @@ class StaticAnalysisSuggestion(BaseModel):
         return f"{self.short_description}\n{self.justification}\n<location>{self.path}:{self.line}</location>"
 
 
+class BugPrediction(BaseModel):
+    description: str = Field(
+        description="A detailed technical analysis of the bug that explains: 1) The exact failure mechanism, 2) The conditions that trigger it, 3) Why the current code is problematic, 4) Which specific code paths are affected, and 5) What could go wrong if this bug isn't fixed. Include concrete examples of variable states that would cause failure and ideally a short code snippet example. Max 350 words."
+    )
+    short_description: str = Field(
+        description="A concise, technical explanation of the potential bug that identifies the specific risk and affected code. Phrase it politely as a suspicion. Max 75 words."
+    )
+    suggested_fix: str = Field(
+        description="A short, fluff-free, information-dense explanation of the suggested fix. Max 100 words."
+    )
+    encoded_location: str = Field(
+        description="Specific location of the bug in the format of 'path/to/file.py:start_line~end_line'"
+    )
+    severity: float = Field(
+        description="From 0 to 1 how serious is this potential bug? Score this as if you are a developer who would have to respond to an incident caused by this bug. 1 being 'guaranteed production crash'. Score lower if the bug requires very specific conditions to be met. The score should be very granular, e.g., 0.432."
+    )
+    confidence: float = Field(
+        description="From 0 to 1 how confident are you that this is a bug? 1 being 'I am 100% confident that this is a bug'. This should be based on the amount of evidence you had to reach your conclusion. The score should be very granular, e.g., 0.432."
+    )
+    title: str = Field(description="A concise summary title of the bug prediction. Max 10 words.")
+
+
 class CodegenState(BaseModel):
     run_id: int = -1
     file_changes: list[FileChange] = Field(default_factory=list)
     static_analysis_suggestions: list[StaticAnalysisSuggestion] = Field(default_factory=list)
+    bug_predictions: list[BugPrediction] = Field(default_factory=list)
     status: CodegenStatus = CodegenStatus.PENDING
     last_triggered_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
     updated_at: datetime.datetime = Field(default_factory=datetime.datetime.now)
@@ -326,6 +349,94 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
     """
 
     relevant_warning_results: list[RelevantWarningResult]
+
+
+class CodeBugPredictionsOutput(BaseComponentOutput):
+    bug_predictions: list[BugPrediction]
+
+
+class FilterFilesRequest(BaseComponentRequest):
+    pr_files: list[PrFile]
+    pr_title: str
+    pr_body: str
+    shuffle_files: bool = True
+    num_files_desired: int = 5
+
+
+class FilterFilesOutput(BaseComponentOutput):
+    pr_files: list[PrFile]
+
+
+class BugPredictorRequest(BaseComponentRequest):
+    pr_files: list[PrFile]
+    repo_full_name: str
+    pr_title: str
+    pr_body: str
+    max_num_concurrent_calls: int = 6
+
+
+class BugPredictorHypothesis(BaseModel):
+    content: str = Field(description="Description of the specific bug.")
+    location_filename: str = Field(
+        description="The full file path in the code change indicating the potential bug's location."
+    )
+    location_start_line_num: int = Field(
+        description="The starting line number in the code change indicating the potential bug's location."
+    )
+    location_end_line_num: int = Field(
+        description=(
+            "The ending line number in the code change indicating the potential bug's location. "
+            "If the bug is at one line, the end line should be the same as the start line."
+        )
+    )
+
+    def to_encoded_location(self) -> str:
+        location = Location(
+            filename=self.location_filename,
+            start_line=str(self.location_start_line_num),
+            end_line=str(self.location_end_line_num),
+        )
+        return location.encode()
+
+
+class LocatedBugPredictionFollowup(BaseModel):
+    followup: str
+    encoded_location: str
+
+
+class BugPredictorOutput(BaseComponentOutput):
+    hypotheses_unstructured: str
+    hypotheses: list[BugPredictorHypothesis]
+    followups: list[str | None]
+    "None indicates that the verification agent errored out"
+
+    @field_validator("followups")
+    @classmethod
+    def validate_lists_same_length(
+        cls, v: list[str | None], info: ValidationInfo
+    ) -> list[str | None]:
+        hypotheses_data = info.data.get("hypotheses")
+        if hypotheses_data is not None:
+            if len(hypotheses_data) != len(v):
+                raise ValueError("hypotheses and followups must be the same length")
+        return v
+
+    def get_located_followups(self) -> list[LocatedBugPredictionFollowup]:
+        return [
+            LocatedBugPredictionFollowup(
+                followup=followup, encoded_location=hypothesis.to_encoded_location()
+            )
+            for followup, hypothesis in zip(self.followups, self.hypotheses)
+            if followup is not None
+        ]
+
+
+class FormatterRequest(BaseComponentRequest):
+    located_followups: list[LocatedBugPredictionFollowup]
+
+
+class FormatterOutput(BaseComponentOutput):
+    bug_predictions: list[BugPrediction]
 
 
 class CodecovTaskRequest(BaseModel):
