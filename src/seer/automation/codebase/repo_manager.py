@@ -198,7 +198,7 @@ class RepoManager:
         try:
             self._clone_repo()
             self._sync_repo()
-            self.upload_to_gcs()
+            self.upload_to_gcs(copy_repo=False)  # Don't copy for backfill to save time
         except Exception:
             logger.exception(
                 "Failed to initialize repo archive during backfill",
@@ -399,14 +399,25 @@ class RepoManager:
         git_repo.git.execute(["git", "remote", "remove", "origin"])
 
     @sentry_sdk.trace
-    def upload_to_gcs(self):
+    def upload_to_gcs(self, *, copy_repo: bool = True):
         """
         Upload the repository from the cloned tmp directory to GCS.
         This method uses a thread to perform the upload without blocking.
+        
+        Args:
+            copy_repo: Whether to copy the repository before uploading. Defaults to True.
+                       Set to False for backfill initialization to avoid unnecessary copying.
         """
-        copied_repo_path = self._copy_repo()
-        self._verify_repo_state(repo_path=copied_repo_path)
-        self._prune_repo(repo_path=copied_repo_path)
+        repo_path_to_use = None
+        if copy_repo:
+            repo_path_to_use = self._copy_repo()
+            self._verify_repo_state(repo_path=repo_path_to_use)
+            self._prune_repo(repo_path=repo_path_to_use)
+        else:
+            # Use the existing repo path directly without copying
+            repo_path_to_use = self.repo_path
+            self._verify_repo_state(repo_path=repo_path_to_use)
+            self._prune_repo(repo_path=repo_path_to_use)
 
         with Session() as session:
             existing_repo_archive = self.get_db_archive_entry(session)
@@ -428,10 +439,10 @@ class RepoManager:
             # Create a temporary tar.gz file of the repository
             temp_tarfile = os.path.join(self.tmp_dir, "upload_repo_archive.tar.gz")
             try:
-                logger.info(f"Creating tar archive of repository at {copied_repo_path}")
+                logger.info(f"Creating tar archive of repository at {repo_path_to_use}")
                 with tarfile.open(temp_tarfile, "w:gz") as tar:
-                    for item in os.listdir(copied_repo_path):
-                        item_path = os.path.join(copied_repo_path, item)
+                    for item in os.listdir(repo_path_to_use):
+                        item_path = os.path.join(repo_path_to_use, item)
                         tar.add(item_path, arcname=item)
 
                 if self.is_cancelled:
@@ -457,9 +468,9 @@ class RepoManager:
                 if os.path.exists(temp_tarfile):
                     os.unlink(temp_tarfile)
 
-                # Clean up the copied repo
-                if os.path.exists(copied_repo_path):
-                    shutil.rmtree(copied_repo_path)
+                # Clean up the copied repo if we made one
+                if copy_repo and os.path.exists(repo_path_to_use) and repo_path_to_use != self.repo_path:
+                    shutil.rmtree(repo_path_to_use)
 
     def get_db_archive_entry(self, session: SQLAlchemySession):
         if self.organization_id is None:

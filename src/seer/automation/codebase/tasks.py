@@ -197,8 +197,8 @@ def run_backfill_task(app_config: AppConfig = injected):
 
 
 @celery_app.task(
-    soft_time_limit=timedelta(minutes=20).total_seconds(),
-    time_limit=timedelta(minutes=22).total_seconds(),
+    soft_time_limit=timedelta(minutes=28).total_seconds(),
+    time_limit=timedelta(minutes=29).total_seconds(),
 )
 def run_backfill(backfill_job_dict: dict):
     backfill_job = BackfillJob.model_validate(backfill_job_dict)
