@@ -844,9 +844,6 @@ class RepoClient:
         branch_name: str | None = None,
         from_base_sha: bool = False,
     ) -> GitRef | None:
-        """
-        Create a new branch based from the base_commit_sha for the changes suggested by Autofix.
-        """
         if not file_patches and not file_changes:
             raise ValueError("Either file_patches or file_changes must be provided")
 

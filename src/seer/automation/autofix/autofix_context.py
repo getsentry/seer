@@ -379,7 +379,7 @@ class AutofixContext(PipelineContext):
                             file_patches=change_state.diff,
                             branch_name=change_state.draft_branch_name
                             or f"seer/{change_state.title}",
-                            from_base_sha=True,
+                            from_base_sha=True,  # Autofix PRs are always created from the base commit
                         )
 
                         if branch_ref is None:
