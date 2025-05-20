@@ -45,14 +45,9 @@ class EvalItemInput(BaseModel):
         if isinstance(self.repo, RepoDefinition):
             repo_definition = self.repo
         else:
-            repo_definition = RepoDefinition(
-                provider=self.repo.provider,
-                owner=self.repo.owner,
-                name=self.repo.name,
-                external_id=self.repo.external_id,
-            )
+            repo_definition = repo_info_to_repo_definition(self.repo)
         more_readable_repos = [
-            (repo_info_to_repo_definition(repo) if isinstance(repo, RepoInfo) else repo)
+            repo_info_to_repo_definition(repo) if isinstance(repo, RepoInfo) else repo
             for repo in self.more_readable_repos
         ]
         return CodegenRelevantWarningsRequest(
