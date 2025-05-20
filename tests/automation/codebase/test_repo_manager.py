@@ -500,7 +500,7 @@ def test_upload_to_gcs_success(repo_manager, mock_repo_client):
     # Prepare a dummy archive record for upload_lock
     dummy_archive = MagicMock()
     dummy_archive.upload_locked_at = None
-    copied_path = os.path.join(repo_manager.tmp_dir, "repo")
+    copied_path = os.path.join(repo_manager.tmp_dir, "copied_repo")
     with (
         patch.object(repo_manager, "_copy_repo", return_value=copied_path),
         patch.object(repo_manager, "_verify_repo_state"),
@@ -560,7 +560,7 @@ def test_upload_to_gcs_failure(repo_manager, mock_repo_client):
     # Prepare a dummy archive record for upload_lock
     dummy_archive = MagicMock()
     dummy_archive.upload_locked_at = None
-    copied_path = os.path.join(repo_manager.tmp_dir, "repo")
+    copied_path = os.path.join(repo_manager.tmp_dir, "copied_repo")
     with (
         patch.object(repo_manager, "_copy_repo", return_value=copied_path),
         patch.object(repo_manager, "_verify_repo_state"),
