@@ -1290,7 +1290,9 @@ class TestClaudeTools:
             result = autofix_tools.handle_claude_tools(**kwargs)
 
             # Assert
-            autofix_tools._attempt_fix_path.assert_called_once_with(new_path, repo_name)
+            autofix_tools._attempt_fix_path.assert_called_once_with(
+                new_path, repo_name, ignore_local_changes=False
+            )
             autofix_tools.context.does_file_exist.assert_called_once_with(
                 path=new_path, repo_name=repo_name, ignore_local_changes=False
             )
@@ -1317,7 +1319,9 @@ class TestClaudeTools:
 
         # Assert
         # Check that _attempt_fix_path was called
-        autofix_tools._attempt_fix_path.assert_called_once_with(nonexistent_path, repo_name)
+        autofix_tools._attempt_fix_path.assert_called_once_with(
+            nonexistent_path, repo_name, ignore_local_changes=False
+        )
         # Check that the result is the expected path error message
         assert (
             f"Error: The path you provided '{nonexistent_path}' does not exist in the repository '{repo_name}'."
