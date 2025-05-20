@@ -889,7 +889,7 @@ class RepoClient:
 
         # Check that the changes were made
         comparison = self.repo.compare(
-            self.get_branch_head_sha(self.base_branch), latest_commit.sha
+            self.get_branch_head_sha(self.base_branch), branch_ref.object.sha
         )
 
         # Remove the branch if there are no changes
