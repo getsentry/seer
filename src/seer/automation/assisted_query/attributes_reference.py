@@ -1,15 +1,6 @@
-def get_searchable_properties(
-    include_issue_properties=True,
-    include_event_properties=True,
-    include_span_properties=True,
-    include_session_replay_properties=True,
-    include_user_feedback_properties=True,
-    include_release_properties=True,
-) -> dict[str, str]:
+def get_searchable_properties() -> dict[str, str]:
     """
-    Returns a dictionary of all searchable properties in Sentry from the docs: https://docs.sentry.io/concepts/search/searchable-properties/.
-
-    TODO: Update this to include the audited attributes: https://github.com/getsentry/sentry-conventions/tree/main/generated/attributes
+    Returns a dictionary of all searchable properties in Sentry from the docs: https://docs.sentry.io/concepts/search/searchable-properties/ as well as the audited attributes: https://github.com/getsentry/sentry-conventions/tree/main/generated/attributes
     """
     issue_properties_map = {
         "age": "Returns issues created since the time defined by the value. The syntax is similar to the Unix find command. Supported suffixes: m - minutes, h - hours, d - days, w - weeks. For example, age:-24h returns isssues that are new in the last 24 hours, while age:+12h returns ones that are older than 12 hours. Entering age:+12h age:-24h would return issues created between 12 and 24 hours ago. Type: relative time",
@@ -18,7 +9,6 @@ def get_searchable_properties(
         "assigned_or_suggested": "Returns issues that are assigned to or suggested to be assigned to the defined user(s) or team(s). Suggested assignees are found by matching ownership rules and suspect commits. Values can be a user ID (your email address), me for yourself, none for no assignee/suggestion, my_teams or #team-name for teams you belong to. Type: team or org user",
         "bookmarks": "Returns issues bookmarked by the defined user. Values can be your user ID (your email address) or me for yourself. Type: team or org user",
         "device.arch": "CPU architecture. Type: string",
-        "device.brand": "Brand of the device. Type: string",
         "device.family": "Family of the device. Typically, the common part of a model name across generations. For example, iPhone, Samsung Galaxy. Type: string",
         "device.locale": "Deprecated. Type: string",
         "device.model_id": "Internal hardware revision to identify the device exactly. Type: n/a",
@@ -44,12 +34,9 @@ def get_searchable_properties(
         "geo.country_code": "ISO 3166-1 country code. Type: string",
         "geo.region": "Full name of the country. Type: string",
         "has": "Returns results with the defined tag or field, but not the value of that tag or field. For example, entering has:user would find events with the user tag. Type: error",
-        "http.method": "HTTP method of the request that created the event. Type: string",
         "http.referer": "Identifies the web page from which the resource was requested. Type: string",
         "http.status_code": "HTTP status code, which indicates whether a response was successful. For example, 200 or 404. Type: string",
         "http.url": "Full URL of the request that caused the error, but without any parameters. Type: string",
-        "id": "The event or replay id. In Issues, use only the ID value without the id key. Type: UUID",
-        "is": "The properties of an issue. Values can be: unresolved, resolved, archived, assigned, unassigned, for_review, linked, or unlinked. The for_review value filters unresolved issues and only shows the recently unresolved or new issues that haven't been marked as \"reviewed\". The linked and unlinked values return issues based on whether they're linked to an external issue tracker or not. Type: status",
         "issue": "The short issue code, for example SENTRY-ABC. Type: string",
         "issue.category": "The category of the issue. For example: error, performance, replay and cron. Type: string",
         "issue.type": "The specific type of issue. For example issue.type:performance_n_plus_one_db_queries returns the n plus one db query performance issues. Type: string",
@@ -64,7 +51,6 @@ def get_searchable_properties(
         "platform.name": "Name of the platform. Type: string",
         "project": "The name of the project. In some pages of sentry.io, you can also filter on project using a dropdown. Type: string",
         "project.id": "The id of the project. Type: number",
-        "release": "A release is a version of your code deployed to an environment. You can create a token with an exact match of the version of a release, or release:latest to pick the most recent release. Learn more. Type: string",
         "release.build": "The number that identifies an iteration of your app. For example, CFBundleVersion on iOS or versionCode on Android. Learn more. Type: number",
         "release.package": "The unique identifier of the project/app. For example, CFBundleIdentifier on iOS or packageName on Android. Learn more. Type: string",
         "release.stage": "The usage your release is seeing relative to other releases. Values can be adopted, low, or replaced. Learn more. Type: string",
@@ -82,10 +68,7 @@ def get_searchable_properties(
         "trace": "A trace represents the record of the entire operation you want to measure or track — like page load, searched using the UUID generated by Sentry's SDK. Type: UUID",
         "transaction": "For transactions, the name of the transaction. For errors, the name of the associated transaction. Type: string",
         "unreal.crash_type": "The Unreal Crash Context Type. Type: string",
-        "user.email": "An alternative, or addition, to the username. Sentry is aware of email addresses and can therefore display things such as Gravatars and unlock messaging capabilities. Type: string",
-        "user.id": "Application-specific internal identifier for the user. Type: string",
         "user.ip": "User's IP address. Sentry uses the IP address as a unique identifier for unauthenticated users. Type: string",
-        "user.username": "Username, which is typically a better label than the user.id. Type: string",
     }
 
     event_properties_map = {
@@ -100,10 +83,8 @@ def get_searchable_properties(
         "culprit": "Deprecated. Type: string",
         "device.arch": "CPU architecture. Type: string",
         "device.battery_level": "If the device has a battery, this can be a floating point value defining the battery level (in the range 0-100). Type: string",
-        "device.brand": "Brand of the device. Type: string",
         "device.charging": "Whether the device was charging or not. Not a boolean. Type: string",
         "device.class": "The estimated performance class of the client device, estimated high, medium, or low. For more details, see the Device Classification section below. Type: string",
-        "device.family": "Family of the device. Typically, the common part of a model name across generations. For example, iPhone, Samsung Galaxy. Type: string",
         "device.locale": "Deprecated. Type: string",
         "device.name": "Details of the device. Type: string",
         "device.online": "Whether the device was online or not. A string that is either True or False. Type: string",
@@ -114,8 +95,6 @@ def get_searchable_properties(
         "device.screen_width_pixels": "Device screen width in pixels. Type: string",
         "device.simulator": "Indicates whether this device is a simulator or a real device. A string that is either True or False. Type: string",
         "device.uuid": "Deprecated. Type: UUID",
-        "dist": "Distinguishes build or deployment variants of the same release of an application. For example, the dist can be the build number of an Xcode build or the version code of an Android build. Type: string",
-        "environment": "Refers to your code deployment naming convention. For example, development, testing, staging and so on. Learn more.In some pages of sentry.io, you filter on environment using a dropdown. Type: string",
         "epm()": "Returns results with a matching events-per-minute count. Doesn't take a parameter. Type: number",
         "eps()": "Returns results with a matching events-per-second count. Doesn't take a parameter. Type: number",
         "error.handled": "Indicates whether the user has handled the exception — for example, using try...catch. An error is considered handled if all stack traces handle the error. Values are 1/0 or true/false. Type: boolean",
@@ -131,11 +110,9 @@ def get_searchable_properties(
         "geo.country_code": "ISO 3166-1 country code. Type: string",
         "geo.region": "Full name of the country. Type: string",
         "has": "Returns results with the defined tag or field, but not the value of that tag or field. For example, entering has:user would find events with the user tag. Type: error",
-        "http.method": "HTTP method of the request that created the event. Type: string",
         "http.referer": "Identifies the web page from which the resource was requested. Type: string",
         "http.status_code": "HTTP status code, which indicates whether a response was successful. For example, 200 or 404. Type: string",
         "http.url": "Full URL of the request that caused the error, but without any parameters. Type: string",
-        "id": "The event id. In Issues, use only the ID value without the id key. Type: UUID",
         "issue": "The short issue code, for example SENTRY-ABC. Type: string",
         "last_seen()": "Datetime when the event was last seen. Equivalent to max(timestamp). Doesn't take a parameter. Type: datetime",
         "level": "Severity of the event (such as: fatal, error, warning). Always set to info for transactions. Type: string",
@@ -170,13 +147,10 @@ def get_searchable_properties(
         "project": "The name of the project. In some pages of sentry.io, you can also filter on project using a dropdown. Type: string",
         "project.id": "The id of the project. Type: number",
         "pXY(duration field)": 'Returns results with an approximate percentile of the field. Replace "XY" with 50, 75, 95, 99, or 100. For example, if you wanted to find the 50th percentile of transaction durations, you would enter p50(transaction.duration). Type: number',
-        "release": "A release is a version of your code deployed to an environment. You can create a token with an exact match of the version of a release, or release:latest to pick the most recent release. Learn more. Type: string",
         "release.build": "The number that identifies an iteration of your app. For example, CFBundleVersion on iOS or versionCode on Android. Learn more. Type: number",
         "release.package": "The unique identifier of the project/app. For example, CFBundleIdentifier on iOS or packageName on Android. Learn more. Type: string",
         "release.stage": "The usage your release is seeing relative to other releases. Values can be adopted, low, or replaced. Learn more. Type: string",
         "release.version": "A shorter version of the name; name without the package or short version of the hash. Learn more. Type: string",
-        "sdk.name": "Name of the Sentry SDK that sent the event. Type: string",
-        "sdk.version": "Version of the Sentry SDK that sent the event. Type: string",
         "spans.browser": "Cumulative browser time for a transaction, based on the span operations. Type: duration",
         "spans.db": "Cumulative db time for a transaction, based on span operations. Type: duration",
         "spans.http": "Cumulative http time for a transaction, based on span operations. Type: duration",
@@ -198,17 +172,13 @@ def get_searchable_properties(
         "trace": "A trace represents the record of the entire operation you want to measure or track — like page load, searched using the UUID generated by Sentry's SDK. Type: UUID",
         "trace.parent_span": "Span ID of the parent to the current transaction. This is null if the transaction is root. Type: UUID",
         "trace.span": "Span ID of the root span of the root transaction in the event. Type: UUID",
-        "transaction": "For transactions, the name of the transaction. For errors, the name of the associated transaction. Type: string",
         "transaction.duration": "Duration, in milliseconds, of the transaction. Type: duration",
         "transaction.op": "Short code identifying the type of operation the span is measuring. Type: string",
         "transaction.status": "Describes the status of the span/transaction. Check out our Transaction Payloads documentation for all possible statuses. Type: string",
         "unreal.crash_type": "The Unreal Crash Context Type. Type: string",
         "user_misery(number)": 'Returns transactions with the defined user misery value. User Misery is a user-weighted performance metric that counts the number of unique users who were frustrated; "frustration" is measured as a response time four times the satisfactory response time threshold (in milliseconds). It highlights transactions that have the highest impact on users. Type: number',
         "user.display": "In order, the first available user field available: email, then username, ID, and then IP address. Type: string",
-        "user.email": "An alternative, or addition, to the username. Sentry is aware of email addresses and can therefore display things such as Gravatars and unlock messaging capabilities. Type: string",
-        "user.id": "Application-specific internal identifier for the user. Type: string",
         "user.ip": "User's IP address. Sentry uses the IP address as a unique identifier for unauthenticated users. Type: string",
-        "user.username": "Username, which is typically a better label than the user.id. Type: string",
     }
 
     span_properties_map = {
@@ -219,7 +189,6 @@ def get_searchable_properties(
         "device.class": "Device class is a synthesized field that's calculated by using device info found in context such as model (for iOS devices), and device specs like processor_frequency (for Android devices). Type: string",
         "span.domain": "General scope of the span's action, for example, the tables involved in a db span or the host name in an http span. Type: string",
         "duration": "The total time taken by the span. Type: duration",
-        "environment": "Refers to your code deployment naming convention. For example, development, testing, staging and so on. Learn more. In some pages of Sentry, you filter on environment using a dropdown. Type: string",
         "file_extension": "The file extension of a resource span. Type: string",
         "group": "Unique hash of the span's description. Type: string",
         "http.decoded_response_content_length": "The decoded body size of the resource. Type: string",
@@ -229,28 +198,18 @@ def get_searchable_properties(
         "messaging.message.id": "The unique ID of a message from the queue or messaging system. Type: string",
         "span.module": "The Insights module that the span is associated with, for example, cache, db, http, and so on. Type: string",
         "span.op": "The operation of the span, for example, http.client, middleware. Type: string",
-        "os.name": "Name of the operating system. Type: string",
-        "platform": "Name of the platform. This defaults to other and is only a property for platforms from this list: as3, c, cfml, cocoa, csharp, elixir, go, groovy, haskell, java, javascript, native, node, objc, other, perl, php, python, ruby Type: string",
-        "release": "A release is a version of your code deployed to an environment. You can create a token that matches a release exactly, or pick the most recent release by using release:latest. Learn more. Type: string",
         "resource.render_blocking_status": "The render blocking status of the resource. Type: string",
-        "sdk.name": "Name of the Sentry SDK that sent the event. Type: string",
-        "sdk.version": "Version of the Sentry SDK that sent the event. Type: string",
         "self_time": "The duration of the span excluding the duration of its child spans. Type: string",
         "span.status": "Status of the operation the span represents.",
         "status_code": "The HTTP response status code. Type: string",
         "system": "Database system (e.g., postgresql or mysql). Type: string",
         "trace.status": "The span trace's success or failure status. Type: string",
-        "transaction": "Name of the containing transaction. Type: string",
         "transaction.method": "HTTP method of the containing transaction. Type: string",
         "transaction.op": "Operation of the containing transaction. Type: string",
-        "user.email": "An alternative or addition to the username. Sentry is aware of email addresses and can therefore display things such as Gravatars and unlock messaging capabilities. Type: string",
-        "user.id": "Application-specific internal identifier for the user. Type: string",
-        "user.username": "Username, which is typically a better label than user.id. Type: string",
     }
 
     session_replay_properties_map = {
         "activity": "Replay activity is calculated based on the number of errors, the number of ui events, and the duration of the replay. It's represented as a number from 1 to 10. Type: number",
-        "browser.name": "Name of the users' web browser. For example, Chrome, Firefox, or Safari. Type: string",
         "browser.version": "The version string of the browser. Type: string",
         "click.alt": 'The alt of an element that was clicked. For example, "a good dog" would match the element <img src="/lassie.jpeg" alt="a good dog" />. Type: string',
         "click.class": 'The class of an element that was clicked. No leading . is necessary. For example, btn-primary would match the element <a class="btn btn-primary">Save</a>. Type: string',
@@ -270,52 +229,26 @@ def get_searchable_properties(
         "count_urls": "The number of URLs that the user visited during a replay recording. Type: number",
         "dead.selector": 'Similar to the click.selector search property, but only queries on dead clicks. An element identified using a subset of CSS selector syntax. For example, #section-1 or span.active or span[role=button] or .active[role=button] would all match the element <span id="section-1" class="active" role="button"/>. Note that, CSS combinators, pseudo selectors, and attr selectors other than = are not supported. Type: string',
         "device.brand": "Brand of the device. Type: string",
-        "device.family": "Family of the device. Typically, the common part of a model name across generations. For example, iPhone, Samsung Galaxy. Type: string",
-        "device.model_id": "Internal hardware revision to identify the device exactly. Type: n/a",
         "device.name": "Details of the device. Type: string",
-        "dist": "Distinguishes build or deployment variants of the same release of an application. For example, the dist can be the build number of an Xcode build or the version code of an Android build. Type: string",
         "duration": "Duration of a replay in seconds. Type: number",
         "error_ids": "Error event IDs that have occurred within a replay. Type: array",
-        "id": "The event or replay id. In Issues, use only the ID value without the id key. Type: UUID",
         "level": "Severity of the event (such as: fatal, error, warning). Always set to info for transactions. Type: string",
         "os.name": "The name of the operating system. For example, Windows, Mac OS X, or Linux. Type: string",
         "os.version": "The version number of the operating system. Type: string",
-        "platform": "Name of the platform. This is only a metrics property for valid platforms, defaulting to other. Type: string",
         "project_id": "The id of the project. Type: string",
         "rage.selector": 'Similar to the click.selector search property, but only queries on rage clicks. An element identified using a subset of CSS selector syntax. For example, #section-1 or span.active or span[role=button] or .active[role=button] would all match the element <span id="section-1" class="active" role="button"/>. Note that, CSS combinators, pseudo selectors, and attr selectors other than = are not supported. Type: string',
-        "release": "A release is a version of your code deployed to an environment. You can create a token with an exact match of the version of a release, or release:latest to pick the most recent release. Learn more. Type: string",
         "replay_type": "The reason a replay was triggered. For example, session when replaysSessionSampleRate takes effect, or buffer when replaysOnErrorSampleRate is sampled instead of session. Learn more in the Session Replay docs. Type: string",
-        "sdk.name": "Name of the Sentry SDK that sent the event. Type: string",
-        "sdk.version": "Version of the Sentry SDK that sent the event. Type: string",
         "seen_by_me": "Whether you've seen this replay. Alias: viewed_by_me. Type: boolean",
         "trace": "A trace represents the record of the entire operation you want to measure or track — like page load, searched using the UUID generated by Sentry's SDK. Type: UUID",
-        "url": "A specific URL that the user visited during the replay. You can also search for multiple URLs at once using urls and passing in an array of strings. Type: string",
-        "user.email": "An alternative, or addition, to the username. Sentry is aware of email addresses and can therefore display things such as Gravatars and unlock messaging capabilities. Type: string",
-        "user.id": "Application-specific internal identifier for the user. Type: string",
-        "user.ip": "User's IP address. Sentry uses the IP address as a unique identifier for unauthenticated users. Type: string",
-        "user.username": "Username, which is typically a better label than the user.id. Type: string",
     }
 
     user_feedback_properties_map = {
         "assigned": "Returns user feedback submissions assigned to the defined user(s) or team(s). Values can be a user ID (your email address), me for yourself, none for no assignee, my_teams or #team-name for teams you belong to. Type: team or org user",
-        "browser.name": "Name of the browser. Type: string",
-        "device.brand": "Brand of the device. Type: string",
-        "device.family": "Family of the device. Typically, the common part of a model name across generations. For example, iPhone, Samsung Galaxy. Type: string",
-        "device.model_id": "Internal hardware revision to identify the device exactly. Type: n/a",
         "device.name": "Name of the device. Type: string",
-        "dist": "Distinguishes build or deployment variants of the same release of an application. For example, the dist can be the build number of an Xcode build or the version code of an Android build. Type: string",
         "environment": "The environment that the event was first seen in. Type: string",
-        "id": "The feedback ID. Type: UUID",
         "is": "The properties of a user feedback submission. Values can be: unresolved, resolved, assigned, unassigned, linked, or unlinked. The linked and unlinked values return user feedback submissions based on whether they are linked to an external issue tracker or not. Type: status",
         "level": "The severity of the user feedback submissions. If the feedback came in through the crash-report modal then the level is tied to the error experienced by the end-user. For feedback from the user feedback widget, the level is info. Type: string",
-        "os.name": "The name of the operating system. Type: string",
-        "sdk.name": "Name of the Sentry SDK that sent the event. Type: string",
-        "sdk.version": "Version of the Sentry SDK that sent the event. Type: string",
         "timestamp": "The finish timestamp of the transaction. Returns events with matching datetime. Type: datetime",
-        "transaction": "The error or transaction name identifier. Type: string",
-        "url": "The URL of the page that the feedback is triggered on. Type: string",
-        "user.email": "The user's email address exists only if Sentry received it from the Sentry.setUser SDK option as a tag. This property does not apply to emails entered inside the user feedback widget, which are not searchable. Type: string",
-        "user.id": "Application-specific internal identifier for the user. Type: string",
         "user.ip": "User's IP address. Sentry uses the IP address as a unique identifier for unauthenticated users. Type: string",
         "user.username": "Username, which is typically a better label than the user.id. Type: string",
     }
@@ -328,20 +261,428 @@ def get_searchable_properties(
         "release.version": "A shorter version of the name; name without the package or short version of the hash. Learn more. Type: string",
     }
 
+    ai_properties_map = {
+        "ai.citations": "References or sources cited by the AI model in its response. Type: string[]",
+        "ai.completion_tokens.used": "The number of tokens used to respond to the message. Type: integer",
+        "ai.documents": "Documents or content chunks used as context for the AI model. Type: string[]",
+        "ai.finish_reason": "The reason why the model stopped generating. Type: string",
+        "ai.frequency_penalty": "Used to reduce repetitiveness of generated tokens. The higher the value, the stronger a penalty is applied to previously present tokens, proportional to how many times they have already appeared in the prompt or prior generation. Type: double",
+        "ai.function_call": "For an AI model call, the function that was called. This is deprecated for OpenAI, and replaced by tool_calls Type: string",
+        "ai.generation_id": "Unique identifier for the completion. Type: string",
+        "ai.input_messages": "The input messages sent to the model Type: string",
+        "ai.is_search_required": "Boolean indicating if the model needs to perform a search. Type: boolean",
+        "ai.metadata": "Extra metadata passed to an AI pipeline step. Type: string",
+        "ai.model.provider": "The provider of the model. Type: string",
+        "ai.model_id": "The vendor-specific ID of the model used. Type: string",
+        "ai.pipeline.name": "The name of the AI pipeline. Type: string",
+        "ai.preamble": "For an AI model call, the preamble parameter. Preambles are a part of the prompt used to adjust the model's overall behavior and conversation style. Type: string",
+        "ai.presence_penalty": "Used to reduce repetitiveness of generated tokens. Similar to frequency_penalty, except that this penalty is applied equally to all tokens that have already appeared, regardless of their exact frequencies. Type: double",
+        "ai.prompt_tokens.used": "The number of tokens used to process just the prompt. Type: integer",
+        "ai.raw_prompting": "When enabled, the user's prompt will be sent to the model without any pre-processing. Type: boolean",
+        "ai.response_format": "For an AI model call, the format of the response Type: string",
+        "ai.responses": "The response messages sent back by the AI model. Type: string[]",
+        "ai.search_queries": "Queries used to search for relevant context or documents. Type: string[]",
+        "ai.search_results": "Results returned from search queries for context. Type: string[]",
+        "ai.seed": "The seed, ideally models given the same seed and same other parameters will produce the exact same output. Type: string",
+        "ai.streaming": "Whether the request was streamed back. Type: boolean",
+        "ai.tags": "Tags that describe an AI pipeline step. Type: string",
+        "ai.temperature": "For an AI model call, the temperature parameter. Temperature essentially means how random the output will be. Type: double",
+        "ai.texts": "Raw text inputs provided to the model. Type: string[]",
+        "ai.tool_calls": "For an AI model call, the tool calls that were made. Type: string[]",
+        "ai.tools": "For an AI model call, the functions that are available Type: string[]",
+        "ai.top_k": "Limits the model to only consider the K most likely next tokens, where K is an integer (e.g., top_k=20 means only the 20 highest probability tokens are considered). Type: integer",
+        "ai.top_p": "Limits the model to only consider tokens whose cumulative probability mass adds up to p, where p is a float between 0 and 1 (e.g., top_p=0.7 means only tokens that sum up to 70% of the probability mass are considered). Type: double",
+        "ai.total_cost": "The total cost for the tokens used. Type: double",
+        "ai.total_tokens.used": "The total number of tokens used to process the prompt. Type: integer",
+        "ai.warnings": "Warning messages generated during model execution. Type: string[]",
+    }
+
+    browser_properties_map = {
+        "browser.script.invoker": "How a script was called in the browser. Type: string",
+        "browser.script.invoker_type": "Browser script entry point type. Type: string",
+        "browser.script.source_char_position": "A number representing the script character position of the script. Type:integer",
+        "browser.version": "The version of the browser. Type: string",
+    }
+
+    cache_properties_map = {
+        "cache.hit": "If the cache was hit during this span. Type: boolean",
+        "cache.item_size": "The size of the requested item in the cache. In bytes. Type: integer",
+        "cache.key": "The key of the cache accessed. Type: string[]",
+        "cache.operation": "The operation being performed on the cache. Type: string",
+        "cache.ttl": "The ttl of the cache in seconds Type: integer",
+    }
+
+    client_properties_map = {
+        "client.address": "Client address - domain name if available without reverse DNS lookup;otherwise, IP address or Unix domain socket name. Type: string",
+        "client.port": "Client port number. Type: integer",
+        "http.client_id": "Client address - domain name if available without reverse DNS lookup;otherwise, IP address or Unix domain socket name. Type: string",
+    }
+
+    cloudflare_properties_map = {
+        "cloudflare.d1.duration": "The duration of a Cloudflare D1 operation. Type: integer",
+        "cloudflare.d1.rows_read": "The number of rows read in a Cloudflare D1 operation. Type: integer",
+        "cloudflare.d1.rows_written": "The number of rows written in a Cloudflare D1 operation. Type: integer",
+    }
+
+    code_properties_map = {
+        "code.file.path": "The source code file name that identifies the code unit as uniquely as possible (preferably an absolute file path). Type: string",
+        "code.filepath": "The source code file name that identifies the code unit as uniquely as possible (preferably an absolute file path). Type: string",
+        "code.function": "The method or function name, or equivalent (usually rightmost part of the code unit's name). Type: string",
+        "code.function.name": "The method or function name, or equivalent (usually rightmost part of the code unit's name). Type: string",
+        "code.line.number": "The line number in code.filepath best representing the operation. It SHOULD point within the code unit named in code.function Type: integer",
+        "code.lineno": "The line number in code.filepath best representing the operation. It SHOULD point within the code unit named in code.function Type: integer",
+        "code.namespace": "The 'namespace' within which code.function is defined. Usually the qualified class or module name, such that code.namespace + some separator + code.function form a unique identifier for the code unit. Type: string",
+    }
+
+    db_properties_map = {
+        "db.collection": "The name of a collection (table, container) within the database. Type: string",
+        "db.collection.name": "The name of a collection (table, container) within the database. Type: string",
+        "db.name": "The name of the database being accessed. Type: string",
+        "db.namespace": "The name of the database being accessed. Type: string",
+        "db.operation": "The name of the operation being executed. Type: string",
+        "db.operation.name": "The name of the operation being executed. Type: string",
+        "db.query.summary": "A database query being executed. Should be parameterized. The full version of the query is in `db.query.text`. Type: string",
+        "db.query.text": "The database statement being executed. Type: string",
+        "db.redis.connection": "The redis connection name. Type: string",
+        "db.redis.parameters": "The array of command parameters given to a redis command. Type: string[]",
+        "db.sql.bindings": "The array of query bindings. Type: string[]",
+        "db.statement": "The database statement being executed. Type: string",
+        "db.system": "An identifier for the database management system (DBMS) product being used. Type: string",
+        "db.system.name": "An identifier for the database management system (DBMS) product being used. Type: string",
+        "db.user": "The database user. Type: string",
+    }
+
+    error_properties_map = {
+        "error.type": "Describes a class of error the operation ended with. Type: string",
+    }
+
+    exception_properties_map = {
+        "exception.escaped": "SHOULD be set to true if the exception event is recorded at a point where it is known that the exception is escaping the scope of the span. Type: boolean",
+        "exception.message": "The error message. Type: string",
+        "exception.stacktrace": "A stacktrace as a string in the natural representation for the language runtime. The representation is to be determined and documented by each language SIG. Type: string",
+        "exception.type": "The type of the exception (its fully-qualified class name, if applicable). The dynamic type of the exception should be preferred over the static type in languages that support it. Type: string",
+    }
+
+    faas_properties_map = {
+        "faas.coldstart": "A boolean that is true if the serverless function is executed for the first time (aka cold-start). Type: boolean",
+        "faas.cron": "A string containing the schedule period as Cron Expression. Type: string",
+        "faas.time": "A string containing the function invocation time in the ISO 8601 format expressed in UTC. Type: string",
+        "faas.trigger": "Type of the trigger which caused this function invocation. Type: string",
+    }
+
+    frames_properties_map = {
+        "frames.delay": "The sum of all delayed frame durations in seconds during the lifetime of the span. Type: integer",
+        "frames.frozen": "The number of frozen frames rendered during the lifetime of the span. Type: integer",
+        "frames.slow": "The number of slow frames rendered during the lifetime of the span. Type: integer",
+        "frames.total": "The number of total frames rendered during the lifetime of the span. Type: integer",
+    }
+
+    gen_ai_properties_map = {
+        "gen_ai.prompt": "The input messages sent to the model Type: string",
+        "gen_ai.request.frequency_penalty": "Used to reduce repetitiveness of generated tokens. The higher the value, the stronger a penalty is applied to previously present tokens, proportional to how many times they have already appeared in the prompt or prior generation. Type: double",
+        "gen_ai.request.presence_penalty": "Used to reduce repetitiveness of generated tokens. Similar to frequency_penalty, except that this penalty is applied equally to all tokens that have already appeared, regardless of their exact frequencies. Type: double",
+        "gen_ai.request.seed": "The seed, ideally models given the same seed and same other parameters will produce the exact same output. Type: string",
+        "gen_ai.request.temperature": "For an AI model call, the temperature parameter. Temperature essentially means how random the output will be. Type: double",
+        "gen_ai.request.top_k": "Limits the model to only consider the K most likely next tokens, where K is an integer (e.g., top_k=20 means only the 20 highest probability tokens are considered). Type: integer",
+        "gen_ai.request.top_p": "Limits the model to only consider tokens whose cumulative probability mass adds up to p, where p is a float between 0 and 1 (e.g., top_p=0.7 means only tokens that sum up to 70% of the probability mass are considered). Type: double",
+        "gen_ai.response.finish_reasons": "The reason why the model stopped generating. Type: string",
+        "gen_ai.response.id": "Unique identifier for the completion. Type: string",
+        "gen_ai.response.model": "The vendor-specific ID of the model used. Type: string",
+        "gen_ai.system": "The provider of the model. Type: string",
+        "gen_ai.tool.name": "Name of the tool utilized by the agent. Type: string",
+        "gen_ai.usage.completion_tokens": "The number of tokens used in the GenAI response (completion). Type: integer",
+        "gen_ai.usage.input_tokens": "The number of tokens used in the GenAI input (prompt). Type: integer",
+        "gen_ai.usage.output_tokens": "The number of tokens used in the GenAI response (completion). Type: integer",
+        "gen_ai.usage.prompt_tokens": "The number of tokens used in the GenAI input (prompt). Type: integer",
+        "gen_ai.usage.total_tokens": "The total number of tokens used to process the prompt. (input tokens plus output tokens) Type: integer",
+    }
+
+    general_properties_map = {
+        "app_start_type": "Mobile app start variant. Either cold or warm. Type: string",
+        "blocked_main_thread": "Whether the main thread was blocked by the span. Type: boolean",
+        "channel": "The channel name that is being used. Type: string",
+        "fs_error": "The error message of a file system error. Type: string",
+        "http.request.method": "The HTTP method used. Type: string",
+        "id": "A unique identifier for the span. Type: string",
+        "method": "The HTTP method used. Type: string",
+        "previous_route": "Also used by mobile SDKs to indicate the previous route in the application. Type: string",
+        "profile_id": "The id of the sentry profile. Type: string",
+        "route": "The matched route, that is, the path template in the format used by the respective server framework. Also used by mobile SDKs to indicate the current route in the application. Type: string",
+        "sentry.environment": "The sentry environment. Type: string",
+        "sentry.profile_id": "The id of the sentry profile. Type: string",
+        "sentry.release": "The sentry release. Type: string",
+        "sentry.transaction": "The sentry transaction (segment name). Type: string",
+        "type": "More granular type of the operation happening. Type: string",
+        "url.full": "The URL of the resource that was fetched. Type: string",
+    }
+
+    graphql_properties_map = {
+        "graphql.operation.name": "The name of the operation being executed. Type: string",
+        "graphql.operation.type": "The type of the operation being executed. Type: string",
+    }
+
+    http_properties_map = {
+        "http.client_ip": "Client address - domain name if available without reverse DNS lookup; otherwise, IP address or Unix domain socket name. Type: string",
+        "http.decoded_response_content_length": "The decoded body size of the response (in bytes). Type: integer",
+        "http.flavor": "The actual version of the protocol used for network communication. Type: string",
+        "http.fragment": "The fragments present in the URI. Note that this contains the leading # character, while the `url.fragment` attribute does not. Type: string",
+        "http.host": "The domain name. Type: string",
+        "http.method": "The HTTP method of the request that created the span. Type: string",
+        "http.query": "The query string present in the URL. Note that this contains the leading ? character, while the `url.query` attribute does not. Type: string",
+        "http.request.connect_start": "The UNIX timestamp representing the time immediately before the user agent starts establishing the connection to the server to retrieve the resource. Type: integer",
+        "http.request.connection_end": "The UNIX timestamp representing the time immediately after the browser finishes establishing the connection to the server to retrieve the resource. The timestamp value includes the time interval to establish the transport connection, as well as other time intervals such as TLS handshake and SOCKS authentication. Type: integer",
+        "http.request.domain_lookup_end": "The UNIX timestamp representing the time immediately after the browser finishes the domain-name lookup for the resource. Type: integer",
+        "http.request.domain_lookup_start": "The UNIX timestamp representing the time immediately before the browser starts the domain-name lookup for the resource. Type: integer",
+        "http.request.fetch_start": "The UNIX timestamp representing the time immediately before the browser starts to fetch the resource. Type: integer",
+        "http.request.method": "The HTTP method used. Type: string",
+        "http.request.redirect_start": "The UNIX timestamp representing the start time of the fetch which that initiates the redirect. Type: integer",
+        "http.request.request_start": "The UNIX timestamp representing the time immediately before the browser starts requesting the resource from the server, cache, or local resource. If the transport connection fails and the browser retires the request, the value returned will be the start of the retry request. Type: integer",
+        "http.request.resend_count": "The ordinal number of request resending attempt (for any reason, including redirects). Type: integer",
+        "http.request.response_end": "The UNIX timestamp representing the time immediately after the browser receives the last byte of the resource or immediately before the transport connection is closed, whichever comes first. Type: integer",
+        "http.request.response_start": "The UNIX timestamp representing the time immediately before the browser starts receiving the response from the server, cache, or local resource. If the transport connection fails and the browser retires the request, the value returned will be the start of the retry request. Type: integer",
+        "http.request.secure_connection_start": "The UNIX timestamp representing the time immediately before the browser starts the handshake process to secure the current connection. If a secure connection is not used, the property returns zero. Type: integer",
+        "http.response.body.size": "The encoded body size of the response (in bytes). Type: integer",
+        "http.response.header.content-length": "The size of the message body sent to the recipient (in bytes) Type: string",
+        "http.response.size": "The transfer size of the response (in bytes). Type: integer",
+        "http.response.status_code": "The status code of the HTTP response. Type: integer",
+        "http.response_content_length": "The encoded body size of the response (in bytes). Type: integer",
+        "http.response_transfer_size": "The transfer size of the response (in bytes). Type: integer",
+        "http.route": "The matched route, that is, the path template in the format used by the respective server framework. Type: string",
+        "http.scheme": "The URI scheme component identifying the used protocol. Type: string",
+        "http.status_code": "The status code of the HTTP response. Type: integer",
+        "http.target": "The pathname and query string of the URL. Type: string",
+        "http.url": "The URL of the resource that was fetched. Type: string",
+        "method": "The HTTP method used. Type: string",
+        "user_agent.original": "Value of the HTTP User-Agent header sent by the client. Type: string",
+    }
+
+    jvm_properties_map = {
+        "jvm.gc.action": "Name of the garbage collector action. Type: string",
+        "jvm.gc.name": "Name of the garbage collector. Type: string",
+        "jvm.memory.pool.name": "Name of the memory pool. Type: string",
+        "jvm.memory.type": "Name of the memory pool. Type: string",
+        "jvm.thread.daemon": "Whether the thread is daemon or not. Type: boolean",
+        "jvm.thread.state": "State of the thread. Type: string",
+    }
+
+    lcp_properties_map = {
+        "lcp.element": "The dom element responsible for the largest contentful paint. Type: string",
+        "lcp.id": "The id of the dom element responsible for the largest contentful paint. Type: string",
+        "lcp.size": "The size of the largest contentful paint element. Type: integer",
+        "lcp.url": "The url of the dom element responsible for the largest contentful paint. Type: string",
+    }
+
+    logger_properties_map = {
+        "logger.name": "The name of the logger that generated this event. Type: string",
+    }
+
+    messaging_properties_map = {
+        "messaging.destination.connection": "The message destination connection. Type: string",
+        "messaging.destination.name": "The message destination name. Type: string",
+        "messaging.message.body.size": "The size of the message body in bytes. Type: integer",
+        "messaging.message.envelope.size": "The size of the message body and metadata in bytes. Type: integer",
+        "messaging.message.id": "A value used by the messaging system as an identifier for the message, represented as a string. Type: string",
+        "messaging.message.receive.latency": "The latency between when the message was published and received. Type: integer",
+        "messaging.message.retry.count": "The amount of attempts to send the message. Type: integer",
+        "messaging.operation.type": "A string identifying the type of the messaging operation Type: string",
+        "messaging.system": "The messaging system as identified by the client instrumentation. Type: string",
+    }
+
+    navigation_properties_map = {
+        "navigation.type": "The type of navigation done by a client-side router. Type: string",
+    }
+
+    net_properties_map = {
+        "net.host.ip": "Local address of the network connection - IP address or Unix domain socket name. Type: string",
+        "net.host.name": "Server domain name if available without reverse DNS lookup; otherwise, IP address or Unix domain socket name. Type: string",
+        "net.host.port": "Server port number. Type: integer",
+        "net.peer.ip": "Peer address of the network connection - IP address or Unix domain socket name. Type: string",
+        "net.peer.name": "Server domain name if available without reverse DNS lookup; otherwise, IP address or Unix domain socket name. Type: string",
+        "net.peer.port": "Peer port number. Type: integer",
+        "net.protocol.name": "OSI application layer or non-OSI equivalent. Type: string",
+        "net.protocol.version": "The actual version of the protocol used for network communication. Type: string",
+        "net.sock.family": "OSI transport and network layer Type: string",
+        "net.sock.host.addr": "Local address of the network connection mapping to Unix domain socket name. Type: string",
+        "net.sock.host.port": "Local port number of the network connection. Type: integer",
+        "net.sock.peer.addr": "Peer address of the network connection - IP address Type: string",
+        "net.sock.peer.name": "Peer address of the network connection - Unix domain socket name Type: string",
+        "net.sock.peer.port": "Peer port number of the network connection. Type: integer",
+        "net.transport": "OSI transport layer or inter-process communication method. Type: string",
+        "server.port": "Server port number. Type: integer",
+    }
+
+    network_properties_map = {
+        "http.flavor": "The actual version of the protocol used for network communication. Type: string",
+        "net.host.ip": "Local address of the network connection - IP address or Unix domain socket name. Type: string",
+        "net.protocol.name": "OSI application layer or non-OSI equivalent. Type: string",
+        "net.sock.host.port": "Local port number of the network connection. Type: integer",
+        "net.transport": "OSI transport layer or inter-process communication method. Type: string",
+        "network.local.address": "Local address of the network connection - IP address or Unix domain socket name. Type: string",
+        "network.local.port": "Local port number of the network connection. Type: integer",
+        "network.peer.address": "Peer address of the network connection - IP address or Unix domain socket name. Type: string",
+        "network.peer.port": "Peer port number of the network connection. Type: integer",
+        "network.protocol.name": "OSI application layer or non-OSI equivalent. Type: string",
+        "network.protocol.version": "The actual version of the protocol used for network communication. Type: string",
+        "network.transport": "OSI transport layer or inter-process communication method. Type: string",
+        "network.type": "OSI network layer or non-OSI equivalent. Type: string",
+    }
+
+    os_properties_map = {
+        "os.build_id": "The build ID of the operating system. Type: string",
+        "os.description": "Human readable (not intended to be parsed) OS version information, like e.g. reported by ver or lsb_release -a commands. Type: string",
+        "os.type": "The operating system type. Type: string",
+        "os.version": "The version of the operating system. Type: string",
+    }
+
+    otel_properties_map = {
+        "otel.scope.name": "The name of the instrumentation scope - (InstrumentationScope.Name in OTLP). Type: string",
+        "otel.scope.version": "The version of the instrumentation scope - (InstrumentationScope.Version in OTLP). Type: string",
+        "otel.status_code": "Name of the code, either OK or ERROR. MUST NOT be set if the status code is UNSET. Type: string",
+        "otel.status_description": "Description of the Status if it has a value, otherwise not set. Type: string",
+    }
+
+    process_properties_map = {
+        "process.executable.name": "The name of the executable that started the process. Type: string",
+        "process.pid": "The process ID of the running process. Type: integer",
+        "process.runtime.description": "An additional description about the runtime of the process, for example a specific vendor customization of the runtime environment. Equivalent to `raw_description` in the Sentry runtime context. Type: string",
+        "process.runtime.name": "The name of the runtime. Equivalent to `name` in the Sentry runtime context. Type: string",
+        "process.runtime.version": "The version of the runtime of this process, as returned by the runtime without modification. Equivalent to `version` in the Sentry runtime context. Type: string",
+    }
+
+    resource_properties_map = {
+        "resource.render_blocking_status": "The render blocking status of the resource. Type: string",
+    }
+
+    rpc_properties_map = {
+        "rpc.grpc.status_code": "The numeric status code of the gRPC request. Type: integer",
+        "rpc.service": "The full (logical) name of the service being called, including its package name, if applicable. Type: string",
+    }
+
+    sentry_properties_map = {
+        "profile_id": "The id of the sentry profile. Type: string",
+        "replay_id": "The id of the sentry replay. Type: string",
+        "sentry.cancellation_reason": "The reason why a span ended early. Type: string",
+        "sentry.environment": "The sentry environment. Type: string",
+        "sentry.exclusive_time": "The exclusive time duration of the span. Type: integer",
+        "sentry.http.prefetch": "If an http request was a prefetch request. Type: boolean",
+        "sentry.idle_span_finish_reason": "The reason why an idle span ended early. Type: string",
+        "sentry.nextjs.function.route": "A parameterized route for a function in Next.js that contributes to Server-Side Rendering. Should be present on spans that track such functions when the file location of the function is known. Type: string",
+        "sentry.nextjs.function.type": "A descriptor for a for a function in Next.js that contributes to Server-Side Rendering. Should be present on spans that track such functions. Type: string",
+        "sentry.nextjs.ssr.function.route": "A parameterized route for a function in Next.js that contributes to Server-Side Rendering. Should be present on spans that track such functions when the file location of the function is known. Type: string",
+        "sentry.nextjs.ssr.function.type": "A descriptor for a for a function in Next.js that contributes to Server-Side Rendering. Should be present on spans that track such functions. Type: string",
+        "sentry.op": "The operation of a span. Type: string",
+        "sentry.origin": "The origin of a span. Type: string",
+        "sentry.platform": "The sdk platform that generated the event. Type: string",
+        "sentry.profile_id": "The id of the sentry profile. Type: string",
+        "sentry.release": "The sentry release. Type: string",
+        "sentry.replay_id": "The id of the sentry replay. Type: string",
+        "sentry.sample_rate": "The sample rate of the span. Type: double",
+        "sentry.sdk.integrations": "A list of names identifying enabled integrations. The list shouldhave all enabled integrations, including default integrations. Defaultintegrations are included because different SDK releases may contain differentdefault integrations. Type: string[]",
+        "sentry.sdk.name": "The sentry sdk name. Type: string",
+        "sentry.sdk.version": "The sentry sdk version. Type: string",
+        "sentry.span.source": "The source of a span, also referred to as transaction source. Type: string",
+        "service.version": "The sentry release. Type: string",
+    }
+
+    server_properties_map = {
+        "http.server_name": "Server domain name if available without reverse DNS lookup; otherwise, IP address or Unix domain socket name. Type: string",
+        "server.address": "Server domain name if available without reverse DNS lookup; otherwise, IP address or Unix domain socket name. Type: string",
+        "server.port": "Server port number. Type: integer",
+    }
+
+    service_properties_map = {
+        "sentry.release": "The version string of the service API or implementation. The format is not defined by these conventions. Type: string",
+        "service.name": "Logical name of the service. Type: string",
+        "service.version": "The version string of the service API or implementation. The format is not defined by these conventions. Type: string",
+    }
+
+    thread_properties_map = {
+        "thread.id": 'Current "managed" thread ID. Type: integer',
+        "thread.name": "Current thread name. Type: string",
+    }
+
+    ui_properties_map = {
+        "ui.component_name": "The name of the associated component. Type: string",
+        "ui.contributes_to_ttfd": "Whether the span execution contributed to the TTFD (time to fully drawn) metric. Type: boolean",
+        "ui.contributes_to_ttid": "Whether the span execution contributed to the TTID (time to initial display) metric. Type: boolean",
+    }
+
+    url_properties_map = {
+        "url": "The URL of the resource that was fetched. Type: string",
+        "url.domain": "Server domain name if available without reverse DNS lookup; otherwise, IP address or Unix domain socket name. Type: string",
+        "url.fragment": "The fragments present in the URI. Note that this does not contain the leading # character, while the `http.fragment` attribute does. Type: string",
+        "url.path": "The URI path component. Type: string",
+        "url.port": "Server port number. Type: integer",
+        "url.query": "The query string present in the URL. Note that this does not contain the leading ? character, while the `http.query` attribute does. Type: string",
+        "url.scheme": "The URI scheme component identifying the used protocol. Type: string",
+        "url.template": "The low-cardinality template of an absolute path reference. Type: string",
+    }
+
+    user_agent_properties_map = {
+        "http.user_agent": "Value of the HTTP User-Agent header sent by the client. Type: string",
+        "user_agent.original": "Value of the HTTP User-Agent header sent by the client. Type: string",
+    }
+
+    user_properties_map = {
+        "user.email": "User email address. Type: string",
+        "user.full_name": "User's full name. Type: string",
+        "user.geo.city": "Human readable city name. Type: string",
+        "user.geo.country_code": "Two-letter country code (ISO 3166-1 alpha-2). Type: string",
+        "user.geo.region": "Human readable region name or code. Type: string",
+        "user.geo.subdivision": "Human readable subdivision name. Type: string",
+        "user.hash": "Unique user hash to correlate information for a user in anonymized form. Type: string",
+        "user.id": "Unique identifier of the user. Type: string",
+        "user.name": "Short name or login/username of the user. Type: string",
+        "user.roles": "Array of user roles at the time of the event. Type: string[]",
+    }
+
     # Combine all property maps into one
     all_properties_map = {}
+    property_maps = [
+        issue_properties_map,
+        event_properties_map,
+        span_properties_map,
+        session_replay_properties_map,
+        user_feedback_properties_map,
+        release_properties_map,
+        ai_properties_map,
+        browser_properties_map,
+        cache_properties_map,
+        client_properties_map,
+        cloudflare_properties_map,
+        code_properties_map,
+        db_properties_map,
+        error_properties_map,
+        exception_properties_map,
+        faas_properties_map,
+        frames_properties_map,
+        gen_ai_properties_map,
+        general_properties_map,
+        graphql_properties_map,
+        http_properties_map,
+        jvm_properties_map,
+        lcp_properties_map,
+        logger_properties_map,
+        messaging_properties_map,
+        navigation_properties_map,
+        net_properties_map,
+        network_properties_map,
+        os_properties_map,
+        otel_properties_map,
+        process_properties_map,
+        resource_properties_map,
+        rpc_properties_map,
+        sentry_properties_map,
+        server_properties_map,
+        service_properties_map,
+        thread_properties_map,
+        ui_properties_map,
+        url_properties_map,
+        user_agent_properties_map,
+        user_properties_map,
+    ]
 
-    if include_issue_properties:
-        all_properties_map.update(issue_properties_map)
-    if include_event_properties:
-        all_properties_map.update(event_properties_map)
-    if include_span_properties:
-        all_properties_map.update(span_properties_map)
-    if include_session_replay_properties:
-        all_properties_map.update(session_replay_properties_map)
-    if include_user_feedback_properties:
-        all_properties_map.update(user_feedback_properties_map)
-    if include_release_properties:
-        all_properties_map.update(release_properties_map)
+    for prop_map in property_maps:
+        all_properties_map.update(prop_map)
 
     return all_properties_map
