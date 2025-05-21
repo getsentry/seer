@@ -298,16 +298,16 @@ def ensure_timezone_aware(dt: datetime.datetime | None) -> datetime.datetime | N
     """
     Ensures a datetime is timezone-aware by adding UTC timezone if it's naive.
     Returns None if the input is None.
-    
+
     Args:
         dt: The datetime object to ensure is timezone-aware
-        
+
     Returns:
         A timezone-aware datetime object, or None if dt is None
     """
     if dt is None:
         return None
-    
+
     if dt.tzinfo is None:
         return dt.replace(tzinfo=datetime.UTC)
     return dt
