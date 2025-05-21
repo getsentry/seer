@@ -104,7 +104,7 @@ class BugPredictionStep(CodegenStep):
             )
 
     @observe(name="Codegen - Bug Prediction Step")
-    def _invoke(self, app_config: AppConfig = injected, **kwargs) -> None:
+    def _invoke(self, **kwargs) -> None:
         super()._invoke()
 
         self.logger.info("Executing Codegen - Bug Prediction Step")
