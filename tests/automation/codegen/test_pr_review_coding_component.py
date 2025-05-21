@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from seer.automation.agent.agent import AgentConfig
+from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.models import CodePrReviewOutput, CodePrReviewRequest
 from seer.automation.codegen.pr_review_coding_component import PrReviewCodingComponent
 
@@ -39,13 +40,83 @@ class TestPrReviewCodingComponent(unittest.TestCase):
         self.tools_patcher.stop()
         self.agent_patcher.stop()
 
+    def test_get_client_type_with_codecov_request(self):
+        client_type = self.component._get_client_type(is_codecov_request=True)
+        self.assertEqual(client_type, RepoClientType.CODECOV_PR_REVIEW)
+
+    def test_get_client_type_without_codecov_request(self):
+        client_type = self.component._get_client_type(is_codecov_request=False)
+        self.assertEqual(client_type, RepoClientType.WRITE)
+
+    @patch("seer.automation.codegen.pr_review_coding_component.BaseTools")
+    def test_invoke_uses_correct_client_type_for_codecov_request(self, mock_base_tools):
+        # Configure mock tools
+        mock_tools_instance = MagicMock()
+        mock_base_tools.return_value.__enter__.return_value = mock_tools_instance
+        mock_tools_instance.get_tools.return_value = ["mocked_tool"]
+
+        # Mock LLM client
+        mock_llm_client = MagicMock()
+
+        # Set up formatted_response to return valid response
+        mock_pr_description = MagicMock()
+        mock_pr_description.parsed = MagicMock(spec=CodePrReviewOutput.PrDescription)
+
+        mock_formatted_response = MagicMock()
+        mock_formatted_response.parsed = [MagicMock(spec=CodePrReviewOutput.Comment)]
+
+        mock_llm_client.generate_structured.side_effect = [
+            mock_pr_description,
+            mock_formatted_response,
+        ]
+
+        # Call invoke
+        self.component.invoke(self.request, is_codecov_request=True, llm_client=mock_llm_client)
+
+        # Verify BaseTools was called with the correct client type
+        mock_base_tools.assert_called_once()
+        self.assertEqual(
+            mock_base_tools.call_args[1]["repo_client_type"], RepoClientType.CODECOV_PR_REVIEW
+        )
+
+    @patch("seer.automation.codegen.pr_review_coding_component.BaseTools")
+    def test_invoke_uses_correct_client_type_for_non_codecov_request(self, mock_base_tools):
+        # Configure mock tools
+        mock_tools_instance = MagicMock()
+        mock_base_tools.return_value.__enter__.return_value = mock_tools_instance
+        mock_tools_instance.get_tools.return_value = ["mocked_tool"]
+
+        # Mock LLM client
+        mock_llm_client = MagicMock()
+
+        # Set up formatted_response to return valid response
+        mock_pr_description = MagicMock()
+        mock_pr_description.parsed = MagicMock(spec=CodePrReviewOutput.PrDescription)
+
+        mock_formatted_response = MagicMock()
+        mock_formatted_response.parsed = [MagicMock(spec=CodePrReviewOutput.Comment)]
+
+        mock_llm_client.generate_structured.side_effect = [
+            mock_pr_description,
+            mock_formatted_response,
+        ]
+
+        # Call invoke
+        self.component.invoke(self.request, is_codecov_request=False, llm_client=mock_llm_client)
+
+        # Verify BaseTools was called with the correct client type
+        mock_base_tools.assert_called_once()
+        self.assertEqual(mock_base_tools.call_args[1]["repo_client_type"], RepoClientType.WRITE)
+
     @patch("seer.automation.codegen.pr_review_coding_component.LlmClient")
     def test_invoke_returns_none_when_agent_run_returns_none(self, mock_llm_client_class):
         # Set up agent to return None
         self.mock_agent_instance.run.return_value = None
 
         # Call invoke
-        result = self.component.invoke(self.request, mock_llm_client_class)
+        result = self.component.invoke(
+            self.request, is_codecov_request=False, llm_client=mock_llm_client_class
+        )
 
         # Assert result is None
         self.assertIsNone(result)
@@ -63,7 +134,9 @@ class TestPrReviewCodingComponent(unittest.TestCase):
         mock_llm_client_class.generate_structured.return_value = None
 
         # Call invoke
-        result = self.component.invoke(self.request, mock_llm_client_class)
+        result = self.component.invoke(
+            self.request, is_codecov_request=False, llm_client=mock_llm_client_class
+        )
 
         # Assert result is None
         self.assertIsNone(result)
@@ -83,7 +156,9 @@ class TestPrReviewCodingComponent(unittest.TestCase):
         ]
 
         # Call invoke
-        result = self.component.invoke(self.request, mock_llm_client_class)
+        result = self.component.invoke(
+            self.request, is_codecov_request=False, llm_client=mock_llm_client_class
+        )
 
         # Assert result is None
         self.assertIsNone(result)
@@ -118,7 +193,9 @@ class TestPrReviewCodingComponent(unittest.TestCase):
         ]
 
         # Call invoke
-        result = self.component.invoke(self.request, mock_llm_client_class)
+        result = self.component.invoke(
+            self.request, is_codecov_request=False, llm_client=mock_llm_client_class
+        )
 
         # Verify LlmClient.generate_structured was called correctly for PR description
         pr_description_call = mock_llm_client_class.generate_structured.call_args_list[0]
@@ -170,7 +247,9 @@ class TestPrReviewCodingComponent(unittest.TestCase):
         ]
 
         # Call invoke
-        result = self.component.invoke(self.request, mock_llm_client_class)
+        result = self.component.invoke(
+            self.request, is_codecov_request=False, llm_client=mock_llm_client_class
+        )
 
         # Verify suggestion was not added to comment body
         self.assertEqual(mock_comment.body, "Test comment")

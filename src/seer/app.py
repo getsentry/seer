@@ -371,6 +371,7 @@ def codegen_pr_review_state_endpoint(
     raise NotImplementedError("PR Review state is not implemented yet.")
 
 
+# TODO: Remove this endpoint once we migrate all codecov requests to overwatch
 @json_api(blueprint, "/v1/automation/codecov-request")
 def codecov_request_endpoint(
     data: CodecovTaskRequest,
@@ -383,13 +384,23 @@ def codecov_request_endpoint(
         raise ConsentError(f"Invalid permissions for org {data.external_owner_id}.")
 
     if data.request_type == "pr-review":
-        return codegen_pr_review_endpoint(data.data)
+        return codegen_pr_review(data.data, is_codecov_request=True)
     elif data.request_type == "unit-tests":
         return codegen_unittest(data.data, is_codecov_request=True)
     elif data.request_type == "pr-closed":
         return codegen_pr_closed_endpoint(data.data)
     elif data.request_type == "retry-unit-tests":
         return codegen_retry_unittest(data.data)
+
+    raise ValueError(f"Unsupported request_type: {data.request_type}")
+
+
+@json_api(blueprint, "/v1/automation/overwatch-request")
+def overwatch_request_endpoint(
+    data: CodecovTaskRequest,
+) -> CodegenBaseResponse:
+    if data.request_type == "pr-review":
+        return codegen_pr_review(data.data, is_codecov_request=False)
 
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 

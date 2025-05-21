@@ -141,7 +141,9 @@ def get_unittest_state(request: CodegenUnitTestsStateRequest):
 
 
 @inject
-def codegen_pr_review(request: CodegenBaseRequest, app_config: AppConfig = injected):
+def codegen_pr_review(
+    request: CodegenBaseRequest, app_config: AppConfig = injected, is_codecov_request: bool = True
+):
     state = create_initial_pr_review_run(request)
 
     cur_state = state.get()
@@ -150,6 +152,7 @@ def codegen_pr_review(request: CodegenBaseRequest, app_config: AppConfig = injec
         run_id=cur_state.run_id,
         pr_id=request.pr_id,
         repo_definition=request.repo,
+        is_codecov_request=is_codecov_request,
     )
 
     PrReviewStep.get_signature(

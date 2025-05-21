@@ -19,13 +19,23 @@ logger = logging.getLogger(__name__)
 class PrReviewCodingComponent(BaseComponent[CodePrReviewRequest, CodePrReviewOutput]):
     context: CodegenContext
 
+    def _get_client_type(self, is_codecov_request: bool) -> RepoClientType:
+        """Helper method to determine the appropriate repo client type based on the request type."""
+        return RepoClientType.CODECOV_PR_REVIEW if is_codecov_request else RepoClientType.WRITE
+
     @observe(name="Review PR")
     @ai_track(description="Review PR")
     @inject
     def invoke(
-        self, request: CodePrReviewRequest, llm_client: LlmClient = injected
+        self,
+        request: CodePrReviewRequest,
+        is_codecov_request: bool,
+        llm_client: LlmClient = injected,
     ) -> CodePrReviewOutput | None:
-        with BaseTools(self.context, repo_client_type=RepoClientType.CODECOV_PR_REVIEW) as tools:
+        with BaseTools(
+            self.context,
+            repo_client_type=self._get_client_type(is_codecov_request),
+        ) as tools:
             agent = LlmAgent(
                 tools=tools.get_tools(),
                 config=AgentConfig(interactive=False),
