@@ -62,8 +62,12 @@ class TestPrReviewCodingComponent(unittest.TestCase):
         mock_pr_description = MagicMock()
         mock_pr_description.parsed = MagicMock(spec=CodePrReviewOutput.PrDescription)
 
+        # Create mock comment with suggestion attribute
+        mock_comment = MagicMock(spec=CodePrReviewOutput.Comment)
+        mock_comment.suggestion = None
+
         mock_formatted_response = MagicMock()
-        mock_formatted_response.parsed = [MagicMock(spec=CodePrReviewOutput.Comment)]
+        mock_formatted_response.parsed = [mock_comment]
 
         mock_llm_client.generate_structured.side_effect = [
             mock_pr_description,
@@ -93,8 +97,12 @@ class TestPrReviewCodingComponent(unittest.TestCase):
         mock_pr_description = MagicMock()
         mock_pr_description.parsed = MagicMock(spec=CodePrReviewOutput.PrDescription)
 
+        # Create mock comment with suggestion attribute
+        mock_comment = MagicMock(spec=CodePrReviewOutput.Comment)
+        mock_comment.suggestion = None
+
         mock_formatted_response = MagicMock()
-        mock_formatted_response.parsed = [MagicMock(spec=CodePrReviewOutput.Comment)]
+        mock_formatted_response.parsed = [mock_comment]
 
         mock_llm_client.generate_structured.side_effect = [
             mock_pr_description,

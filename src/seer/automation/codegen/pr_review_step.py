@@ -83,6 +83,7 @@ class PrReviewStep(CodegenStep):
                 CodePrReviewRequest(
                     diff=diff_content,
                 ),
+                is_codecov_request=self.request.is_codecov_request,
             )
         except ValueError as e:
             self.logger.error(f"Error generating pr review for {pr.url}: {e}")
@@ -91,8 +92,13 @@ class PrReviewStep(CodegenStep):
             publisher.publish_no_changes_required()
             return
 
+        # Handle None response
+        if generated_pr_review is None:
+            publisher.publish_no_changes_required()
+            return
+
         try:
-            publisher.publish_generated_pr_review(pr_review=generated_pr_review),
+            publisher.publish_generated_pr_review(pr_review=generated_pr_review)
         except ValueError as e:
             self.logger.error(f"Error publishing pr review for {pr.url}: {e}")
             return
