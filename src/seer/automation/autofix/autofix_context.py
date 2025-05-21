@@ -137,12 +137,30 @@ class AutofixContext(PipelineContext):
                 raise ValueError(f"Repo '{repo_name}' not found in the list of repos.")
 
         repo_client = self.get_repo_client(repo_name)
-        file_contents, _ = repo_client.get_file_content(path)
+
+        file_contents = None
 
         if not ignore_local_changes:
+            # first check if the file is locally created
             cur_state = self.state.get()
+            locally_created_files = list(
+                filter(
+                    lambda x: x.path == path and x.change_type == "create",
+                    cur_state.codebases[repo_client.repo_external_id].file_changes,
+                )
+            )
+            if locally_created_files:
+                file_contents = locally_created_files[0].new_snippet
+        if not file_contents:
+            # then check the remote file
+            file_contents, _ = repo_client.get_file_content(path)
+
+        # apply any local edits
+        if not ignore_local_changes:
             repo_file_changes = cur_state.codebases[repo_client.repo_external_id].file_changes
-            current_file_changes = list(filter(lambda x: x.path == path, repo_file_changes))
+            current_file_changes = list(
+                filter(lambda x: x.path == path and x.change_type != "create", repo_file_changes)
+            )
             for file_change in current_file_changes:
                 file_contents = file_change.apply(file_contents)
 
