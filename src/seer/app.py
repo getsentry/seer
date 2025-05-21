@@ -29,7 +29,7 @@ from seer.automation.assisted_query.models import (
     CreateCacheRequest,
     CreateCacheResponse,
     TranslateRequest,
-    TranslateResponse,
+    TranslateResponses,
 )
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
@@ -561,7 +561,7 @@ def create_cache_endpoint(data: CreateCacheRequest) -> CreateCacheResponse:
 
 
 @json_api(blueprint, "/v1/assisted-query/translate")
-def translate_endpoint(data: TranslateRequest) -> TranslateResponse:
+def translate_endpoint(data: TranslateRequest) -> TranslateResponses:
     try:
         with statsd.timed("seer.automation.assisted_query.translate.duration"):
             response = translate_query(data)

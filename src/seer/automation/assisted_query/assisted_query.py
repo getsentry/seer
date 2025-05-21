@@ -13,6 +13,7 @@ from seer.automation.assisted_query.models import (
     RelevantFieldsResponse,
     TranslateRequest,
     TranslateResponse,
+    TranslateResponses,
 )
 from seer.automation.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.dependency_injection import inject, injected
@@ -23,8 +24,9 @@ logger = logging.getLogger(__name__)
 REQUIRED_FIELDS = ["span.op", "span.description", "transaction"]
 
 
-def translate_query(request: TranslateRequest) -> TranslateResponse:
-
+def translate_query(
+    request: TranslateRequest,
+) -> TranslateResponses:
     natural_language_query = request.natural_language_query
     org_id = request.org_id
     project_ids = request.project_ids
@@ -40,22 +42,24 @@ def translate_query(request: TranslateRequest) -> TranslateResponse:
         )
         cache_name = res.cache_name
 
-    sentry_query = create_query_from_natural_language(
-        natural_language_query,
-        cache_name,
-        org_id,
-        project_ids,
+    sentry_queries = create_query_from_natural_language(
+        natural_language_query, cache_name, org_id, project_ids
     )
 
-    sentry_query = sentry_query.parsed
+    queries = sentry_queries.parsed
 
-    return TranslateResponse(
-        query=sentry_query.query,
-        stats_period=sentry_query.stats_period,
-        group_by=sentry_query.group_by,
-        visualization=sentry_query.visualization,
-        sort=sentry_query.sort,
-    )
+    responses = [
+        TranslateResponse(
+            query=query.query,
+            stats_period=query.stats_period,
+            group_by=query.group_by,
+            visualization=query.visualization,
+            sort=query.sort,
+        )
+        for query in queries
+    ]
+
+    return TranslateResponses(responses=responses)
 
 
 @inject
@@ -69,7 +73,6 @@ def create_query_from_natural_language(
     llm_client: LlmClient = injected,
     rpc_client: RpcClient = injected,
 ) -> LlmGenerateStructuredResponse:
-
     model = get_model_provider()
 
     # Step 1: Figure out relevant fields
@@ -112,19 +115,17 @@ def create_query_from_natural_language(
     else:
         field_values = field_values_response["values"]
 
-    # Step 3: Generate final prompt based off of relevant fields and values
-    fields_and_values_prompt = prompts.get_fields_and_values_prompt(
+    # Step 3: Generate final prompt(s) based off of relevant fields and values
+    final_query_prompt = prompts.get_final_query_prompt(
         natural_language_query, relevant_fields, field_values
     )
     generated_query = llm_client.generate_structured(
-        prompt=fields_and_values_prompt,
+        prompt=final_query_prompt,
         model=model,
         cache_name=cache_name,
-        response_format=ModelResponse,
+        response_format=list[ModelResponse],
+        temperature=0.2,
         thinking_budget=0,
         use_local_endpoint=True,
     )
-
-    # XXX: Step 3a/b: Create 3-5 query options and select the best one
-
     return generated_query

@@ -17,7 +17,7 @@ from seer.automation.assisted_query.models import (
     ModelResponse,
     RelevantFieldsResponse,
     TranslateRequest,
-    TranslateResponse,
+    TranslateResponses,
 )
 from seer.rpc import RpcClient
 
@@ -43,18 +43,22 @@ class TestAssistedQuery:
             "seer.automation.assisted_query.assisted_query.create_query_from_natural_language"
         ) as mock_create_query:
             mock_create_query.return_value = LlmGenerateStructuredResponse(
-                TranslateResponse(
-                    query="error",
-                    stats_period="24h",
-                    group_by=["project"],
-                    visualization=[
-                        Chart(
-                            chart_type=1,
-                            y_axes=["Test y-axis 1", "Test y-axis 2"],
-                        )
-                    ],
-                    sort="-count",
-                ),
+                [
+                    ModelResponse(
+                        explanation="This is a test explanation",
+                        query="error",
+                        stats_period="24h",
+                        group_by=["project"],
+                        visualization=[
+                            Chart(
+                                chart_type=1,
+                                y_axes=["Test y-axis 1", "Test y-axis 2"],
+                            )
+                        ],
+                        sort="-count",
+                        confidence_score=0.95,
+                    ),
+                ],
                 metadata=LlmResponseMetadata(
                     model="gemini-2.5-flash-preview-04-17",
                     provider_name=LlmProviderType.GEMINI,
@@ -64,17 +68,17 @@ class TestAssistedQuery:
 
             response = translate_query(request)
 
-            assert isinstance(response, TranslateResponse)
-            assert response.query == "error"
-            assert response.stats_period == "24h"
-            assert response.group_by == ["project"]
-            assert response.visualization == [
+            assert isinstance(response, TranslateResponses)
+            assert response.responses[0].query == "error"
+            assert response.responses[0].stats_period == "24h"
+            assert response.responses[0].group_by == ["project"]
+            assert response.responses[0].visualization == [
                 Chart(
                     chart_type=1,
                     y_axes=["Test y-axis 1", "Test y-axis 2"],
                 )
             ]
-            assert response.sort == "-count"
+            assert response.responses[0].sort == "-count"
 
     @patch("seer.automation.assisted_query.assisted_query.create_query_from_natural_language")
     @patch("seer.automation.assisted_query.assisted_query.LlmClient")
@@ -101,15 +105,17 @@ class TestAssistedQuery:
         )
 
         mock_create_query.return_value = LlmGenerateStructuredResponse(
-            ModelResponse(
-                explanation="This is a test explanation",
-                query="error",
-                stats_period="24h",
-                group_by=["project"],
-                visualization=[Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])],
-                sort="-count",
-                confidence_score=0.95,
-            ),
+            [
+                ModelResponse(
+                    explanation="This is a test explanation",
+                    query="error",
+                    stats_period="24h",
+                    group_by=["project"],
+                    visualization=[Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])],
+                    sort="-count",
+                    confidence_score=0.95,
+                )
+            ],
             metadata=LlmResponseMetadata(
                 model="gemini-2.5-flash-preview-04-17",
                 provider_name=LlmProviderType.GEMINI,
@@ -118,15 +124,14 @@ class TestAssistedQuery:
         )
 
         response = translate_query(request)
-
-        assert isinstance(response, TranslateResponse)
-        assert response.query == "error"
-        assert response.stats_period == "24h"
-        assert response.group_by == ["project"]
-        assert response.visualization == [
+        assert isinstance(response, TranslateResponses)
+        assert response.responses[0].query == "error"
+        assert response.responses[0].stats_period == "24h"
+        assert response.responses[0].group_by == ["project"]
+        assert response.responses[0].visualization == [
             Chart(chart_type=1, y_axes=["Test y-axis 1", "Test y-axis 2"])
         ]
-        assert response.sort == "-count"
+        assert response.responses[0].sort == "-count"
 
     @patch("seer.automation.assisted_query.assisted_query.RpcClient")
     @patch("seer.automation.agent.client.LlmClient")
