@@ -104,17 +104,28 @@ class BugPredictionStep(CodegenStep):
             )
 
     @observe(name="Codegen - Bug Prediction Step")
-    def _invoke(self, **kwargs) -> None:
+    def _invoke(self, app_config: AppConfig = injected, **kwargs) -> None:
         self.logger.info("Executing Codegen - Bug Prediction Step")
         self.context.event_manager.mark_running()
 
         # 1. Read the PR.
         if self.request.repo.base_commit_sha is None:
+            # Overwatch currently passes the commit_sha in the request.
+            # Need to set this on the repo definition so that code search happens at this commit.
             self.request.repo.base_commit_sha = self.request.commit_sha
         repo_client = self.context.get_repo_client(
             repo_name=self.request.repo.full_name, type=RepoClientType.READ
         )
+
         pr = repo_client.repo.get_pull(self.request.pr_id)
+        pr_head_sha = repo_client.get_pr_head_sha(pr.url)
+        if (pr_head_sha != self.request.commit_sha) and not app_config.is_production:
+            # This should only be used when we're evaluating, which happens locally.
+            comparison = repo_client.repo.compare(pr.base.sha, self.request.commit_sha)
+            files = comparison.files
+        else:
+            files = pr.get_files()
+
         pr_files = [
             PrFile(
                 filename=file.filename,
@@ -125,7 +136,7 @@ class BugPredictionStep(CodegenStep):
                 previous_filename=file.previous_filename or file.filename,
                 repo_full_name=self.request.repo.full_name,
             )
-            for file in pr.get_files()
+            for file in files
             if file.patch
         ]
 
@@ -147,7 +158,7 @@ class BugPredictionStep(CodegenStep):
             )
         )
 
-        # 4. Post-process each analysis—either into a presentable bug prediction if it's verified, else nothing.
+        # 4. Post-process the analyses into a list of presentable, verified bug predictions.
         formatter = FormatterComponent(self.context)
         formatter_output = formatter.invoke(
             FormatterRequest(
