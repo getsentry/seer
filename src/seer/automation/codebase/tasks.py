@@ -20,6 +20,7 @@ class BackfillJob(BaseModel):
     organization_id: int
     repo_definition: RepoDefinition
     backfill_job_id: int | None = None
+    scaled_time_limit: float = timedelta(minutes=15).total_seconds()
 
 
 class BackfillJobError(RuntimeError):
@@ -143,10 +144,19 @@ def collect_all_repos_for_backfill():
                 f"DEBUG: Will be running backfill for {repo_definition.full_name} of org {project_preference.organization_id}"
             )
 
+            repo_client = RepoClient.from_repo_definition(repo_definition, RepoClientType.READ)
+            repo_size_in_gb = repo_client.repo.size / 1024 / 1024
+
+            scaled_time_limit = (
+                timedelta(minutes=15)
+                + timedelta(minutes=min(35, round(max(0, repo_size_in_gb - 1) * 7)))
+            ).total_seconds()
+
             backfill_jobs.append(
                 BackfillJob(
                     organization_id=project_preference.organization_id,
                     repo_definition=repo_definition,
+                    scaled_time_limit=scaled_time_limit,
                 )
             )
             processed_repos.add(repo_key)
@@ -188,7 +198,11 @@ def collect_all_repos_for_backfill():
         session.commit()
 
     for backfill_job in backfill_jobs:
-        run_backfill.apply_async(args=(backfill_job.model_dump(),))
+        run_backfill.apply_async(
+            args=(backfill_job.model_dump(),),
+            soft_time_limit=backfill_job.scaled_time_limit,
+            time_limit=backfill_job.scaled_time_limit + 30,  # 30 second buffer for hard timeout
+        )
 
 
 @inject
@@ -197,8 +211,8 @@ def run_backfill_task(app_config: AppConfig = injected):
 
 
 @celery_app.task(
-    soft_time_limit=timedelta(minutes=28).total_seconds(),
-    time_limit=timedelta(minutes=29).total_seconds(),
+    soft_time_limit=timedelta(minutes=15).total_seconds(),
+    time_limit=timedelta(minutes=15, seconds=30).total_seconds(),
 )
 def run_backfill(backfill_job_dict: dict):
     backfill_job = BackfillJob.model_validate(backfill_job_dict)
@@ -207,7 +221,7 @@ def run_backfill(backfill_job_dict: dict):
         raise BackfillJobError("backfill_job_id is required")
 
     logger.info(
-        f"Running backfill job {backfill_job.backfill_job_id} for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id}"
+        f"Running backfill job {backfill_job.backfill_job_id} for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id} with time limit {backfill_job.scaled_time_limit}"
     )
 
     with Session() as session:
