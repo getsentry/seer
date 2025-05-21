@@ -33,6 +33,7 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             name="Delete old Automation runs for 30 day time-to-live",
         )
 
+    if config.AUTOFIX_BACKFILL_ENABLED:
         sender.add_periodic_task(
             crontab(minute="*/30", hour="*"),  # run once every 30 minutes
             collect_all_repos_for_backfill.signature(kwargs={}, queue=config.CELERY_WORKER_QUEUE),
