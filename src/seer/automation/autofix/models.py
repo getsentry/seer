@@ -360,7 +360,7 @@ class AutofixRequest(BaseModel):
                 for entry in event.get("entries", []):
                     if entry.get("type") == "exception":
                         for exception in entry.get("data", {}).get("values", []):
-                            if "stacktrace" in exception:
+                            if "stacktrace" in exception and exception["stacktrace"] is not None:
                                 for frame in exception.get("stacktrace", {}).get("frames", []):
                                     if frame.get("function") and frame.get("in_app", False):
                                         relevant_functions.add(frame["function"])
