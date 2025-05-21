@@ -1,5 +1,4 @@
 import logging
-import os
 import shlex
 import subprocess
 import textwrap
@@ -343,7 +342,12 @@ class BaseTools:
         return f"<did you mean>\n{joined}\n</did you mean>"
 
     def _attempt_fix_path(
-        self, path: str, repo_name: str, files_only: bool = False, ignore_local_changes: bool = True
+        self,
+        path: str,
+        repo_name: str,
+        files_only: bool = False,
+        directories_only: bool = False,
+        ignore_local_changes: bool = True,
     ) -> str | None:
         """
         Attempts to fix a path by checking if it exists in the repository as a path or directory.
@@ -352,6 +356,7 @@ class BaseTools:
             path: The path to autocorrect
             repo_name: The name of the repository to use for validation
             files_only: If True, only return valid file paths, not directory paths
+            directories_only: If True, only return valid directory paths, not file paths
         """
         repo_client = self.context.get_repo_client(repo_name=repo_name, type=self.repo_client_type)
         all_files = repo_client.get_valid_file_paths()
@@ -371,11 +376,12 @@ class BaseTools:
             return None
 
         for p in all_files:
-            if p.endswith(normalized_path):
-                # is a valid file path
+            is_valid_file_path = p.endswith(normalized_path)
+            is_valid_directory_path = p.startswith(normalized_path) and not is_valid_file_path
+
+            if not directories_only and is_valid_file_path:
                 return p
-            if not files_only and p.startswith(normalized_path):
-                # is a valid directory path
+            elif not files_only and is_valid_directory_path:
                 return normalized_path
 
         return None
@@ -836,12 +842,20 @@ class BaseTools:
         try:
             view_range = kwargs.get("view_range", [])
 
-            # handle directories
-            if os.path.isdir(path):
-                if view_range:
-                    return "Error: Cannot view a directory with a line range."
-
-                return self.tree(path, repo_name)
+            # check file existence and handle directories
+            does_file_exist = self.context.does_file_exist(
+                path=path, repo_name=repo_name, ignore_local_changes=False
+            )
+            if not does_file_exist:
+                directory_path = self._attempt_fix_path(
+                    path, repo_name, directories_only=True, ignore_local_changes=False
+                )
+                if directory_path:
+                    if view_range:
+                        return "Error: Cannot view a directory with a line range."
+                    return self.tree(directory_path, repo_name)
+                else:
+                    return "Error: File not found."
 
             file_contents = self._get_file_contents(path, repo_name)
             lines = file_contents.split("\n")
