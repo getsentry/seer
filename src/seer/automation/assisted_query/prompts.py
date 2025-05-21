@@ -342,7 +342,7 @@ def get_final_query_prompt(
     return f"""
         ## Final Query Construction Guidelines
 
-        Based on the user's natural language query and the search guidelines provided, construct a MAXIMUM of 3 options for the final query using the field names and appropriate values from the possible values.
+        Based on the user's natural language query and the search guidelines provided, construct 1-3 options for the final query using the field names and appropriate values from the possible values.
         We want to potentially return multiple queries to the user to give them a range of options to choose from since the user's intent may be captured in different ways.
         You MUST use the values from the <available_values> section to construct the query. Follow these steps carefully for each query option:
 
@@ -369,7 +369,7 @@ def get_final_query_prompt(
 
         Only return additional options if you are absolutely confident they will provide unique value to the user.
         Return options in order of confidence score from highest to lowest.
-        DO NOT RETURN MORE THAN 3 OPTIONS NO MATTER WHAT.
+        You MUST return at least 1 option and a maximum of 3 options NO MATTER WHAT THE USER'S QUERY IS.
 
         ## We have identified the following fields as most relevant to the user's query:
 
