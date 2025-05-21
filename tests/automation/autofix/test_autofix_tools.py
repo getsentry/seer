@@ -943,6 +943,27 @@ class TestClaudeTools:
         # Assert
         assert "File not found" in result
 
+    def test_handle_view_command_directory(self, autofix_tools: BaseTools):
+        # Setup: simulate that the path is a directory, not a file
+        repo_name = "test/repo"
+        dir_path = "src/"
+        kwargs = {}  # no view_range
+
+        # Mock does_file_exist to return False (so it checks for directory)
+        autofix_tools.context.does_file_exist.return_value = False
+        # Mock _attempt_fix_path to return the directory path (indicating it's a valid directory)
+        autofix_tools._attempt_fix_path = MagicMock(return_value=dir_path)
+        # Mock tree to return a known value
+        expected_tree_output = "<directory_tree>\nmock tree\n</directory_tree>"
+        autofix_tools.tree = MagicMock(return_value=expected_tree_output)
+
+        # Test
+        result = autofix_tools._handle_view_command(kwargs, repo_name, dir_path)
+
+        # Assert
+        autofix_tools.tree.assert_called_once_with(dir_path, repo_name)
+        assert result == expected_tree_output
+
     def test_handle_str_replace_command(self, autofix_tools: BaseTools, test_state, test_repos):
         # Setup
         autofix_tools.context.get_file_contents.return_value = "old text"
