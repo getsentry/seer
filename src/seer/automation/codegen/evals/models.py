@@ -12,14 +12,10 @@ class RepoInfo(BaseModel):
     name: str
     external_id: str
 
-
-def repo_info_to_repo_definition(repo_info: RepoInfo) -> RepoDefinition:
-    return RepoDefinition(
-        provider=repo_info.provider,
-        owner=repo_info.owner,
-        name=repo_info.name,
-        external_id=repo_info.external_id,
-    )
+    def to_repo_definition(self) -> RepoDefinition:
+        return RepoDefinition(
+            provider=self.provider, owner=self.owner, name=self.name, external_id=self.external_id
+        )
 
 
 class EvalItemInput(BaseModel):
@@ -27,7 +23,7 @@ class EvalItemInput(BaseModel):
     An item in the evaluation dataset.
     """
 
-    repo: RepoInfo | RepoDefinition
+    repo: RepoDefinition | RepoInfo
     pr_id: int
     more_readable_repos: list[RepoDefinition] | list[RepoInfo] = Field(default_factory=list)
     organization_id: int
@@ -45,9 +41,9 @@ class EvalItemInput(BaseModel):
         if isinstance(self.repo, RepoDefinition):
             repo_definition = self.repo
         else:
-            repo_definition = repo_info_to_repo_definition(self.repo)
+            repo_definition = self.repo.to_repo_definition()
         more_readable_repos = [
-            repo_info_to_repo_definition(repo) if isinstance(repo, RepoInfo) else repo
+            repo.to_repo_definition() if isinstance(repo, RepoInfo) else repo
             for repo in self.more_readable_repos
         ]
         return CodegenRelevantWarningsRequest(

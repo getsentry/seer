@@ -395,6 +395,9 @@ def test_bug_prediction_step_invoke(
     mock_context = MagicMock()
     mock_context.get_repo_client.return_value = mock_repo_client
     mock_repo_client.repo.get_pull.return_value = mock_pr
+
+    commit_sha = "sha123"
+    mock_repo_client.get_pr_head_sha.return_value = commit_sha
     mock_pr.get_files.return_value = mock_pr_files
     mock_pr.title = "Test PR"
     mock_pr.body = "Test PR description"
@@ -442,7 +445,7 @@ def test_bug_prediction_step_invoke(
         "callback_url": "not-used-url",
         "organization_id": 1,
         "warnings": [],
-        "commit_sha": "sha123",
+        "commit_sha": commit_sha,
         "run_id": 1,
         "should_post_to_overwatch": False,
     }
