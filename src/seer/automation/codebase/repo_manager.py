@@ -15,7 +15,7 @@ from google.cloud import storage  # type:ignore
 from sqlalchemy.orm import Session as SQLAlchemySession
 
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codebase.utils import cleanup_dir
+from seer.automation.codebase.utils import cleanup_dir, ensure_timezone_aware
 from seer.configuration import AppConfig
 from seer.db import DbSeerRepoArchive, Session
 from seer.dependency_injection import copy_modules_initializer, inject, injected
@@ -641,7 +641,7 @@ class RepoManager:
                     # Not locked
                     not repo_archive.upload_locked_at
                     # Expired
-                    or repo_archive.upload_locked_at
+                    or ensure_timezone_aware(repo_archive.upload_locked_at)
                     < datetime.datetime.now(datetime.UTC)
                     - datetime.timedelta(minutes=UPLOAD_LOCK_TIMEOUT_MINUTES)
                 ):
