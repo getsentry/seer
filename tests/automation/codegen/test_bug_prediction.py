@@ -397,7 +397,7 @@ def test_bug_prediction_step_invoke(
     mock_repo_client.repo.get_pull.return_value = mock_pr
 
     commit_sha = "sha123"
-    mock_repo_client.get_pr_head_sha.return_value = commit_sha
+    mock_pr.head.sha = commit_sha
     mock_pr.get_files.return_value = mock_pr_files
     mock_pr.title = "Test PR"
     mock_pr.body = "Test PR description"
