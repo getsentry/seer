@@ -1,5 +1,4 @@
 import logging
-import os
 import shlex
 import subprocess
 import textwrap
@@ -836,12 +835,20 @@ class BaseTools:
         try:
             view_range = kwargs.get("view_range", [])
 
-            # handle directories
-            if os.path.isdir(path):
-                if view_range:
-                    return "Error: Cannot view a directory with a line range."
-
-                return self.tree(path, repo_name)
+            # check file existence and handle directories
+            does_file_exist = self.context.does_file_exist(
+                path=path, repo_name=repo_name, ignore_local_changes=False
+            )
+            if not does_file_exist:
+                directory_path = self._attempt_fix_path(
+                    path, repo_name, files_only=False, ignore_local_changes=False
+                )
+                if directory_path:
+                    if view_range:
+                        return "Error: Cannot view a directory with a line range."
+                    return self.tree(directory_path, repo_name)
+                else:
+                    return "Error: File not found."
 
             file_contents = self._get_file_contents(path, repo_name)
             lines = file_contents.split("\n")
