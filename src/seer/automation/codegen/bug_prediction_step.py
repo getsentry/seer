@@ -105,6 +105,8 @@ class BugPredictionStep(CodegenStep):
 
     @observe(name="Codegen - Bug Prediction Step")
     def _invoke(self, app_config: AppConfig = injected, **kwargs) -> None:
+        super()._invoke()
+
         self.logger.info("Executing Codegen - Bug Prediction Step")
         self.context.event_manager.mark_running()
 
@@ -119,8 +121,7 @@ class BugPredictionStep(CodegenStep):
 
         pr = repo_client.repo.get_pull(self.request.pr_id)
         pr_head_sha = repo_client.get_pr_head_sha(pr.url)
-        if (pr_head_sha != self.request.commit_sha) and not app_config.is_production:
-            # This should only be used when we're evaluating, which happens locally.
+        if pr_head_sha != self.request.commit_sha:
             comparison = repo_client.repo.compare(pr.base.sha, self.request.commit_sha)
             files = comparison.files
         else:
