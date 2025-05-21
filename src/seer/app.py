@@ -13,6 +13,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
 
 from integrations.codecov.codecov_auth import CodecovAuthentication
+from integrations.overwatch.overwatch_auth import OverwatchAuthentication
 from seer.anomaly_detection.models.external import (
     AlertInSeer,
     DeleteAlertDataRequest,
@@ -399,8 +400,15 @@ def codecov_request_endpoint(
 def overwatch_request_endpoint(
     data: CodecovTaskRequest,
 ) -> CodegenBaseResponse:
+    is_valid = OverwatchAuthentication.authenticate_overwatch_app_install(data.external_owner_id)
+
+    if not is_valid:
+        raise ConsentError(f"Invalid permissions for org {data.external_owner_id}.")
+
     if data.request_type == "pr-review":
         return codegen_pr_review(data.data, is_codecov_request=False)
+    elif data.request_type == "unit-tests":
+        return codegen_unittest(data.data, is_codecov_request=False)
 
     raise ValueError(f"Unsupported request_type: {data.request_type}")
 
