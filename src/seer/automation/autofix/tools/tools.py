@@ -158,7 +158,7 @@ class BaseTools:
 
         end_time = time.time()
         logger.info(
-            f"Repositories became ready in {end_time - start_time} seconds for {len(self.repo_managers)} repositories"
+            f"Repositories were waited on for {end_time - start_time} seconds, {len(done)} ready, {len(not_done)} not ready"
         )
 
     def __enter__(self):
