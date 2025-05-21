@@ -391,6 +391,14 @@ def test_run_iteration_skips_duplicate_tool_calls(autofix_agent, run_config):
     If a tool call with the same function and args was already called, AutofixAgent should not call it again,
     and should append a message indicating the tool was not called again.
     """
+    autofix_agent.tools = [
+        FunctionTool(
+            name="fix_bug",
+            description="Fix the bug",
+            parameters=[],
+            fn=lambda: None,
+        )
+    ]
     # Prepare memory with a previous tool call result
     prev_tool_call = ToolCall(id="t1", function="fix_bug", args='{"line": 42}')
     autofix_agent.memory = [

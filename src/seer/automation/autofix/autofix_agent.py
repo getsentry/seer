@@ -308,7 +308,13 @@ class AutofixAgent(LlmAgent):
                     if msg.tool_calls:
                         if any(
                             tool_call.function == existing_tool_call.function
-                            and tool_call.args == existing_tool_call.args
+                            and self.parse_tool_arguments(
+                                self.get_tool_by_name(tool_call.function), tool_call.args
+                            )
+                            == self.parse_tool_arguments(
+                                self.get_tool_by_name(existing_tool_call.function),
+                                existing_tool_call.args,
+                            )
                             and tool_call.id != existing_tool_call.id
                             for existing_tool_call in msg.tool_calls
                         ):
