@@ -1,3 +1,4 @@
+import datetime
 import functools
 import logging
 import os
@@ -291,3 +292,22 @@ def left_truncated_paths(path: Path, max_num_paths: int = 2) -> list[str]:
         parts.pop(0)
         result.append(Path(*parts).as_posix())
     return result
+
+
+def ensure_timezone_aware(dt: datetime.datetime | None) -> datetime.datetime | None:
+    """
+    Ensures a datetime is timezone-aware by adding UTC timezone if it's naive.
+    Returns None if the input is None.
+    
+    Args:
+        dt: The datetime object to ensure is timezone-aware
+        
+    Returns:
+        A timezone-aware datetime object, or None if dt is None
+    """
+    if dt is None:
+        return None
+    
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.UTC)
+    return dt
