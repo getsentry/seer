@@ -156,7 +156,7 @@ class BugPredictionStep(CodegenStep):
             BugPredictorRequest(
                 pr_files=pr_files,
                 repo_full_name=self.request.repo.full_name,
-                pr_title=pr.title,
+                pr_title=pr.title or "",
                 pr_body=pr.body or "",
             )
         )
