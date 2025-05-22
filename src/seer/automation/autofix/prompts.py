@@ -39,7 +39,8 @@ def format_repo_prompt(
     readable_str = textwrap.dedent(
         """\
         You have the following repositories to work with:
-        {names_list_str}"""
+        {names_list_str}
+        You may see references to other code that you cannot access, such as other repositories, third-party libraries, or frames marked "Not In App". You may consider them in your analysis, but do not attempt to search for their source code."""
     ).format(
         names_list_str="\n".join(
             [f"- {repo.full_name}{format_repo_instructions(repo)}" for repo in readable_repos]
