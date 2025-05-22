@@ -1,12 +1,7 @@
 import textwrap
 from typing import Literal
 
-from seer.automation.autofix.prompts import (
-    format_code_map,
-    format_instruction,
-    format_summary,
-    format_trace_tree,
-)
+from seer.automation.autofix.prompts import format_code_map, format_summary, format_trace_tree
 from seer.automation.models import Profile, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
@@ -65,7 +60,7 @@ class RootCauseAnalysisPrompts:
     ):
         return textwrap.dedent(
             """\
-            Please begin by gathering all relevant context to understand what happened, from the entry point of the code to the error, and WHY it happened. {instruction_str}I have included everything I know about the Sentry issue so far below:
+            Please begin by gathering all relevant context to understand what happened, from the entry point of the code to the error, and WHY it happened. {instruction_str} I have included everything I know about the Sentry issue so far below:
 
             <issue_details>
             {summary_str}
@@ -76,7 +71,7 @@ class RootCauseAnalysisPrompts:
             </issue_details>"""
         ).format(
             error_str=event,
-            instruction_str=format_instruction(instruction),
+            instruction_str=instruction,
             summary_str=format_summary(summary),
             code_map_str=format_code_map(code_map),
             trace_tree_str=format_trace_tree(trace_tree),

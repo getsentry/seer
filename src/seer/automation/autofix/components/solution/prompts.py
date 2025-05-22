@@ -49,10 +49,6 @@ class SolutionPrompts:
         )
 
     @staticmethod
-    def format_original_instruction(instruction: str):
-        return instruction
-
-    @staticmethod
     def format_root_cause(root_cause: RootCauseAnalysisItem | str):
         if isinstance(root_cause, RootCauseAnalysisItem):
             return RootCausePlanTaskPromptXml.from_root_cause(root_cause).to_prompt_str()
@@ -70,7 +66,7 @@ class SolutionPrompts:
     ):
         return textwrap.dedent(
             """\
-            Please begin by gathering all relevant context to understand how to fix the issue. {original_instruction}I have included everything I know about the Sentry issue so far below:
+            Please begin by gathering all relevant context to understand how to fix the issue. {original_instruction} I have included everything I know about the Sentry issue so far below:
 
             <issue_details>
             <root_cause>
@@ -88,11 +84,7 @@ class SolutionPrompts:
         ).format(
             event_str=event,
             root_cause_str=SolutionPrompts.format_root_cause(root_cause),
-            original_instruction=(
-                ("\n" + SolutionPrompts.format_original_instruction(original_instruction))
-                if original_instruction
-                else ""
-            ),
+            original_instruction=original_instruction,
             code_map_str=(
                 f"<map_of_relevant_code>{format_code_map(code_map)}</map_of_relevant_code>"
                 if code_map
