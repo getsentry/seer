@@ -96,6 +96,7 @@ class RootCauseStep(AutofixPipelineStep):
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
                 trace_tree=state.request.trace_tree,
+                logs=state.request.logs,
             )
         )
 
