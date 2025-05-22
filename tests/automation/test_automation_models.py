@@ -10,6 +10,8 @@ from seer.automation.models import (
     FilePatch,
     Hunk,
     Line,
+    Log,
+    Logs,
     Profile,
     ProfileFrame,
     Span,
@@ -1305,3 +1307,49 @@ def test_annotated_hunks(patch_and_hunks: tuple[str, list[Hunk]]):
         21    23      return"""
     ).replace("__NO_SPACE__", "")
     assert formatted_annotated_hunks == formatted_annotated_hunks_expected
+
+
+def test_logs_format_logs():
+    logs = [
+        Log(
+            message="Error occurred",
+            severity="ERROR",
+            timestamp="2024-06-01T12:00:00Z",
+            project_slug="proj1",
+            consecutive_count=3,
+            code_file_path="src/main.py",
+            code_function_name="main",
+        ),
+        Log(
+            message="Warning issued",
+            severity="WARNING",
+            timestamp="2024-06-01T13:00:00Z",
+            project_slug="proj2",
+            code_file_path="src/utils.py",
+        ),
+        Log(
+            message="Info log",
+            severity="INFO",
+            timestamp="2024-06-01T14:00:00Z",
+            project_slug="proj1",
+            code_function_name="helper",
+        ),
+        Log(message="Simple log", timestamp="2024-06-01T15:00:00Z"),
+        Log(
+            message="Repeated log",
+            severity="INFO",
+            timestamp="2024-06-01T16:00:00Z",
+            project_slug="proj2",
+            consecutive_count=2,
+        ),
+    ]
+    logs_obj = Logs(logs=logs)
+    output = logs_obj.format_logs()
+    # Check that logs are sorted by timestamp descending
+    assert output.splitlines()[0].startswith("[INFO] Repeated log [repeated x2 times")
+    assert "[ERROR] Error occurred [repeated x3 times]" in output
+    assert "project: proj1" in output
+    assert "code: main in src/main.py" in output
+    assert "code: utils.py" in output or "code: src/utils.py" in output
+    assert "[WARNING] Warning issued" in output
+    assert "Simple log" in output
