@@ -172,6 +172,7 @@ def run_autofix_root_cause(
     state = create_initial_autofix_run(request)
 
     cur_state = state.get()
+    logger.info(f"Cur state: {cur_state}")
 
     # Process has no further work.
     if cur_state.status in AutofixStatus.terminal():

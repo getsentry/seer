@@ -848,6 +848,7 @@ class RepoClient:
             raise ValueError("Either file_patches or file_changes must be provided")
 
         new_branch_name = sanitize_branch_name(branch_name or pr_title)
+        logger.info(f"Creating new branch for PR from sha {self.base_commit_sha}")
 
         try:
             branch_ref = self._create_branch(new_branch_name, from_base_sha)

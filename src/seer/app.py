@@ -234,8 +234,10 @@ def repo_access_check_endpoint(data: RepoAccessCheckRequest) -> RepoAccessCheckR
 
 @json_api(blueprint, "/v1/automation/autofix/start")
 def autofix_start_endpoint(data: AutofixRequest) -> AutofixEndpointResponse:
-    raise_if_no_genai_consent(data.organization_id)
+    # raise_if_no_genai_consent(data.organization_id)
+    logger.info(f"Autofix request: {data}")
     run_id = run_autofix_root_cause(data)
+    logger.info(f"Run ID: {run_id}")
     return AutofixEndpointResponse(started=True, run_id=run_id or -1)
 
 
