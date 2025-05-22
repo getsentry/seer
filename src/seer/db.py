@@ -106,7 +106,7 @@ class ProcessRequest(Base):
         DateTime, default=datetime.datetime(2020, 1, 1), nullable=False
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, default=datetime.datetime.utcnow, nullable=False
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
 
@@ -206,7 +206,7 @@ class DbSeerEvent(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     event_metadata: Mapped[dict] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
 
 
@@ -226,6 +226,9 @@ class DbRunState(Base):
     )
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     pr_id: Mapped[int] = relationship("DbPrIdToAutofixRunIdMapping", cascade="all, delete")
 
@@ -308,7 +311,7 @@ class DbSeerBackfillJob(Base):
     repo_provider: Mapped[str] = mapped_column(String, nullable=False)
     repo_external_id: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     started_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True, default=None)
     completed_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=True, default=None)
@@ -406,7 +409,7 @@ class DbDynamicAlert(Base):
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
     anomaly_algo_data: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     timeseries: Mapped[List["DbDynamicAlertTimeSeries"]] = relationship(
         "DbDynamicAlertTimeSeries",
@@ -428,7 +431,7 @@ class DbDynamicAlert(Base):
         default=TaskStatus.NOT_QUEUED,
     )
     last_queued_at: Mapped[Optional[datetime.date]] = mapped_column(
-        DateTime, nullable=True, default=datetime.datetime.utcnow
+        DateTime, nullable=True, default=lambda: datetime.datetime.now(datetime.UTC)
     )
 
 
@@ -450,7 +453,7 @@ class DbDynamicAlertTimeSeries(Base):
     # JSON field that can be extended.
     anomaly_algo_data: Mapped[dict] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.utcnow
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     dynamic_alert = relationship(
         "DbDynamicAlert",
@@ -476,7 +479,7 @@ class DbIssueSummary(Base):
     group_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     summary: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     fixability_score: Mapped[float] = mapped_column(Float, nullable=True)
     is_fixable: Mapped[bool] = mapped_column(Boolean, nullable=True)
@@ -489,12 +492,12 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     value: Mapped[float] = mapped_column(Float, nullable=False)
     anomaly_type: Mapped[str] = mapped_column(String, nullable=False)
     saved_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
 
 
@@ -513,7 +516,7 @@ class DbProphetAlertTimeSeries(Base):
     yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
     dynamic_alert = relationship(
         "DbDynamicAlert",
@@ -531,7 +534,7 @@ class DbProphetAlertTimeSeriesHistory(Base):
     yhat_lower: Mapped[float] = mapped_column(Float, nullable=False)
     yhat_upper: Mapped[float] = mapped_column(Float, nullable=False)
     saved_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
 
 
@@ -550,7 +553,7 @@ class DbReviewCommentEmbedding(Base):
     embedding: Mapped[Vector] = mapped_column(Vector(768), nullable=False)
     comment_metadata: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
     )
 
     __table_args__ = (
