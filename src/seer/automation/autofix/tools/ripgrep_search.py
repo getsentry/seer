@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -12,11 +13,43 @@ TOTAL_RIPGREP_RESULTS_CHARACTER_LENGTH = 16384
 logger = logging.getLogger(__name__)
 
 
+def calculate_dynamic_timeout(repo_dir: str, base_timeout: float = MAX_RIPGREP_TIMEOUT_SECONDS) -> float:
+    """Calculate appropriate timeout based on repository size."""
+    try:
+        # Get total size of the repository
+        total_size = 0
+        for dirpath, _, filenames in os.walk(repo_dir):
+            for filename in filenames:
+                file_path = os.path.join(dirpath, filename)
+                if os.path.isfile(file_path):
+                    total_size += os.path.getsize(file_path)
+        
+        # Convert to MB for easier calculation
+        size_mb = total_size / (1024 * 1024)
+        
+        # Scale timeout linearly with size, with some constraints
+        # Base size is considered 100MB
+        if size_mb <= 100:
+            return base_timeout
+        elif size_mb <= 500:
+            # Scale up to 2x for medium repos
+            scale_factor = 1.0 + (size_mb - 100) / 400
+            return min(base_timeout * scale_factor, base_timeout * 2)
+        else:
+            # For very large repos, cap at 3x
+            return min(base_timeout * 3, 60)  # Max 60 seconds
+    except Exception as e:
+        logger.exception(f"Error calculating dynamic timeout: {e}")
+        return base_timeout  # Fall back to default timeout
+
+
 @observe(name="Run ripgrep in repo")
 @sentry_sdk.trace
 def run_ripgrep_in_repo(
-    repo_dir: str, cmd: list[str], timeout: float = MAX_RIPGREP_TIMEOUT_SECONDS
+    repo_dir: str, cmd: list[str], timeout: float = None
 ) -> str:
+    if timeout is None:
+        timeout = calculate_dynamic_timeout(repo_dir)
     try:
         prepared_cmd = " ".join(cmd)
         result = subprocess.run(
@@ -75,8 +108,14 @@ def run_ripgrep_in_repo(
         return f"Ran ripgrep with command: `{prepared_cmd}`\n\nResult:\n{output}"
 
     except subprocess.TimeoutExpired:
-        raise RuntimeError(
-            f"Ran ripgrep with command: `{prepared_cmd}`\n\nripgrep timed out after {timeout}s"
+        return (
+            f"Ran ripgrep with command: `{prepared_cmd}`\n\n"
+            f"Search timed out after {timeout}s. The repository may be too large or the search pattern too general.\n"
+            f"Consider:\n"
+            f"- Using a more specific search pattern\n"
+            f"- Adding include patterns (e.g., '*.py' for Python files only)\n"
+            f"- Adding exclude patterns (e.g., exclude large directories like 'node_modules')\n"
+            f"- Breaking your search into multiple smaller searches"
         )
 
 
