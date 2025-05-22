@@ -2,35 +2,55 @@ import textwrap
 
 from seer.automation.autofix.components.coding.models import RootCausePlanTaskPromptXml
 from seer.automation.autofix.components.root_cause.models import RootCauseAnalysisItem
-from seer.automation.autofix.prompts import (
-    format_code_map,
-    format_instruction,
-    format_summary,
-    format_trace_tree,
-)
+from seer.automation.autofix.prompts import format_code_map, format_trace_tree
 from seer.automation.models import Profile, TraceTree
-from seer.automation.summarize.issue import IssueSummary
 
 
 class SolutionPrompts:
     @staticmethod
-    def format_system_msg():
+    def format_system_msg(repos_str: str, has_tools: bool):
         return textwrap.dedent(
             """\
-            You are an exceptional AI system that is amazing at researching bugs in codebases.
+            You are Seer, a powerful agentic AI debugging assistant designed by Sentry, the world's leading platform for helping developers debug their code.
 
-            You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You can use these tools as many times as you want to find the relevant code snippets.
+            You are assisting a USER who is a developer trying to fix an ISSUE reported by Sentry. You have already found the ROOT CAUSE of the issue. The USER will provide you with important context on the ISSUE to start the session: the ROOT CAUSE and the ISSUE details from Sentry (may include a stack trace, breadcrumbs, trace, HTTP request, etc.).
+            Now, you must lead the effort to fix the ISSUE.
 
-            # Guidelines:
-            - EVERY TIME before you use a tool, think step-by-step each time before using the tools provided to you.
+            <tool_calling>
+            {tool_calling_str}
+            </tool_calling>
+
+            <available_repos>
+            {repos_str}
+            </available_repos>
+
+            <solution_guidelines>
+            Your SOLUTION to the ISSUE must fit in naturally with the codebase. To do so, you must explore until you gain an understanding of the codebase and the system in which the ISSUE is occurring. You MUST find a SOLUTION that is both technically correct and naturally fits into the code and its intended outcomes.
+            Simpler solutions to the ISSUE with minimal code changes are usually preferred. Do NOT propose multiple band-aid solutions and mitigation techniques. Instead, focus on the single most effective SOLUTION to the ROOT CAUSE of the ISSUE.
+            Break down your SOLUTION into a concrete list of steps to take in the codebase. The USER will follow your suggestion and implement the code changes later. Your SOLUTION should fit smoothly into the codebase. For example, are there existing utils you can reuse? Does it preserve the intended behavior of the application?
+            If code changes are not appropriate to fix the ISSUE, you may outline the appropriate SOLUTION steps instead.
+            Touching infrastructure, dependencies, or third party libraries is almost never desirable.
+            </solution_guidelines>
+
+            Remember:
+            - EVERY TIME before you use a tool, think step-by-step.
             - You also MUST think step-by-step before giving the final answer.
+            - If the USER provides additional instructions or guidance throughout the conversation, you MUST pay close attention and follow it, as they know the codebase better than you do and your goal is to satisfy the USER.
 
-            It is important that you gather all information needed to understand how to fix the issue, from the entry point of the code to the error."""
+            We will start by gathering all relevant context. Then when you are sure, propose the final solution plan for the ISSUE.
+            """
+        ).format(
+            tool_calling_str=(
+                "As you have no prior knowledge of the codebase, you must use the available tools to gather all necessary context in addition to the context provided by the USER. You have access to tools that allow you to search a codebase to find the relevant code snippets and view relevant files. You also have tools to search for additional context, including trace-connected Sentry context such as spans, profiles, and connected errors. Use these as necessary to find the correct solution to the ISSUE. The best solution may lie elsewhere in the codebase than the original ISSUE or even its ROOT CAUSE."
+                if has_tools
+                else "You do not have to ability to gather more context at this point. You must come up with the best solution you can based on what you know so far."
+            ),
+            repos_str=repos_str,
         )
 
     @staticmethod
     def format_original_instruction(instruction: str):
-        return f"Earlier, the user provided context: {format_instruction(instruction)}"
+        return instruction
 
     @staticmethod
     def format_root_cause(root_cause: RootCauseAnalysisItem | str):
@@ -43,24 +63,16 @@ class SolutionPrompts:
     def format_default_msg(
         *,
         event: str,
-        repos_str: str,
         root_cause: RootCauseAnalysisItem | str,
         original_instruction: str | None,
-        summary: IssueSummary | None,
         code_map: Profile | None,
         trace_tree: TraceTree | None,
     ):
         return textwrap.dedent(
             """\
-            <goal>Gather all information that may be needed to understand how to fix this issue at its root in the way the developer would most likely want to fix it. (don't worry about proposing the fix itself yet)</goal>
-
-            <available_repos>
-            {repos_str}
-            </available_repos>
+            Please begin by gathering all relevant context to understand how to fix the issue. {original_instruction}I have included everything I know about the Sentry issue so far below:
 
             <issue_details>
-            {summary_str}
-
             <root_cause>
             {root_cause_str}
             </root_cause>
@@ -75,14 +87,12 @@ class SolutionPrompts:
             """
         ).format(
             event_str=event,
-            repos_str=repos_str,
             root_cause_str=SolutionPrompts.format_root_cause(root_cause),
             original_instruction=(
                 ("\n" + SolutionPrompts.format_original_instruction(original_instruction))
                 if original_instruction
                 else ""
             ),
-            summary_str=f"<summary>{format_summary(summary)}</summary>" if summary else "",
             code_map_str=(
                 f"<map_of_relevant_code>{format_code_map(code_map)}</map_of_relevant_code>"
                 if code_map
@@ -109,12 +119,6 @@ class SolutionPrompts:
 
     @staticmethod
     def solution_proposal_msg():
-        return textwrap.dedent(
-            """\
-            <goal>Based on all the information you've learned, outline the most actionable and effective steps to fix the issue.</goal>
-
-            <guidelines>
-            Your solution should be whatever is the BEST, most CORRECT solution, whether it's a one-line change or a bigger refactor.
-            </guidelines>
-            """
+        return (
+            "Now that we've gathered more context, please give me the final plan to fix the issue."
         )

@@ -60,7 +60,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         model=(
                             AnthropicProvider.model("claude-3-7-sonnet@20250219")
                             if config.SENTRY_REGION == "de"
-                            else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
+                            else GeminiProvider.model("gemini-2.5-flash-preview-05-20")
                         ),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
@@ -69,12 +69,13 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                                 code_map=request.profile,
                                 instruction=request.instruction,
                                 trace_tree=request.trace_tree,
-                                repos_str=repos_str,
                             )
                             if not request.initial_memory
                             else None
                         ),
-                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(),
+                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(
+                            repos_str=repos_str, mode="context"
+                        ),
                         max_iterations=64,
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
@@ -98,7 +99,9 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     run_config=RunConfig(
                         model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                         prompt=RootCauseAnalysisPrompts.root_cause_proposal_msg(),
-                        system_prompt="You are an exceptional AI system that is amazing at analyzing bugs in codebases. Your job is to figure out the correct root cause of this issue.",
+                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(
+                            repos_str=repos_str, mode="reasoning"
+                        ),
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Proposal",
                         temperature=1.0,
@@ -130,7 +133,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     model=(
                         GeminiProvider.model("gemini-2.0-flash-001")
                         if config.SENTRY_REGION == "de"
-                        else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
+                        else GeminiProvider.model("gemini-2.5-flash-preview-05-20")
                     ),
                     response_format=MultipleRootCauseAnalysisOutputPrompt,
                     run_name="Root Cause Extraction & Formatting",

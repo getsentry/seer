@@ -147,8 +147,6 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     SolutionPrompts.format_default_msg(
                         event=request.event_details.format_event(),
                         root_cause=root_cause_raw if root_cause_raw else request.root_cause_and_fix,
-                        summary=request.summary,
-                        repos_str=repos_str,
                         original_instruction=request.original_instruction,
                         code_map=request.profile,
                         trace_tree=request.trace_tree,
@@ -156,65 +154,22 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 )
 
             try:
-                if has_tools:  # run context gatherer
-                    response = agent.run(
-                        run_config=RunConfig(
-                            model=(
-                                AnthropicProvider.model("claude-3-7-sonnet@20250219")
-                                if config.SENTRY_REGION == "de"
-                                else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
-                            ),
-                            system_prompt=SolutionPrompts.format_system_msg(),
-                            memory_storage_key="solution",
-                            run_name="Solution Discovery",
-                            max_iterations=64,
-                            temperature=0.0,
-                            max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
-                        ),
-                    )
-
-                    if not response:
-                        self.context.store_memory("solution", agent.memory)
-                        return None
-
-                self.context.event_manager.add_log("Being artificially intelligent...")
-
-                # reason to propose final solution
-                agent.tools = []
-                agent.memory = (
-                    agent.memory
-                    if has_tools
-                    else (
-                        [
-                            Message(
-                                role="user",
-                                content=SolutionPrompts.format_default_msg(
-                                    event=request.event_details.format_event(),
-                                    root_cause=request.root_cause_and_fix,
-                                    summary=request.summary,
-                                    repos_str=repos_str,
-                                    original_instruction=request.original_instruction,
-                                    code_map=request.profile,
-                                    trace_tree=request.trace_tree,
-                                ),
-                            )
-                        ]
-                        if not request.initial_memory
-                        else request.initial_memory
-                    )
-                )
-
                 response = agent.run(
                     run_config=RunConfig(
-                        model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        model=(
+                            AnthropicProvider.model("claude-3-7-sonnet@20250219")
+                            if config.SENTRY_REGION == "de"
+                            else GeminiProvider.model("gemini-2.5-pro-preview-05-06")
+                        ),
+                        system_prompt=SolutionPrompts.format_system_msg(
+                            repos_str=repos_str, has_tools=has_tools
+                        ),
                         memory_storage_key="solution",
-                        run_name="Solution Proposal",
-                        temperature=1.0,
-                        reasoning_effort="high",
-                        prompt=SolutionPrompts.solution_proposal_msg(),
-                        system_prompt="You are an exceptional AI system that is amazing at fixing bugs in codebases. Your job is to figure out the correct and most effective solution to fix this issue.",
-                        max_tokens=32000,
-                    )
+                        run_name="Solution Discovery",
+                        max_iterations=64,
+                        temperature=0.0,
+                        max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
+                    ),
                 )
 
                 if not response:
@@ -229,7 +184,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     model=(
                         GeminiProvider.model("gemini-2.0-flash-001")
                         if config.SENTRY_REGION == "de"
-                        else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
+                        else GeminiProvider.model("gemini-2.5-flash-preview-05-20")
                     ),
                     response_format=SolutionOutput,
                     run_name="Solution Extraction & Formatting",

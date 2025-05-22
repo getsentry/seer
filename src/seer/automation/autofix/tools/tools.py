@@ -1136,7 +1136,7 @@ class BaseTools:
                     FunctionTool(
                         name="grep_search",
                         fn=self.run_ripgrep,
-                        description="Runs a ripgrep command over the codebase to find what you're looking for. Use this as your main tool for searching codebases. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
+                        description="Runs a ripgrep command over the codebase to find what you're looking for. Use the include and exclude patterns to narrow down the search to specific paths or file types.",
                         parameters=[
                             {
                                 "name": "include_pattern",
