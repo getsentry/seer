@@ -18,6 +18,7 @@ from seer.automation.models import (
     FilePatch,
     IssueDetails,
     Line,
+    Logs,
     Profile,
     RepoDefinition,
     TraceTree,
@@ -340,6 +341,7 @@ class AutofixRequest(BaseModel):
     issue_summary: IssueSummary | None = None
     profile: Profile | None = None
     trace_tree: TraceTree | None = None
+    logs: Logs | None = None
 
     options: AutofixRequestOptions = Field(default_factory=AutofixRequestOptions)
 

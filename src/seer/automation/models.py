@@ -980,6 +980,62 @@ class TraceTree(BaseModel):
         return list(set(event.project_id for event in self._get_all_events() if event.project_id))
 
 
+class Log(BaseModel):
+    message: str | None = None
+    severity: str | None = None
+    timestamp: str | None = None
+    project_slug: str | None = None
+    consecutive_count: int | None = None
+    code_file_path: str | None = None
+    code_function_name: str | None = None
+
+
+class Logs(BaseModel):
+    logs: list[Log]
+
+    def format_logs(self):
+        num_unique_projects = len(set(log.project_slug for log in self.logs))
+        should_print_project_slug = num_unique_projects > 1
+
+        # sort logs by timestamp in descending order (assumes timestamp is in ISO format)
+        sorted_logs = sorted(
+            self.logs,
+            key=lambda log: log.timestamp or "",
+            reverse=True,
+        )
+
+        lines = []
+        for log in sorted_logs:
+            severity = f"[{log.severity}]" if log.severity else ""
+            message = log.message or ""
+            project = (
+                f"project: {log.project_slug}"
+                if should_print_project_slug and log.project_slug
+                else ""
+            )
+            code = ""
+            if log.code_function_name and log.code_file_path:
+                code = f"code: {log.code_function_name} in {log.code_file_path}"
+            elif log.code_function_name:
+                code = f"code: {log.code_function_name}"
+            elif log.code_file_path:
+                code = f"code: {log.code_file_path}"
+
+            meta_parts = [part for part in [project, code] if part]
+            meta = f"  [{' , '.join(meta_parts)}]" if meta_parts else ""
+
+            repeated = (
+                f" [repeated x{log.consecutive_count} times]"
+                if log.consecutive_count and log.consecutive_count > 1
+                else ""
+            )
+
+            line = f"{severity} {message}{repeated}{meta}".strip()
+            lines.append(line)
+
+        return "\n".join(lines)
+
+
 class RepoDefinition(BaseModel):
     provider: Annotated[str, Examples(("github", "integrations:github"))]
     owner: str
