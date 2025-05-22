@@ -1005,7 +1005,7 @@ class Logs(BaseModel):
         )
 
         lines = []
-        for log in sorted_logs:
+        for log in sorted_logs[:50]:
             severity = f"[{log.severity}]" if log.severity else ""
             message = log.message or ""
             project = (
