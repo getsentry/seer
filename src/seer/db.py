@@ -409,7 +409,7 @@ class DbDynamicAlert(Base):
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
     anomaly_algo_data: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=datetime.datetime.utcnow
     )
     timeseries: Mapped[List["DbDynamicAlertTimeSeries"]] = relationship(
         "DbDynamicAlertTimeSeries",
@@ -431,7 +431,7 @@ class DbDynamicAlert(Base):
         default=TaskStatus.NOT_QUEUED,
     )
     last_queued_at: Mapped[Optional[datetime.date]] = mapped_column(
-        DateTime, nullable=True, default=lambda: datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=datetime.datetime.utcnow
     )
 
 
@@ -453,7 +453,7 @@ class DbDynamicAlertTimeSeries(Base):
     # JSON field that can be extended.
     anomaly_algo_data: Mapped[dict] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=datetime.datetime.utcnow
     )
     dynamic_alert = relationship(
         "DbDynamicAlert",
