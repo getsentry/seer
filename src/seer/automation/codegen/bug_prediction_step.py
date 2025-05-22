@@ -142,7 +142,11 @@ class BugPredictionStep(CodegenStep):
         # 2. Filter files to ones that are most error prone.
         pr_files = (
             FilterFilesComponent(self.context)
-            .invoke(FilterFilesRequest(pr_files=pr_files, pr_title=pr.title, pr_body=pr.body))
+            .invoke(
+                FilterFilesRequest(
+                    pr_files=pr_files, pr_title=pr.title or "", pr_body=pr.body or ""
+                )
+            )
             .pr_files
         )
         # TODO: populate diagnostics
@@ -152,8 +156,8 @@ class BugPredictionStep(CodegenStep):
             BugPredictorRequest(
                 pr_files=pr_files,
                 repo_full_name=self.request.repo.full_name,
-                pr_title=pr.title,
-                pr_body=pr.body,
+                pr_title=pr.title or "",
+                pr_body=pr.body or "",
             )
         )
 
