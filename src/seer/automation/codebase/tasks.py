@@ -1,19 +1,58 @@
 import datetime
 import logging
-import time
+from contextlib import contextmanager
 from datetime import timedelta
 
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from celery_app.app import celery_app
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codebase.repo_manager import RepoManager
+from seer.automation.codebase.utils import ensure_timezone_aware
 from seer.automation.models import RepoDefinition
 from seer.configuration import AppConfig
-from seer.db import DbSeerBackfillJob, DbSeerBackfillState, DbSeerProjectPreference, Session
+from seer.db import (
+    DbSeerBackfillJob,
+    DbSeerBackfillState,
+    DbSeerProjectPreference,
+    DbSeerRepoArchive,
+    Session,
+)
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
+
+MAX_QUERIED_PROJECT_IDS = 250
+THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING = 32
+
+
+@contextmanager
+def acquire_backfill_lock(session):
+    """
+    Acquire a Postgres advisory lock for the backfill task.
+    The lock key is a 64-bit integer: we use a simple hash of 'backfill_scheduler' string.
+    """
+    # This ensures the same lock key is used across restarts
+    lock_key = 1234567890123456789
+
+    try:
+        # pg_try_advisory_xact_lock returns true if lock acquired, false if not
+        # This is a transaction-level lock that auto-releases when transaction ends
+        got_lock = session.execute(
+            text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key}
+        ).scalar()
+
+        if not got_lock:
+            logger.info("Could not acquire backfill lock, another process has it")
+            yield False
+        else:
+            logger.info("Acquired backfill lock")
+            yield True
+
+    except Exception:
+        logger.exception("Error while managing backfill lock")
+        yield False
 
 
 class BackfillJob(BaseModel):
@@ -34,169 +73,165 @@ class BackfillJobError(RuntimeError):
 def collect_all_repos_for_backfill():
     logger.info("Collecting repos for backfill")
 
-    # TODO: Remove this once we have a real backfill cursor
-    backfill_project_ids = [1, 300688, 1320254, 5613870, 4507936016302080]
-
-    with Session() as session:
-        backfill_state = (
-            session.query(DbSeerBackfillState).filter(DbSeerBackfillState.id == 1).first()
-        )
-
-        # TODO: Implement backfill cursor
-        # ...
-
-        # start of hack #
-        # This logic below with the task_taken_key is basically because of how our celerybeat setup is.
-        # Every deployment of celerybeat will each schedule a task, so this is a hack to ensure that only one
-        # deployment runs the task at a time.
-        task_taken_key = backfill_state.task_taken_key if backfill_state else None
-
-        # current timestamp, rounded to the nearest 30 minutes
-        current_cron_iteration = str(round(time.time() / 1800))
-
-        if task_taken_key == current_cron_iteration:
-            # don't do anything, we've already run this cron iteration
-            logger.info("Already ran this cron iteration, skipping")
-            return
-
-        # update the task taken key
-        if backfill_state:
-            backfill_state.task_taken_key = current_cron_iteration
-        else:
-            session.add(
-                DbSeerBackfillState(id=1, backfill_cursor=0, task_taken_key=current_cron_iteration)
-            )
-
-        session.commit()
-
-        # end of hack #
-
-        project_preferences = (
-            session.query(DbSeerProjectPreference)
-            .filter(DbSeerProjectPreference.project_id.in_(backfill_project_ids))
-            .order_by(DbSeerProjectPreference.project_id)
-            # TODO: for backfill cursor .limit(MAX_QUERIED_PROJECT_IDS)
-            .all()
-        )
-
-    if len(project_preferences) == 0:
-        logger.info("No project preferences to backfill")
-        return
-
-    logger.info(f"Found {len(project_preferences)} project preferences to backfill")
-
     backfill_jobs: list[BackfillJob] = []
     processed_repos = set()  # Tracks (org_id, repo_provider, repo_external_id)
 
-    for project_preference in project_preferences:
-        for repo in project_preference.repositories:
-            repo_definition = RepoDefinition.model_validate(repo)
+    with Session() as main_session:
+        backfill_state = (
+            main_session.query(DbSeerBackfillState).filter(DbSeerBackfillState.id == 1).first()
+        )
 
-            # Create a unique key for this repository
-            repo_key = (
-                project_preference.organization_id,
-                repo_definition.provider,
-                repo_definition.external_id,
+        if not backfill_state:
+            backfill_state = DbSeerBackfillState(id=1, backfill_cursor=0)
+            main_session.add(backfill_state)
+            main_session.flush()
+
+        # Use advisory lock instead of task_taken_key
+        with acquire_backfill_lock(main_session) as got_lock:
+            if not got_lock:
+                return
+
+            # If we get here, we have the lock
+            logger.info(f"Looking from {backfill_state.backfill_cursor + 1} onwards")
+            project_preferences = (
+                main_session.query(DbSeerProjectPreference)
+                .filter(DbSeerProjectPreference.project_id > backfill_state.backfill_cursor)
+                .order_by(DbSeerProjectPreference.project_id)
+                .limit(MAX_QUERIED_PROJECT_IDS)
+                .all()
             )
 
-            # Skip if we've already processed this repository
-            if repo_key in processed_repos:
-                logger.info(
-                    f"Repository {repo_definition.full_name} for org {project_preference.organization_id} already added to backfill jobs, skipping."
-                )
-                continue
+            if len(project_preferences) == 0:
+                logger.info("No project preferences to backfill, looping")
+                backfill_state.backfill_cursor = 0
+                main_session.flush()
 
-            with Session() as session:
-                # existing_archive = (
-                #     session.query(DbSeerRepoArchive)
-                #     .filter(
-                #         DbSeerRepoArchive.organization_id == project_preference.organization_id,
-                #         DbSeerRepoArchive.bucket_name == RepoManager.get_bucket_name(),
-                #         DbSeerRepoArchive.blob_path
-                #         == RepoManager.make_blob_name(
-                #             project_preference.organization_id,
-                #             repo_definition.provider,
-                #             repo_definition.owner,
-                #             repo_definition.name,
-                #             repo_definition.external_id,
-                #         ),
-                #     )
-                #     .first()
-                # )
-
-                # TODO: For dev purposes, this will make our backfill jobs run every 30 minutes, which is ok as long as we maintain the hardcoded list of project ids
-                existing_backfill_jobs = (
-                    session.query(DbSeerBackfillJob)
-                    .filter(
-                        DbSeerBackfillJob.organization_id == project_preference.organization_id,
-                        DbSeerBackfillJob.repo_provider == repo_definition.provider,
-                        DbSeerBackfillJob.repo_external_id == repo_definition.external_id,
-                    )
+                logger.info(f"Looking from {backfill_state.backfill_cursor + 1} onwards")
+                project_preferences = (
+                    main_session.query(DbSeerProjectPreference)
+                    .filter(DbSeerProjectPreference.project_id > backfill_state.backfill_cursor)
+                    .order_by(DbSeerProjectPreference.project_id)
+                    .limit(MAX_QUERIED_PROJECT_IDS)
                     .all()
                 )
 
-                if existing_backfill_jobs:
-                    for existing_backfill_job in existing_backfill_jobs:
-                        session.delete(existing_backfill_job)
-                    session.commit()
+            if len(project_preferences) == 0:
+                logger.info("No project preferences to backfill, done")
+                return
 
             logger.info(
-                f"DEBUG: Will be running backfill for {repo_definition.full_name} of org {project_preference.organization_id}"
+                f"Found {len(project_preferences)} project preferences to look at, starting from {project_preferences[0].project_id} to {project_preferences[-1].project_id}"
             )
 
-            repo_client = RepoClient.from_repo_definition(repo_definition, RepoClientType.READ)
-            repo_size_in_gb = repo_client.repo.size / 1024 / 1024
+            for project_preference in project_preferences:
+                for repo in project_preference.repositories:
+                    repo_definition = RepoDefinition.model_validate(repo)
+                    repo_client = RepoClient.from_repo_definition(
+                        repo_definition,
+                        RepoClientType.READ,
+                    )
+                    blob_name = RepoManager.make_blob_name(
+                        project_preference.organization_id,
+                        repo_definition.provider,
+                        repo_definition.owner,
+                        repo_definition.name,
+                        repo_definition.external_id,
+                    )
+                    count = (
+                        main_session.query(DbSeerRepoArchive)
+                        .filter(
+                            DbSeerRepoArchive.organization_id == project_preference.organization_id,
+                            DbSeerRepoArchive.bucket_name == RepoManager.get_bucket_name(),
+                            DbSeerRepoArchive.blob_path == blob_name,
+                        )
+                        .count()
+                    )
 
-            scaled_time_limit = (
-                timedelta(minutes=15)
-                + timedelta(minutes=min(35, round(max(0, repo_size_in_gb - 1) * 7)))
-            ).total_seconds()
+                    if count > 0:
+                        logger.info(
+                            f"Repository {repo_definition.full_name} for org {project_preference.organization_id} already has an archive, skipping."
+                        )
+                        continue
 
-            backfill_jobs.append(
-                BackfillJob(
-                    organization_id=project_preference.organization_id,
-                    repo_definition=repo_definition,
-                    scaled_time_limit=scaled_time_limit,
+                    repo_key = (
+                        project_preference.organization_id,
+                        repo_definition.provider,
+                        repo_definition.external_id,
+                    )
+
+                    if repo_key in processed_repos:
+                        logger.info(
+                            f"Repository {repo_definition.full_name} for org {project_preference.organization_id} already added to backfill jobs, skipping."
+                        )
+                        continue
+
+                    repo_size_in_gb = repo_client.repo.size / 1024 / 1024
+
+                    scaled_time_limit = (
+                        timedelta(minutes=15)
+                        + timedelta(minutes=min(35, round(max(0, repo_size_in_gb - 1) * 7)))
+                    ).total_seconds()
+
+                    backfill_jobs.append(
+                        BackfillJob(
+                            organization_id=project_preference.organization_id,
+                            repo_definition=repo_definition,
+                            scaled_time_limit=scaled_time_limit,
+                        )
+                    )
+                    processed_repos.add(repo_key)
+
+                if len(backfill_jobs) >= THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING:
+                    break
+
+            backfill_state.backfill_cursor = project_preference.project_id
+            main_session.flush()
+
+            for backfill_job in backfill_jobs:
+                existing_backfill_job = (
+                    main_session.query(DbSeerBackfillJob)
+                    .filter(
+                        DbSeerBackfillJob.organization_id == backfill_job.organization_id,
+                        DbSeerBackfillJob.repo_provider == backfill_job.repo_definition.provider,
+                        DbSeerBackfillJob.repo_external_id
+                        == backfill_job.repo_definition.external_id,
+                    )
+                    .first()
                 )
-            )
-            processed_repos.add(repo_key)
+                if existing_backfill_job:
+                    if not existing_backfill_job.failed_at and (
+                        existing_backfill_job.started_at
+                        and ensure_timezone_aware(existing_backfill_job.started_at)
+                        < datetime.datetime.now(datetime.UTC) - timedelta(hours=1)
+                    ):
+                        logger.info(
+                            f"Backfill job {existing_backfill_job.id} for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id} already started, skipping."
+                        )
+                        continue
+                    else:
 
-            # if not existing_archive:
-            #     backfill_jobs.append(
-            #         BackfillJob(
-            #             organization_id=project_preference.organization_id,
-            #             repo_definition=repo_definition,
-            #         )
-            #     )
-            # else:
+                        logger.info(
+                            f"Deleting old backfill failed job {existing_backfill_job.id} for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id}"
+                        )
+                        main_session.delete(existing_backfill_job)
+                        main_session.flush()
 
-            #     logger.info(
-            #         f"Repo {repo_definition.full_name} for org {project_preference.organization_id} already exists in archive with id {existing_archive.id}, skipping."
-            #     )
+                db_backfill_job = DbSeerBackfillJob(
+                    organization_id=backfill_job.organization_id,
+                    repo_provider=backfill_job.repo_definition.provider,
+                    repo_external_id=backfill_job.repo_definition.external_id,
+                )
 
-    logger.info(f"Collected {len(backfill_jobs)} repos for backfill")
+                main_session.add(db_backfill_job)
+                main_session.flush()
 
-    with Session() as session:
-        # TODO: Implement backfill cursor
-        # session.query(DbSeerBackfillState).filter(DbSeerBackfillState.id == 1).update(
-        #     {DbSeerBackfillState.backfill_cursor: new_backfill_cursor}
-        # )
+                backfill_job.backfill_job_id = db_backfill_job.id
 
-        # create backfill jobs
-        for backfill_job in backfill_jobs:
-            db_backfill_job = DbSeerBackfillJob(
-                organization_id=backfill_job.organization_id,
-                repo_provider=backfill_job.repo_definition.provider,
-                repo_external_id=backfill_job.repo_definition.external_id,
-            )
+            main_session.commit()
 
-            session.add(db_backfill_job)
-            session.flush()
+            logger.info(f"Queueing {len(backfill_jobs)} backfill jobs")
 
-            backfill_job.backfill_job_id = db_backfill_job.id
-
-        session.commit()
-
+    # Queue all jobs after transaction is complete
     for backfill_job in backfill_jobs:
         run_backfill.apply_async(
             args=(backfill_job.model_dump(),),
