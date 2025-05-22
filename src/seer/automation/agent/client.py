@@ -200,6 +200,7 @@ class OpenAiProvider:
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
         predicted_output: str | None = None,
@@ -219,6 +220,7 @@ class OpenAiProvider:
             model=self.model_name,
             messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
             temperature=temperature,
+            seed=seed,
             tools=(
                 cast(Iterable[ChatCompletionToolParam], tool_dicts)
                 if tool_dicts
@@ -278,6 +280,7 @@ class OpenAiProvider:
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
         timeout: float | None = None,
@@ -297,6 +300,7 @@ class OpenAiProvider:
             model=self.model_name,
             messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
             temperature=temperature,
+            seed=seed,
             tools=(
                 cast(Iterable[ChatCompletionToolParam], tool_dicts)
                 if tool_dicts
@@ -418,6 +422,7 @@ class OpenAiProvider:
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         max_tokens: int | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
@@ -438,6 +443,7 @@ class OpenAiProvider:
             model=self.model_name,
             messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
             temperature=temperature,
+            seed=seed,
             tools=(
                 cast(Iterable[ChatCompletionToolParam], tool_dicts)
                 if tool_dicts
@@ -1005,7 +1011,9 @@ class GeminiProvider:
 
     @observe(as_type="generation", name="Gemini Generation with Grounding")
     @sentry_sdk.trace
-    def search_the_web(self, prompt: str, temperature: float | None = None) -> str:
+    def search_the_web(
+        self, prompt: str, temperature: float | None = None, seed: int | None = None
+    ) -> str:
         client = self.get_client()
         google_search_tool = GeminiTool(google_search=GoogleSearch())
 
@@ -1016,6 +1024,7 @@ class GeminiProvider:
                 tools=[google_search_tool],
                 response_modalities=["TEXT"],
                 temperature=temperature or 0.0,
+                seed=seed,
             ),
         )
         answer = ""
@@ -1066,6 +1075,7 @@ class GeminiProvider:
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         response_format: Type[StructuredOutputType],
         max_tokens: int | None = None,
         cache_name: str | None = None,
@@ -1090,6 +1100,7 @@ class GeminiProvider:
                     tools=tool_dicts,
                     response_modalities=["TEXT"],
                     temperature=temperature or 0.0,
+                    seed=seed,
                     response_mime_type="application/json",
                     max_output_tokens=max_tokens or 8192,
                     response_schema=response_format,
@@ -1144,6 +1155,7 @@ class GeminiProvider:
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         max_tokens: int | None = None,
         first_token_timeout: float,
         inactivity_timeout: float,
@@ -1170,6 +1182,7 @@ class GeminiProvider:
                     system_instruction=system_prompt,
                     response_modalities=["TEXT"],
                     temperature=temperature or 0.0,
+                    seed=seed,
                     max_output_tokens=max_tokens or 8192,
                     thinking_config=ThinkingConfig(include_thoughts=True),
                 ),
@@ -1240,6 +1253,7 @@ class GeminiProvider:
         system_prompt: str | None = None,
         tools: list[FunctionTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         max_tokens: int | None = None,
     ):
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
@@ -1257,6 +1271,7 @@ class GeminiProvider:
                 tools=tool_dicts,
                 system_instruction=system_prompt,
                 temperature=temperature or 0.0,
+                seed=seed,
                 max_output_tokens=max_tokens or 8192,
             ),
         )
@@ -1524,6 +1539,7 @@ class LlmClient:
         system_prompt: str | None = None,
         tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
         timeout: float | None = None,
@@ -1555,6 +1571,7 @@ class LlmClient:
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
+                    seed=seed,
                     tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     predicted_output=predicted_output,
@@ -1584,6 +1601,7 @@ class LlmClient:
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
+                    seed=seed,
                     tools=cast(list[FunctionTool], tools),
                 )
             else:
@@ -1604,6 +1622,7 @@ class LlmClient:
         response_format: Type[StructuredOutputType],
         tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
         timeout: float | None = None,
@@ -1636,6 +1655,7 @@ class LlmClient:
                     response_format=response_format,
                     system_prompt=system_prompt,
                     temperature=temperature,
+                    seed=seed,
                     tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
@@ -1654,6 +1674,7 @@ class LlmClient:
                     response_format=response_format,
                     system_prompt=system_prompt,
                     temperature=temperature,
+                    seed=seed,
                     tools=cast(list[FunctionTool], tools),
                     cache_name=cache_name,
                     thinking_budget=thinking_budget,
@@ -1676,6 +1697,7 @@ class LlmClient:
         system_prompt: str | None = None,
         tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
+        seed: int | None = None,
         max_tokens: int | None = None,
         run_name: str | None = None,
         timeout: float | None = None,
@@ -1711,6 +1733,7 @@ class LlmClient:
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
+                    seed=seed,
                     tools=cast(list[FunctionTool], tools),
                     timeout=timeout,
                     reasoning_effort=reasoning_effort,
@@ -1743,6 +1766,7 @@ class LlmClient:
                     prompt=prompt,
                     system_prompt=system_prompt,
                     temperature=temperature or default_temperature,
+                    seed=seed,
                     tools=cast(list[FunctionTool], tools),
                     first_token_timeout=first_token_timeout,
                     inactivity_timeout=inactivity_timeout,
@@ -1767,6 +1791,7 @@ class LlmClient:
         prompt: str,
         model: LlmProvider,
         temperature: float | None = None,
+        seed: int | None = None,
         run_name: str | None = None,
     ) -> str:
         try:
@@ -1780,7 +1805,9 @@ class LlmClient:
 
             if model.provider_name == LlmProviderType.GEMINI:
                 model = cast(GeminiProvider, model)
-                return model.search_the_web(prompt, temperature or default_temperature)
+                return model.search_the_web(
+                    prompt, temperature=temperature or default_temperature, seed=seed
+                )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
         except Exception as e:
