@@ -13,7 +13,9 @@ TOTAL_RIPGREP_RESULTS_CHARACTER_LENGTH = 16384
 logger = logging.getLogger(__name__)
 
 
-def calculate_dynamic_timeout(repo_dir: str, base_timeout: float = MAX_RIPGREP_TIMEOUT_SECONDS) -> float:
+def calculate_dynamic_timeout(
+    repo_dir: str, base_timeout: float = MAX_RIPGREP_TIMEOUT_SECONDS
+) -> float:
     """Calculate appropriate timeout based on repository size."""
     try:
         # Get total size of the repository
@@ -23,10 +25,10 @@ def calculate_dynamic_timeout(repo_dir: str, base_timeout: float = MAX_RIPGREP_T
                 file_path = os.path.join(dirpath, filename)
                 if os.path.isfile(file_path):
                     total_size += os.path.getsize(file_path)
-        
+
         # Convert to MB for easier calculation
         size_mb = total_size / (1024 * 1024)
-        
+
         # Scale timeout linearly with size, with some constraints
         # Base size is considered 100MB
         if size_mb <= 100:
@@ -45,9 +47,7 @@ def calculate_dynamic_timeout(repo_dir: str, base_timeout: float = MAX_RIPGREP_T
 
 @observe(name="Run ripgrep in repo")
 @sentry_sdk.trace
-def run_ripgrep_in_repo(
-    repo_dir: str, cmd: list[str], timeout: float = None
-) -> str:
+def run_ripgrep_in_repo(repo_dir: str, cmd: list[str], timeout: float = None) -> str:
     if timeout is None:
         timeout = calculate_dynamic_timeout(repo_dir)
     try:
