@@ -270,6 +270,7 @@ class RepoClient:
         self.base_commit_sha = repo_definition.base_commit_sha or self.get_branch_head_sha(
             self.base_branch
         )
+        print(f"Starting repo client with sha : {self.base_commit_sha}")
         self.repo_definition = repo_definition
 
         self.get_valid_file_paths = functools.lru_cache(maxsize=8)(self._get_valid_file_paths)
@@ -848,7 +849,7 @@ class RepoClient:
             raise ValueError("Either file_patches or file_changes must be provided")
 
         new_branch_name = sanitize_branch_name(branch_name or pr_title)
-        logger.info(f"Creating new branch for PR from sha {self.base_commit_sha}")
+        print(f"Creating new branch for PR from sha {self.base_commit_sha}")
 
         try:
             branch_ref = self._create_branch(new_branch_name, from_base_sha)

@@ -172,7 +172,7 @@ def run_autofix_root_cause(
     state = create_initial_autofix_run(request)
 
     cur_state = state.get()
-    logger.info(f"Cur state: {cur_state}")
+    print(f"Cur state: {cur_state.status}")
 
     # Process has no further work.
     if cur_state.status in AutofixStatus.terminal():
@@ -181,6 +181,8 @@ def run_autofix_root_cause(
 
     if not validate_repo_branches_exist(cur_state.request.repos, AutofixEventManager(state)):
         return
+
+    print("Validated repo branches exist")
 
     RootCauseStep.get_signature(
         RootCauseStepRequest(
