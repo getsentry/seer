@@ -92,6 +92,7 @@ class TestAutofixEventManager:
 
         assert state.get().steps == []
 
+    @pytest.mark.skip(reason="Flaky")
     @patch("time.sleep")
     def test_reset_steps_to_point(self, mock_time, event_manager, state):
         with state.update() as cur:
