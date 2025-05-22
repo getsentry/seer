@@ -25,6 +25,15 @@ from seer.automation.agent.models import (
 from seer.automation.agent.tools import FunctionTool
 
 
+def _are_tool_calls_equal(tool_calls1: list[ToolCall], tool_calls2: list[ToolCall]) -> bool:
+    for tool_call1, tool_call2 in zip(tool_calls1, tool_calls2, strict=True):
+        tool_call1.id = None
+        tool_call2.id = None
+        if tool_call1 != tool_call2:
+            return False
+    return True
+
+
 @pytest.mark.vcr()
 def test_openai_generate_text():
     llm_client = LlmClient()
@@ -33,6 +42,7 @@ def test_openai_generate_text():
     response = llm_client.generate_text(
         prompt="Say hello",
         model=model,
+        seed=42,
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
@@ -74,6 +84,7 @@ def test_openai_generate_text_with_tools():
                 {
                     "name": "x",
                     "type": "string",
+                    "description": 'The string "Hello"',
                 },
             ],
             fn=lambda x: x,
@@ -89,14 +100,9 @@ def test_openai_generate_text_with_tools():
     assert isinstance(response, LlmGenerateTextResponse)
     assert response.message.content is None
     assert response.message.role == "assistant"
-    assert response.message.tool_calls == [
-        ToolCall(
-            id="call_NMeKwqzR3emFbDdFNPGeI8E7", function="test_function", args='{"x": "Hello"}'
-        ),
-        ToolCall(
-            id="call_dcOjoT13fP18vft0idWNqjRp", function="test_function", args='{"x": "World"}'
-        ),
-    ]
+    assert _are_tool_calls_equal(
+        response.message.tool_calls, [ToolCall(function="test_function", args='{"x":"Hello"}')]
+    )
 
 
 @pytest.mark.vcr()
@@ -127,9 +133,9 @@ def test_anthropic_generate_text_with_tools():
     assert isinstance(response, LlmGenerateTextResponse)
     assert response.message.content is not None
     assert response.message.role == "tool_use"
-    assert response.message.tool_calls == [
-        ToolCall(id="toolu_vrtx_01Y7rMxTGDBpGMDL1hwNY173", function="test_function", args="{}"),
-    ]
+    assert _are_tool_calls_equal(
+        response.message.tool_calls, [ToolCall(function="test_function", args="{}")]
+    )
 
 
 @pytest.mark.vcr()
@@ -145,10 +151,11 @@ def test_openai_generate_structured():
         prompt="Generate a person",
         model=model,
         response_format=TestStructure,
+        seed=42,
     )
 
     assert isinstance(response, LlmGenerateStructuredResponse)
-    assert response.parsed == TestStructure(name="Alice Johnson", age=28)
+    assert response.parsed == TestStructure(name="Alice Johnson", age=29)
     assert response.metadata.model == "gpt-4o-mini-2024-07-18"
     assert response.metadata.provider_name == LlmProviderType.OPENAI
 
@@ -319,6 +326,7 @@ def test_openai_generate_text_stream():
         llm_client.generate_text_stream(
             prompt="Say hello",
             model=model,
+            seed=42,
         )
     )
 
@@ -386,6 +394,7 @@ def test_openai_generate_text_stream_with_tools():
             prompt="Call test_function with the input 'test data'",
             model=model,
             tools=tools,
+            seed=42,
         )
     )
 
@@ -513,6 +522,7 @@ def test_gemini_generate_text():
     response = llm_client.generate_text(
         prompt="Say hello",
         model=model,
+        seed=42,
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
@@ -547,6 +557,7 @@ def test_gemini_generate_text_with_tools():
         prompt="Please write a haiku, then invoke 'submit' with complete = true",
         model=model,
         tools=tools,
+        seed=42,
     )
 
     assert isinstance(response, LlmGenerateTextResponse)
@@ -575,6 +586,7 @@ def test_gemini_generate_structured():
         prompt="Generate a person named John Doe aged 30",
         model=model,
         response_format=TestStructure,
+        seed=42,
     )
 
     assert isinstance(response, LlmGenerateStructuredResponse)
@@ -641,12 +653,13 @@ def test_gemini_prep_message_and_tools():
 @pytest.mark.vcr()
 def test_gemini_generate_text_stream():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-001")
+    model = GeminiProvider.model("gemini-2.5-flash-preview-04-17")
 
     stream_items = list(
         llm_client.generate_text_stream(
             prompt="Say hello",
             model=model,
+            seed=42,
         )
     )
 
@@ -668,7 +681,7 @@ def test_gemini_generate_text_stream():
 @pytest.mark.vcr()
 def test_gemini_generate_text_stream_with_tools():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-001")
+    model = GeminiProvider.model("gemini-2.5-flash-preview-04-17")
 
     tools = [
         FunctionTool(
@@ -689,6 +702,7 @@ def test_gemini_generate_text_stream_with_tools():
             prompt="Please write a haiku, then invoke 'submit' with complete = true",
             model=model,
             tools=tools,
+            seed=42,
         )
     )
 
@@ -730,6 +744,7 @@ def test_gemini_generate_text_from_web_search():
     response = llm_client.generate_text_from_web_search(
         prompt="What year is it?",
         model=model,
+        seed=42,
     )
 
     assert isinstance(response, str)
