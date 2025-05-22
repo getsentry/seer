@@ -547,6 +547,7 @@ class TestAutofixContextPrCommit(unittest.TestCase):
             pr_title="This is the title",
             file_patches=[],
             branch_name="draft/custom-branch-name",
+            from_base_sha=True,
         )
 
         # Verify the branch name was updated in the state
