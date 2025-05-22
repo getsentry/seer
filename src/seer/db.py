@@ -228,7 +228,7 @@ class DbRunState(Base):
         DateTime, nullable=False, default=datetime.datetime.utcnow
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime, nullable=False, default=lambda: datetime.datetime.now(datetime.UTC)
+        DateTime, nullable=False, default=datetime.datetime.utcnow
     )
     pr_id: Mapped[int] = relationship("DbPrIdToAutofixRunIdMapping", cascade="all, delete")
 
