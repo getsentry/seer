@@ -72,7 +72,7 @@ class AppConfig(BaseModel):
     LANGFUSE_HOST: str = ""
 
     API_PUBLIC_KEY_SECRET_ID: str = ""
-    JSON_API_SHARED_SECRETS: ParseList = ["some-secret-to-seer", "some-secret-from-seer"]
+    JSON_API_SHARED_SECRETS: ParseList = Field(default_factory=list)
     IGNORE_API_AUTH: ParseBool = False  # Used for both API Tokens and RPC Secrets
 
     TORCH_NUM_THREADS: ParseInt = 0
