@@ -38,17 +38,8 @@ def upgrade():
         created_at = datetime.utcnow()
         try:
             if value:
-                # If value is a dict, get created_at; if it's a JSON string, parse it
-                if isinstance(value, dict):
-                    created_at = value.get("created_at") or created_at
-                else:
-                    try:
-                        value_dict = json.loads(value)
-                        created_at = value_dict.get("created_at") or created_at
-                    except Exception:
-                        pass
-        except Exception:
-            # If JSON is invalid, use current timestamp
+                created_at = value.get("created_at") or created_at
+        except json.JSONDecodeError:
             logger.error(f"Invalid JSON for run_state {id}: {value}")
             pass
 
