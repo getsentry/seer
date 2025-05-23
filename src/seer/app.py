@@ -63,15 +63,10 @@ from seer.automation.autofix.tasks import (
 from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codegen.evals.models import (
-    CodegenBugPredictionEvaluationRequest,
-    CodegenBugPredictionEvaluationResponse,
     CodegenRelevantWarningsEvaluationRequest,
     CodegenRelevantWarningsEvaluationSummary,
 )
-from seer.automation.codegen.evals.tasks import (
-    run_bug_prediction_evaluation,
-    run_relevant_warnings_evaluation,
-)
+from seer.automation.codegen.evals.tasks import run_relevant_warnings_evaluation
 from seer.automation.codegen.models import (
     CodecovTaskRequest,
     CodegenBaseRequest,
@@ -371,32 +366,6 @@ def codegen_bug_prediction_endpoint(
     data: CodegenRelevantWarningsRequest,
 ) -> CodegenRelevantWarningsResponse:
     return codegen_bug_prediction(data)
-
-
-@json_api(blueprint, "/v1/automation/codegen/bug-prediction/evaluation/start")
-def codegen_bug_prediction_evaluation_start_endpoint(
-    data: CodegenBugPredictionEvaluationRequest,
-) -> CodegenBugPredictionEvaluationResponse:
-    config = resolve(AppConfig)
-    if not config.DEV:
-        raise RuntimeError("The evaluation endpoint is only available in development mode")
-
-    result = run_bug_prediction_evaluation(data)
-
-    return result
-
-
-# @json_api(blueprint, "/v1/automation/codegen/bug-prediction/evaluation/results")
-# def codegen_bug_prediction_evaluation_results_endpoint(
-#     data: CodegenBugPredictionEvaluationRequest,
-# ) -> CodegenBugPredictionEvaluationResponse:
-#     config = resolve(AppConfig)
-#     if not config.DEV:
-#         raise RuntimeError("The evaluation endpoint is only available in development mode")
-
-#     result = get_bug_prediction_evaluation_results(data)
-
-#     return result
 
 
 @json_api(blueprint, "/v1/automation/codegen/pr-review")

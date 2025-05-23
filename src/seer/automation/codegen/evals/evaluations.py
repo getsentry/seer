@@ -1,5 +1,4 @@
 import logging
-from unittest import mock
 
 from langfuse.client import DatasetItemClient
 from langfuse.decorators import observe
@@ -12,16 +11,8 @@ from seer.automation.codegen.evals.models import (
     ModelEvaluationOutput,
     ModelEvaluationOutputList,
 )
-from seer.automation.codegen.models import (
-    BugPrediction,
-    CodeFetchIssuesOutput,
-    StaticAnalysisSuggestion,
-)
-from seer.automation.codegen.relevant_warnings_step import RelevantWarningsStep
-from seer.automation.codegen.tasks import (
-    create_initial_bug_prediction_run,
-    create_initial_relevant_warnings_run,
-)
+from seer.automation.codegen.models import BugPrediction
+from seer.automation.codegen.tasks import create_initial_bug_prediction_run
 from seer.automation.state import DbStateRunTypes
 
 logger = logging.getLogger(__name__)
@@ -46,40 +37,25 @@ def sync_run_evaluation_on_item(
     request.should_post_to_overwatch = False
 
     # Create a proper state for the evaluation run
-    # state = create_initial_relevant_warnings_run(request)
     state = create_initial_bug_prediction_run(request)
     run_id = state.get().run_id
-
-    # relevant_warnings_step = RelevantWarningsStep(
-    #     request={"run_id": run_id, **request.model_dump()},
-    #     type=DbStateRunTypes.RELEVANT_WARNINGS,
-    # )
 
     bug_predictor_step = BugPredictionStep(
         request={"run_id": run_id, **request.model_dump()},
         type=DbStateRunTypes.BUG_PREDICTION,
     )
 
-    # # Mock FilterIssuesComponent to return the issues
-    # # Ignoring the filename_to_issues part of the output.
-    # mock.patch(
-    #     "seer.automation.codegen.relevant_warnings_step.FetchIssuesComponent.invoke",
-    #     return_value=CodeFetchIssuesOutput(filename_to_issues={"all_issues": item.issues or []}),
-    # )
-
     # Invoke the step.
     bug_predictor_step.invoke()
 
     # Grab the suggestions from the state.
     state = bug_predictor_step.context.state
-    # return state.get().static_analysis_suggestions
     return state.get().bug_predictions
 
 
 @observe(name="[Relevant Warnings Eval] Evaluate semantic similarity")
 def evaluate_bug_predictions(
     received_bug_predictions: list[BugPrediction],
-    # received_suggestions: list[StaticAnalysisSuggestion],
     expected_issues: list[EvalItemOutput],
     model: str,
 ) -> list[ModelEvaluationOutput]:

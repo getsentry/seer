@@ -28,7 +28,6 @@ def test_detected_celery_jobs():
                 "seer.automation.codebase.tasks.run_backfill",
                 "seer.automation.codebase.tasks.run_test_download_and_verify_backfill",
                 "seer.automation.codegen.evals.tasks.run_relevant_warnings_evaluation_on_item",
-                "seer.automation.codegen.evals.tasks.run_bug_prediction_evaluation_on_item",
                 "seer.automation.codegen.pr_review_step.pr_review_task",
                 "seer.automation.codegen.relevant_warnings_step.relevant_warnings_task",
                 "seer.automation.codegen.bug_prediction_step.bug_prediction_task",

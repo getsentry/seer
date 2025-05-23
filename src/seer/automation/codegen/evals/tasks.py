@@ -7,17 +7,11 @@ from langfuse.api.resources.commons.types.dataset_status import DatasetStatus
 
 from celery_app.app import celery_app
 from seer.automation.autofix.evaluations import make_score_name
-from seer.automation.codegen.evals.bug_prediction import (
-    BugPredictionEvaluationComponent,
-    BugPredictionScorerComponent,
-)
 from seer.automation.codegen.evals.evaluations import (
     evaluate_bug_predictions,
     sync_run_evaluation_on_item,
 )
 from seer.automation.codegen.evals.models import (
-    CodegenBugPredictionEvaluationRequest,
-    CodegenBugPredictionEvaluationResponse,
     CodegenRelevantWarningsEvaluationRequest,
     CodegenRelevantWarningsEvaluationSummary,
     EvalItemOutput,
@@ -26,32 +20,6 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
-
-
-@inject
-def run_bug_prediction_evaluation(
-    request: CodegenBugPredictionEvaluationRequest, app_config: AppConfig = injected
-):
-    # confirm langfuse creds and gh token creds are set
-
-    langfuse = Langfuse()
-
-    dataset = langfuse.get_dataset(request.dataset_name)
-    items = dataset.items
-
-    print("these are items", items)
-
-    # collect results
-    BugPredictionEvaluationComponent().invoke()
-
-    # score results
-    BugPredictionScorerComponent().invoke()
-
-    return CodegenBugPredictionEvaluationResponse(
-        started=True,
-        item_count=42,
-        task_ids=[],
-    )
 
 
 @inject
@@ -176,16 +144,16 @@ def run_relevant_warnings_evaluation_on_item(
 
     scores = evaluate_bug_predictions(bug_predictions, list_of_issues, scoring_model)
     valid_scores = [score for score in scores if score.bug_matched_idx != -1]
-    suggestions_matched = [score.suggestion_idx for score in valid_scores]
-    suggestions_not_matched = [
-        i for i in range(len(bug_predictions)) if i not in suggestions_matched
+    bug_predictions_matched = [score.suggestion_idx for score in valid_scores]
+    bug_predictions_not_matched = [
+        i for i in range(len(bug_predictions)) if i not in bug_predictions_matched
     ]
     bugs_matched = [score.bug_matched_idx for score in valid_scores]
     bugs_not_found = [i for i in range(len(list_of_issues)) if i not in bugs_matched]
     scores_content = [score.match_score for score in valid_scores]
     location_match = [score.location_match for score in valid_scores]
     langfuse.score(
-        comment=f"Expected number of bugs: {len(list_of_issues)}; Actual bugs found: {[ (suggestion_idx, bug_idx) for suggestion_idx, bug_idx in zip(suggestions_matched, bugs_matched)]}",
+        comment=f"Expected number of bugs: {len(list_of_issues)}; Actual bugs found: {[ (suggestion_idx, bug_idx) for suggestion_idx, bug_idx in zip(bug_predictions_matched, bugs_matched)]}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="bugs_found_count"),
         value=len(bugs_matched),
@@ -209,8 +177,8 @@ def run_relevant_warnings_evaluation_on_item(
         value=len(bugs_not_found),
     )
     langfuse.score(
-        comment=f"Suggestions not matched to any bug: {suggestions_not_matched}",
+        comment=f"Suggestions not matched to any bug: {bug_predictions_not_matched}",
         trace_id=dataset_item_trace_id,
         name=make_score_name(model=scoring_model, n_panel=scoring_n_panel, name="noise"),
-        value=len(suggestions_not_matched),
+        value=len(bug_predictions_not_matched),
     )

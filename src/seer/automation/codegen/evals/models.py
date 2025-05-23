@@ -102,14 +102,3 @@ class CodegenRelevantWarningsEvaluationSummary(BaseModel):
     started: bool
     item_count: int
     task_ids: list[str]
-
-
-class CodegenBugPredictionEvaluationRequest(BaseModel):
-    dataset_name: str
-    run_name: str
-
-
-class CodegenBugPredictionEvaluationResponse(BaseModel):
-    started: bool
-    item_count: int
-    task_ids: list[str]
