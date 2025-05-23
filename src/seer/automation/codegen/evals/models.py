@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from pydantic.fields import Field
 
 from seer.automation.codebase.models import StaticAnalysisWarning
+from seer.automation.codegen.bug_prediction_step import BugPredictionStepRequest
 from seer.automation.codegen.models import CodegenRelevantWarningsRequest
 from seer.automation.models import IssueDetails, RepoDefinition
 
@@ -54,6 +55,12 @@ class EvalItemInput(BaseModel):
             warnings=self.warnings,
             callback_url="",
             commit_sha=self.commit_sha,
+        )
+
+    def get_bug_prediction_request(self) -> BugPredictionStepRequest:
+        relevant_warnings_request = self.get_request()
+        return BugPredictionStepRequest(
+            **relevant_warnings_request.model_dump(),
         )
 
 
