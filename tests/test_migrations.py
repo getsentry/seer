@@ -26,10 +26,6 @@ def test_run_state_migration(alembic_runner: MigrationContext):
     with Session() as session:
         for i in range(1, 7):
             state = session.query(DbRunState).get(i)
-            print(state)
-            print(
-                f"Row {i}: created_at={state.created_at}, last_triggered_at={state.last_triggered_at}, updated_at={state.updated_at}"
-            )
             assert state.created_at
             assert state.last_triggered_at
             assert state.updated_at
