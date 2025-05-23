@@ -35,10 +35,10 @@ def upgrade():
 
     for row in results:
         id, value = row
-        created_at = datetime.utcnow()
         try:
             if value:
-                created_at = value.get("created_at") or created_at
+                last_triggered_at = value.get("last_triggered_at") or datetime.utcnow()
+                created_at = value.get("created_at") or last_triggered_at
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON for run_state {id}: {value}")
             pass
