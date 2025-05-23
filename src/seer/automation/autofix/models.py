@@ -272,9 +272,7 @@ class AutofixGroupState(BaseModel):
     updated_at: Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)] = (
         Field(default_factory=datetime.datetime.now)
     )
-    created_at: Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)] = (
-        Field(default_factory=datetime.datetime.now)
-    )
+    created_at: datetime.datetime | None = None
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
     feedback: AutofixFeedback | None = None
@@ -639,9 +637,6 @@ class AutofixContinuation(AutofixGroupState):
                 else:
                     return solution_step.solution, solution_step.selected_mode
         return None, None
-
-    def mark_created(self):
-        self.created_at = datetime.datetime.now()
 
     def mark_triggered(self):
         self.last_triggered_at = datetime.datetime.now()

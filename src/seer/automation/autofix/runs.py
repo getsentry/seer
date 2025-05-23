@@ -1,3 +1,4 @@
+import datetime
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -85,7 +86,7 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
     update_repo_access_and_properties(continuation_state, set_branches_and_commits=True)
 
     with state.update() as cur:
-        cur.mark_created()
+        cur.created_at = datetime.datetime.utcnow()
         cur.mark_triggered()
 
     event_manager = AutofixEventManager(state)
