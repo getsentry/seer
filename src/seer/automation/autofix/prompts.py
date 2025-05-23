@@ -1,6 +1,6 @@
 import textwrap
 
-from seer.automation.models import Profile, RepoDefinition, TraceTree
+from seer.automation.models import Logs, Profile, RepoDefinition, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -86,3 +86,9 @@ def format_trace_tree(trace_tree: TraceTree | None):
     if not trace_tree:
         return ""
     return f"\nHere's a high-level trace to give you context on the whole system (note it may be incomplete or irrelevant to the issue): \n{trace_tree.format_trace_tree()}\n"
+
+
+def format_logs(logs: Logs | None):
+    if not logs:
+        return ""
+    return f"\nHere are some logs from the system as it was running: \n{logs.format_logs()}\n"

@@ -69,6 +69,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                                 code_map=request.profile,
                                 instruction=request.instruction,
                                 trace_tree=request.trace_tree,
+                                logs=request.logs,
                             )
                             if not request.initial_memory
                             else None
