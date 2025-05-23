@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from pydantic.fields import Field
 
 from seer.automation.codebase.models import StaticAnalysisWarning
+from seer.automation.codegen.bug_prediction_step import BugPredictionStepRequest
 from seer.automation.codegen.models import CodegenRelevantWarningsRequest
 from seer.automation.models import IssueDetails, RepoDefinition
 
@@ -56,6 +57,12 @@ class EvalItemInput(BaseModel):
             commit_sha=self.commit_sha,
         )
 
+    def get_bug_prediction_request(self) -> BugPredictionStepRequest:
+        relevant_warnings_request = self.get_request()
+        return BugPredictionStepRequest(
+            **relevant_warnings_request.model_dump(),
+        )
+
 
 class EvalItemOutput(BaseModel):
     repos: list[str]
@@ -92,6 +99,17 @@ class CodegenRelevantWarningsEvaluationRequest(BaseModel):
 
 
 class CodegenRelevantWarningsEvaluationSummary(BaseModel):
+    started: bool
+    item_count: int
+    task_ids: list[str]
+
+
+class CodegenBugPredictionEvaluationRequest(BaseModel):
+    dataset_name: str
+    run_name: str
+
+
+class CodegenBugPredictionEvaluationResponse(BaseModel):
     started: bool
     item_count: int
     task_ids: list[str]

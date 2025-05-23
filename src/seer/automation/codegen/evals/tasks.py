@@ -3,14 +3,21 @@ import random
 
 from langfuse import Langfuse
 from langfuse.api.resources.commons.errors import NotFoundError
+from langfuse.api.resources.commons.types.dataset_status import DatasetStatus
 
 from celery_app.app import celery_app
 from seer.automation.autofix.evaluations import make_score_name
+from seer.automation.codegen.evals.bug_prediction import (
+    BugPredictionEvaluationComponent,
+    BugPredictionScorerComponent,
+)
 from seer.automation.codegen.evals.evaluations import (
-    evaluate_suggestions,
+    evaluate_bug_predictions,
     sync_run_evaluation_on_item,
 )
 from seer.automation.codegen.evals.models import (
+    CodegenBugPredictionEvaluationRequest,
+    CodegenBugPredictionEvaluationResponse,
     CodegenRelevantWarningsEvaluationRequest,
     CodegenRelevantWarningsEvaluationSummary,
     EvalItemOutput,
@@ -19,6 +26,32 @@ from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
+
+
+@inject
+def run_bug_prediction_evaluation(
+    request: CodegenBugPredictionEvaluationRequest, app_config: AppConfig = injected
+):
+    # confirm langfuse creds and gh token creds are set
+
+    langfuse = Langfuse()
+
+    dataset = langfuse.get_dataset(request.dataset_name)
+    items = dataset.items
+
+    print("these are items", items)
+
+    # collect results
+    BugPredictionEvaluationComponent().invoke()
+
+    # score results
+    BugPredictionScorerComponent().invoke()
+
+    return CodegenBugPredictionEvaluationResponse(
+        started=True,
+        item_count=42,
+        task_ids=[],
+    )
 
 
 @inject
@@ -96,6 +129,10 @@ def run_relevant_warnings_evaluation_on_item(
         logger.error(f"Item {item_id} not found or not active. Skipping scoring.")
         return
 
+    if dataset_item.status == DatasetStatus.ARCHIVED:
+        logger.error(f"Item {item_id} is archived. Skipping scoring.")
+        return
+
     logger.info(
         f"Starting relevant warnings evaluation for item {item_id}, number {item_index}/{item_count}, with run name '{run_name}'."
     )
@@ -107,7 +144,7 @@ def run_relevant_warnings_evaluation_on_item(
     with dataset_item.observe(run_name=run_name, run_description=run_description) as trace_id:
         dataset_item_trace_id = trace_id
         try:
-            suggestions = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
+            bug_predictions = sync_run_evaluation_on_item(dataset_item, langfuse_session_id=trace_id)  # type: ignore
             langfuse.score(
                 trace_id=dataset_item_trace_id,
                 name="error_running_evaluation",
@@ -120,12 +157,12 @@ def run_relevant_warnings_evaluation_on_item(
                 name="error_running_evaluation",
                 value=1,
             )
-            suggestions = None
+            bug_predictions = None
 
     # If suggestions is None we assume no suggestions were generated.
     # rather than an error happening.
     # TODO: Is this the best way to handle this?
-    suggestions = suggestions or []
+    bug_predictions = bug_predictions or []
 
     if not dataset_item.expected_output:
         # This happens in negative test cases where we don't have any expected issues.
@@ -137,10 +174,12 @@ def run_relevant_warnings_evaluation_on_item(
         list_of_issues = [dataset_item.expected_output]
     list_of_issues = [EvalItemOutput.model_validate(issue) for issue in list_of_issues]
 
-    scores = evaluate_suggestions(suggestions, list_of_issues, scoring_model)
+    scores = evaluate_bug_predictions(bug_predictions, list_of_issues, scoring_model)
     valid_scores = [score for score in scores if score.bug_matched_idx != -1]
     suggestions_matched = [score.suggestion_idx for score in valid_scores]
-    suggestions_not_matched = [i for i in range(len(suggestions)) if i not in suggestions_matched]
+    suggestions_not_matched = [
+        i for i in range(len(bug_predictions)) if i not in suggestions_matched
+    ]
     bugs_matched = [score.bug_matched_idx for score in valid_scores]
     bugs_not_found = [i for i in range(len(list_of_issues)) if i not in bugs_matched]
     scores_content = [score.match_score for score in valid_scores]

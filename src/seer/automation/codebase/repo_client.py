@@ -1016,7 +1016,12 @@ class RepoClient:
     def get_pr_head_sha(self, pr_url: str) -> str:
         data = requests.get(pr_url, headers=self._get_auth_headers(accept_type="json"))
         data.raise_for_status()  # Raise an exception for HTTP errors
-        return data.json()["head"]["sha"]
+        # This could return None if the PR data doesn't have a head or sha field
+        # or if the JSON response is malformed
+        response_json = data.json()
+        if not response_json or "head" not in response_json or "sha" not in response_json["head"]:
+            raise ValueError(f"Could not extract head SHA from PR data: {response_json}")
+        return response_json["head"]["sha"]
 
     def get_current_commit_info(self, sha: str | None):
         if sha is None:
