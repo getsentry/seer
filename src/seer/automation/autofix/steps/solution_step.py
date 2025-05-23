@@ -92,6 +92,9 @@ class AutofixSolutionStep(AutofixPipelineStep):
             )
         )
 
+        if solution_output is None:
+            raise RuntimeError("Solution agent return no output")
+
         state = self.context.state.get()
         if state.steps and state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
             return
