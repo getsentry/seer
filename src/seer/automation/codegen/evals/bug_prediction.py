@@ -41,7 +41,9 @@ class BugPredictionEvaluationComponent:
         bug_prediction_request = data.to_bug_prediction_request()
         bug_prediction_request.run_id = run_id
 
-        BugPredictionStep(request=bug_prediction_request, type=DbStateRunTypes.BUG_PREDICTION).invoke()
+        BugPredictionStep(
+            request=bug_prediction_request, type=DbStateRunTypes.BUG_PREDICTION
+        ).invoke()
 
 
 class BugPredictionScorerComponent:
