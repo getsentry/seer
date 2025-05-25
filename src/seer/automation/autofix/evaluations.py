@@ -288,7 +288,9 @@ def score_root_cause_single_it(
 
     request = AutofixRequest.model_validate(input_data["request"])
 
-    event_details = EventDetails.from_event(request.issue.events[0])
+    event_details = EventDetails.from_event(
+        event=request.issue.events[0], issue_title=request.issue.title
+    )
 
     prompt = textwrap.dedent(
         """\

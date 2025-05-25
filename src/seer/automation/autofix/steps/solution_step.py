@@ -72,7 +72,9 @@ class AutofixSolutionStep(AutofixPipelineStep):
         if not root_cause_and_fix:
             raise ValueError("Root cause analysis must be performed before solution")
 
-        event_details = EventDetails.from_event(state.request.issue.events[0])
+        event_details = EventDetails.from_event(
+            event=state.request.issue.events[0], issue_title=state.request.issue.title
+        )
         self.context.process_event_paths(event_details)
 
         summary = state.request.issue_summary

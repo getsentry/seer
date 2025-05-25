@@ -79,10 +79,12 @@ class IssueSummaryForLlmToGenerate(BaseModel):
 def summarize_issue(
     request: SummarizeIssueRequest, llm_client: LlmClient = injected
 ) -> IssueSummaryWithScores:
-    event_details = EventDetails.from_event(request.issue.events[0])
+    event_details = EventDetails.from_event(
+        event=request.issue.events[0], issue_title=request.issue.title
+    )
     connected_event_details = (
         [
-            EventDetails.from_event(issue.events[0])
+            EventDetails.from_event(event=issue.events[0], issue_title=issue.title)
             for issue in request.connected_issues
             if issue.events
         ]
