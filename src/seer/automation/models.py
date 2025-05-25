@@ -407,7 +407,7 @@ class EventDetails(BaseModel):
         )
 
         title = event.get("title")
-        if issue_title and title not in issue_title:
+        if issue_title and title and title not in issue_title:
             title = f"{issue_title} - {title}"
 
         return cls(
