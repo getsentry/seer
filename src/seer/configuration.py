@@ -100,6 +100,7 @@ class AppConfig(BaseModel):
     SEVERITY_ENABLED: ParseBool = False
     AUTOFIXABILITY_SCORING_ENABLED: ParseBool = False
     AUTOFIX_ENABLED: ParseBool = False
+    AUTOFIX_BACKFILL_ENABLED: ParseBool = False
     GRPC_SERVER_ENABLE: ParseBool = False
     HOSTNAME: str = Field(default_factory=gethostname)
 
@@ -114,6 +115,7 @@ class AppConfig(BaseModel):
         self.SEVERITY_ENABLED = False
         self.AUTOFIXABILITY_SCORING_ENABLED = False
         self.AUTOFIX_ENABLED = False
+        self.AUTOFIX_BACKFILL_ENABLED = False
         self.GRPC_SERVER_ENABLE = False
 
     @property
@@ -130,7 +132,11 @@ class AppConfig(BaseModel):
 
     @property
     def is_autofix_enabled(self):
-        return self.AUTOFIX_ENABLED or "autofix" in self.HOSTNAME
+        return self.AUTOFIX_ENABLED
+
+    @property
+    def is_autofix_backfill_enabled(self):
+        return self.AUTOFIX_BACKFILL_ENABLED
 
     @property
     def is_anomaly_detection_enabled(self):

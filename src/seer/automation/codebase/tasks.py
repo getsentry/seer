@@ -502,8 +502,11 @@ def run_repo_sync():
             repo_archives = (
                 main_session.query(DbSeerRepoArchive)
                 .where(
-                    DbSeerRepoArchive.updated_at
-                    < datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL
+                    and_(
+                        DbSeerRepoArchive.updated_at.isnot(None),
+                        DbSeerRepoArchive.updated_at
+                        < datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL,
+                    )
                 )
                 .order_by(DbSeerRepoArchive.updated_at)
                 .limit(MAX_REPO_ARCHIVES_PER_SYNC)
@@ -602,9 +605,10 @@ def run_repo_sync_for_repo_archive(repo_sync_job_dict: dict):
     if not repo_archive:
         raise RepoSyncJobError("repo archive not found")
 
+    updated_at = ensure_timezone_aware(repo_archive.updated_at)
     if (
-        ensure_timezone_aware(repo_archive.updated_at)
-        > datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL
+        updated_at is not None
+        and updated_at > datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL
     ):
         logger.info(
             f"Repo {repo_sync_job.repo_full_name} was last updated less than {REPO_ARCHIVE_UPDATE_INTERVAL} ago, skipping"
