@@ -146,9 +146,17 @@ class TestSummarizeIssue:
 
         summarize_issue(sample_request, llm_client=mock_llm_client)
 
-        mock_from_event.assert_any_call(sample_request.issue.events[0])
-        mock_from_event.assert_any_call(sample_request.connected_issues[0].events[0])
-        mock_from_event.assert_any_call(sample_request.connected_issues[1].events[0])
+        mock_from_event.assert_any_call(
+            event=sample_request.issue.events[0], issue_title=sample_request.issue.title
+        )
+        mock_from_event.assert_any_call(
+            event=sample_request.connected_issues[0].events[0],
+            issue_title=sample_request.connected_issues[0].title,
+        )
+        mock_from_event.assert_any_call(
+            event=sample_request.connected_issues[1].events[0],
+            issue_title=sample_request.connected_issues[1].title,
+        )
         assert mock_event_details.format_event.call_count == 3
         assert "foo details" in mock_llm_client.generate_structured.call_args[1]["prompt"]
         assert "bar details" in mock_llm_client.generate_structured.call_args[1]["prompt"]

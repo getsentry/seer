@@ -81,7 +81,9 @@ class RootCauseStep(AutofixPipelineStep):
             self.context.event_manager.add_log("Going back to the drawing board...")
 
         state = self.context.state.get()
-        event_details = EventDetails.from_event(state.request.issue.events[0])
+        event_details = EventDetails.from_event(
+            event=state.request.issue.events[0], issue_title=state.request.issue.title
+        )
         self.context.process_event_paths(event_details)
 
         summary = state.request.issue_summary

@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import textwrap
 from typing import Annotated, Any, Literal, NotRequired, Optional
@@ -29,6 +30,8 @@ from seer.automation.utils import (
     unescape_xml_chars,
 )
 from seer.db import DbSeerProjectPreference
+
+logger = logging.getLogger(__name__)
 
 
 class StacktraceFrame(BaseModel):
@@ -321,6 +324,16 @@ class RequestDetails(BaseModel):
     # not including cookies, headers, env, query, etc. for now
 
 
+class EvidenceSpan(BaseModel):
+    span_id: str | None = None
+    parent_span_id: str | None = None
+    timestamp: float | None = None
+    op: str | None = None
+    description: str | None = None
+    exclusive_time: float | None = None  # duration in milliseconds
+    data: dict[str, Any] | None = None
+
+
 class EventDetails(BaseModel):
     title: str
     message: str | None = None
@@ -330,9 +343,10 @@ class EventDetails(BaseModel):
     breadcrumbs: list[BreadcrumbsDetails] = Field(default_factory=list, exclude=False)
     stacktraces: list[Stacktrace] = Field(default_factory=list, exclude=False)
     request: RequestDetails | None = None
+    spans: list[EvidenceSpan] = Field(default_factory=list, exclude=False)
 
     @classmethod
-    def from_event(cls, error_event: SentryEventData):
+    def from_event(cls, event: SentryEventData, issue_title: str | None = None):
         MAX_THREADS = 8  # TODO: Smarter logic for max threads
 
         exceptions: list[ExceptionDetails] = []
@@ -342,12 +356,13 @@ class EventDetails(BaseModel):
         transaction_name: str | None = None
         message: str | None = None
         request: RequestDetails | None = None
+        spans: list[EvidenceSpan] = []
 
-        for tag in error_event.get("tags", []):
+        for tag in event.get("tags", []):
             if tag.get("key") == "transaction":
                 transaction_name = tag.get("value")
 
-        for entry in error_event.get("entries", []):
+        for entry in event.get("entries", []):
             if entry.get("type") == "exception":
                 for exception in entry.get("data", {}).get("values", []):
                     exceptions.append(ExceptionDetails.model_validate(exception))
@@ -376,6 +391,10 @@ class EventDetails(BaseModel):
                 message = entry.get("data", {}).get("formatted", None)
             elif entry.get("type") == "request":
                 request = RequestDetails.model_validate(entry.get("data", {}))
+            elif entry.get("type") == "spans":
+                all_spans = entry.get("data", [])
+                for span in all_spans:
+                    spans.append(EvidenceSpan.model_validate(span))
 
         sentry_sdk.set_tags(
             {
@@ -386,11 +405,18 @@ class EventDetails(BaseModel):
                 "has_transaction_name": transaction_name is not None,
                 "has_http_request": request is not None,
                 "has_error_message": message is not None,
+                "has_spans": spans and len(spans) > 0,
             }
         )
 
+        title = event.get("title")
+        if (
+            issue_title and title and title not in issue_title and len(spans) > 0
+        ):  # if it's a performance issue with spans, use the issue title as well if not a duplicate
+            title = f"{issue_title} - {title}"
+
         return cls(
-            title=error_event.get("title"),
+            title=title,
             transaction_name=transaction_name,
             exceptions=exceptions,
             threads=threads,
@@ -398,6 +424,7 @@ class EventDetails(BaseModel):
             message=message,
             stacktraces=stacktraces,
             request=request,
+            spans=spans,
         )
 
     def format_event(self):
@@ -406,6 +433,7 @@ class EventDetails(BaseModel):
         message = self.message if self.message and self.message not in self.title else ""
         stacktraces = self.format_stacktraces()
         request = self.format_request()
+        spans = self.format_spans()
 
         return (
             textwrap.dedent(
@@ -414,6 +442,7 @@ class EventDetails(BaseModel):
             {message}
             {exceptions}
             {stacktraces}
+            {spans}
             {breadcrumbs}
             {request}
             """
@@ -436,6 +465,7 @@ class EventDetails(BaseModel):
                     else ""
                 ),
                 request=f"\n<http_request>\n{request}\n</http_request>" if request.strip() else "",
+                spans=f"\n<relevant_spans>\n{spans}\n</relevant_spans>" if spans.strip() else "",
             )
             .strip()
         )
@@ -450,13 +480,14 @@ class EventDetails(BaseModel):
             include_context=include_context, include_var_values=include_var_values
         )
         message = self.message if self.message and self.message not in self.title else ""
-
+        spans = self.format_spans()
         return textwrap.dedent(
             """\
             {title}
             {message}
             {exceptions}
             {stacktraces}
+            {spans}
             """
         ).format(
             title=self.title,
@@ -465,6 +496,7 @@ class EventDetails(BaseModel):
                 f"<stacktraces>\n{stacktraces}\n</stacktraces>" if stacktraces.strip() else ""
             ),
             message=f"<message>\n{message}\n</message>" if message.strip() else "",
+            spans=f"<relevant_spans>\n{spans}\n</relevant_spans>" if spans.strip() else "",
         )
 
     def format_exceptions(self, include_context: bool = True, include_var_values: bool = True):
@@ -585,6 +617,70 @@ class EventDetails(BaseModel):
                 )
             ),
         )
+
+    def format_spans(self):
+        """
+        Format the EvidenceSpan list as an ASCII tree based on parent/child relationships,
+        sorted by timestamp at each level. Each line: 'op - description (TIME ms)'.
+        Data is shown as JSON below each span if present.
+        """
+        if not self.spans:
+            return ""
+
+        try:
+
+            # Build span_id -> span mapping and parent -> children mapping
+            span_id_to_span = {}
+            parent_to_children = {}
+            roots = []
+            for span in self.spans:
+                if not span.span_id:
+                    continue  # skip spans without an id
+                span_id_to_span[span.span_id] = span
+                parent_to_children.setdefault(span.parent_span_id, []).append(span)
+
+            # Find root spans (those with parent_span_id None or not in span_id_to_span)
+            for span in self.spans:
+                if not span.parent_span_id or span.parent_span_id not in span_id_to_span:
+                    roots.append(span)
+
+            # Sort children by timestamp at each level
+            def sort_children(children):
+                return sorted(
+                    children,
+                    key=lambda s: (s.timestamp if s.timestamp is not None else float("inf")),
+                )
+
+            # Recursively format the tree
+            def format_span_tree(spans, prefix="", lines=None, is_last_parent=True):
+                if lines is None:
+                    lines = []
+                for i, span in enumerate(sort_children(spans)):
+                    is_last = i == len(spans) - 1
+                    op = span.op or "?"
+                    desc = span.description or ""
+                    time = (
+                        f"{span.exclusive_time:.0f}ms" if span.exclusive_time is not None else "?ms"
+                    )
+                    line = f"{prefix}{'└─' if is_last else '├─'} {op} - {desc} ({time})"
+                    lines.append(line)
+                    data_prefix = f"{prefix}   " if is_last else f"{prefix}│  "
+                    if span.data:
+                        data_str = format_dict(span.data, indent=len(data_prefix) + 2)
+                        for data_line in data_str.split("\n"):
+                            lines.append(f"{data_prefix}{data_line}")
+                    # Recurse into children
+                    children = parent_to_children.get(span.span_id, [])
+                    if children:
+                        format_span_tree(children, data_prefix, lines, is_last)
+                return lines
+
+            lines = ["Relevant Spans"]
+            lines.extend(format_span_tree(roots))
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception(f"Error formatting spans: {e}")
+            return ""
 
 
 class IssueDetails(BaseModel):
@@ -993,7 +1089,7 @@ class Log(BaseModel):
 class Logs(BaseModel):
     logs: list[Log]
 
-    def format_logs(self):
+    def format_logs(self, max_logs: int = 50):
         num_unique_projects = len(set(log.project_slug for log in self.logs))
         should_print_project_slug = num_unique_projects > 1
 
@@ -1005,7 +1101,7 @@ class Logs(BaseModel):
         )
 
         lines = []
-        for log in sorted_logs[:50]:
+        for log in sorted_logs[:max_logs]:
             severity = f"[{log.severity}]" if log.severity else ""
             message = log.message or ""
             project = (

@@ -1,8 +1,13 @@
 import textwrap
 from typing import Literal
 
-from seer.automation.autofix.prompts import format_code_map, format_summary, format_trace_tree
-from seer.automation.models import Profile, TraceTree
+from seer.automation.autofix.prompts import (
+    format_code_map,
+    format_logs,
+    format_summary,
+    format_trace_tree,
+)
+from seer.automation.models import Logs, Profile, TraceTree
 from seer.automation.summarize.issue import IssueSummary
 
 
@@ -57,6 +62,7 @@ class RootCauseAnalysisPrompts:
         summary: IssueSummary | None = None,
         code_map: Profile | None = None,
         trace_tree: TraceTree | None = None,
+        logs: Logs | None = None,
     ):
         return textwrap.dedent(
             """\
@@ -67,6 +73,7 @@ class RootCauseAnalysisPrompts:
             {error_str}
             {code_map_str}
             {trace_tree_str}
+            {logs_str}
             {instruction_str}
             </issue_details>"""
         ).format(
@@ -75,6 +82,7 @@ class RootCauseAnalysisPrompts:
             summary_str=format_summary(summary),
             code_map_str=format_code_map(code_map),
             trace_tree_str=format_trace_tree(trace_tree),
+            logs_str=format_logs(logs),
         )
 
     @staticmethod
