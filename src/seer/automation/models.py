@@ -620,7 +620,7 @@ class EventDetails(BaseModel):
         Data is shown as JSON below each span if present.
         """
         if not self.spans:
-            return "No spans available"
+            return ""
 
         # Build span_id -> span mapping and parent -> children mapping
         span_id_to_span = {}
