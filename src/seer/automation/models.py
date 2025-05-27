@@ -993,7 +993,7 @@ class Log(BaseModel):
 class Logs(BaseModel):
     logs: list[Log]
 
-    def format_logs(self):
+    def format_logs(self, max_logs: int = 50):
         num_unique_projects = len(set(log.project_slug for log in self.logs))
         should_print_project_slug = num_unique_projects > 1
 
@@ -1005,7 +1005,7 @@ class Logs(BaseModel):
         )
 
         lines = []
-        for log in sorted_logs[:50]:
+        for log in sorted_logs[:max_logs]:
             severity = f"[{log.severity}]" if log.severity else ""
             message = log.message or ""
             project = (
