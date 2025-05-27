@@ -1,4 +1,3 @@
-import datetime
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -84,6 +83,7 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
 
     # Add information about the git repositories to the autofix state
     update_repo_access_and_properties(continuation_state, set_branches_and_commits=True)
+
     with state.update() as cur:
         cur.mark_triggered()
 
