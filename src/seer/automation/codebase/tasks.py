@@ -23,20 +23,20 @@ from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
+BACKFILL_LOCK_KEY = 1234567890123456780
 MAX_QUERIED_PROJECT_IDS = 250
 THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING = 32
-MAX_QUERIED_REPO_ARCHIVES_PER_SYNC = 250
+
+SYNC_LOCK_KEY = 1234567890123456781
 MAX_REPO_ARCHIVES_PER_SYNC = 32
+REPO_ARCHIVE_UPDATE_INTERVAL = datetime.timedelta(days=7)
 
 
 @contextmanager
-def acquire_backfill_lock(session):
+def acquire_lock(session, lock_key: int, lock_name: str):
     """
-    Acquire a Postgres advisory lock for the backfill task.
-    The lock key is a 64-bit integer: we use a simple hash of 'backfill_scheduler' string.
+    Acquire a Postgres advisory lock for the backfill or sync task.
     """
-    # This ensures the same lock key is used across restarts
-    lock_key = 1234567890123456789
 
     try:
         # pg_try_advisory_xact_lock returns true if lock acquired, false if not
@@ -46,14 +46,14 @@ def acquire_backfill_lock(session):
         ).scalar()
 
         if not got_lock:
-            logger.info("Could not acquire backfill lock, another process has it")
+            logger.info(f"Could not acquire {lock_name} lock, another process has it")
             yield False
         else:
-            logger.info("Acquired backfill lock")
+            logger.info(f"Acquired {lock_name} lock")
             yield True
 
     except Exception:
-        logger.exception("Error while managing backfill lock")
+        logger.exception(f"Error while managing {lock_name} lock")
         yield False
 
 
@@ -70,6 +70,7 @@ class BackfillJobError(RuntimeError):
 
 class RepoSyncJob(BaseModel):
     archive_id: int
+    repo_full_name: str
     scaled_time_limit: float = timedelta(minutes=15).total_seconds()
 
 
@@ -98,7 +99,9 @@ def collect_all_repos_for_backfill():
             main_session.flush()
 
         # Use advisory lock instead of task_taken_key
-        with acquire_backfill_lock(main_session) as got_lock:
+        with acquire_lock(
+            main_session, lock_key=BACKFILL_LOCK_KEY, lock_name="backfill"
+        ) as got_lock:
             if not got_lock:
                 return
 
@@ -383,43 +386,53 @@ def run_repo_sync():
     repos_to_update: list[RepoSyncJob] = []
 
     with Session() as main_session:
-        backfill_state = (
-            main_session.query(DbSeerBackfillState).filter(DbSeerBackfillState.id == 1).first()
-        )
+        with acquire_lock(main_session, lock_key=SYNC_LOCK_KEY, lock_name="sync") as got_lock:
+            if not got_lock:
+                return
 
-        if not backfill_state:
-            backfill_state = DbSeerBackfillState(id=1, repo_sync_cursor=0)
-            main_session.add(backfill_state)
-            main_session.flush()
-
-        repo_archives = (
-            main_session.query(DbSeerRepoArchive)
-            .where(DbSeerRepoArchive.id > backfill_state.repo_sync_cursor)
-            .order_by(DbSeerRepoArchive.id)
-            .limit(MAX_QUERIED_REPO_ARCHIVES_PER_SYNC)
-            .all()
-        )
-
-        for repo_archive in repo_archives:
-            repo_client = RepoClient.from_repo_definition(
-                RepoManager.get_repo_definition_from_blob_name(repo_archive.blob_path),
+            repo_archives = (
+                main_session.query(DbSeerRepoArchive)
+                .where(
+                    DbSeerRepoArchive.updated_at
+                    < datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL
+                )
+                .order_by(DbSeerRepoArchive.updated_at)
+                .limit(MAX_REPO_ARCHIVES_PER_SYNC)
+                .all()
             )
-            commit_timestamp = repo_client.get_current_commit_info(repo_archive.commit_sha)[
-                "timestamp"
-            ]
-            if commit_timestamp < datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=7):
-                logger.info(
-                    f"Repo {repo_archive.blob_path} has a commit older than 7 days, needs to update"
-                )
-                repos_to_update.append(
-                    RepoSyncJob(
-                        archive_id=repo_archive.id,
-                        scaled_time_limit=repo_client.get_scaled_time_limit(),
-                    )
-                )
 
-        backfill_state.repo_sync_cursor = repo_archives[-1].id
-        main_session.flush()
+            for repo_archive in repo_archives:
+                try:
+                    repo_client = RepoClient.from_repo_definition(
+                        RepoManager.get_repo_definition_from_blob_name(repo_archive.blob_path),
+                        RepoClientType.READ,
+                    )
+
+                    repos_to_update.append(
+                        RepoSyncJob(
+                            archive_id=repo_archive.id,
+                            repo_full_name=repo_client.repo_full_name,
+                            scaled_time_limit=repo_client.get_scaled_time_limit(),
+                        )
+                    )
+                except Exception as e:
+                    if "Error getting repo via full name" in str(e):
+                        logger.info(
+                            f"Repo {repo_archive.blob_path} not found from github api, deleting repo archive"
+                        )
+                        main_session.delete(repo_archive)
+                        main_session.flush()
+                        continue
+
+                    logger.exception(
+                        "Failed to get repo_client for repo",
+                        extra={"repo_archive_id": repo_archive.id},
+                    )
+                    continue
+
+        main_session.commit()
+
+    logger.info(f"Queueing {len(repos_to_update)} repo sync jobs")
 
     for repo_sync_job in repos_to_update:
         run_repo_sync_for_repo_archive.apply_async(
@@ -436,6 +449,10 @@ def run_repo_sync():
 def run_repo_sync_for_repo_archive(repo_sync_job_dict: dict):
     repo_sync_job = RepoSyncJob.model_validate(repo_sync_job_dict)
 
+    logger.info(
+        f"Running repo sync for repo {repo_sync_job.repo_full_name} with time limit {repo_sync_job.scaled_time_limit}"
+    )
+
     with Session() as main_session:
         repo_archive = (
             main_session.query(DbSeerRepoArchive)
@@ -443,15 +460,42 @@ def run_repo_sync_for_repo_archive(repo_sync_job_dict: dict):
             .first()
         )
 
-        if not repo_archive:
-            raise RepoSyncJobError("repo archive not found")
+    if not repo_archive:
+        raise RepoSyncJobError("repo archive not found")
 
-        repo_client = RepoClient.from_repo_definition(
-            RepoManager.get_repo_definition_from_blob_name(repo_archive.blob_path),
+    if (
+        ensure_timezone_aware(repo_archive.updated_at)
+        > datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL
+    ):
+        logger.info(
+            f"Repo {repo_sync_job.repo_full_name} was last updated less than {REPO_ARCHIVE_UPDATE_INTERVAL} ago, skipping"
         )
-        repo_manager = RepoManager(
-            repo_client, organization_id=repo_archive.organization_id, force_gcs=True
-        )
+        return
+
+    repo_client = RepoClient.from_repo_definition(
+        RepoManager.get_repo_definition_from_blob_name(repo_archive.blob_path),
+        RepoClientType.READ,
+    )
+    repo_manager = RepoManager(
+        repo_client, organization_id=repo_archive.organization_id, force_gcs=True
+    )
+    try:
         repo_manager.update_repo_archive()
+    except Exception as e:
+        logger.info(f"DEBUG: Exception type: {type(e)}, Exception str: {str(e)}")
+        if "Repository archive not found in GCS" in str(e):
+            logger.info(
+                f"Repo {repo_sync_job.repo_full_name} not found in GCS, deleting repo archive"
+            )
+            with Session() as session:
+                session.delete(repo_archive)
+                session.commit()
+            return
 
-        logger.info("Repo sync job done.")
+        logger.exception(
+            "Failed to update repo archive",
+            extra={"repo_archive_id": repo_archive.id},
+        )
+        raise
+
+    logger.info("Repo sync job done.")

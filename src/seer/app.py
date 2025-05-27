@@ -62,6 +62,7 @@ from seer.automation.autofix.tasks import (
 )
 from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
+from seer.automation.codebase.tasks import collect_all_repos_for_backfill, run_repo_sync
 from seer.automation.codegen.evals.models import (
     CodegenRelevantWarningsEvaluationRequest,
     CodegenRelevantWarningsEvaluationSummary,
@@ -311,6 +312,28 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
         raise RuntimeError("The evaluation endpoint is only available in development mode")
 
     run_autofix_evaluation(data)
+
+    return AutofixEndpointResponse(started=True, run_id=-1)
+
+
+@json_api(blueprint, "/v1/automation/autofix/backfill/start")
+def autofix_backfill_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEndpointResponse:
+    config = resolve(AppConfig)
+    if not config.DEV:
+        raise RuntimeError("The evaluation endpoint is only available in development mode")
+
+    collect_all_repos_for_backfill.apply_async()
+
+    return AutofixEndpointResponse(started=True, run_id=-1)
+
+
+@json_api(blueprint, "/v1/automation/autofix/sync/start")
+def autofix_sync_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEndpointResponse:
+    config = resolve(AppConfig)
+    if not config.DEV:
+        raise RuntimeError("The evaluation endpoint is only available in development mode")
+
+    run_repo_sync.apply_async()
 
     return AutofixEndpointResponse(started=True, run_id=-1)
 

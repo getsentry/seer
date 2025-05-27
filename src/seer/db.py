@@ -298,9 +298,9 @@ class DbSeerProjectPreference(Base):
 
 class DbSeerBackfillState(Base):
     __tablename__ = "seer_backfill_state"
-    id: Mapped[int] = mapped_column(Integer, nullable=False, primary_key=True)
-    backfill_cursor: Mapped[int] = mapped_column(Integer, nullable=False)
-    repo_sync_cursor: Mapped[int] = mapped_column(Integer, nullable=False)
+    id: Mapped[int] = mapped_column(BigInteger, nullable=False, primary_key=True)
+    backfill_cursor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    repo_sync_cursor: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
     task_taken_key: Mapped[str] = mapped_column(String, nullable=True)
 
@@ -329,6 +329,10 @@ class DbSeerRepoArchive(Base):
     bucket_name: Mapped[str] = mapped_column(String, nullable=False)
     blob_path: Mapped[str] = mapped_column(String, nullable=False)
     commit_sha: Mapped[str] = mapped_column(String, nullable=False)
+
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
 
     upload_locked_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=True, default=None

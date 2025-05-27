@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Minimum seconds between consecutive liveness probe updates
 LIVENESS_UPDATE_INTERVAL = 5.0
 
-UPLOAD_LOCK_TIMEOUT_MINUTES = 10
+UPLOAD_LOCK_TIMEOUT_MINUTES = 5
 
 
 class RepoInitializationError(RuntimeError):
@@ -97,16 +97,99 @@ class RepoManager:
 
     @staticmethod
     def get_repo_definition_from_blob_name(blob_name: str):
-        # Format is: organization_id/provider/owner/name_external_id.tar.gz
+        """
+        Parse a blob name to extract repository definition components.
+
+        Expected format: repos/{organization_id}/{provider}/{owner}/{name}_{external_id}.tar.gz
+
+        Args:
+            blob_name: The blob name to parse
+
+        Returns:
+            RepoDefinition: Parsed repository definition
+
+        Raises:
+            ValueError: If the blob name format is invalid or missing required components
+        """
+        if not blob_name or not isinstance(blob_name, str):
+            raise ValueError("Blob name must be a non-empty string")
+
+        blob_name = blob_name.strip()
+        if not blob_name:
+            raise ValueError("Blob name cannot be empty or whitespace")
+
+        # Split by '/' and validate structure
         parts = blob_name.split("/")
-        name, external_id = parts[3].split("_")
-        return RepoDefinition(
-            organization_id=parts[0],
-            provider=parts[1],
-            owner=parts[2],
-            name=name,
-            external_id=external_id,
-        )
+        if len(parts) != 5:
+            raise ValueError(
+                f"Invalid blob name format. Expected 5 parts separated by '/', got {len(parts)} parts. "
+                f"Expected format: repos/{{organization_id}}/{{provider}}/{{owner}}/{{name}}_{{external_id}}.tar.gz"
+            )
+
+        # Validate the first part is 'repos'
+        if parts[0] != "repos":
+            raise ValueError(f"Blob name must start with 'repos/', got '{parts[0]}/'")
+
+        # Extract and validate organization_id
+        try:
+            organization_id = int(parts[1])
+            if organization_id <= 0:
+                raise ValueError(f"Organization ID must be positive, got {organization_id}")
+        except ValueError as e:
+            if "invalid literal" in str(e):
+                raise ValueError(f"Organization ID must be a valid integer, got '{parts[1]}'")
+            raise
+
+        # Extract and validate provider
+        provider = parts[2].strip()
+        if not provider:
+            raise ValueError("Provider cannot be empty")
+
+        # Extract and validate owner
+        owner = parts[3].strip()
+        if not owner:
+            raise ValueError("Owner cannot be empty")
+
+        # Parse the final part: {name}_{external_id}.tar.gz
+        filename = parts[4]
+        if not filename.endswith(".tar.gz"):
+            raise ValueError(f"Blob name must end with '.tar.gz', got '{filename}'")
+
+        # Remove the .tar.gz extension
+        name_and_id = filename[:-7]  # Remove '.tar.gz'
+        if not name_and_id:
+            raise ValueError("Filename cannot be empty after removing .tar.gz extension")
+
+        # Split by '_' to separate name and external_id
+        name_parts = name_and_id.split("_")
+        if len(name_parts) < 2:
+            raise ValueError(
+                f"Filename must contain name and external_id separated by '_', got '{name_and_id}'"
+            )
+
+        # Handle cases where the name itself might contain underscores
+        # The external_id is the last part after the final underscore
+        name = "_".join(name_parts[:-1])
+        external_id = name_parts[-1]
+
+        # Validate extracted components
+        if not name.strip():
+            raise ValueError("Repository name cannot be empty")
+        if not external_id.strip():
+            raise ValueError("External ID cannot be empty")
+
+        name = name.strip()
+        external_id = external_id.strip()
+
+        try:
+            return RepoDefinition(
+                provider=provider,
+                owner=owner,
+                name=name,
+                external_id=external_id,
+            )
+        except Exception as e:
+            raise ValueError(f"Failed to create RepoDefinition: {e}")
 
     @staticmethod
     @inject
@@ -243,6 +326,7 @@ class RepoManager:
             logger.exception(
                 "Failed to update repo archive", extra={"repo": self.repo_client.repo_full_name}
             )
+            raise
 
     @sentry_sdk.trace
     def _clone_repo(self) -> str:
@@ -450,7 +534,8 @@ class RepoManager:
         git_repo.git.execute(["git", "gc", "--prune=now"])
 
         # Remove all remotes
-        git_repo.git.execute(["git", "remote", "remove", "origin"])
+        for remote in git_repo.remotes:
+            git_repo.git.execute(["git", "remote", "remove", remote.name])
 
     @sentry_sdk.trace
     def upload_to_gcs(self, *, copy_repo: bool = True):
@@ -486,6 +571,7 @@ class RepoManager:
                 session.add(repo_archive)
             else:
                 existing_repo_archive.commit_sha = self.repo_client.base_commit_sha
+                existing_repo_archive.updated_at = datetime.datetime.now(datetime.UTC)
 
             session.commit()
 
@@ -704,7 +790,7 @@ class RepoManager:
                     did_lock = True
                 else:
                     logger.info(
-                        f"Repository is already locked for upload, was locked at {repo_archive.upload_locked_at} ({datetime.datetime.now(datetime.UTC) - repo_archive.upload_locked_at})",
+                        f"Repository is already locked for upload, was locked at {repo_archive.upload_locked_at} ({datetime.datetime.now(datetime.UTC) - ensure_timezone_aware(repo_archive.upload_locked_at)})",
                     )
                     raise RepoInitializationError("Repository is already locked for upload")
 
