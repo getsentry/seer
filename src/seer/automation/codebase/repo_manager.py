@@ -232,8 +232,7 @@ class RepoManager:
             if self.is_cancelled:
                 return
 
-            db_archive_entry: DbSeerRepoArchive | None = None
-            if not self._use_gcs or not (db_archive_entry := self.gcs_archive_exists()):
+            if not self._use_gcs or not self.gcs_archive_exists():
                 self._clone_repo()
 
             else:
@@ -249,36 +248,6 @@ class RepoManager:
 
             if self.is_cancelled:
                 return
-
-            if db_archive_entry:
-                original_timestamp = self.repo_client.get_current_commit_info(
-                    db_archive_entry.commit_sha
-                )["timestamp"]
-                new_commit_time = self.repo_client.get_current_commit_info(
-                    self.repo_client.base_commit_sha
-                )["timestamp"]
-
-                if new_commit_time > original_timestamp:
-                    logger.info(
-                        f"Repository {self.repo_client.repo_full_name} after syncing is in a newer state than before syncing",
-                    )
-                    if self._use_gcs:
-                        logger.info(
-                            f"Uploading newer state of repository {self.repo_client.repo_full_name} to GCS"
-                        )
-
-                        # Upload to GCS in a separate thread, don't wait for it.
-                        ThreadPoolExecutor(
-                            max_workers=1, initializer=copy_modules_initializer()
-                        ).submit(self.upload_to_gcs)
-                else:
-                    logger.info(
-                        f"Repository {self.repo_client.repo_full_name} after syncing is in an older state than before syncing",
-                    )
-            elif self._use_gcs:
-                ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer()).submit(
-                    self.upload_to_gcs
-                )
         except RepoInitializationError as rie:
             if "cancelled" in str(rie).lower():
                 logger.warning(

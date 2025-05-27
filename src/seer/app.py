@@ -35,6 +35,7 @@ from seer.automation.assisted_query.models import (
 from seer.automation.autofix.models import (
     AutofixEndpointResponse,
     AutofixEvaluationRequest,
+    AutofixNoopRequest,
     AutofixPrIdRequest,
     AutofixRequest,
     AutofixStateRequest,
@@ -317,10 +318,10 @@ def autofix_evaluation_start_endpoint(data: AutofixEvaluationRequest) -> Autofix
 
 
 @json_api(blueprint, "/v1/automation/autofix/backfill/start")
-def autofix_backfill_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEndpointResponse:
+def autofix_backfill_start_endpoint(data: AutofixNoopRequest) -> AutofixEndpointResponse:
     config = resolve(AppConfig)
     if not config.DEV:
-        raise RuntimeError("The evaluation endpoint is only available in development mode")
+        raise RuntimeError("The backfill endpoint is only available in development mode")
 
     collect_all_repos_for_backfill.apply_async()
 
@@ -328,10 +329,10 @@ def autofix_backfill_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEn
 
 
 @json_api(blueprint, "/v1/automation/autofix/sync/start")
-def autofix_sync_start_endpoint(data: AutofixEvaluationRequest) -> AutofixEndpointResponse:
+def autofix_sync_start_endpoint(data: AutofixNoopRequest) -> AutofixEndpointResponse:
     config = resolve(AppConfig)
     if not config.DEV:
-        raise RuntimeError("The evaluation endpoint is only available in development mode")
+        raise RuntimeError("The sync endpoint is only available in development mode")
 
     run_repo_sync.apply_async()
 

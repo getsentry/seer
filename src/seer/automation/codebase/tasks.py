@@ -4,14 +4,13 @@ from contextlib import contextmanager
 from datetime import timedelta
 
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import and_, or_, text
 
 from celery_app.app import celery_app
 from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codebase.repo_manager import RepoManager
 from seer.automation.codebase.utils import ensure_timezone_aware
 from seer.automation.models import RepoDefinition
-from seer.configuration import AppConfig
 from seer.db import (
     DbSeerBackfillJob,
     DbSeerBackfillState,
@@ -19,15 +18,16 @@ from seer.db import (
     DbSeerRepoArchive,
     Session,
 )
-from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
 
+# These lock keys ensure that only one backfill or sync task runs at a time, given our current setup with multiple celerybeat instances.
 BACKFILL_LOCK_KEY = 1234567890123456780
+SYNC_LOCK_KEY = 1234567890123456781
+
 MAX_QUERIED_PROJECT_IDS = 250
 THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING = 32
 
-SYNC_LOCK_KEY = 1234567890123456781
 MAX_REPO_ARCHIVES_PER_SYNC = 32
 REPO_ARCHIVE_UPDATE_INTERVAL = datetime.timedelta(days=7)
 
@@ -83,6 +83,25 @@ class RepoSyncJobError(RuntimeError):
     time_limit=timedelta(minutes=1, seconds=10).total_seconds(),
 )
 def collect_all_repos_for_backfill():
+    """
+    Collects repositories that need to be backfilled and queues backfill jobs for them.
+
+    This task is the main orchestrator for the backfill process. It:
+    1. Uses a PostgreSQL advisory lock to ensure only one instance runs at a time
+    2. Queries project preferences in batches, starting from a cursor position
+    3. For each repository in the preferences, checks if it already has an archive
+    4. Creates BackfillJob entries for repositories that need backfilling
+    5. Manages the backfill cursor to track progress across runs
+    6. Cleans up old/failed backfill jobs before creating new ones
+    7. Queues individual backfill tasks for each repository
+
+    The task processes up to MAX_QUERIED_PROJECT_IDS project preferences per run
+    and stops after THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING jobs are queued
+    to prevent overwhelming the system.
+
+    Returns:
+        None - This task queues other tasks but doesn't return a value
+    """
     logger.info("Collecting repos for backfill")
 
     backfill_jobs: list[BackfillJob] = []
@@ -195,7 +214,30 @@ def collect_all_repos_for_backfill():
             main_session.flush()
 
             for backfill_job in backfill_jobs:
-                existing_backfill_job = (
+                # Use atomic delete with conditions to avoid race conditions
+                deleted_count = (
+                    main_session.query(DbSeerBackfillJob)
+                    .filter(
+                        DbSeerBackfillJob.organization_id == backfill_job.organization_id,
+                        DbSeerBackfillJob.repo_provider == backfill_job.repo_definition.provider,
+                        DbSeerBackfillJob.repo_external_id
+                        == backfill_job.repo_definition.external_id,
+                        # Only delete if failed OR if started more than 1 hour ago without completion
+                        or_(
+                            DbSeerBackfillJob.failed_at.isnot(None),
+                            and_(
+                                DbSeerBackfillJob.started_at.isnot(None),
+                                DbSeerBackfillJob.completed_at.is_(None),
+                                DbSeerBackfillJob.started_at
+                                < datetime.datetime.now(datetime.UTC) - timedelta(hours=1),
+                            ),
+                        ),
+                    )
+                    .delete(synchronize_session=False)
+                )
+
+                # Check if there's still an active job (not deleted by the above operation)
+                existing_active_job = (
                     main_session.query(DbSeerBackfillJob)
                     .filter(
                         DbSeerBackfillJob.organization_id == backfill_job.organization_id,
@@ -205,24 +247,19 @@ def collect_all_repos_for_backfill():
                     )
                     .first()
                 )
-                if existing_backfill_job:
-                    if not existing_backfill_job.failed_at and (
-                        existing_backfill_job.started_at
-                        and ensure_timezone_aware(existing_backfill_job.started_at)
-                        < datetime.datetime.now(datetime.UTC) - timedelta(hours=1)
-                    ):
-                        logger.info(
-                            f"Backfill job {existing_backfill_job.id} for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id} already started, skipping."
-                        )
-                        continue
-                    else:
 
-                        logger.info(
-                            f"Deleting old backfill failed job {existing_backfill_job.id} for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id}"
-                        )
-                        main_session.delete(existing_backfill_job)
-                        main_session.flush()
+                if existing_active_job:
+                    logger.info(
+                        f"Backfill job for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id} is still active, skipping."
+                    )
+                    continue
 
+                if deleted_count > 0:
+                    logger.info(
+                        f"Deleted {deleted_count} old backfill job(s) for {backfill_job.repo_definition.full_name} of org {backfill_job.organization_id}"
+                    )
+
+                # Create new job
                 db_backfill_job = DbSeerBackfillJob(
                     organization_id=backfill_job.organization_id,
                     repo_provider=backfill_job.repo_definition.provider,
@@ -247,16 +284,40 @@ def collect_all_repos_for_backfill():
         )
 
 
-@inject
-def run_backfill_task(app_config: AppConfig = injected):
-    run_backfill.apply_async(queue=app_config.CELERY_WORKER_QUEUE)
-
-
 @celery_app.task(
     soft_time_limit=timedelta(minutes=15).total_seconds(),
     time_limit=timedelta(minutes=15, seconds=30).total_seconds(),
 )
 def run_backfill(backfill_job_dict: dict):
+    """
+    Executes a single repository backfill job to create an archive in Google Cloud Storage.
+
+    This task performs the actual backfill work for a specific repository. It:
+    1. Validates the backfill job parameters and ensures the job hasn't already been processed
+    2. Marks the job as started in the database to prevent duplicate processing
+    3. Creates a RepoClient and RepoManager for the specified repository
+    4. Calls initialize_archive_for_backfill() which:
+       - Clones the repository from the source (GitHub, etc.) with depth=1
+       - Syncs to the specific target commit (base_commit_sha)
+       - Creates a tar.gz archive and uploads it directly to Google Cloud Storage
+    5. Updates the job status to completed upon success
+    6. Queues a verification task to test the created archive
+    7. Handles failures by marking the job as failed and cleaning up resources
+
+    The backfill process creates a compressed archive containing the repository at a specific
+    commit, which can later be downloaded and used without needing to clone from the original source.
+
+    Args:
+        backfill_job_dict (dict): Serialized BackfillJob containing:
+            - organization_id: The organization that owns the repository
+            - repo_definition: Repository details (provider, owner, name, etc.)
+            - backfill_job_id: Database ID of the backfill job record
+            - scaled_time_limit: Time limit adjusted for repository complexity
+
+    Raises:
+        BackfillJobError: If the job is invalid, already processed, or not found
+        Exception: Any other errors during the backfill process
+    """
     backfill_job = BackfillJob.model_validate(backfill_job_dict)
 
     if not backfill_job.backfill_job_id:
@@ -336,6 +397,35 @@ def run_backfill(backfill_job_dict: dict):
     time_limit=timedelta(minutes=17).total_seconds(),
 )
 def run_test_download_and_verify_backfill(backfill_job_dict: dict):
+    """
+    Verifies that a completed backfill job created a valid and accessible repository archive.
+
+    This task is automatically queued after a successful backfill to ensure the archive
+    was properly created and can be downloaded. It:
+    1. Validates that the backfill job exists and hasn't already been verified
+    2. Creates a RepoClient and RepoManager for the repository
+    3. Calls initialize() which attempts to:
+       - Check if a GCS archive exists for this repository
+       - Download the tar.gz archive from Google Cloud Storage
+       - Extract the archive to a temporary directory
+       - Sync the repository to the target commit (if needed)
+       - Verify the repository state and file integrity
+    4. Marks the job as verified in the database upon successful verification
+    5. Cleans up any temporary files created during verification
+
+    This verification step is crucial to catch any issues with the archive creation
+    process, such as corruption during upload, incomplete file transfers, or extraction problems.
+
+    Args:
+        backfill_job_dict (dict): Serialized BackfillJob containing:
+            - organization_id: The organization that owns the repository
+            - repo_definition: Repository details (provider, owner, name, etc.)
+            - backfill_job_id: Database ID of the backfill job record
+
+    Raises:
+        BackfillJobError: If the job is not found or already verified
+        Exception: Any errors during the verification process
+    """
     backfill_job = BackfillJob.model_validate(backfill_job_dict)
 
     logger.info(
@@ -382,6 +472,25 @@ def run_test_download_and_verify_backfill(backfill_job_dict: dict):
     time_limit=timedelta(minutes=1, seconds=10).total_seconds(),
 )
 def run_repo_sync():
+    """
+    Identifies repository archives that need updating and queues sync jobs for them.
+
+    This task maintains the freshness of repository archives by periodically updating them
+    with the latest changes from the source repositories. It:
+    1. Uses a PostgreSQL advisory lock to ensure only one sync process runs at a time
+    2. Queries for repository archives that haven't been updated within REPO_ARCHIVE_UPDATE_INTERVAL (7 days)
+    3. Orders archives by their last update time to prioritize the oldest ones
+    4. Limits processing to MAX_REPO_ARCHIVES_PER_SYNC (32) archives per run
+    5. For each archive, creates a RepoSyncJob with appropriate time limits
+    6. Handles repositories that no longer exist by deleting their archives
+    7. Queues individual sync tasks for each repository that needs updating
+
+    This task runs periodically (typically daily) to ensure repository archives
+    stay reasonably up-to-date without overwhelming the system.
+
+    Returns:
+        None - This task queues other tasks but doesn't return a value
+    """
     # Go through repo archives and make the repo is up to date
     repos_to_update: list[RepoSyncJob] = []
 
@@ -447,6 +556,36 @@ def run_repo_sync():
     time_limit=timedelta(minutes=15, seconds=30).total_seconds(),
 )
 def run_repo_sync_for_repo_archive(repo_sync_job_dict: dict):
+    """
+    Updates a specific repository archive with the latest changes from the source repository.
+
+    This task performs the actual synchronization work for a single repository archive. It:
+    1. Validates the sync job parameters and retrieves the repository archive from the database
+    2. Checks if the archive was recently updated to avoid unnecessary work
+    3. Creates a RepoClient and RepoManager for the repository
+    4. Calls update_repo_archive() which:
+       - Downloads the existing tar.gz archive from Google Cloud Storage
+       - Extracts the archive to a temporary directory
+       - Syncs the repository to the latest target commit (base_commit_sha)
+       - Creates a new tar.gz archive with the updated repository state
+       - Uploads the updated archive back to Google Cloud Storage
+       - Updates the database record with new commit SHA and timestamp
+    5. Handles cases where the archive no longer exists in GCS by deleting the database record
+    6. Logs errors and re-raises exceptions for proper error handling
+
+    The sync process ensures that archived repositories stay current with their source
+    repositories by periodically updating them with the latest commits.
+
+    Args:
+        repo_sync_job_dict (dict): Serialized RepoSyncJob containing:
+            - archive_id: Database ID of the repository archive to update
+            - repo_full_name: Full name of the repository (owner/name)
+            - scaled_time_limit: Time limit adjusted for repository complexity
+
+    Raises:
+        RepoSyncJobError: If the repository archive is not found
+        Exception: Any errors during the sync process
+    """
     repo_sync_job = RepoSyncJob.model_validate(repo_sync_job_dict)
 
     logger.info(
