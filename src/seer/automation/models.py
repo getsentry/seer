@@ -407,7 +407,9 @@ class EventDetails(BaseModel):
         )
 
         title = event.get("title")
-        if issue_title and title and title not in issue_title:
+        if (
+            issue_title and title and title not in issue_title and len(spans) > 0
+        ):  # if it's a performance issue with spans, use the issue title as well if not a duplicate
             title = f"{issue_title} - {title}"
 
         return cls(
