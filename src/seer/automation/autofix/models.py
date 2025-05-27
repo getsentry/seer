@@ -272,7 +272,6 @@ class AutofixGroupState(BaseModel):
     updated_at: Annotated[datetime.datetime, Examples(datetime.datetime.now() for _ in gen)] = (
         Field(default_factory=datetime.datetime.now)
     )
-    created_at: datetime.datetime | None = None
     completed_at: datetime.datetime | None = None
     signals: list[str] = Field(default_factory=list)
     feedback: AutofixFeedback | None = None
