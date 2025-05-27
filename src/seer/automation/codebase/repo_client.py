@@ -7,6 +7,7 @@ import tempfile
 import textwrap
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
@@ -1147,6 +1148,20 @@ class RepoClient:
 
     def get_commit_url(self, commit_sha: str):
         return f"https://github.com/{self.repo_full_name}/commit/{commit_sha}"
+
+    def get_scaled_time_limit(
+        self, minutes_per_gb: int = 7, max_additional_minutes: int = 35
+    ) -> float:
+        repo_size_in_gb = self.repo.size / 1024 / 1024
+
+        return (
+            timedelta(minutes=15)
+            + timedelta(
+                minutes=min(
+                    max_additional_minutes, round(max(0, repo_size_in_gb - 1) * minutes_per_gb)
+                )
+            )
+        ).total_seconds()
 
 
 def get_repo_client(

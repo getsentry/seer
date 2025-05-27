@@ -300,6 +300,7 @@ class DbSeerBackfillState(Base):
     __tablename__ = "seer_backfill_state"
     id: Mapped[int] = mapped_column(Integer, nullable=False, primary_key=True)
     backfill_cursor: Mapped[int] = mapped_column(Integer, nullable=False)
+    repo_sync_cursor: Mapped[int] = mapped_column(Integer, nullable=False)
 
     task_taken_key: Mapped[str] = mapped_column(String, nullable=True)
 

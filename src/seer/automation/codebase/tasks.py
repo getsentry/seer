@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 MAX_QUERIED_PROJECT_IDS = 250
 THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING = 32
+MAX_QUERIED_REPO_ARCHIVES_PER_SYNC = 250
+MAX_REPO_ARCHIVES_PER_SYNC = 32
 
 
 @contextmanager
@@ -63,6 +65,15 @@ class BackfillJob(BaseModel):
 
 
 class BackfillJobError(RuntimeError):
+    pass
+
+
+class RepoSyncJob(BaseModel):
+    archive_id: int
+    scaled_time_limit: float = timedelta(minutes=15).total_seconds()
+
+
+class RepoSyncJobError(RuntimeError):
     pass
 
 
@@ -165,18 +176,11 @@ def collect_all_repos_for_backfill():
                         )
                         continue
 
-                    repo_size_in_gb = repo_client.repo.size / 1024 / 1024
-
-                    scaled_time_limit = (
-                        timedelta(minutes=15)
-                        + timedelta(minutes=min(35, round(max(0, repo_size_in_gb - 1) * 7)))
-                    ).total_seconds()
-
                     backfill_jobs.append(
                         BackfillJob(
                             organization_id=project_preference.organization_id,
                             repo_definition=repo_definition,
-                            scaled_time_limit=scaled_time_limit,
+                            scaled_time_limit=repo_client.get_scaled_time_limit(),
                         )
                     )
                     processed_repos.add(repo_key)
@@ -368,3 +372,86 @@ def run_test_download_and_verify_backfill(backfill_job_dict: dict):
         session.commit()
 
     repo_manager.cleanup()
+
+
+@celery_app.task(
+    soft_time_limit=timedelta(minutes=1).total_seconds(),
+    time_limit=timedelta(minutes=1, seconds=10).total_seconds(),
+)
+def run_repo_sync():
+    # Go through repo archives and make the repo is up to date
+    repos_to_update: list[RepoSyncJob] = []
+
+    with Session() as main_session:
+        backfill_state = (
+            main_session.query(DbSeerBackfillState).filter(DbSeerBackfillState.id == 1).first()
+        )
+
+        if not backfill_state:
+            backfill_state = DbSeerBackfillState(id=1, repo_sync_cursor=0)
+            main_session.add(backfill_state)
+            main_session.flush()
+
+        repo_archives = (
+            main_session.query(DbSeerRepoArchive)
+            .where(DbSeerRepoArchive.id > backfill_state.repo_sync_cursor)
+            .order_by(DbSeerRepoArchive.id)
+            .limit(MAX_QUERIED_REPO_ARCHIVES_PER_SYNC)
+            .all()
+        )
+
+        for repo_archive in repo_archives:
+            repo_client = RepoClient.from_repo_definition(
+                RepoManager.get_repo_definition_from_blob_name(repo_archive.blob_path),
+            )
+            commit_timestamp = repo_client.get_current_commit_info(repo_archive.commit_sha)[
+                "timestamp"
+            ]
+            if commit_timestamp < datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=7):
+                logger.info(
+                    f"Repo {repo_archive.blob_path} has a commit older than 7 days, needs to update"
+                )
+                repos_to_update.append(
+                    RepoSyncJob(
+                        archive_id=repo_archive.id,
+                        scaled_time_limit=repo_client.get_scaled_time_limit(),
+                    )
+                )
+
+        backfill_state.repo_sync_cursor = repo_archives[-1].id
+        main_session.flush()
+
+    for repo_sync_job in repos_to_update:
+        run_repo_sync_for_repo_archive.apply_async(
+            args=(repo_sync_job.model_dump(),),
+            soft_time_limit=repo_sync_job.scaled_time_limit,
+            time_limit=repo_sync_job.scaled_time_limit + 30,  # 30 second buffer for hard timeout
+        )
+
+
+@celery_app.task(
+    soft_time_limit=timedelta(minutes=15).total_seconds(),
+    time_limit=timedelta(minutes=15, seconds=30).total_seconds(),
+)
+def run_repo_sync_for_repo_archive(repo_sync_job_dict: dict):
+    repo_sync_job = RepoSyncJob.model_validate(repo_sync_job_dict)
+
+    with Session() as main_session:
+        repo_archive = (
+            main_session.query(DbSeerRepoArchive)
+            .filter(DbSeerRepoArchive.id == repo_sync_job.archive_id)
+            .first()
+        )
+
+        if not repo_archive:
+            raise RepoSyncJobError("repo archive not found")
+
+        repo_client = RepoClient.from_repo_definition(
+            RepoManager.get_repo_definition_from_blob_name(repo_archive.blob_path),
+        )
+        repo_manager = RepoManager(
+            repo_client, organization_id=repo_archive.organization_id, force_gcs=True
+        )
+        repo_manager.update_repo_archive()
+
+        logger.info("Repo sync job done.")

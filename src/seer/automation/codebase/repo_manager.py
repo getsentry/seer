@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session as SQLAlchemySession
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir, ensure_timezone_aware
+from seer.automation.models import RepoDefinition
 from seer.configuration import AppConfig
 from seer.db import DbSeerRepoArchive, Session
 from seer.dependency_injection import copy_modules_initializer, inject, injected
@@ -92,6 +93,19 @@ class RepoManager:
     ):
         return (
             f"repos/{organization_id}/{provider}/{repo_owner}/{repo_name}_{repo_external_id}.tar.gz"
+        )
+
+    @staticmethod
+    def get_repo_definition_from_blob_name(blob_name: str):
+        # Format is: organization_id/provider/owner/name_external_id.tar.gz
+        parts = blob_name.split("/")
+        name, external_id = parts[3].split("_")
+        return RepoDefinition(
+            organization_id=parts[0],
+            provider=parts[1],
+            owner=parts[2],
+            name=name,
+            external_id=external_id,
         )
 
     @staticmethod
@@ -219,6 +233,16 @@ class RepoManager:
             )
             self.cleanup()
             raise
+
+    def update_repo_archive(self):
+        try:
+            self.download_from_gcs()
+            self._sync_repo()
+            self.upload_to_gcs(copy_repo=False)  # Don't copy for update job to save time
+        except Exception:
+            logger.exception(
+                "Failed to update repo archive", extra={"repo": self.repo_client.repo_full_name}
+            )
 
     @sentry_sdk.trace
     def _clone_repo(self) -> str:
