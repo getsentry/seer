@@ -392,7 +392,7 @@ class EventDetails(BaseModel):
             elif entry.get("type") == "request":
                 request = RequestDetails.model_validate(entry.get("data", {}))
             elif entry.get("type") == "spans":
-                all_spans = entry.get("data", {}).get("values", [])
+                all_spans = entry.get("data", [])
                 for span in all_spans:
                     spans.append(EvidenceSpan.model_validate(span))
 
