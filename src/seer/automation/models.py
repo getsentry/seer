@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import textwrap
 from typing import Annotated, Any, Literal, NotRequired, Optional
@@ -29,6 +30,8 @@ from seer.automation.utils import (
     unescape_xml_chars,
 )
 from seer.db import DbSeerProjectPreference
+
+logger = logging.getLogger(__name__)
 
 
 class StacktraceFrame(BaseModel):
@@ -624,52 +627,60 @@ class EventDetails(BaseModel):
         if not self.spans:
             return ""
 
-        # Build span_id -> span mapping and parent -> children mapping
-        span_id_to_span = {}
-        parent_to_children = {}
-        roots = []
-        for span in self.spans:
-            if not span.span_id:
-                continue  # skip spans without an id
-            span_id_to_span[span.span_id] = span
-            parent_to_children.setdefault(span.parent_span_id, []).append(span)
+        try:
 
-        # Find root spans (those with parent_span_id None or not in span_id_to_span)
-        for span in self.spans:
-            if not span.parent_span_id or span.parent_span_id not in span_id_to_span:
-                roots.append(span)
+            # Build span_id -> span mapping and parent -> children mapping
+            span_id_to_span = {}
+            parent_to_children = {}
+            roots = []
+            for span in self.spans:
+                if not span.span_id:
+                    continue  # skip spans without an id
+                span_id_to_span[span.span_id] = span
+                parent_to_children.setdefault(span.parent_span_id, []).append(span)
 
-        # Sort children by timestamp at each level
-        def sort_children(children):
-            return sorted(
-                children, key=lambda s: (s.timestamp if s.timestamp is not None else float("inf"))
-            )
+            # Find root spans (those with parent_span_id None or not in span_id_to_span)
+            for span in self.spans:
+                if not span.parent_span_id or span.parent_span_id not in span_id_to_span:
+                    roots.append(span)
 
-        # Recursively format the tree
-        def format_span_tree(spans, prefix="", lines=None, is_last_parent=True):
-            if lines is None:
-                lines = []
-            for i, span in enumerate(sort_children(spans)):
-                is_last = i == len(spans) - 1
-                op = span.op or "?"
-                desc = span.description or ""
-                time = f"{span.exclusive_time:.0f}ms" if span.exclusive_time is not None else "?ms"
-                line = f"{prefix}{'└─' if is_last else '├─'} {op} - {desc} ({time})"
-                lines.append(line)
-                data_prefix = f"{prefix}   " if is_last else f"{prefix}│  "
-                if span.data:
-                    data_str = format_dict(span.data, indent=len(data_prefix) + 2)
-                    for data_line in data_str.split("\n"):
-                        lines.append(f"{data_prefix}{data_line}")
-                # Recurse into children
-                children = parent_to_children.get(span.span_id, [])
-                if children:
-                    format_span_tree(children, data_prefix, lines, is_last)
-            return lines
+            # Sort children by timestamp at each level
+            def sort_children(children):
+                return sorted(
+                    children,
+                    key=lambda s: (s.timestamp if s.timestamp is not None else float("inf")),
+                )
 
-        lines = ["Relevant Spans"]
-        lines.extend(format_span_tree(roots))
-        return "\n".join(lines)
+            # Recursively format the tree
+            def format_span_tree(spans, prefix="", lines=None, is_last_parent=True):
+                if lines is None:
+                    lines = []
+                for i, span in enumerate(sort_children(spans)):
+                    is_last = i == len(spans) - 1
+                    op = span.op or "?"
+                    desc = span.description or ""
+                    time = (
+                        f"{span.exclusive_time:.0f}ms" if span.exclusive_time is not None else "?ms"
+                    )
+                    line = f"{prefix}{'└─' if is_last else '├─'} {op} - {desc} ({time})"
+                    lines.append(line)
+                    data_prefix = f"{prefix}   " if is_last else f"{prefix}│  "
+                    if span.data:
+                        data_str = format_dict(span.data, indent=len(data_prefix) + 2)
+                        for data_line in data_str.split("\n"):
+                            lines.append(f"{data_prefix}{data_line}")
+                    # Recurse into children
+                    children = parent_to_children.get(span.span_id, [])
+                    if children:
+                        format_span_tree(children, data_prefix, lines, is_last)
+                return lines
+
+            lines = ["Relevant Spans"]
+            lines.extend(format_span_tree(roots))
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception(f"Error formatting spans: {e}")
+            return ""
 
 
 class IssueDetails(BaseModel):
