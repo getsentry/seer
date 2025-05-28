@@ -6,9 +6,7 @@ Create Date: 2025-05-22 22:45:51.495835
 
 """
 
-import json
 import logging
-from datetime import datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -31,23 +29,14 @@ def upgrade():
 
     # Update the column with values from the 'value' column or default to current timestamp
     connection = op.get_bind()
-    results = connection.execute(sa.text("SELECT id, value FROM run_state")).fetchall()
-
-    for row in results:
-        id, value = row
-        try:
-            if value:
-                last_triggered_at = value.get("last_triggered_at") or datetime.utcnow()
-                created_at = value.get("created_at") or last_triggered_at
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON for run_state {id}: {value}")
-            pass
-
-        # Update the row with new value
-        connection.execute(
-            sa.text("UPDATE run_state SET created_at = :created_at WHERE id = :id"),
-            {"id": id, "created_at": created_at},
+    connection.execute(
+        sa.text(
+            """
+            UPDATE run_state
+            SET created_at = COALESCE(created_at, last_triggered_at, NOW())
+        """
         )
+    )
 
     # Make the column non-nullable
     with op.batch_alter_table("run_state", schema=None) as batch_op:
