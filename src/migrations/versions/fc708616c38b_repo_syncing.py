@@ -38,9 +38,9 @@ def upgrade():
     op.execute("DELETE FROM seer_repo_archive")
 
     with op.batch_alter_table("seer_repo_archive", schema=None) as batch_op:
-        batch_op.add_column(sa.Column("repo_definition", sa.JSON(), nullable=False))
-        batch_op.alter_column(
-            "updated_at", existing_type=sa.DateTime(), nullable=False, default=sa.func.now()
+        batch_op.add_column(sa.Column("repo_definition", sa.JSON(), nullable=False, default={}))
+        batch_op.add_column(
+            sa.Column("updated_at", sa.DateTime(), nullable=False, default=sa.func.now())
         )
 
     # ### end Alembic commands ###
