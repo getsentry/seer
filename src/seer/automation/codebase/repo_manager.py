@@ -63,7 +63,6 @@ class RepoManager:
         organization_id: int | None = None,
         project_id: int | None = None,
         trigger_liveness_probe: Callable[[], None] | None = None,
-        force_gcs: bool = False,
     ):
         """
         Initialize the local git client.
@@ -83,9 +82,7 @@ class RepoManager:
         self.is_cancelled = False
         self._last_liveness_update = 0.0
 
-        self._use_gcs = (
-            organization_id == 1 and project_id == 6178942
-        ) or force_gcs  # TODO: Hardcoded ONLY for Seer and for backfill calls
+        self._use_gcs = organization_id == 1
 
     @staticmethod
     def make_blob_name(

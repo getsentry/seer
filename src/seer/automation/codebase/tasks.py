@@ -357,9 +357,7 @@ def run_backfill(backfill_job_dict: dict):
         repo_client = RepoClient.from_repo_definition(
             backfill_job.repo_definition, RepoClientType.READ
         )
-        repo_manager = RepoManager(
-            repo_client, organization_id=backfill_job.organization_id, force_gcs=True
-        )
+        repo_manager = RepoManager(repo_client, organization_id=backfill_job.organization_id)
 
         # 4. Call initialize_archive_for_backfill() which clones, syncs, and uploads the archive
         repo_manager.initialize_archive_for_backfill()
@@ -446,9 +444,7 @@ def run_test_download_and_verify_backfill(backfill_job_dict: dict):
 
     # 2. Create a RepoClient and RepoManager for the repository
     repo_client = RepoClient.from_repo_definition(backfill_job.repo_definition, RepoClientType.READ)
-    repo_manager = RepoManager(
-        repo_client, organization_id=backfill_job.organization_id, force_gcs=True
-    )
+    repo_manager = RepoManager(repo_client, organization_id=backfill_job.organization_id)
 
     # 3. Call initialize() which downloads, extracts, and verifies the archive
     repo_manager.initialize()
@@ -614,9 +610,7 @@ def run_repo_sync_for_repo_archive(repo_sync_job_dict: dict):
         RepoDefinition.model_validate(repo_archive.repo_definition),
         RepoClientType.READ,
     )
-    repo_manager = RepoManager(
-        repo_client, organization_id=repo_archive.organization_id, force_gcs=True
-    )
+    repo_manager = RepoManager(repo_client, organization_id=repo_archive.organization_id)
     try:
         # 4. Call update_repo_archive() which downloads, syncs, and re-uploads the archive
         repo_manager.update_repo_archive()

@@ -1079,7 +1079,7 @@ class TestRunBackfill:
 
         # Verify RepoManager was created correctly
         mock_repo_manager_class.assert_called_once_with(
-            mock_repo_client.return_value, organization_id=1, force_gcs=True
+            mock_repo_client.return_value, organization_id=1
         )
 
         # Verify archive initialization was called
@@ -1376,7 +1376,7 @@ class TestRunBackfill:
 
         # Verify RepoManager was created with correct parameters
         mock_repo_manager_class.assert_called_once_with(
-            mock_repo_client_instance, organization_id=42, force_gcs=True
+            mock_repo_client_instance, organization_id=42
         )
 
         # Verify job completion
@@ -2205,7 +2205,7 @@ class TestRunRepoSyncForRepoArchive:
 
         # Verify RepoManager was created correctly
         mock_repo_manager_class.assert_called_once_with(
-            mock_repo_client_instance, organization_id=1, force_gcs=True
+            mock_repo_client_instance, organization_id=1
         )
 
         # Verify update_repo_archive was called
@@ -2381,7 +2381,7 @@ class TestRunRepoSyncForRepoArchive:
 
         # Verify RepoManager was created with correct parameters
         mock_repo_manager_class.assert_called_once_with(
-            mock_repo_client_instance, organization_id=42, force_gcs=True
+            mock_repo_client_instance, organization_id=42
         )
 
         # Verify update was called
