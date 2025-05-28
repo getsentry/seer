@@ -31,6 +31,9 @@ THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING = 32
 MAX_REPO_ARCHIVES_PER_SYNC = 32
 REPO_ARCHIVE_UPDATE_INTERVAL = datetime.timedelta(days=7)
 
+# Temporarily limit processing to specific organization IDs
+FLAGGED_ORG_IDS = {1}
+
 
 @contextmanager
 def acquire_lock(session, lock_key: int, lock_name: str):
@@ -120,7 +123,12 @@ def collect_all_repos_for_backfill():
             logger.info(f"Looking from {backfill_state.backfill_cursor + 1} onwards")
             project_preferences = (
                 main_session.query(DbSeerProjectPreference)
-                .filter(DbSeerProjectPreference.project_id > backfill_state.backfill_cursor)
+                .filter(
+                    DbSeerProjectPreference.project_id > backfill_state.backfill_cursor,
+                    DbSeerProjectPreference.organization_id.in_(
+                        FLAGGED_ORG_IDS
+                    ),  # Temporarily only run on flagged org ids
+                )
                 .order_by(DbSeerProjectPreference.project_id)
                 .limit(MAX_QUERIED_PROJECT_IDS)
                 .all()
@@ -135,7 +143,12 @@ def collect_all_repos_for_backfill():
                 logger.info(f"Looking from {backfill_state.backfill_cursor + 1} onwards")
                 project_preferences = (
                     main_session.query(DbSeerProjectPreference)
-                    .filter(DbSeerProjectPreference.project_id > backfill_state.backfill_cursor)
+                    .filter(
+                        DbSeerProjectPreference.project_id > backfill_state.backfill_cursor,
+                        DbSeerProjectPreference.organization_id.in_(
+                            FLAGGED_ORG_IDS
+                        ),  # Temporarily only run on flagged org ids
+                    )
                     .order_by(DbSeerProjectPreference.project_id)
                     .limit(MAX_QUERIED_PROJECT_IDS)
                     .all()
@@ -490,6 +503,9 @@ def run_repo_sync():
                         DbSeerRepoArchive.updated_at.isnot(None),
                         DbSeerRepoArchive.updated_at
                         < datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL,
+                        DbSeerRepoArchive.organization_id.in_(
+                            FLAGGED_ORG_IDS
+                        ),  # Temporarily only run on flagged org ids
                     )
                 )
                 .order_by(DbSeerRepoArchive.updated_at)
