@@ -35,6 +35,7 @@ from seer.automation.assisted_query.models import (
 from seer.automation.autofix.models import (
     AutofixContinuation,
     AutofixEvaluationRequest,
+    AutofixNoopRequest,
     AutofixRequest,
 )
 from seer.automation.autofix.runs import create_initial_autofix_run
@@ -935,6 +936,102 @@ class TestSeer(unittest.TestCase):
             content_type="application/json",
         )
         assert response.status_code == 504
+
+    @mock.patch("seer.app.collect_all_repos_for_backfill.apply_async")
+    def test_autofix_backfill_start_endpoint_success(self, mock_collect_all_repos):
+        """Test successful autofix backfill start endpoint in development mode"""
+        # Prepare test data
+        test_data = AutofixNoopRequest()
+
+        # Mock the config to be in DEV mode
+        with mock.patch("seer.app.resolve") as mock_resolve:
+            mock_config = mock.Mock()
+            mock_config.DEV = True
+            mock_resolve.return_value = mock_config
+
+            # Make a POST request to the endpoint
+            response = app.test_client().post(
+                "/v1/automation/autofix/backfill/start",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
+
+            # Assert that the response is correct
+            self.assertEqual(response.status_code, 200)
+            response_data = json.loads(response.get_data(as_text=True))
+            self.assertEqual(response_data, {"started": True, "run_id": -1})
+
+            # Assert that collect_all_repos_for_backfill.apply_async was called
+            mock_collect_all_repos.assert_called_once()
+
+    def test_autofix_backfill_start_endpoint_non_dev_mode(self):
+        """Test autofix backfill start endpoint raises error in non-development mode"""
+        # Prepare test data
+        test_data = AutofixNoopRequest()
+
+        # Mock the config to be in production mode
+        with mock.patch("seer.app.resolve") as mock_resolve:
+            mock_config = mock.Mock()
+            mock_config.DEV = False
+            mock_resolve.return_value = mock_config
+
+            # Make a POST request to the endpoint and expect a RuntimeError
+            with pytest.raises(
+                RuntimeError, match="The backfill endpoint is only available in development mode"
+            ):
+                app.test_client().post(
+                    "/v1/automation/autofix/backfill/start",
+                    data=test_data.model_dump_json(),
+                    content_type="application/json",
+                )
+
+    @mock.patch("seer.app.run_repo_sync.apply_async")
+    def test_autofix_sync_start_endpoint_success(self, mock_run_repo_sync):
+        """Test successful autofix sync start endpoint in development mode"""
+        # Prepare test data
+        test_data = AutofixNoopRequest()
+
+        # Mock the config to be in DEV mode
+        with mock.patch("seer.app.resolve") as mock_resolve:
+            mock_config = mock.Mock()
+            mock_config.DEV = True
+            mock_resolve.return_value = mock_config
+
+            # Make a POST request to the endpoint
+            response = app.test_client().post(
+                "/v1/automation/autofix/sync/start",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
+
+            # Assert that the response is correct
+            self.assertEqual(response.status_code, 200)
+            response_data = json.loads(response.get_data(as_text=True))
+            self.assertEqual(response_data, {"started": True, "run_id": -1})
+
+            # Assert that run_repo_sync.apply_async was called
+            mock_run_repo_sync.assert_called_once()
+
+    def test_autofix_sync_start_endpoint_non_dev_mode(self):
+        """Test autofix sync start endpoint raises error in non-development mode"""
+        # Prepare test data
+        test_data = AutofixNoopRequest()
+
+        # Mock the config to be in production mode
+        with mock.patch("seer.app.resolve") as mock_resolve:
+            mock_config = mock.Mock()
+            mock_config.DEV = False
+            mock_resolve.return_value = mock_config
+
+            # Make a POST request to the endpoint and expect a RuntimeError
+            with pytest.raises(
+                RuntimeError, match="The sync endpoint is only available in development mode"
+            ):
+                app.test_client().post(
+                    "/v1/automation/autofix/sync/start",
+                    data=test_data.model_dump_json(),
+                    content_type="application/json",
+                )
 
 
 @parametrize(count=1)

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session as SQLAlchemySession
 
 from seer.automation.codebase.repo_client import RepoClient
 from seer.automation.codebase.utils import cleanup_dir, ensure_timezone_aware
+from seer.automation.models import RepoDefinition
 from seer.configuration import AppConfig
 from seer.db import DbSeerRepoArchive, Session
 from seer.dependency_injection import copy_modules_initializer, inject, injected
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Minimum seconds between consecutive liveness probe updates
 LIVENESS_UPDATE_INTERVAL = 5.0
 
-UPLOAD_LOCK_TIMEOUT_MINUTES = 10
+UPLOAD_LOCK_TIMEOUT_MINUTES = 5
 
 
 class RepoInitializationError(RuntimeError):
@@ -62,7 +63,6 @@ class RepoManager:
         organization_id: int | None = None,
         project_id: int | None = None,
         trigger_liveness_probe: Callable[[], None] | None = None,
-        force_gcs: bool = False,
     ):
         """
         Initialize the local git client.
@@ -82,9 +82,7 @@ class RepoManager:
         self.is_cancelled = False
         self._last_liveness_update = 0.0
 
-        self._use_gcs = (
-            organization_id == 1 and project_id == 6178942
-        ) or force_gcs  # TODO: Hardcoded ONLY for Seer and for backfill calls
+        self._use_gcs = organization_id == 1
 
     @staticmethod
     def make_blob_name(
@@ -135,8 +133,7 @@ class RepoManager:
             if self.is_cancelled:
                 return
 
-            db_archive_entry: DbSeerRepoArchive | None = None
-            if not self._use_gcs or not (db_archive_entry := self.gcs_archive_exists()):
+            if not self._use_gcs or not self.gcs_archive_exists():
                 self._clone_repo()
 
             else:
@@ -152,36 +149,6 @@ class RepoManager:
 
             if self.is_cancelled:
                 return
-
-            if db_archive_entry:
-                original_timestamp = self.repo_client.get_current_commit_info(
-                    db_archive_entry.commit_sha
-                )["timestamp"]
-                new_commit_time = self.repo_client.get_current_commit_info(
-                    self.repo_client.base_commit_sha
-                )["timestamp"]
-
-                if new_commit_time > original_timestamp:
-                    logger.info(
-                        f"Repository {self.repo_client.repo_full_name} after syncing is in a newer state than before syncing",
-                    )
-                    if self._use_gcs:
-                        logger.info(
-                            f"Uploading newer state of repository {self.repo_client.repo_full_name} to GCS"
-                        )
-
-                        # Upload to GCS in a separate thread, don't wait for it.
-                        ThreadPoolExecutor(
-                            max_workers=1, initializer=copy_modules_initializer()
-                        ).submit(self.upload_to_gcs)
-                else:
-                    logger.info(
-                        f"Repository {self.repo_client.repo_full_name} after syncing is in an older state than before syncing",
-                    )
-            elif self._use_gcs:
-                ThreadPoolExecutor(max_workers=1, initializer=copy_modules_initializer()).submit(
-                    self.upload_to_gcs
-                )
         except RepoInitializationError as rie:
             if "cancelled" in str(rie).lower():
                 logger.warning(
@@ -218,6 +185,17 @@ class RepoManager:
                 extra={"repo": self.repo_client.repo_full_name},
             )
             self.cleanup()
+            raise
+
+    def update_repo_archive(self):
+        try:
+            self.download_from_gcs()
+            self._sync_repo()
+            self.upload_to_gcs(copy_repo=False)  # Don't copy for update job to save time
+        except Exception:
+            logger.exception(
+                "Failed to update repo archive", extra={"repo": self.repo_client.repo_full_name}
+            )
             raise
 
     @sentry_sdk.trace
@@ -426,7 +404,8 @@ class RepoManager:
         git_repo.git.execute(["git", "gc", "--prune=now"])
 
         # Remove all remotes
-        git_repo.git.execute(["git", "remote", "remove", "origin"])
+        for remote in git_repo.remotes:
+            git_repo.git.execute(["git", "remote", "remove", remote.name])
 
     @sentry_sdk.trace
     def upload_to_gcs(self, *, copy_repo: bool = True):
@@ -449,6 +428,13 @@ class RepoManager:
             self._verify_repo_state(repo_path=repo_path_to_use)
             self._prune_repo(repo_path=repo_path_to_use)
 
+        minimal_repo_definition = RepoDefinition(
+            provider=self.repo_client.provider,
+            owner=self.repo_client.repo_owner,
+            name=self.repo_client.repo_name,
+            external_id=self.repo_client.repo_external_id,
+        )
+
         with Session() as session:
             existing_repo_archive = self.get_db_archive_entry(session)
 
@@ -458,10 +444,13 @@ class RepoManager:
                     bucket_name=self.get_bucket_name(),
                     blob_path=self.blob_name,
                     commit_sha=self.repo_client.base_commit_sha,
+                    repo_definition=minimal_repo_definition.model_dump(),
                 )
                 session.add(repo_archive)
             else:
                 existing_repo_archive.commit_sha = self.repo_client.base_commit_sha
+                existing_repo_archive.updated_at = datetime.datetime.now(datetime.UTC)
+                existing_repo_archive.repo_definition = minimal_repo_definition.model_dump()
 
             session.commit()
 
@@ -680,7 +669,7 @@ class RepoManager:
                     did_lock = True
                 else:
                     logger.info(
-                        f"Repository is already locked for upload, was locked at {repo_archive.upload_locked_at} ({datetime.datetime.now(datetime.UTC) - repo_archive.upload_locked_at})",
+                        f"Repository is already locked for upload, was locked at {repo_archive.upload_locked_at} ({datetime.datetime.now(datetime.UTC) - ensure_timezone_aware(repo_archive.upload_locked_at)})",
                     )
                     raise RepoInitializationError("Repository is already locked for upload")
 

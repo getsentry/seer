@@ -990,16 +990,145 @@ class TestRepoClient:
         assert file_paths == ["dir1/dir2/file3.py", "dir1/file2.py", "file1.py"]
 
     def test_does_file_exist(self, repo_client, mock_github):
-        repo_client.get_valid_file_paths = MagicMock(
-            return_value=["file1.py", "dir1/file2.py", "dir1/dir2/file3.py"]
-        )
+        # Mock get_valid_file_paths to return a set of files
+        with patch.object(
+            repo_client, "get_valid_file_paths", return_value={"file1.py", "dir/file2.py"}
+        ):
+            # Test existing file
+            assert repo_client.does_file_exist("file1.py") is True
 
-        file_path_1 = "file1.py"
-        file_path_2 = "/dir1/file2.py"
-        file_path_3 = "./dir1/dir2/file3.py"
-        file_path_4 = "dir1/dir2/file4.py"
+            # Test existing file with leading slash
+            assert repo_client.does_file_exist("/file1.py") is True
 
-        assert repo_client.does_file_exist(file_path_1)
-        assert repo_client.does_file_exist(file_path_2)
-        assert repo_client.does_file_exist(file_path_3)
-        assert not repo_client.does_file_exist(file_path_4)
+            # Test existing file with leading ./
+            assert repo_client.does_file_exist("./file1.py") is True
+
+            # Test existing nested file
+            assert repo_client.does_file_exist("dir/file2.py") is True
+
+            # Test non-existing file
+            assert repo_client.does_file_exist("nonexistent.py") is False
+
+    def test_get_scaled_time_limit_default_parameters(self, repo_client, mock_github):
+        """Test get_scaled_time_limit with default parameters for various repo sizes."""
+        # Test with 1GB repo (should get base 15 minutes only)
+        mock_github.get_repo.return_value.size = 1024 * 1024  # 1GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = 15 * 60  # 15 minutes in seconds
+        assert result == expected
+
+        # Test with 0.5GB repo (should get base 15 minutes only)
+        mock_github.get_repo.return_value.size = 512 * 1024  # 0.5GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = 15 * 60  # 15 minutes in seconds
+        assert result == expected
+
+        # Test with 2GB repo (should get 15 + 7 = 22 minutes)
+        mock_github.get_repo.return_value.size = 2 * 1024 * 1024  # 2GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = (15 + 7) * 60  # 22 minutes in seconds
+        assert result == expected
+
+        # Test with 3GB repo (should get 15 + 14 = 29 minutes)
+        mock_github.get_repo.return_value.size = 3 * 1024 * 1024  # 3GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = (15 + 14) * 60  # 29 minutes in seconds
+        assert result == expected
+
+        # Test with 6GB repo (should get 15 + 35 = 50 minutes, capped at max_additional_minutes)
+        mock_github.get_repo.return_value.size = 6 * 1024 * 1024  # 6GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = (15 + 35) * 60  # 50 minutes in seconds (capped)
+        assert result == expected
+
+        # Test with 10GB repo (should still be capped at 15 + 35 = 50 minutes)
+        mock_github.get_repo.return_value.size = 10 * 1024 * 1024  # 10GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = (15 + 35) * 60  # 50 minutes in seconds (capped)
+        assert result == expected
+
+    def test_get_scaled_time_limit_custom_parameters(self, repo_client, mock_github):
+        """Test get_scaled_time_limit with custom parameters."""
+        # Test with custom minutes_per_gb
+        mock_github.get_repo.return_value.size = 2 * 1024 * 1024  # 2GB in KB
+        result = repo_client.get_scaled_time_limit(minutes_per_gb=10)
+        expected = (15 + 10) * 60  # 25 minutes in seconds
+        assert result == expected
+
+        # Test with custom max_additional_minutes
+        mock_github.get_repo.return_value.size = 10 * 1024 * 1024  # 10GB in KB
+        result = repo_client.get_scaled_time_limit(max_additional_minutes=20)
+        expected = (15 + 20) * 60  # 35 minutes in seconds (capped at 20)
+        assert result == expected
+
+        # Test with both custom parameters
+        mock_github.get_repo.return_value.size = 3 * 1024 * 1024  # 3GB in KB
+        result = repo_client.get_scaled_time_limit(minutes_per_gb=5, max_additional_minutes=15)
+        expected = (15 + 10) * 60  # 25 minutes in seconds (2GB extra * 5 min/GB = 10 min)
+        assert result == expected
+
+    def test_get_scaled_time_limit_edge_cases(self, repo_client, mock_github):
+        """Test get_scaled_time_limit with edge cases."""
+        # Test with zero size repo
+        mock_github.get_repo.return_value.size = 0
+        result = repo_client.get_scaled_time_limit()
+        expected = 15 * 60  # 15 minutes in seconds
+        assert result == expected
+
+        # Test with very small repo (less than 1GB)
+        mock_github.get_repo.return_value.size = 100  # 100KB
+        result = repo_client.get_scaled_time_limit()
+        expected = 15 * 60  # 15 minutes in seconds
+        assert result == expected
+
+        # Test with exactly 1GB repo
+        mock_github.get_repo.return_value.size = 1024 * 1024  # Exactly 1GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = 15 * 60  # 15 minutes in seconds (no additional time for exactly 1GB)
+        assert result == expected
+
+        # Test with zero minutes_per_gb
+        mock_github.get_repo.return_value.size = 5 * 1024 * 1024  # 5GB in KB
+        result = repo_client.get_scaled_time_limit(minutes_per_gb=0)
+        expected = 15 * 60  # 15 minutes in seconds (no scaling)
+        assert result == expected
+
+        # Test with zero max_additional_minutes
+        mock_github.get_repo.return_value.size = 5 * 1024 * 1024  # 5GB in KB
+        result = repo_client.get_scaled_time_limit(max_additional_minutes=0)
+        expected = 15 * 60  # 15 minutes in seconds (no additional time allowed)
+        assert result == expected
+
+    def test_get_scaled_time_limit_calculation_precision(self, repo_client, mock_github):
+        """Test get_scaled_time_limit calculation precision and rounding."""
+        # Test with 1.5GB repo (should round to 1GB extra, so 7 additional minutes)
+        mock_github.get_repo.return_value.size = int(1.5 * 1024 * 1024)  # 1.5GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = (15 + 4) * 60  # 19 minutes (round(0.5 * 7) = 4 additional minutes)
+        assert result == expected
+
+        # Test with 2.7GB repo (should round to 2GB extra, so 14 additional minutes)
+        mock_github.get_repo.return_value.size = int(2.7 * 1024 * 1024)  # 2.7GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = (15 + 12) * 60  # 27 minutes (round(1.7 * 7) = 12 additional minutes)
+        assert result == expected
+
+        # Test with fractional GB that rounds up
+        mock_github.get_repo.return_value.size = int(1.8 * 1024 * 1024)  # 1.8GB in KB
+        result = repo_client.get_scaled_time_limit()
+        expected = (15 + 6) * 60  # 21 minutes (round(0.8 * 7) = 6 additional minutes)
+        assert result == expected
+
+    def test_get_scaled_time_limit_return_type(self, repo_client, mock_github):
+        """Test that get_scaled_time_limit returns a float representing seconds."""
+        mock_github.get_repo.return_value.size = 2 * 1024 * 1024  # 2GB in KB
+        result = repo_client.get_scaled_time_limit()
+
+        # Should return a float
+        assert isinstance(result, float)
+
+        # Should be in seconds (positive value)
+        assert result > 0
+
+        # Should be reasonable (between 15 minutes and a few hours)
+        assert 15 * 60 <= result <= 10 * 60 * 60  # Between 15 minutes and 10 hours
