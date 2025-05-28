@@ -482,7 +482,8 @@ class RepoClient:
 
             return decode_raw_data(contents.decoded_content)
         except Exception as e:
-            raise Exception(f"Error getting file contents: {e}")
+            logger.exception(f"Error getting file contents: {e}")
+            return None, "utf-8"
 
     def _get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
         if commit_sha is None:
