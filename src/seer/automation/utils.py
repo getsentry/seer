@@ -258,7 +258,7 @@ def decode_raw_data(raw_data: bytes):
     If that fails, raise an error.
     """
     try:
-        # Try UTF-8 first, since it's the standard for most Github repos
+        # Try UTF-8 first, since it's the most common file encoding
         content = raw_data.decode("utf-8")
         return content, "utf-8"
     except UnicodeDecodeError:
