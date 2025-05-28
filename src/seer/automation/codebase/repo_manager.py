@@ -716,3 +716,51 @@ class RepoManager:
         self.git_repo = None
 
         logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
+
+    @sentry_sdk.trace
+    def delete_archive(self):
+        """
+        Delete the repository archive from both GCS and the database.
+
+        This method removes the archive blob from Google Cloud Storage and deletes
+        the corresponding database record. It's designed to be safe to call even
+        if the archive doesn't exist in one or both locations.
+
+        Raises:
+            RepoInitializationError: If organization_id is not set
+            Exception: Any errors during the deletion process
+        """
+        if self.organization_id is None:
+            raise RepoInitializationError("Organization ID is not set, can't delete archive")
+
+        logger.info(f"Deleting repository archive: {self.get_bucket_name()}/{self.blob_name}")
+
+        try:
+            # Delete the GCS blob first
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(self.get_bucket_name())
+            blob = bucket.blob(self.blob_name)
+
+            if blob.exists():
+                blob.delete()
+                logger.info(f"Deleted GCS blob: {self.get_bucket_name()}/{self.blob_name}")
+            else:
+                logger.info(
+                    f"GCS blob not found (already deleted?): {self.get_bucket_name()}/{self.blob_name}"
+                )
+
+            # Delete the database record
+            with Session() as session:
+                repo_archive = self.get_db_archive_entry(session)
+                if repo_archive:
+                    session.delete(repo_archive)
+                    session.commit()
+                    logger.info(f"Deleted database record for archive: {self.blob_name}")
+                else:
+                    logger.info(f"Database record not found (already deleted?): {self.blob_name}")
+
+            logger.info(f"Successfully deleted repository archive: {self.blob_name}")
+
+        except Exception:
+            logger.exception(f"Failed to delete repository archive: {self.blob_name}")
+            raise
