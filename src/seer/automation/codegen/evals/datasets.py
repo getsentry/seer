@@ -512,7 +512,9 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
 
         # Update overall predicted bugs count distribution
         predicted_bugs_count = item_detailed_scores.bugs_found + item_detailed_scores.noise
-        predicted_bugs_count_distribution[predicted_bugs_count] = predicted_bugs_count_distribution.get(predicted_bugs_count, 0) + 1
+        predicted_bugs_count_distribution[predicted_bugs_count] = (
+            predicted_bugs_count_distribution.get(predicted_bugs_count, 0) + 1
+        )
 
         if item_detailed_scores.bugs_expected == 0:
             # Negative item (no expected bugs)
@@ -521,7 +523,8 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
 
             # Update false positives distribution
             negative_items_summary["false_positives_distribution"][predicted_bugs_count] = (
-                negative_items_summary["false_positives_distribution"].get(predicted_bugs_count, 0) + 1
+                negative_items_summary["false_positives_distribution"].get(predicted_bugs_count, 0)
+                + 1
             )
         else:
             # Positive item (has expected bugs)
@@ -534,13 +537,12 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
 
     # Calculate precision, recall, and F1 score
     total_true_positives = positive_items_summary["total_bugs_found"]
-    total_predicted = positive_items_summary["total_predicted_bugs"] + negative_items_summary["total_predicted_bugs"]
-    
-    precision = (
-        total_true_positives / total_predicted
-        if total_predicted > 0
-        else 0.0
+    total_predicted = (
+        positive_items_summary["total_predicted_bugs"]
+        + negative_items_summary["total_predicted_bugs"]
     )
+
+    precision = total_true_positives / total_predicted if total_predicted > 0 else 0.0
     recall = (
         positive_items_summary["total_bugs_found"] / positive_items_summary["total_bugs_expected"]
         if positive_items_summary["total_bugs_expected"] > 0
