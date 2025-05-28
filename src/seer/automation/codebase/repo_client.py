@@ -33,7 +33,7 @@ from seer.automation.autofix.utils import generate_random_string, sanitize_branc
 from seer.automation.codebase.models import GithubPrReviewComment
 from seer.automation.codebase.utils import get_all_supported_extensions
 from seer.automation.models import FileChange, FilePatch, InitializationError, RepoDefinition
-from seer.automation.utils import AgentError, detect_encoding
+from seer.automation.utils import AgentError, decode_raw_data
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
 
@@ -480,18 +480,9 @@ class RepoClient:
             if isinstance(contents, list):
                 raise Exception(f"Expected a single ContentFile but got a list for path {path}")
 
-            detected_encoding = detect_encoding(contents.decoded_content) if contents else "utf-8"
-            try:
-                content = contents.decoded_content.decode(detected_encoding)
-            except UnicodeDecodeError:
-                # fallback to utf-8; may still not work
-                detected_encoding = "utf-8"
-                content = contents.decoded_content.decode(detected_encoding)
-
-            return content, detected_encoding
+            return decode_raw_data(contents.decoded_content)
         except Exception as e:
-            logger.exception(f"Error getting file contents: {e}")
-            return None, "utf-8"
+            raise Exception(f"Error getting file contents: {e}")
 
     def _get_valid_file_paths(self, commit_sha: str | None = None) -> set[str]:
         if commit_sha is None:
