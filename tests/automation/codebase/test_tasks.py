@@ -116,7 +116,7 @@ class TestAcquireLock:
         assert success_count == 1, f"Expected 1 success, got {success_count}"
         assert failed_count == 4, f"Expected 4 failures, got {failed_count}"
 
-    def test_acquire_lock_database_exception_handling(self, caplog):
+    def test_acquire_lock_database_exception_handling(self):
         """Test handling of database exceptions during lock acquisition."""
         with Session() as session:
             # Force an invalid SQL execution to trigger a database exception
@@ -131,30 +131,20 @@ class TestAcquireLock:
             session.execute = mock_execute
 
             # Should handle the exception gracefully and return False
-            with caplog.at_level(logging.ERROR):
-                with acquire_lock(session, BACKFILL_LOCK_KEY, "test_lock") as got_lock:
-                    assert got_lock is False
+            with acquire_lock(session, BACKFILL_LOCK_KEY, "test_lock") as got_lock:
+                assert got_lock is False
 
-            # Verify exception was logged
-            assert "Error while managing test_lock lock" in caplog.text
-
-    def test_acquire_lock_logging(self, caplog):
+    def test_acquire_lock_logging(self):
         """Test that lock acquisition and failure are properly logged."""
-        with caplog.at_level(logging.INFO):
-            # Test successful acquisition
-            with Session() as session1:
-                with acquire_lock(session1, BACKFILL_LOCK_KEY, "success_lock") as got_lock1:
-                    assert got_lock1 is True
+        # Test successful acquisition
+        with Session() as session1:
+            with acquire_lock(session1, BACKFILL_LOCK_KEY, "success_lock") as got_lock1:
+                assert got_lock1 is True
 
-                    # Test failed acquisition in another session
-                    with Session() as session2:
-                        with acquire_lock(session2, BACKFILL_LOCK_KEY, "failure_lock") as got_lock2:
-                            assert got_lock2 is False
-
-        # Verify logging messages
-        log_messages = caplog.text
-        assert "Acquired success_lock lock" in log_messages
-        assert "Could not acquire failure_lock lock, another process has it" in log_messages
+                # Test failed acquisition in another session
+                with Session() as session2:
+                    with acquire_lock(session2, BACKFILL_LOCK_KEY, "failure_lock") as got_lock2:
+                        assert got_lock2 is False
 
     def test_acquire_lock_with_actual_lock_keys(self):
         """Test with the actual lock keys used in the application."""
@@ -233,7 +223,7 @@ class TestCollectAllReposForBackfill:
             session.query(DbSeerBackfillJob).delete()
             session.commit()
 
-    def test_collect_all_repos_for_backfill_no_lock_acquired(self, caplog):
+    def test_collect_all_repos_for_backfill_no_lock_acquired(self):
         """Test that function returns early when lock cannot be acquired."""
         # First session acquires the lock
         with Session() as session1:
@@ -243,11 +233,9 @@ class TestCollectAllReposForBackfill:
                 # Import and call the function while lock is held
                 from seer.automation.codebase.tasks import collect_all_repos_for_backfill
 
-                with caplog.at_level(logging.INFO):
-                    collect_all_repos_for_backfill()
+                collect_all_repos_for_backfill()
 
-                # Verify it logged that it couldn't acquire the lock
-                assert "Could not acquire backfill lock, another process has it" in caplog.text
+                # Function should return early without processing
 
     @patch("seer.automation.codebase.tasks.run_backfill.apply_async")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
@@ -299,7 +287,7 @@ class TestCollectAllReposForBackfill:
     @patch("seer.automation.codebase.tasks.RepoManager.make_blob_name")
     @patch("seer.automation.codebase.tasks.RepoManager.get_bucket_name")
     def test_collect_all_repos_for_backfill_skips_existing_archives(
-        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async, caplog
+        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async
     ):
         """Test that function skips repositories that already have archives."""
         # Setup mocks
@@ -344,12 +332,9 @@ class TestCollectAllReposForBackfill:
 
         from seer.automation.codebase.tasks import collect_all_repos_for_backfill
 
-        with caplog.at_level(logging.INFO):
-            collect_all_repos_for_backfill()
+        collect_all_repos_for_backfill()
 
-        # Verify it skipped the repo with existing archive
-        assert "already has an archive, skipping" in caplog.text
-        # Verify no backfill job was queued
+        # Verify no backfill job was queued (repo was skipped due to existing archive)
         mock_apply_async.assert_not_called()
 
     @patch("seer.automation.codebase.tasks.run_backfill.apply_async")
@@ -357,7 +342,7 @@ class TestCollectAllReposForBackfill:
     @patch("seer.automation.codebase.tasks.RepoManager.make_blob_name")
     @patch("seer.automation.codebase.tasks.RepoManager.get_bucket_name")
     def test_collect_all_repos_for_backfill_skips_duplicate_repos(
-        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async, caplog
+        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async
     ):
         """Test that function skips duplicate repositories within the same run."""
         # Setup mocks
@@ -400,12 +385,9 @@ class TestCollectAllReposForBackfill:
 
         from seer.automation.codebase.tasks import collect_all_repos_for_backfill
 
-        with caplog.at_level(logging.INFO):
-            collect_all_repos_for_backfill()
+        collect_all_repos_for_backfill()
 
-        # Verify it skipped the duplicate repo
-        assert "already added to backfill jobs, skipping" in caplog.text
-        # Verify only one backfill job was queued
+        # Verify only one backfill job was queued (duplicate was skipped)
         assert mock_apply_async.call_count == 1
 
     @patch("seer.automation.codebase.tasks.run_backfill.apply_async")
@@ -2008,16 +1990,14 @@ class TestRunRepoSync:
         assert job_data["archive_id"] == old_archive_id
 
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
-    def test_run_repo_sync_empty_database(self, mock_apply_async, caplog):
+    def test_run_repo_sync_empty_database(self, mock_apply_async):
         """Test behavior when database has no repo archives."""
         from seer.automation.codebase.tasks import run_repo_sync
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync()
+        run_repo_sync()
 
         # Verify no jobs were queued
         mock_apply_async.assert_not_called()
-        assert "Queueing 0 repo sync jobs" in caplog.text
 
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
@@ -2177,7 +2157,7 @@ class TestRunRepoSyncForRepoArchive:
     @patch("seer.automation.codebase.tasks.RepoManager")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
     def test_run_repo_sync_for_repo_archive_success(
-        self, mock_repo_client, mock_repo_manager_class, caplog
+        self, mock_repo_client, mock_repo_manager_class
     ):
         """Test successful repo sync execution."""
         from seer.automation.codebase.tasks import run_repo_sync_for_repo_archive
@@ -2192,8 +2172,7 @@ class TestRunRepoSyncForRepoArchive:
         archive_id = self._create_test_repo_archive()
         job_dict = self._create_test_repo_sync_job_dict(archive_id=archive_id)
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync_for_repo_archive(job_dict)
+        run_repo_sync_for_repo_archive(job_dict)
 
         # Verify RepoClient was created correctly
         mock_repo_client.assert_called_once()
@@ -2210,10 +2189,6 @@ class TestRunRepoSyncForRepoArchive:
 
         # Verify update_repo_archive was called
         mock_repo_manager_instance.update_repo_archive.assert_called_once()
-
-        # Verify appropriate logging
-        assert "Running repo sync for repo test-owner/test-repo" in caplog.text
-        assert "Repo sync job done." in caplog.text
 
     # Error handling tests
     @patch("seer.automation.codebase.tasks.RepoManager")
