@@ -5,7 +5,7 @@ from seer.db import DbRunState, Session
 
 
 def test_run_state_migration(alembic_runner: MigrationContext):
-    alembic_runner.migrate_up_before("4a87188db505")
+    alembic_runner.migrate_up_to("4a87188db505")
 
     with Session() as session:
         for id, json in (
