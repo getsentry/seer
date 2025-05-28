@@ -116,6 +116,23 @@ class TestRepoClient:
         )
 
     @patch("seer.automation.codebase.repo_client.requests.get")
+    def test_get_file_content_non_utf8(self, mock_requests, repo_client, mock_github):
+        # Simulate a file with ISO-8859-9 encoding
+        non_utf8_bytes = b"test caf\xe9 content"  # 'café' in ISO-8859-9
+        mock_content = MagicMock()
+        mock_content.decoded_content = non_utf8_bytes
+        mock_github.get_repo.return_value.get_contents.return_value = mock_content
+
+        # Patch chardet.detect to return ISO-8859-9
+        content, encoding = repo_client.get_file_content("test_file_ISO-8859-9.py")
+
+        assert content == "test café content"
+        assert encoding == "ISO-8859-9"
+        mock_github.get_repo.return_value.get_contents.assert_called_with(
+            "test_file_ISO-8859-9.py", ref="test_sha"
+        )
+
+    @patch("seer.automation.codebase.repo_client.requests.get")
     def test_fail_get_file_content(self, mock_requests, repo_client, mock_github):
         mock_content = MagicMock()
         mock_content.decoded_content = b"test content"
