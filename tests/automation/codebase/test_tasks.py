@@ -534,7 +534,7 @@ class TestCollectAllReposForBackfill:
     @patch("seer.automation.codebase.tasks.RepoManager.make_blob_name")
     @patch("seer.automation.codebase.tasks.RepoManager.get_bucket_name")
     def test_collect_all_repos_for_backfill_skips_active_jobs(
-        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async, caplog
+        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async
     ):
         """Test that function skips repositories with active backfill jobs."""
         # Setup mocks
@@ -573,11 +573,8 @@ class TestCollectAllReposForBackfill:
 
         from seer.automation.codebase.tasks import collect_all_repos_for_backfill
 
-        with caplog.at_level(logging.INFO):
-            collect_all_repos_for_backfill()
+        collect_all_repos_for_backfill()
 
-        # Verify it skipped the repo with active job
-        assert "is still active, skipping" in caplog.text
         # The function still creates a BackfillJob but skips it during processing,
         # so apply_async is called but no new database job is created
         mock_apply_async.assert_called_once()
@@ -586,6 +583,20 @@ class TestCollectAllReposForBackfill:
         call_args = mock_apply_async.call_args
         job_data = call_args[1]["args"][0]
         assert job_data["backfill_job_id"] is None
+
+        # Verify that no new database job was created (still only the original active job)
+        with Session() as session:
+            jobs = (
+                session.query(DbSeerBackfillJob)
+                .filter(
+                    DbSeerBackfillJob.organization_id == 1,
+                    DbSeerBackfillJob.repo_external_id == "123",
+                )
+                .all()
+            )
+            assert len(jobs) == 1  # Only the original active job
+            assert jobs[0].started_at is not None
+            assert jobs[0].completed_at is None
 
     @patch("seer.automation.codebase.tasks.run_backfill.apply_async")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
@@ -2136,22 +2147,32 @@ class TestRunRepoSyncForRepoArchive:
             run_repo_sync_for_repo_archive(job_dict)
 
     # Recently updated archive tests
-    def test_run_repo_sync_for_repo_archive_skips_recently_updated(self, caplog):
+    def test_run_repo_sync_for_repo_archive_skips_recently_updated(self):
         """Test that function skips archives updated within the interval."""
         from seer.automation.codebase.tasks import run_repo_sync_for_repo_archive
 
-        # Create archive updated recently
-        archive_id = self._create_test_repo_archive(
-            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=3)
-        )
+        # Create archive updated recently (3 days ago)
+        recent_update_time = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=3)
+        archive_id = self._create_test_repo_archive(updated_at=recent_update_time)
         job_dict = self._create_test_repo_sync_job_dict(archive_id=archive_id)
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync_for_repo_archive(job_dict)
+        # Should return early without doing any work
+        run_repo_sync_for_repo_archive(job_dict)
 
-        # Verify it was skipped
-        assert "was last updated less than" in caplog.text
-        assert "skipping" in caplog.text
+        # Verify the archive still exists and wasn't modified
+        with Session() as session:
+            archive = (
+                session.query(DbSeerRepoArchive).filter(DbSeerRepoArchive.id == archive_id).first()
+            )
+            assert archive is not None
+            # The updated_at should still be close to the original value (3 days ago)
+            # Allow for small differences due to database precision
+            time_diff = abs(
+                (
+                    archive.updated_at.replace(tzinfo=datetime.UTC) - recent_update_time
+                ).total_seconds()
+            )
+            assert time_diff < 60  # Should be within 1 minute of the original time
 
     # Success path tests
     @patch("seer.automation.codebase.tasks.RepoManager")
