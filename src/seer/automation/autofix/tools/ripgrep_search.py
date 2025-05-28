@@ -5,7 +5,7 @@ from pathlib import Path
 import sentry_sdk
 from langfuse.decorators import observe
 
-MAX_RIPGREP_TIMEOUT_SECONDS = 20
+MAX_RIPGREP_TIMEOUT_SECONDS = 45
 MAX_RIPGREP_LINE_CHARACTER_LENGTH = 1024
 TOTAL_RIPGREP_RESULTS_CHARACTER_LENGTH = 16384
 
