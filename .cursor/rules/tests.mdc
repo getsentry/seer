@@ -1,0 +1,18 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+## Running tests
+Run tests via
+```
+docker compose up -d test-db
+docker compose run app pytest ...
+```
+
+## Writing tests
+
+ALWAYS make sure you're actually writing some meaningful test that tests the actual functionality of the application, not testing a mock you wrote or logging.
+
+### Database Use
+We have a test db that can be brought up via `docker compose up -d test-db` that can and should be used in tests, so we don't have to mock db reads and writes.
