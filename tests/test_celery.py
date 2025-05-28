@@ -99,10 +99,12 @@ def test_autofix_backfill_beat_jobs():
         app_config = resolve(AppConfig)
         app_config.disable_all()
         app_config.AUTOFIX_BACKFILL_ENABLED = True
+        app.finalize()
 
         assert set(k for k in app.conf.beat_schedule.keys()) == set(
             [
                 "Collect all repos for backfill every 30 minutes",
+                "Run repo sync every 30 minutes, on a :15 & :45 min to not interfere with autofix backfill",
             ]
         )
 
