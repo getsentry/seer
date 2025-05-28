@@ -396,7 +396,9 @@ def run_backfill(backfill_job_dict: dict):
             session.commit()
             raise
     finally:
-        repo_manager.cleanup()
+        # Only cleanup if repo_manager was successfully created
+        if "repo_manager" in locals():
+            repo_manager.cleanup()
 
 
 @celery_app.task(

@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock, patch
 
+import pytest
 from sqlalchemy import text
 
 from seer.automation.codebase.tasks import BACKFILL_LOCK_KEY, SYNC_LOCK_KEY, acquire_lock
@@ -943,3 +944,566 @@ class TestCollectAllReposForBackfill:
             external_ids = {job.repo_external_id for job in jobs}
             expected_ids = {"3000", "3001", "2000", "2001", "2002"}  # All the repos we created
             assert external_ids == expected_ids
+
+
+class TestRunBackfill:
+    """Test cases for the run_backfill function using the real test database."""
+
+    def setup_method(self):
+        """Set up test data before each test."""
+        with Session() as session:
+            # Clean up any existing test data
+            session.query(DbSeerBackfillJob).delete()
+            session.commit()
+
+    def teardown_method(self):
+        """Clean up test data after each test."""
+        with Session() as session:
+            session.query(DbSeerBackfillJob).delete()
+            session.commit()
+
+    def _create_test_backfill_job(self, **kwargs):
+        """Helper to create a test backfill job in the database."""
+        defaults = {
+            "organization_id": 1,
+            "repo_provider": "github",
+            "repo_external_id": "123",
+        }
+        defaults.update(kwargs)
+
+        with Session() as session:
+            job = DbSeerBackfillJob(**defaults)
+            session.add(job)
+            session.commit()
+            return job.id
+
+    def _create_test_backfill_job_dict(self, backfill_job_id=None, **kwargs):
+        """Helper to create a test BackfillJob dictionary."""
+        defaults = {
+            "organization_id": 1,
+            "repo_definition": {
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "test-repo",
+                "external_id": "123",
+                "branch_name": "main",
+            },
+            "backfill_job_id": backfill_job_id,
+            "scaled_time_limit": 900.0,
+        }
+        defaults.update(kwargs)
+        return defaults
+
+    # Input validation tests
+    def test_run_backfill_missing_job_id(self):
+        """Test that function raises error when backfill_job_id is missing."""
+        from seer.automation.codebase.tasks import BackfillJobError, run_backfill
+
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=None)
+
+        with pytest.raises(BackfillJobError, match="backfill_job_id is required"):
+            run_backfill(job_dict)
+
+    def test_run_backfill_invalid_job_data(self):
+        """Test that function handles invalid job data gracefully."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Test with completely invalid data
+        with pytest.raises(Exception):  # Pydantic validation error
+            run_backfill({"invalid": "data"})
+
+    def test_run_backfill_job_not_found(self):
+        """Test that function raises error when job ID doesn't exist in database."""
+        from seer.automation.codebase.tasks import BackfillJobError, run_backfill
+
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=99999)
+
+        with pytest.raises(BackfillJobError, match="backfill job not found"):
+            run_backfill(job_dict)
+
+    # Database state validation tests
+    def test_run_backfill_job_already_started(self):
+        """Test that function raises error when job is already started."""
+        from seer.automation.codebase.tasks import BackfillJobError, run_backfill
+
+        job_id = self._create_test_backfill_job(started_at=datetime.datetime.now(datetime.UTC))
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        with pytest.raises(BackfillJobError, match="backfill job already started"):
+            run_backfill(job_dict)
+
+    def test_run_backfill_job_already_completed(self):
+        """Test that function raises error when job is already completed."""
+        from seer.automation.codebase.tasks import BackfillJobError, run_backfill
+
+        job_id = self._create_test_backfill_job(completed_at=datetime.datetime.now(datetime.UTC))
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        with pytest.raises(BackfillJobError, match="backfill job already completed"):
+            run_backfill(job_dict)
+
+    def test_run_backfill_job_already_failed(self):
+        """Test that function raises error when job is already failed."""
+        from seer.automation.codebase.tasks import BackfillJobError, run_backfill
+
+        job_id = self._create_test_backfill_job(failed_at=datetime.datetime.now(datetime.UTC))
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        with pytest.raises(BackfillJobError, match="backfill job already failed"):
+            run_backfill(job_dict)
+
+    # Success path tests
+    @patch("seer.automation.codebase.tasks.run_test_download_and_verify_backfill.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_success(
+        self, mock_repo_client, mock_repo_manager_class, mock_verify_task
+    ):
+        """Test successful backfill execution."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute
+        run_backfill(job_dict)
+
+        # Verify RepoClient was created correctly
+        mock_repo_client.assert_called_once()
+        call_args = mock_repo_client.call_args
+        # Check positional arguments: repo_definition and RepoClientType.READ
+        assert len(call_args[0]) == 2  # Two positional arguments
+        # The second argument should be RepoClientType.READ
+        from seer.automation.codebase.repo_client import RepoClientType
+
+        assert call_args[0][1] == RepoClientType.READ
+
+        # Verify RepoManager was created correctly
+        mock_repo_manager_class.assert_called_once_with(
+            mock_repo_client.return_value, organization_id=1, force_gcs=True
+        )
+
+        # Verify archive initialization was called
+        mock_repo_manager_instance.initialize_archive_for_backfill.assert_called_once()
+
+        # Verify cleanup was called
+        mock_repo_manager_instance.cleanup.assert_called_once()
+
+        # Verify verification task was queued
+        mock_verify_task.assert_called_once_with(args=(job_dict,))
+
+        # Verify job was marked as completed
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.completed_at is not None
+            assert job.failed_at is None
+
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_repo_client_creation_failure(self, mock_repo_client):
+        """Test handling of RepoClient creation failure."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mock to raise exception
+        mock_repo_client.side_effect = Exception("RepoClient creation failed")
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute and expect exception
+        with pytest.raises(Exception, match="RepoClient creation failed"):
+            run_backfill(job_dict)
+
+        # Verify job was marked as failed
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.failed_at is not None
+            assert job.completed_at is None
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_repo_manager_creation_failure(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test handling of RepoManager creation failure."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_class.side_effect = Exception("RepoManager creation failed")
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute and expect exception
+        with pytest.raises(Exception, match="RepoManager creation failed"):
+            run_backfill(job_dict)
+
+        # Verify job was marked as failed
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.failed_at is not None
+            assert job.completed_at is None
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_archive_initialization_failure(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test handling of archive initialization failure."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_instance.initialize_archive_for_backfill.side_effect = Exception(
+            "Archive initialization failed"
+        )
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute and expect exception
+        with pytest.raises(Exception, match="Archive initialization failed"):
+            run_backfill(job_dict)
+
+        # Verify job was marked as failed
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.failed_at is not None
+            assert job.completed_at is None
+
+        # Verify cleanup was still called
+        mock_repo_manager_instance.cleanup.assert_called_once()
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_marks_job_as_failed_on_exception(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that job is marked as failed when any exception occurs."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_instance.initialize_archive_for_backfill.side_effect = RuntimeError(
+            "Test failure"
+        )
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute and expect exception
+        with pytest.raises(RuntimeError, match="Test failure"):
+            run_backfill(job_dict)
+
+        # Verify job was marked as failed with timestamp
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.failed_at is not None
+            assert job.completed_at is None
+            assert job.started_at is not None  # Should still be marked as started
+
+    # Cleanup tests
+    @patch("seer.automation.codebase.tasks.run_test_download_and_verify_backfill.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_cleanup_called_on_success(
+        self, mock_repo_client, mock_repo_manager_class, mock_verify_task
+    ):
+        """Test that cleanup is called on successful execution."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute
+        run_backfill(job_dict)
+
+        # Verify cleanup was called
+        mock_repo_manager_instance.cleanup.assert_called_once()
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_cleanup_called_on_failure(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that cleanup is called even when execution fails."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_instance.initialize_archive_for_backfill.side_effect = Exception(
+            "Test failure"
+        )
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute and expect exception
+        with pytest.raises(Exception, match="Test failure"):
+            run_backfill(job_dict)
+
+        # Verify cleanup was still called
+        mock_repo_manager_instance.cleanup.assert_called_once()
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_cleanup_called_on_early_exit(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that cleanup is called even when validation fails early."""
+        from seer.automation.codebase.tasks import BackfillJobError, run_backfill
+
+        # Don't create a job in the database, so validation will fail
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=99999)
+
+        # Execute and expect early validation failure
+        with pytest.raises(BackfillJobError, match="backfill job not found"):
+            run_backfill(job_dict)
+
+        # Verify RepoClient and RepoManager were never created
+        mock_repo_client.assert_not_called()
+        mock_repo_manager_class.assert_not_called()
+
+    # Logging tests
+    @patch("seer.automation.codebase.tasks.run_test_download_and_verify_backfill.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_logging_success(
+        self, mock_repo_client, mock_repo_manager_class, mock_verify_task, caplog
+    ):
+        """Test that appropriate logs are generated on successful execution."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute
+        with caplog.at_level(logging.INFO):
+            run_backfill(job_dict)
+
+        # Verify appropriate logs were generated
+        log_messages = caplog.text
+        assert f"Running backfill job {job_id}" in log_messages
+        assert "test-owner/test-repo" in log_messages
+        assert "Backfill job done." in log_messages
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_logging_failure(self, mock_repo_client, mock_repo_manager_class, caplog):
+        """Test that appropriate logs are generated on execution failure."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_instance.initialize_archive_for_backfill.side_effect = Exception(
+            "Test failure"
+        )
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute and expect exception
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(Exception, match="Test failure"):
+                run_backfill(job_dict)
+
+        # Verify error logging
+        log_messages = caplog.text
+        assert "Failed to run backfill job" in log_messages
+        assert str(job_id) in log_messages
+
+    # Integration tests with realistic scenarios
+    @patch("seer.automation.codebase.tasks.run_test_download_and_verify_backfill.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_with_realistic_repo_definition(
+        self, mock_repo_client, mock_repo_manager_class, mock_verify_task
+    ):
+        """Test with realistic repository definition data."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job with realistic data
+        job_id = self._create_test_backfill_job(
+            organization_id=42, repo_provider="github", repo_external_id="987654321"
+        )
+
+        job_dict = self._create_test_backfill_job_dict(
+            backfill_job_id=job_id,
+            organization_id=42,
+            repo_definition={
+                "provider": "github",
+                "owner": "getsentry",
+                "name": "sentry",
+                "external_id": "987654321",
+                "branch_name": "master",
+            },
+            scaled_time_limit=1800.0,
+        )
+
+        # Execute
+        run_backfill(job_dict)
+
+        # Verify RepoManager was created with correct parameters
+        mock_repo_manager_class.assert_called_once_with(
+            mock_repo_client_instance, organization_id=42, force_gcs=True
+        )
+
+        # Verify job completion
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.completed_at is not None
+            assert job.organization_id == 42
+            assert job.repo_external_id == "987654321"
+
+    @patch("seer.automation.codebase.tasks.run_test_download_and_verify_backfill.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_verification_task_not_queued_on_failure(
+        self, mock_repo_client, mock_repo_manager_class, mock_verify_task
+    ):
+        """Test that verification task is not queued when backfill fails."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_instance.initialize_archive_for_backfill.side_effect = Exception(
+            "Archive failed"
+        )
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute and expect exception
+        with pytest.raises(Exception, match="Archive failed"):
+            run_backfill(job_dict)
+
+        # Verify verification task was NOT queued
+        mock_verify_task.assert_not_called()
+
+        # Verify job was marked as failed
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.failed_at is not None
+            assert job.completed_at is None
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_marks_job_as_started(self, mock_repo_client, mock_repo_manager_class):
+        """Test that job is marked as started when execution begins."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Verify job starts without started_at
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.started_at is None
+
+        # Execute
+        run_backfill(job_dict)
+
+        # Verify job was marked as started
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.started_at is not None
+
+    @patch("seer.automation.codebase.tasks.run_test_download_and_verify_backfill.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_marks_job_as_completed(
+        self, mock_repo_client, mock_repo_manager_class, mock_verify_task
+    ):
+        """Test that job is marked as completed on successful execution."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute
+        run_backfill(job_dict)
+
+        # Verify job was marked as completed
+        with Session() as session:
+            job = session.query(DbSeerBackfillJob).filter(DbSeerBackfillJob.id == job_id).first()
+            assert job.completed_at is not None
+            assert job.failed_at is None
+
+    @patch("seer.automation.codebase.tasks.run_test_download_and_verify_backfill.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_backfill_queues_verification_task(
+        self, mock_repo_client, mock_repo_manager_class, mock_verify_task
+    ):
+        """Test that verification task is queued after successful backfill."""
+        from seer.automation.codebase.tasks import run_backfill
+
+        # Setup mocks
+        mock_repo_client.return_value = MagicMock()
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        # Create test job
+        job_id = self._create_test_backfill_job()
+        job_dict = self._create_test_backfill_job_dict(backfill_job_id=job_id)
+
+        # Execute
+        run_backfill(job_dict)
+
+        # Verify verification task was queued with correct parameters
+        mock_verify_task.assert_called_once_with(args=(job_dict,))
+
+    # Failure handling tests
