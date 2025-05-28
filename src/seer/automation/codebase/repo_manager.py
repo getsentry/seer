@@ -184,11 +184,14 @@ class RepoManager:
                 )
         except RepoInitializationError as rie:
             if "cancelled" in str(rie).lower():
-                logger.warning(f"Repo initialization for {self.repo_client.repo_full_name} was cancelled: {rie}")
+                logger.warning(
+                    f"Repo initialization for {self.repo_client.repo_full_name} was cancelled: {rie}"
+                )
                 # No re-raise, as this is a graceful cancellation
             else:
                 logger.exception(
-                    "Failed to initialize repo (RepoInitializationError)", extra={"repo": self.repo_client.repo_full_name}
+                    "Failed to initialize repo (RepoInitializationError)",
+                    extra={"repo": self.repo_client.repo_full_name},
                 )
                 self.cleanup()
                 raise  # Re-raise if not a cancellation
@@ -247,18 +250,24 @@ class RepoManager:
             return self.repo_path
         except git.exc.GitCommandError as e:
             if self.is_cancelled and not e.stderr.strip():
-                raise RepoInitializationError(f"Clone cancelled for {self.repo_client.repo_full_name}")
+                raise RepoInitializationError(
+                    f"Clone cancelled for {self.repo_client.repo_full_name}"
+                )
             else:
                 logger.exception(
-                    "Failed to clone repository", extra={"repo": self.repo_client.repo_full_name, "git_stderr": e.stderr}
+                    "Failed to clone repository",
+                    extra={"repo": self.repo_client.repo_full_name, "git_stderr": e.stderr},
                 )
                 self.git_repo = None  # clear the repo to fail the available check
                 raise
         except Exception as exc:
             if self.is_cancelled:
-                raise RepoInitializationError(f"Clone cancelled for {self.repo_client.repo_full_name} during {exc!r}")
+                raise RepoInitializationError(
+                    f"Clone cancelled for {self.repo_client.repo_full_name} during {exc!r}"
+                )
             logger.exception(
-                "Failed to clone repository (unexpected error)", extra={"repo": self.repo_client.repo_full_name}
+                "Failed to clone repository (unexpected error)",
+                extra={"repo": self.repo_client.repo_full_name},
             )
             self.git_repo = None  # clear the repo to fail the available check
             raise
