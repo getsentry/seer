@@ -241,7 +241,7 @@ def run_fixability_score(
 
     with Session() as session:
         issue_summary.scores.fixability_score = fixability_score
-        issue_summary.scores.fixability_score_version = 3
+        issue_summary.scores.fixability_score_version = 4
         issue_summary.scores.is_fixable = is_fixable
         session.merge(issue_summary.to_db_state(request.group_id))
         session.commit()
@@ -261,6 +261,6 @@ def evaluate_autofixability(
         f"Possible cause: {issue_summary.possible_cause}"
     )
     score = autofixability_model.score(issue_summary_input)
-    is_fixable = score > 0.687  # 65th percentile on test set, which is a mix of many orgs' issues
+    is_fixable = score > 0.663  # This flag isn't used. Thresholds are in getsentry/sentry
     sentry_sdk.set_tag("is_fixable", is_fixable)
     return score, is_fixable
