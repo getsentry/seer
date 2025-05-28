@@ -559,7 +559,7 @@ class AnthropicProvider:
         ):
             return anthropic.AnthropicVertex(
                 project_id=project_id,
-                region="us-east5",  # we have PT here for US
+                region="us-east1",  # we have PT here for US
                 max_retries=max_retries,
             )
         else:
