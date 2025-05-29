@@ -8,6 +8,14 @@ from seer.automation.models import FileChange
 from seer.db import DbPrContextToUnitTestGenerationRunIdMapping
 
 
+@patch(
+    "seer.automation.codegen.retry_unittest_coding_component.CodecovClient.fetch_test_results_for_commit",
+    return_value=[],
+)
+@patch(
+    "seer.automation.codegen.retry_unittest_coding_component.CodecovClient.fetch_coverage",
+    return_value="mocked coverage",
+)
 class TestRetryUnitTestCodingComponent:
     @pytest.fixture
     def component(self):
@@ -41,7 +49,14 @@ class TestRetryUnitTestCodingComponent:
     @patch("seer.automation.codegen.retry_unittest_coding_component.BaseTools")
     @patch("seer.automation.codegen.retry_unittest_coding_component.LlmAgent")
     def test_invoke_no_final_response(
-        self, mock_llm_agent, mock_base_tools, component, dummy_request, dummy_prev_context
+        self,
+        mock_llm_agent,
+        mock_base_tools,
+        mock_fetch_coverage,
+        mock_fetch_test_results_for_commit,
+        component,
+        dummy_request,
+        dummy_prev_context,
     ):
         dummy_tools = MagicMock()
         dummy_tools.get_tools.return_value = ["tool"]
@@ -63,6 +78,8 @@ class TestRetryUnitTestCodingComponent:
         mock_llm_agent,
         mock_base_tools,
         mock_extract,
+        mock_fetch_coverage,
+        mock_fetch_test_results_for_commit,
         component,
         dummy_request,
         dummy_prev_context,
@@ -89,6 +106,8 @@ class TestRetryUnitTestCodingComponent:
         mock_base_tools,
         mock_extract,
         mock_plan_steps,
+        mock_fetch_coverage,
+        mock_fetch_test_results_for_commit,
         component,
         dummy_request,
         dummy_prev_context,
@@ -124,6 +143,8 @@ class TestRetryUnitTestCodingComponent:
         mock_task_change,
         mock_task_delete,
         mock_task_create,
+        mock_fetch_coverage,
+        mock_fetch_test_results_for_commit,
         component,
         dummy_request,
         dummy_prev_context,
