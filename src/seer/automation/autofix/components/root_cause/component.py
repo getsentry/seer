@@ -60,7 +60,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         model=(
                             AnthropicProvider.model("claude-3-7-sonnet@20250219")
                             if config.SENTRY_REGION == "de"
-                            else GeminiProvider.model("gemini-2.5-flash-preview-05-20")
+                            else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
                         ),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
@@ -134,7 +134,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     model=(
                         GeminiProvider.model("gemini-2.0-flash-001")
                         if config.SENTRY_REGION == "de"
-                        else GeminiProvider.model("gemini-2.5-flash-preview-05-20")
+                        else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
                     ),
                     response_format=MultipleRootCauseAnalysisOutputPrompt,
                     run_name="Root Cause Extraction & Formatting",
