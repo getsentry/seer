@@ -166,7 +166,7 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
                 prompt=BugPredictionPrompts.format_prompt_structured_hypothesis(
                     hypotheses_unstructured
                 ),
-                model=GeminiProvider.model("gemini-2.0-flash-001"),
+                model=GeminiProvider.model("gemini-2.5-flash-preview-04-17"),
                 response_format=list[BugPredictorHypothesis],
                 max_tokens=8192,
                 run_name="Separate into list of hypotheses",
