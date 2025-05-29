@@ -50,7 +50,7 @@ class TestOverwatchAuth(unittest.TestCase):
         self.assertTrue(valid)
         args, kwargs = mock_post.call_args
         headers = kwargs.get("headers", {})
-        self.assertEqual(headers.get("HTTP-X-GEN-AI-AUTH-SIGNATURE"), expected_signature)
+        self.assertEqual(headers.get("X-GEN-AI-AUTH-SIGNATURE"), expected_signature)
 
     @patch("integrations.overwatch.overwatch_auth.requests.post")
     def test_authenticate_overwatch_app_install_non_200(self, mock_post):
