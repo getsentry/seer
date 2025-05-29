@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 from concurrent.futures import Future
 from unittest.mock import ANY, MagicMock, mock_open, patch
@@ -737,3 +738,513 @@ def test_prune_repo_show_ref_error(repo_manager):
         repo_manager._prune_repo()
         mock_git.git.execute.assert_any_call(["git", "reflog", "expire", "--expire=now", "--all"])
         mock_git.git.execute.assert_any_call(["git", "gc", "--prune=now"])
+
+
+def test_delete_archive_success(repo_manager):
+    """Test successful deletion of both GCS blob and database record."""
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    # Create a test database record
+    repo_definition = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo",
+        external_id="1234567890",
+    )
+
+    with Session() as session:
+        repo_archive = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="test-bucket",
+            blob_path="repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+            commit_sha="abcd123",
+            repo_definition=repo_definition.model_dump(),
+        )
+        session.add(repo_archive)
+        session.commit()
+
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+    ):
+        # Mock GCS blob
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = True
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive
+        repo_manager.delete_archive()
+
+        # Verify GCS blob deletion
+        mock_storage_client.assert_called_once()
+        mock_bucket.blob.assert_called_once_with(repo_manager.blob_name)
+        mock_blob.exists.assert_called_once()
+        mock_blob.delete.assert_called_once()
+
+        # Verify database record is deleted
+        with Session() as session:
+            remaining_archives = (
+                session.query(DbSeerRepoArchive)
+                .filter(
+                    DbSeerRepoArchive.organization_id == 1,
+                    DbSeerRepoArchive.blob_path
+                    == "repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+                )
+                .count()
+            )
+            assert remaining_archives == 0
+
+
+def test_delete_archive_no_organization_id(repo_manager):
+    """Test that delete_archive raises RepoInitializationError when organization_id is None."""
+    repo_manager.organization_id = None
+
+    with pytest.raises(RepoInitializationError, match="Organization ID is not set"):
+        repo_manager.delete_archive()
+
+
+def test_delete_archive_gcs_blob_not_exists(repo_manager):
+    """Test deletion when GCS blob doesn't exist but database record does."""
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    # Create a test database record
+    repo_definition = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo",
+        external_id="1234567890",
+    )
+
+    with Session() as session:
+        repo_archive = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="test-bucket",
+            blob_path="repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+            commit_sha="abcd123",
+            repo_definition=repo_definition.model_dump(),
+        )
+        session.add(repo_archive)
+        session.commit()
+
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+    ):
+        # Mock GCS blob that doesn't exist
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = False
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive - should handle gracefully
+        repo_manager.delete_archive()
+
+        # Verify GCS operations were called
+        mock_blob.exists.assert_called_once()
+        mock_blob.delete.assert_not_called()  # Should not try to delete non-existent blob
+
+        # Verify database record is still deleted
+        with Session() as session:
+            remaining_archives = (
+                session.query(DbSeerRepoArchive)
+                .filter(
+                    DbSeerRepoArchive.organization_id == 1,
+                    DbSeerRepoArchive.blob_path
+                    == "repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+                )
+                .count()
+            )
+            assert remaining_archives == 0
+
+
+def test_delete_archive_db_record_not_exists(repo_manager):
+    """Test deletion when database record doesn't exist but GCS blob does."""
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+    ):
+        # Mock GCS blob that exists
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = True
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive - should handle gracefully
+        repo_manager.delete_archive()
+
+        # Verify GCS blob was deleted
+        mock_blob.exists.assert_called_once()
+        mock_blob.delete.assert_called_once()
+
+        # No database record to verify deletion since none existed
+
+
+def test_delete_archive_neither_exists(repo_manager):
+    """Test deletion when neither GCS blob nor database record exist."""
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+    ):
+        # Mock GCS blob that doesn't exist
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = False
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive - should handle gracefully
+        repo_manager.delete_archive()
+
+        # Verify GCS operations were called
+        mock_blob.exists.assert_called_once()
+        mock_blob.delete.assert_not_called()
+
+
+def test_delete_archive_gcs_deletion_fails(repo_manager):
+    """Test that GCS deletion failures are properly raised."""
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+    ):
+        # Mock GCS blob that raises exception on delete
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = True
+        mock_blob.delete.side_effect = Exception("GCS deletion failed")
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive - should raise the exception
+        with pytest.raises(Exception, match="GCS deletion failed"):
+            repo_manager.delete_archive()
+
+
+def test_delete_archive_db_deletion_fails(repo_manager):
+    """Test that database deletion failures are properly raised."""
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    # Create a test database record
+    repo_definition = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo",
+        external_id="1234567890",
+    )
+
+    with Session() as session:
+        repo_archive = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="test-bucket",
+            blob_path="repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+            commit_sha="abcd123",
+            repo_definition=repo_definition.model_dump(),
+        )
+        session.add(repo_archive)
+        session.commit()
+
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+        patch("seer.automation.codebase.repo_manager.Session") as mock_session_cls,
+    ):
+        # Mock successful GCS deletion
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = True
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Mock database session that raises exception on commit
+        mock_session = MagicMock()
+        mock_session_cls.return_value.__enter__.return_value = mock_session
+        mock_session.commit.side_effect = Exception("Database deletion failed")
+
+        # Execute delete_archive - should raise the exception
+        with pytest.raises(Exception, match="Database deletion failed"):
+            repo_manager.delete_archive()
+
+        # Verify GCS blob was deleted before the DB failure
+        mock_blob.delete.assert_called_once()
+
+
+def test_delete_archive_logging(repo_manager, caplog):
+    """Test that delete_archive produces appropriate log messages."""
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    # Create a test database record
+    repo_definition = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo",
+        external_id="1234567890",
+    )
+
+    with Session() as session:
+        repo_archive = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="test-bucket",
+            blob_path="repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+            commit_sha="abcd123",
+            repo_definition=repo_definition.model_dump(),
+        )
+        session.add(repo_archive)
+        session.commit()
+
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+        caplog.at_level(logging.INFO),
+    ):
+        # Mock GCS blob
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = True
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive
+        repo_manager.delete_archive()
+
+        # Verify expected log messages
+        assert (
+            "Deleting repository archive: test-bucket/repos/1/github/test-owner/test-repo_1234567890.tar.gz"
+            in caplog.text
+        )
+        assert (
+            "Deleted GCS blob: test-bucket/repos/1/github/test-owner/test-repo_1234567890.tar.gz"
+            in caplog.text
+        )
+        assert (
+            "Deleted database record for archive: repos/1/github/test-owner/test-repo_1234567890.tar.gz"
+            in caplog.text
+        )
+        assert (
+            "Successfully deleted repository archive: repos/1/github/test-owner/test-repo_1234567890.tar.gz"
+            in caplog.text
+        )
+
+
+def test_delete_archive_logging_missing_resources(repo_manager, caplog):
+    """Test logging when resources don't exist."""
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+        caplog.at_level(logging.INFO),
+    ):
+        # Mock GCS blob that doesn't exist
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = False
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive
+        repo_manager.delete_archive()
+
+        # Verify expected log messages for missing resources
+        assert (
+            "GCS blob not found (already deleted?): test-bucket/repos/1/github/test-owner/test-repo_1234567890.tar.gz"
+            in caplog.text
+        )
+        assert (
+            "Database record not found (already deleted?): repos/1/github/test-owner/test-repo_1234567890.tar.gz"
+            in caplog.text
+        )
+
+
+def test_delete_archive_realistic_scenario(repo_manager):
+    """Test delete_archive with realistic repository data."""
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    # Create realistic test data
+    repo_definition = RepoDefinition(
+        provider="github",
+        owner="getsentry",
+        name="sentry",
+        external_id="4088350",
+    )
+
+    # Update repo_manager's repo_client to match the realistic data
+    repo_manager.repo_client.provider = "github"
+    repo_manager.repo_client.repo_owner = "getsentry"
+    repo_manager.repo_client.repo_name = "sentry"
+    repo_manager.repo_client.repo_external_id = "4088350"
+
+    with Session() as session:
+        repo_archive = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="sentry-code-analysis-prod",
+            blob_path="repos/1/github/getsentry/sentry_4088350.tar.gz",
+            commit_sha="a1b2c3d4e5f6789012345678901234567890abcd",
+            repo_definition=repo_definition.model_dump(),
+        )
+        session.add(repo_archive)
+        session.commit()
+
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="sentry-code-analysis-prod"),
+    ):
+        # Mock realistic GCS operations
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = True
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive
+        repo_manager.delete_archive()
+
+        # Verify operations were performed with realistic data
+        mock_bucket.blob.assert_called_once_with("repos/1/github/getsentry/sentry_4088350.tar.gz")
+        mock_blob.delete.assert_called_once()
+
+        # Verify database cleanup
+        with Session() as session:
+            remaining_archives = (
+                session.query(DbSeerRepoArchive)
+                .filter(
+                    DbSeerRepoArchive.organization_id == 1,
+                    DbSeerRepoArchive.blob_path == "repos/1/github/getsentry/sentry_4088350.tar.gz",
+                )
+                .count()
+            )
+            assert remaining_archives == 0
+
+
+def test_delete_archive_multiple_archives_same_org(repo_manager):
+    """Test that delete_archive only deletes the specific archive, not others from same org."""
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    # Create multiple archives for same organization
+    repo_definition_1 = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo-1",
+        external_id="1111111111",
+    )
+
+    repo_definition_2 = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo-2",
+        external_id="2222222222",
+    )
+
+    with Session() as session:
+        # Archive that should be deleted
+        repo_archive_1 = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="test-bucket",
+            blob_path="repos/1/github/test-owner/test-repo-1_1111111111.tar.gz",
+            commit_sha="abcd123",
+            repo_definition=repo_definition_1.model_dump(),
+        )
+
+        # Archive that should NOT be deleted
+        repo_archive_2 = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="test-bucket",
+            blob_path="repos/1/github/test-owner/test-repo-2_2222222222.tar.gz",
+            commit_sha="efgh456",
+            repo_definition=repo_definition_2.model_dump(),
+        )
+
+        session.add(repo_archive_1)
+        session.add(repo_archive_2)
+        session.commit()
+
+    # Set repo_manager to point to the first archive
+    repo_manager.repo_client.repo_name = "test-repo-1"
+    repo_manager.repo_client.repo_external_id = "1111111111"
+
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+    ):
+        # Mock GCS blob
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = True
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Execute delete_archive
+        repo_manager.delete_archive()
+
+        # Verify only the first archive was deleted
+        with Session() as session:
+            remaining_archives = (
+                session.query(DbSeerRepoArchive)
+                .filter(DbSeerRepoArchive.organization_id == 1)
+                .all()
+            )
+
+            # Should have exactly 1 remaining archive (the second one)
+            assert len(remaining_archives) == 1
+            assert (
+                remaining_archives[0].blob_path
+                == "repos/1/github/test-owner/test-repo-2_2222222222.tar.gz"
+            )
+
+
+def test_delete_archive_concurrent_deletion_safety(repo_manager):
+    """Test that delete_archive handles concurrent deletion attempts safely."""
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    # Create a test database record
+    repo_definition = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo",
+        external_id="1234567890",
+    )
+
+    with Session() as session:
+        repo_archive = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="test-bucket",
+            blob_path="repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+            commit_sha="abcd123",
+            repo_definition=repo_definition.model_dump(),
+        )
+        session.add(repo_archive)
+        session.commit()
+
+    with (
+        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
+        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
+    ):
+        # Mock GCS blob - simulate concurrent deletion by having exists() return False
+        mock_bucket = MagicMock()
+        mock_blob = MagicMock()
+        mock_blob.exists.return_value = False  # Already deleted by another process
+        mock_bucket.blob.return_value = mock_blob
+        mock_storage_client.return_value.bucket.return_value = mock_bucket
+
+        # Delete the database record manually to simulate concurrent deletion
+        with Session() as session:
+            session.query(DbSeerRepoArchive).filter(
+                DbSeerRepoArchive.organization_id == 1,
+                DbSeerRepoArchive.blob_path
+                == "repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+            ).delete()
+            session.commit()
+
+        # Execute delete_archive - should handle gracefully when resources are already gone
+        repo_manager.delete_archive()
+
+        # Verify the calls were made even though resources were already deleted
+        mock_blob.exists.assert_called_once()
+        mock_blob.delete.assert_not_called()

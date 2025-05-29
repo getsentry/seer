@@ -2521,3 +2521,595 @@ class TestRunRepoSyncForRepoArchive:
 
         # Verify update was called
         mock_repo_manager_instance.update_repo_archive.assert_called_once()
+
+
+class TestRunRepoArchiveCleanup:
+    """Test cases for the run_repo_archive_cleanup task."""
+
+    def setup_method(self):
+        """Clean up any existing data before each test."""
+        with Session() as session:
+            session.query(DbSeerRepoArchive).delete()
+            session.commit()
+
+    def teardown_method(self):
+        """Clean up data after each test."""
+        with Session() as session:
+            session.query(DbSeerRepoArchive).delete()
+            session.commit()
+
+    def _create_test_repo_archive(self, **kwargs):
+        """Helper method to create a test repository archive."""
+        defaults = {
+            "organization_id": 1,
+            "bucket_name": "test-bucket",
+            "blob_path": "repos/1/github/test-owner/test-repo_1234567890.tar.gz",
+            "commit_sha": "abcd123456789",
+            "repo_definition": {
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "test-repo",
+                "external_id": "1234567890",
+            },
+            "updated_at": datetime.datetime.now(datetime.UTC),
+        }
+        defaults.update(kwargs)
+        return DbSeerRepoArchive(**defaults)
+
+    def test_run_repo_archive_cleanup_no_lock_acquired(self):
+        """Test when lock is already held by another process."""
+        from seer.automation.codebase.tasks import (
+            CLEANUP_LOCK_KEY,
+            acquire_lock,
+            run_repo_archive_cleanup,
+        )
+
+        # Acquire the lock in one session
+        with Session() as session1:
+            with acquire_lock(session1, CLEANUP_LOCK_KEY, "test_lock") as got_lock1:
+                assert got_lock1 is True
+
+                # Now run the cleanup task which should fail to get the lock
+                run_repo_archive_cleanup()
+                # Function should return early without processing
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_no_archives_to_cleanup(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test when there are no archives old enough to cleanup."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create a recent archive that shouldn't be cleaned up
+        recent_archive = self._create_test_repo_archive(
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1)
+        )
+
+        with Session() as session:
+            session.add(recent_archive)
+            session.commit()
+
+        run_repo_archive_cleanup()
+
+        # Verify no RepoClient or RepoManager was created
+        mock_repo_client.assert_not_called()
+        mock_repo_manager_class.assert_not_called()
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_successful_cleanup(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test successful cleanup of old archives."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create old archives that should be cleaned up
+        old_archive_1 = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/test-repo-1_1111111111.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "test-repo-1",
+                "external_id": "1111111111",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+        )
+
+        old_archive_2 = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/test-repo-2_2222222222.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "test-repo-2",
+                "external_id": "2222222222",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=40),
+        )
+
+        with Session() as session:
+            session.add(old_archive_1)
+            session.add(old_archive_2)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Verify RepoClient and RepoManager were created for each archive
+        assert mock_repo_client.call_count == 2
+        assert mock_repo_manager_class.call_count == 2
+        assert mock_repo_manager_instance.delete_archive.call_count == 2
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_respects_flagged_orgs_only(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that cleanup only processes archives from flagged organizations."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create old archives - one from flagged org, one from non-flagged org
+        flagged_org_archive = self._create_test_repo_archive(
+            organization_id=1,  # This is in FLAGGED_ORG_IDS
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+        )
+
+        non_flagged_org_archive = self._create_test_repo_archive(
+            organization_id=2,  # This is NOT in FLAGGED_ORG_IDS
+            blob_path="repos/2/github/test-owner/test-repo_1234567890.tar.gz",
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+        )
+
+        with Session() as session:
+            session.add(flagged_org_archive)
+            session.add(non_flagged_org_archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Only the flagged org archive should be processed
+        assert mock_repo_client.call_count == 1
+        assert mock_repo_manager_class.call_count == 1
+        mock_repo_manager_instance.delete_archive.assert_called_once()
+
+        # Verify the correct archive was processed
+        call_args = mock_repo_client.call_args[0]
+        repo_definition = call_args[0]
+        assert repo_definition.owner == "test-owner"
+        assert repo_definition.name == "test-repo"
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_respects_archive_limit(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that cleanup respects MAX_REPO_ARCHIVES_PER_CLEANUP limit."""
+        from seer.automation.codebase.tasks import (
+            MAX_REPO_ARCHIVES_PER_CLEANUP,
+            run_repo_archive_cleanup,
+        )
+
+        # Create more archives than the limit
+        archives_to_create = MAX_REPO_ARCHIVES_PER_CLEANUP + 10
+        old_date = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35)
+
+        with Session() as session:
+            for i in range(archives_to_create):
+                archive = self._create_test_repo_archive(
+                    blob_path=f"repos/1/github/test-owner/test-repo-{i}_{i:010d}.tar.gz",
+                    repo_definition={
+                        "provider": "github",
+                        "owner": "test-owner",
+                        "name": f"test-repo-{i}",
+                        "external_id": f"{i:010d}",
+                    },
+                    updated_at=old_date,
+                )
+                session.add(archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Should only process up to the limit
+        assert mock_repo_client.call_count == MAX_REPO_ARCHIVES_PER_CLEANUP
+        assert mock_repo_manager_class.call_count == MAX_REPO_ARCHIVES_PER_CLEANUP
+        assert mock_repo_manager_instance.delete_archive.call_count == MAX_REPO_ARCHIVES_PER_CLEANUP
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_processes_oldest_first(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that cleanup processes oldest archives first."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create archives with different ages
+        oldest_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/oldest-repo_1111111111.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "oldest-repo",
+                "external_id": "1111111111",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=50),
+        )
+
+        middle_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/middle-repo_2222222222.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "middle-repo",
+                "external_id": "2222222222",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=40),
+        )
+
+        newer_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/newer-repo_3333333333.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "newer-repo",
+                "external_id": "3333333333",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+        )
+
+        with Session() as session:
+            # Add in random order to ensure ordering is by updated_at, not insertion order
+            session.add(middle_archive)
+            session.add(newer_archive)
+            session.add(oldest_archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager to track call order
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Verify all three archives were processed
+        assert mock_repo_client.call_count == 3
+
+        # Check the order of calls - should be oldest first
+        call_args_list = mock_repo_client.call_args_list
+        first_call_repo = call_args_list[0][0][0]
+        second_call_repo = call_args_list[1][0][0]
+        third_call_repo = call_args_list[2][0][0]
+
+        assert first_call_repo.name == "oldest-repo"
+        assert second_call_repo.name == "middle-repo"
+        assert third_call_repo.name == "newer-repo"
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_handles_individual_failures(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that individual archive cleanup failures don't stop the entire process."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create two old archives
+        archive_1 = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/test-repo-1_1111111111.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "test-repo-1",
+                "external_id": "1111111111",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+        )
+
+        archive_2 = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/test-repo-2_2222222222.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "test-repo-2",
+                "external_id": "2222222222",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=40),
+        )
+
+        with Session() as session:
+            session.add(archive_1)
+            session.add(archive_2)
+            session.commit()
+
+        # Mock RepoClient and RepoManager - make first delete_archive fail
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+
+        # Configure delete_archive to fail on first call, succeed on second
+        mock_repo_manager_instance.delete_archive.side_effect = [
+            Exception("GCS deletion failed"),
+            None,  # Success on second call
+        ]
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Both archives should have been attempted
+        assert mock_repo_client.call_count == 2
+        assert mock_repo_manager_class.call_count == 2
+        assert mock_repo_manager_instance.delete_archive.call_count == 2
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_handles_repo_client_creation_failure(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test handling of RepoClient creation failures."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create an old archive
+        old_archive = self._create_test_repo_archive(
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35)
+        )
+
+        with Session() as session:
+            session.add(old_archive)
+            session.commit()
+
+        # Mock RepoClient creation to fail
+        mock_repo_client.side_effect = Exception("Failed to create repo client")
+
+        run_repo_archive_cleanup()
+
+        # Should attempt to create RepoClient
+        mock_repo_client.assert_called_once()
+        # Should not create RepoManager since RepoClient creation failed
+        mock_repo_manager_class.assert_not_called()
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_cutoff_date_logic(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that only archives older than the cutoff date are processed."""
+        from seer.automation.codebase.tasks import (
+            REPO_ARCHIVE_CLEANUP_INTERVAL,
+            run_repo_archive_cleanup,
+        )
+
+        now = datetime.datetime.now(datetime.UTC)
+
+        # Create archives at various ages relative to the cutoff
+        too_new_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/too-new_1111111111.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "too-new",
+                "external_id": "1111111111",
+            },
+            updated_at=now
+            - REPO_ARCHIVE_CLEANUP_INTERVAL
+            + datetime.timedelta(hours=1),  # 29 days, 23 hours old
+        )
+
+        just_old_enough_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/just-old-enough_2222222222.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "just-old-enough",
+                "external_id": "2222222222",
+            },
+            updated_at=now
+            - REPO_ARCHIVE_CLEANUP_INTERVAL
+            - datetime.timedelta(hours=1),  # 30 days, 1 hour old
+        )
+
+        very_old_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/very-old_3333333333.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "very-old",
+                "external_id": "3333333333",
+            },
+            updated_at=now - datetime.timedelta(days=60),  # 60 days old
+        )
+
+        with Session() as session:
+            session.add(too_new_archive)
+            session.add(just_old_enough_archive)
+            session.add(very_old_archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Should only process the two old enough archives
+        assert mock_repo_client.call_count == 2
+        assert mock_repo_manager_class.call_count == 2
+
+        # Verify which archives were processed
+        call_args_list = mock_repo_client.call_args_list
+        processed_repos = [call[0][0].name for call in call_args_list]
+
+        assert "just-old-enough" in processed_repos
+        assert "very-old" in processed_repos
+        assert "too-new" not in processed_repos
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_skips_null_updated_at(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that archives with null updated_at are skipped."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create archives with null and non-null updated_at
+        null_updated_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/null-updated_1111111111.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "null-updated",
+                "external_id": "1111111111",
+            },
+            updated_at=None,
+        )
+
+        old_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/old-repo_2222222222.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "old-repo",
+                "external_id": "2222222222",
+            },
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+        )
+
+        with Session() as session:
+            session.add(null_updated_archive)
+            session.add(old_archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Should only process the archive with non-null updated_at
+        assert mock_repo_client.call_count == 1
+        mock_repo_client.assert_called_once()
+
+        # Verify the correct archive was processed
+        call_args = mock_repo_client.call_args[0]
+        repo_definition = call_args[0]
+        assert repo_definition.name == "old-repo"
+
+    def test_run_repo_archive_cleanup_empty_database(self):
+        """Test cleanup behavior when no archives exist in database."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Should complete without errors
+        run_repo_archive_cleanup()
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_realistic_scenario(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test cleanup with realistic repository data and mixed conditions."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        now = datetime.datetime.now(datetime.UTC)
+
+        # Create a mix of archives - some to clean up, some to keep
+        archives_to_create = [
+            # Should be cleaned up
+            {
+                "blob_path": "repos/1/github/getsentry/sentry_4088350.tar.gz",
+                "repo_definition": {
+                    "provider": "github",
+                    "owner": "getsentry",
+                    "name": "sentry",
+                    "external_id": "4088350",
+                },
+                "updated_at": now - datetime.timedelta(days=45),
+                "should_cleanup": True,
+            },
+            # Should be cleaned up
+            {
+                "blob_path": "repos/1/github/microsoft/vscode_41881900.tar.gz",
+                "repo_definition": {
+                    "provider": "github",
+                    "owner": "microsoft",
+                    "name": "vscode",
+                    "external_id": "41881900",
+                },
+                "updated_at": now - datetime.timedelta(days=35),
+                "should_cleanup": True,
+            },
+            # Should NOT be cleaned up (too recent)
+            {
+                "blob_path": "repos/1/github/facebook/react_10270250.tar.gz",
+                "repo_definition": {
+                    "provider": "github",
+                    "owner": "facebook",
+                    "name": "react",
+                    "external_id": "10270250",
+                },
+                "updated_at": now - datetime.timedelta(days=15),
+                "should_cleanup": False,
+            },
+            # Should NOT be cleaned up (wrong org)
+            {
+                "organization_id": 2,  # Not in FLAGGED_ORG_IDS
+                "blob_path": "repos/2/github/torvalds/linux_2325298.tar.gz",
+                "repo_definition": {
+                    "provider": "github",
+                    "owner": "torvalds",
+                    "name": "linux",
+                    "external_id": "2325298",
+                },
+                "updated_at": now - datetime.timedelta(days=50),
+                "should_cleanup": False,
+            },
+        ]
+
+        with Session() as session:
+            for archive_data in archives_to_create:
+                archive = self._create_test_repo_archive(
+                    **{k: v for k, v in archive_data.items() if k != "should_cleanup"}
+                )
+                session.add(archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Should process exactly 2 archives (the old ones from org 1)
+        expected_cleanup_count = len([a for a in archives_to_create if a["should_cleanup"]])
+        assert mock_repo_client.call_count == expected_cleanup_count
+        assert mock_repo_manager_class.call_count == expected_cleanup_count
+
+        # Verify the correct repositories were processed
+        call_args_list = mock_repo_client.call_args_list
+        processed_repos = [(call[0][0].owner, call[0][0].name) for call in call_args_list]
+
+        assert ("getsentry", "sentry") in processed_repos
+        assert ("microsoft", "vscode") in processed_repos
+        assert ("facebook", "react") not in processed_repos
+        assert ("torvalds", "linux") not in processed_repos
