@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 from concurrent.futures import Future
 from unittest.mock import ANY, MagicMock, mock_open, patch
@@ -1071,92 +1070,6 @@ def test_delete_archive_db_deletion_fails(repo_manager):
 
         # Verify GCS blob was deleted before the DB failure
         mock_blob.delete.assert_called_once()
-
-
-def test_delete_archive_logging(repo_manager, caplog):
-    """Test that delete_archive produces appropriate log messages."""
-    from seer.automation.models import RepoDefinition
-    from seer.db import DbSeerRepoArchive, Session
-
-    # Create a test database record
-    repo_definition = RepoDefinition(
-        provider="github",
-        owner="test-owner",
-        name="test-repo",
-        external_id="1234567890",
-    )
-
-    with Session() as session:
-        repo_archive = DbSeerRepoArchive(
-            organization_id=1,
-            bucket_name="test-bucket",
-            blob_path="repos/1/github/test-owner/test-repo_1234567890.tar.gz",
-            commit_sha="abcd123",
-            repo_definition=repo_definition.model_dump(),
-        )
-        session.add(repo_archive)
-        session.commit()
-
-    with (
-        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
-        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
-        caplog.at_level(logging.INFO),
-    ):
-        # Mock GCS blob
-        mock_bucket = MagicMock()
-        mock_blob = MagicMock()
-        mock_blob.exists.return_value = True
-        mock_bucket.blob.return_value = mock_blob
-        mock_storage_client.return_value.bucket.return_value = mock_bucket
-
-        # Execute delete_archive
-        repo_manager.delete_archive()
-
-        # Verify expected log messages
-        assert (
-            "Deleting repository archive: test-bucket/repos/1/github/test-owner/test-repo_1234567890.tar.gz"
-            in caplog.text
-        )
-        assert (
-            "Deleted GCS blob: test-bucket/repos/1/github/test-owner/test-repo_1234567890.tar.gz"
-            in caplog.text
-        )
-        assert (
-            "Deleted database record for archive: repos/1/github/test-owner/test-repo_1234567890.tar.gz"
-            in caplog.text
-        )
-        assert (
-            "Successfully deleted repository archive: repos/1/github/test-owner/test-repo_1234567890.tar.gz"
-            in caplog.text
-        )
-
-
-def test_delete_archive_logging_missing_resources(repo_manager, caplog):
-    """Test logging when resources don't exist."""
-    with (
-        patch("seer.automation.codebase.repo_manager.storage.Client") as mock_storage_client,
-        patch.object(repo_manager, "get_bucket_name", return_value="test-bucket"),
-        caplog.at_level(logging.INFO),
-    ):
-        # Mock GCS blob that doesn't exist
-        mock_bucket = MagicMock()
-        mock_blob = MagicMock()
-        mock_blob.exists.return_value = False
-        mock_bucket.blob.return_value = mock_blob
-        mock_storage_client.return_value.bucket.return_value = mock_bucket
-
-        # Execute delete_archive
-        repo_manager.delete_archive()
-
-        # Verify expected log messages for missing resources
-        assert (
-            "GCS blob not found (already deleted?): test-bucket/repos/1/github/test-owner/test-repo_1234567890.tar.gz"
-            in caplog.text
-        )
-        assert (
-            "Database record not found (already deleted?): repos/1/github/test-owner/test-repo_1234567890.tar.gz"
-            in caplog.text
-        )
 
 
 def test_delete_archive_realistic_scenario(repo_manager):

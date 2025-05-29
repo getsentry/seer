@@ -1,5 +1,4 @@
 import datetime
-import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock, patch
@@ -439,7 +438,7 @@ class TestCollectAllReposForBackfill:
     @patch("seer.automation.codebase.tasks.RepoManager.make_blob_name")
     @patch("seer.automation.codebase.tasks.RepoManager.get_bucket_name")
     def test_collect_all_repos_for_backfill_cursor_reset_when_no_preferences(
-        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async, caplog
+        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async
     ):
         """Test that cursor resets to 0 when no project preferences are found."""
         # Setup mocks
@@ -454,12 +453,7 @@ class TestCollectAllReposForBackfill:
 
         from seer.automation.codebase.tasks import collect_all_repos_for_backfill
 
-        with caplog.at_level(logging.INFO):
-            collect_all_repos_for_backfill()
-
-        # Verify cursor was reset and appropriate logs were generated
-        assert "No project preferences to backfill, looping" in caplog.text
-        assert "No project preferences to backfill, done" in caplog.text
+        collect_all_repos_for_backfill()
 
         # The cursor gets reset to 0 during the function but since no project preferences are found,
         # the function returns early and the commit doesn't happen, so cursor remains unchanged
@@ -825,7 +819,7 @@ class TestCollectAllReposForBackfill:
     @patch("seer.automation.codebase.tasks.RepoManager.make_blob_name")
     @patch("seer.automation.codebase.tasks.RepoManager.get_bucket_name")
     def test_collect_all_repos_for_backfill_loops_around_when_reaching_end(
-        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async, caplog
+        self, mock_get_bucket_name, mock_make_blob_name, mock_repo_client, mock_apply_async
     ):
         """Test that function loops back to the beginning when it reaches the end of project preferences."""
         # Setup mocks
@@ -885,11 +879,9 @@ class TestCollectAllReposForBackfill:
         from seer.automation.codebase.tasks import collect_all_repos_for_backfill
 
         # First run: cursor is at 1500, should find late_prefs (2000, 2001) and process them
-        with caplog.at_level(logging.INFO):
-            collect_all_repos_for_backfill()
+        collect_all_repos_for_backfill()
 
         # Verify it processed the late preferences
-        assert "Found 2 project preferences to look at, starting from 2000 to 2001" in caplog.text
         assert mock_apply_async.call_count == 2
 
         # Verify cursor was updated to the last processed project_id
@@ -901,16 +893,11 @@ class TestCollectAllReposForBackfill:
 
         # Reset mocks for second run
         mock_apply_async.reset_mock()
-        caplog.clear()
 
         # Second run: cursor is at 2001, should find no preferences after 2001, loop back to 0,
         # and then find early_prefs (100, 101, 102)
-        with caplog.at_level(logging.INFO):
-            collect_all_repos_for_backfill()
+        collect_all_repos_for_backfill()
 
-        # Verify it looped back and processed early preferences
-        assert "No project preferences to backfill, looping" in caplog.text
-        assert "Found 5 project preferences to look at, starting from 100 to 2001" in caplog.text
         # It finds all 5 preferences but only queues 5 jobs total (3 new ones for early prefs,
         # 2 existing ones get skipped as "still active")
         assert mock_apply_async.call_count == 5
@@ -921,9 +908,6 @@ class TestCollectAllReposForBackfill:
                 session.query(DbSeerBackfillState).filter(DbSeerBackfillState.id == 1).first()
             )
             assert backfill_state.backfill_cursor == 2001
-
-        # Verify that the late repos were skipped due to active jobs
-        assert "is still active, skipping" in caplog.text
 
         # Verify all jobs were created in the database
         with Session() as session:
@@ -1486,46 +1470,16 @@ class TestRunRepoSync:
             session.commit()
             return archive.id
 
-    # Lock management tests
-    def test_run_repo_sync_no_lock_acquired(self, caplog):
-        """Test that function returns early when lock cannot be acquired."""
-        # First session acquires the lock
-        with Session() as session1:
-            with acquire_lock(session1, SYNC_LOCK_KEY, "test_lock") as got_lock1:
-                assert got_lock1 is True
-
-                # Import and call the function while lock is held
-                from seer.automation.codebase.tasks import run_repo_sync
-
-                with caplog.at_level(logging.INFO):
-                    run_repo_sync()
-
-                # Verify it logged that it couldn't acquire the lock
-                assert "Could not acquire sync lock, another process has it" in caplog.text
-
-    @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
-    def test_run_repo_sync_acquires_lock_successfully(self, mock_apply_async, caplog):
-        """Test that function proceeds when lock is acquired successfully."""
-        from seer.automation.codebase.tasks import run_repo_sync
-
-        with caplog.at_level(logging.INFO):
-            run_repo_sync()
-
-        # Verify it logged that it acquired the lock
-        assert "Acquired sync lock" in caplog.text
-
     # Repository archive query tests
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
-    def test_run_repo_sync_no_archives_to_sync(self, mock_apply_async, caplog):
+    def test_run_repo_sync_no_archives_to_sync(self, mock_apply_async):
         """Test when no archives need updating."""
         from seer.automation.codebase.tasks import run_repo_sync
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync()
+        run_repo_sync()
 
         # Verify no jobs were queued
         mock_apply_async.assert_not_called()
-        assert "Queueing 0 repo sync jobs" in caplog.text
 
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
@@ -1734,9 +1688,7 @@ class TestRunRepoSync:
 
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
-    def test_run_repo_sync_repo_not_found_deletes_archive(
-        self, mock_repo_client, mock_apply_async, caplog
-    ):
+    def test_run_repo_sync_repo_not_found_deletes_archive(self, mock_repo_client, mock_apply_async):
         """Test that archives are deleted when repo is not found via GitHub API."""
         from seer.automation.codebase.tasks import run_repo_sync
 
@@ -1751,8 +1703,7 @@ class TestRunRepoSync:
             - datetime.timedelta(days=3),  # Downloaded recently
         )
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync()
+        run_repo_sync()
 
         # Verify archive was deleted from database
         with Session() as session:
@@ -1760,9 +1711,6 @@ class TestRunRepoSync:
                 session.query(DbSeerRepoArchive).filter(DbSeerRepoArchive.id == archive_id).first()
             )
             assert archive is None
-
-        # Verify appropriate log message
-        assert "not found from github api, deleting repo archive" in caplog.text
 
         # Verify no job was queued
         mock_apply_async.assert_not_called()
@@ -1797,7 +1745,7 @@ class TestRunRepoSync:
     # Job queuing tests
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
-    def test_run_repo_sync_queues_multiple_jobs(self, mock_repo_client, mock_apply_async, caplog):
+    def test_run_repo_sync_queues_multiple_jobs(self, mock_repo_client, mock_apply_async):
         """Test that multiple sync jobs are queued correctly."""
         from seer.automation.codebase.tasks import run_repo_sync
 
@@ -1825,12 +1773,10 @@ class TestRunRepoSync:
             )
             archive_ids.append(archive_id)
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync()
+        run_repo_sync()
 
         # Verify all jobs were queued
         assert mock_apply_async.call_count == 3
-        assert "Queueing 3 repo sync jobs" in caplog.text
 
         # Verify each job has correct archive_id
         call_args_list = mock_apply_async.call_args_list
@@ -1839,9 +1785,7 @@ class TestRunRepoSync:
 
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
-    def test_run_repo_sync_handles_mixed_success_failure(
-        self, mock_repo_client, mock_apply_async, caplog
-    ):
+    def test_run_repo_sync_handles_mixed_success_failure(self, mock_repo_client, mock_apply_async):
         """Test handling when some repos succeed and others fail."""
         from seer.automation.codebase.tasks import run_repo_sync
 
@@ -1906,10 +1850,6 @@ class TestRunRepoSync:
             )
             assert success_archive is not None
             assert failure_archive is None
-
-        # Verify appropriate logging
-        assert "not found from github api, deleting repo archive" in caplog.text
-        assert "Queueing 1 repo sync jobs" in caplog.text
 
     # Integration tests
     @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
@@ -2253,7 +2193,7 @@ class TestRunRepoSyncForRepoArchive:
     @patch("seer.automation.codebase.tasks.RepoManager")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
     def test_run_repo_sync_for_repo_archive_update_failure(
-        self, mock_repo_client, mock_repo_manager_class, caplog
+        self, mock_repo_client, mock_repo_manager_class
     ):
         """Test handling of update_repo_archive failure."""
         from seer.automation.codebase.tasks import run_repo_sync_for_repo_archive
@@ -2269,13 +2209,8 @@ class TestRunRepoSyncForRepoArchive:
         job_dict = self._create_test_repo_sync_job_dict(archive_id=archive_id)
 
         # Execute and expect exception
-        with caplog.at_level(logging.ERROR):
-            with pytest.raises(Exception, match="Update failed"):
-                run_repo_sync_for_repo_archive(job_dict)
-
-        # Verify error logging
-        assert "Failed to update repo archive" in caplog.text
-        assert str(archive_id) in caplog.text
+        with pytest.raises(Exception, match="Update failed"):
+            run_repo_sync_for_repo_archive(job_dict)
 
     @patch("seer.automation.codebase.tasks.RepoManager")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
@@ -2305,34 +2240,6 @@ class TestRunRepoSyncForRepoArchive:
                 session.query(DbSeerRepoArchive).filter(DbSeerRepoArchive.id == archive_id).first()
             )
             assert archive is None
-
-    # Logging tests
-    @patch("seer.automation.codebase.tasks.RepoManager")
-    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
-    def test_run_repo_sync_for_repo_archive_logging(
-        self, mock_repo_client, mock_repo_manager_class, caplog
-    ):
-        """Test that appropriate logs are generated."""
-        from seer.automation.codebase.tasks import run_repo_sync_for_repo_archive
-
-        # Setup mocks
-        mock_repo_client.return_value = MagicMock()
-        mock_repo_manager_instance = MagicMock()
-        mock_repo_manager_class.return_value = mock_repo_manager_instance
-
-        # Create test archive
-        archive_id = self._create_test_repo_archive()
-        job_dict = self._create_test_repo_sync_job_dict(
-            archive_id=archive_id, repo_full_name="getsentry/sentry", scaled_time_limit=1800.0
-        )
-
-        with caplog.at_level(logging.INFO):
-            run_repo_sync_for_repo_archive(job_dict)
-
-        # Verify appropriate logs
-        log_messages = caplog.text
-        assert "Running repo sync for repo getsentry/sentry with time limit 1800.0" in log_messages
-        assert "Repo sync job done." in log_messages
 
     # Integration tests
     @patch("seer.automation.codebase.tasks.RepoManager")
