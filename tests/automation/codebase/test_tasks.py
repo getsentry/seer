@@ -1642,12 +1642,16 @@ class TestRunRepoSync:
         flagged_archive_id = self._create_test_repo_archive(
             organization_id=1,  # In FLAGGED_ORG_IDS
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=8),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         # Create archive for non-flagged org (should be ignored)
         self._create_test_repo_archive(
             organization_id=999,  # Not in FLAGGED_ORG_IDS
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=8),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         # Setup mocks
@@ -1681,6 +1685,8 @@ class TestRunRepoSync:
             self._create_test_repo_archive(
                 blob_path=f"test/repo/archive-{i}.tar.gz",
                 updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=8 + i),
+                last_downloaded_at=datetime.datetime.now(datetime.UTC)
+                - datetime.timedelta(days=3),  # Downloaded recently
             )
 
         run_repo_sync()
@@ -1759,7 +1765,9 @@ class TestRunRepoSync:
                 "name": "sentry",
                 "external_id": "456",
                 "branch_name": "master",
-            }
+            },
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=2),  # Downloaded recently
         )
 
         run_repo_sync()
@@ -1795,7 +1803,10 @@ class TestRunRepoSync:
         )
 
         # Create test archive
-        archive_id = self._create_test_repo_archive()
+        archive_id = self._create_test_repo_archive(
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
+        )
 
         with caplog.at_level(logging.INFO):
             run_repo_sync()
@@ -1825,7 +1836,10 @@ class TestRunRepoSync:
         mock_repo_client.side_effect = Exception("General RepoClient error")
 
         # Create test archive
-        archive_id = self._create_test_repo_archive()
+        archive_id = self._create_test_repo_archive(
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
+        )
 
         with caplog.at_level(logging.ERROR):
             run_repo_sync()
@@ -1870,6 +1884,8 @@ class TestRunRepoSync:
                     "external_id": str(100 + i),
                     "branch_name": "main",
                 },
+                last_downloaded_at=datetime.datetime.now(datetime.UTC)
+                - datetime.timedelta(days=3),  # Downloaded recently
             )
             archive_ids.append(archive_id)
 
@@ -1903,6 +1919,8 @@ class TestRunRepoSync:
                 "external_id": "200",
                 "branch_name": "main",
             },
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         failure_archive_id = self._create_test_repo_archive(
@@ -1914,6 +1932,8 @@ class TestRunRepoSync:
                 "external_id": "201",
                 "branch_name": "main",
             },
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         # Setup mock to succeed for first repo, fail for second
@@ -2034,6 +2054,8 @@ class TestRunRepoSync:
                 "external_id": "300",
                 "branch_name": "main",
             },
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         delete_archive_id = self._create_test_repo_archive(
@@ -2045,6 +2067,8 @@ class TestRunRepoSync:
                 "external_id": "301",
                 "branch_name": "main",
             },
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         # Setup mock to succeed for first, fail for second
