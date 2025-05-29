@@ -53,7 +53,7 @@ def grouping_lookup() -> GroupingLookup:
 
 @deferred_loading("AUTOFIXABILITY_SCORING_ENABLED")
 def autofixability_model() -> AutofixabilityModel:
-    return AutofixabilityModel(model_path("autofixability_v3/embeddings"))
+    return AutofixabilityModel(model_path("autofixability_v4/embeddings"))
 
 
 @deferred_loading("ANOMALY_DETECTION_ENABLED")
