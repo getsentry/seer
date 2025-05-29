@@ -251,7 +251,7 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
     return structured_message.parsed
 
 
-def decode_raw_data(raw_data: bytes):
+def decode_raw_data(raw_data: bytes) -> tuple[str, str]:
     """
     Try to decode as UTF-8 first (the standard for most repos).
     If that fails, use chardet to guess the encoding.
@@ -266,10 +266,12 @@ def decode_raw_data(raw_data: bytes):
         detected = chardet.detect(raw_data)
         encoding = detected.get("encoding")
         if not encoding:
+            # If chardet returns None, i.e. no encoding detected, raise an error
             raise Exception("Could not detect encoding with chardet.")
         try:
             return raw_data.decode(encoding), encoding
         except UnicodeDecodeError as e:
+            # If the detected encoding does not work, raise an error
             raise UnicodeDecodeError(
                 f"Could not decode raw data with detected encoding '{encoding}': {e}"
             )
