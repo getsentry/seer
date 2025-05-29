@@ -272,9 +272,7 @@ def decode_raw_data(raw_data: bytes) -> tuple[str, str]:
             return raw_data.decode(encoding), encoding
         except UnicodeDecodeError as e:
             # If the detected encoding does not work, raise an error
-            raise UnicodeDecodeError(
-                f"Could not decode raw data with detected encoding '{encoding}': {e}"
-            )
+            raise Exception(f"Could not decode raw data with detected encoding '{encoding}': {e}")
 
 
 def batch_texts_by_token_count(
