@@ -511,7 +511,7 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
             continue
 
         # Update overall predicted bugs count distribution
-        predicted_bugs_count = item_detailed_scores.bugs_found + item_detailed_scores.noise
+        predicted_bugs_count = int(item_detailed_scores.bugs_found + item_detailed_scores.noise)
         predicted_bugs_count_distribution[predicted_bugs_count] = (
             predicted_bugs_count_distribution.get(predicted_bugs_count, 0) + 1
         )
