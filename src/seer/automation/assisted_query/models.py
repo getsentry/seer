@@ -52,3 +52,10 @@ class RelevantFieldsResponse(BaseModel):
 
 class ValuesResponse(BaseModel):
     values: list[str]
+
+
+class QueryOrFieldsResponse(BaseModel):
+    """Response that either contains a direct query result or requests specific fields"""
+
+    queries: list[ModelResponse] | None = None  # Direct query results if possible
+    requested_fields: list[str] | None = None  # Fields needed for more context

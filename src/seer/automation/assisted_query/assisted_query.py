@@ -10,6 +10,7 @@ from seer.automation.assisted_query.create_cache import create_cache
 from seer.automation.assisted_query.models import (
     CreateCacheRequest,
     ModelResponse,
+    QueryOrFieldsResponse,
     RelevantFieldsResponse,
     TranslateRequest,
     TranslateResponse,
@@ -75,30 +76,55 @@ def create_query_from_natural_language(
 ) -> LlmGenerateStructuredResponse:
     model = get_model_provider()
 
-    # Step 1: Figure out relevant fields
-    relevant_fields_prompt = prompts.select_relevant_fields_prompt(natural_language_query)
-    relevant_fields_response = llm_client.generate_structured(
-        prompt=relevant_fields_prompt,
+    # Step 1: Try to generate query directly OR request specific fields
+    query_or_fields_prompt = prompts.get_query_or_fields_prompt(natural_language_query)
+    initial_response = llm_client.generate_structured(
+        prompt=query_or_fields_prompt,
         model=model,
         cache_name=cache_name,
-        response_format=RelevantFieldsResponse,
+        response_format=QueryOrFieldsResponse,
+        temperature=0.2,
         thinking_budget=0,
         use_local_endpoint=True,
     )
 
-    relevant_fields = (
-        relevant_fields_response.parsed.fields if relevant_fields_response.parsed else []
-    )
+    # If we got direct queries, return them immediately
+    if initial_response.parsed and initial_response.parsed.queries:
+        logger.info("Generated queries directly without field selection")
+        return LlmGenerateStructuredResponse(
+            initial_response.parsed.queries, metadata=initial_response.metadata
+        )
+
+    # If we need field values, proceed with field-based generation
+    requested_fields = []
+    if initial_response.parsed and initial_response.parsed.requested_fields:
+        requested_fields = initial_response.parsed.requested_fields
+        logger.info(f"Requested fields for context: {requested_fields}")
+    else:
+        # Fallback: use the original field selection logic
+        logger.info("No direct queries or requested fields, falling back to field selection")
+        relevant_fields_prompt = prompts.select_relevant_fields_prompt(natural_language_query)
+        relevant_fields_response = llm_client.generate_structured(
+            prompt=relevant_fields_prompt,
+            model=model,
+            cache_name=cache_name,
+            response_format=RelevantFieldsResponse,
+            thinking_budget=0,
+            use_local_endpoint=True,
+        )
+        requested_fields = (
+            relevant_fields_response.parsed.fields if relevant_fields_response.parsed else []
+        )
 
     for field in REQUIRED_FIELDS:
-        if field not in relevant_fields:
-            relevant_fields.append(field)
+        if field not in requested_fields:
+            requested_fields.append(field)
 
-    # Step 2: Fetch values for relevant fields
+    # Step 2: Fetch values for requested fields
     field_values_response = rpc_client.call(
         "get_attribute_values",
         org_id=org_id,
-        fields=relevant_fields,
+        fields=requested_fields,
         project_ids=project_ids,
         stats_period="48h",
         limit=200,
@@ -117,7 +143,7 @@ def create_query_from_natural_language(
 
     # Step 3: Generate final prompt(s) based off of relevant fields and values
     final_query_prompt = prompts.get_final_query_prompt(
-        natural_language_query, relevant_fields, field_values
+        natural_language_query, requested_fields, field_values
     )
     generated_query = llm_client.generate_structured(
         prompt=final_query_prompt,
