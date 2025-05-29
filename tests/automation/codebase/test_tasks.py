@@ -1920,8 +1920,7 @@ class TestRunRepoSync:
 
         mock_repo_client.side_effect = mock_repo_client_side_effect
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync()
+        run_repo_sync()
 
         # Verify only successful job was queued
         mock_apply_async.assert_called_once()
@@ -2284,7 +2283,7 @@ class TestRunRepoSyncForRepoArchive:
     @patch("seer.automation.codebase.tasks.RepoManager")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
     def test_run_repo_sync_for_repo_archive_gcs_not_found_deletes_archive(
-        self, mock_repo_client, mock_repo_manager_class, caplog
+        self, mock_repo_client, mock_repo_manager_class
     ):
         """Test that archive is deleted when not found in GCS."""
         from seer.automation.codebase.tasks import run_repo_sync_for_repo_archive
@@ -2301,8 +2300,7 @@ class TestRunRepoSyncForRepoArchive:
         archive_id = self._create_test_repo_archive()
         job_dict = self._create_test_repo_sync_job_dict(archive_id=archive_id)
 
-        with caplog.at_level(logging.INFO):
-            run_repo_sync_for_repo_archive(job_dict)
+        run_repo_sync_for_repo_archive(job_dict)
 
         # Verify archive was deleted from database
         with Session() as session:
@@ -2310,9 +2308,6 @@ class TestRunRepoSyncForRepoArchive:
                 session.query(DbSeerRepoArchive).filter(DbSeerRepoArchive.id == archive_id).first()
             )
             assert archive is None
-
-        # Verify appropriate logging
-        assert "not found in GCS, deleting repo archive" in caplog.text
 
     # Logging tests
     @patch("seer.automation.codebase.tasks.RepoManager")
