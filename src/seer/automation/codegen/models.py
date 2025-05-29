@@ -97,7 +97,7 @@ class StaticAnalysisSuggestion(BaseModel):
 
 class BugPrediction(BaseModel):
     description: str = Field(
-        description="A detailed technical analysis of the bug that explains: 1) The exact failure mechanism, 2) The conditions that trigger it, 3) Why the current code is problematic, 4) Which specific code paths are affected, and 5) What could go wrong if this bug isn't fixed. Include concrete examples of variable states that would cause failure and ideally a short code snippet example. Avoid alarmist language when describing issues; refer to the consequences as technical issues or unexpected behavior, rather than server crashes. Avoid explicitly mentioning previous hypotheses by name in the output. Max 350 words."
+        description="A detailed technical analysis of the bug that explains: 1) The exact failure mechanism, 2) The conditions that trigger it, 3) Why the current code is problematic, 4) Which specific code paths are affected, and 5) What could go wrong if this bug isn't fixed. Include concrete examples of variable states that would cause failure and ideally a short code snippet example. Avoid alarmist language when describing issues; refer to the consequences as technical issues or unexpected behavior, rather than server crashes. Avoid explicitly mentioning the underlying hypotheses by name in the output. Max 350 words."
     )
     short_description: str = Field(
         description="A concise, technical explanation of the potential bug that identifies the specific risk and affected code. Phrase it politely as a suspicion. Avoid alarmist language when describing issues; refer to the consequences as technical issues or unexpected behavior, rather than server crashes. Max 75 words."
