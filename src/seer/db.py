@@ -328,6 +328,10 @@ class DbSeerRepoArchive(Base):
     commit_sha: Mapped[str] = mapped_column(String, nullable=False)
     repo_definition: Mapped[dict] = mapped_column(JSON, nullable=False)
 
+    last_downloaded_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=True, default=None
+    )
+
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )

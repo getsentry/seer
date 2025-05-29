@@ -497,6 +497,7 @@ def run_repo_sync():
             # 2. Query for repository archives that haven't been updated within the interval (7 days)
             # 3. Order archives by their last update time to prioritize the oldest ones
             # 4. Limit processing to MAX_REPO_ARCHIVES_PER_SYNC (32) archives per run
+            # Only sync repos that have been used (downloaded) within the last 7 days
             repo_archives = (
                 main_session.query(DbSeerRepoArchive)
                 .where(
@@ -504,6 +505,9 @@ def run_repo_sync():
                         DbSeerRepoArchive.updated_at.isnot(None),
                         DbSeerRepoArchive.updated_at
                         < datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL,
+                        DbSeerRepoArchive.last_downloaded_at.isnot(None),
+                        DbSeerRepoArchive.last_downloaded_at
+                        >= datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL,
                         DbSeerRepoArchive.organization_id.in_(
                             FLAGGED_ORG_IDS
                         ),  # Temporarily only run on flagged org ids
@@ -678,8 +682,16 @@ def run_repo_archive_cleanup():
                 main_session.query(DbSeerRepoArchive)
                 .where(
                     and_(
-                        DbSeerRepoArchive.updated_at.isnot(None),
-                        DbSeerRepoArchive.updated_at < cutoff_date,
+                        or_(
+                            and_(
+                                DbSeerRepoArchive.last_downloaded_at.isnot(None),
+                                DbSeerRepoArchive.last_downloaded_at < cutoff_date,
+                            ),
+                            and_(
+                                DbSeerRepoArchive.last_downloaded_at.is_(None),
+                                DbSeerRepoArchive.updated_at < cutoff_date,
+                            ),
+                        ),
                         DbSeerRepoArchive.organization_id.in_(
                             FLAGGED_ORG_IDS
                         ),  # Temporarily only run on flagged org ids

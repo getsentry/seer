@@ -1615,9 +1615,11 @@ class TestRunRepoSync:
         mock_repo_client_instance.get_scaled_time_limit.return_value = 900.0
         mock_repo_client.return_value = mock_repo_client_instance
 
-        # Create archive updated more than 7 days ago
+        # Create archive updated more than 7 days ago with recent download
         archive_id = self._create_test_repo_archive(
-            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=8)
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=8),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         run_repo_sync()
@@ -1705,16 +1707,22 @@ class TestRunRepoSync:
         oldest_archive_id = self._create_test_repo_archive(
             blob_path="test/repo/oldest.tar.gz",
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=20),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         middle_archive_id = self._create_test_repo_archive(
             blob_path="test/repo/middle.tar.gz",
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=15),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=2),  # Downloaded recently
         )
 
         newest_archive_id = self._create_test_repo_archive(
             blob_path="test/repo/newest.tar.gz",
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=10),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=1),  # Downloaded recently
         )
 
         run_repo_sync()
@@ -1968,6 +1976,7 @@ class TestRunRepoSync:
             blob_path="test/repo/old.tar.gz",
             organization_id=1,  # Flagged org
             updated_at=now - datetime.timedelta(days=10),
+            last_downloaded_at=now - datetime.timedelta(days=3),  # Downloaded recently
         )
 
         # Archive that doesn't need sync (recent)
@@ -2075,6 +2084,34 @@ class TestRunRepoSync:
         call_args = mock_apply_async.call_args
         job_data = call_args[1]["args"][0]
         assert job_data["archive_id"] == success_archive_id
+
+    @patch("seer.automation.codebase.tasks.run_repo_sync_for_repo_archive.apply_async")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_sync_skips_archives_without_recent_downloads(
+        self, mock_repo_client, mock_apply_async
+    ):
+        """Test that archives without recent downloads are skipped even if they're old."""
+        from seer.automation.codebase.tasks import run_repo_sync
+
+        # Create archive that's old but hasn't been downloaded recently
+        self._create_test_repo_archive(
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=8),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=10),  # Downloaded too long ago
+        )
+
+        # Create archive that's old and never been downloaded
+        self._create_test_repo_archive(
+            blob_path="test/repo/never-downloaded.tar.gz",
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=8),
+            last_downloaded_at=None,  # Never downloaded
+        )
+
+        run_repo_sync()
+
+        # Verify no jobs were queued
+        mock_apply_async.assert_not_called()
+        mock_repo_client.assert_not_called()
 
 
 class TestRunRepoSyncForRepoArchive:
@@ -2609,6 +2646,8 @@ class TestRunRepoArchiveCleanup:
                 "external_id": "1111111111",
             },
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=35),  # Downloaded long ago
         )
 
         old_archive_2 = self._create_test_repo_archive(
@@ -2620,6 +2659,8 @@ class TestRunRepoArchiveCleanup:
                 "external_id": "2222222222",
             },
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=40),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=40),  # Downloaded long ago
         )
 
         with Session() as session:
@@ -2639,50 +2680,6 @@ class TestRunRepoArchiveCleanup:
         assert mock_repo_client.call_count == 2
         assert mock_repo_manager_class.call_count == 2
         assert mock_repo_manager_instance.delete_archive.call_count == 2
-
-    @patch("seer.automation.codebase.tasks.RepoManager")
-    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
-    def test_run_repo_archive_cleanup_respects_flagged_orgs_only(
-        self, mock_repo_client, mock_repo_manager_class
-    ):
-        """Test that cleanup only processes archives from flagged organizations."""
-        from seer.automation.codebase.tasks import run_repo_archive_cleanup
-
-        # Create old archives - one from flagged org, one from non-flagged org
-        flagged_org_archive = self._create_test_repo_archive(
-            organization_id=1,  # This is in FLAGGED_ORG_IDS
-            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
-        )
-
-        non_flagged_org_archive = self._create_test_repo_archive(
-            organization_id=2,  # This is NOT in FLAGGED_ORG_IDS
-            blob_path="repos/2/github/test-owner/test-repo_1234567890.tar.gz",
-            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
-        )
-
-        with Session() as session:
-            session.add(flagged_org_archive)
-            session.add(non_flagged_org_archive)
-            session.commit()
-
-        # Mock RepoClient and RepoManager
-        mock_repo_client_instance = MagicMock()
-        mock_repo_client.return_value = mock_repo_client_instance
-        mock_repo_manager_instance = MagicMock()
-        mock_repo_manager_class.return_value = mock_repo_manager_instance
-
-        run_repo_archive_cleanup()
-
-        # Only the flagged org archive should be processed
-        assert mock_repo_client.call_count == 1
-        assert mock_repo_manager_class.call_count == 1
-        mock_repo_manager_instance.delete_archive.assert_called_once()
-
-        # Verify the correct archive was processed
-        call_args = mock_repo_client.call_args[0]
-        repo_definition = call_args[0]
-        assert repo_definition.owner == "test-owner"
-        assert repo_definition.name == "test-repo"
 
     @patch("seer.automation.codebase.tasks.RepoManager")
     @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
@@ -2815,6 +2812,8 @@ class TestRunRepoArchiveCleanup:
                 "external_id": "1111111111",
             },
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=35),  # Downloaded long ago
         )
 
         archive_2 = self._create_test_repo_archive(
@@ -2826,6 +2825,8 @@ class TestRunRepoArchiveCleanup:
                 "external_id": "2222222222",
             },
             updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=40),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=40),  # Downloaded long ago
         )
 
         with Session() as session:
@@ -3108,3 +3109,142 @@ class TestRunRepoArchiveCleanup:
         assert ("microsoft", "vscode") in processed_repos
         assert ("facebook", "react") not in processed_repos
         assert ("torvalds", "linux") not in processed_repos
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_last_downloaded_logic(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test cleanup logic based on last_downloaded_at field."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        now = datetime.datetime.now(datetime.UTC)
+
+        # Archive with old last_downloaded_at (should be cleaned up)
+        old_downloaded_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/old-downloaded_1111111111.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "old-downloaded",
+                "external_id": "1111111111",
+            },
+            updated_at=now - datetime.timedelta(days=10),  # Recently updated
+            last_downloaded_at=now - datetime.timedelta(days=35),  # Downloaded long ago
+        )
+
+        # Archive with null last_downloaded_at but old updated_at (should be cleaned up)
+        never_downloaded_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/never-downloaded_2222222222.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "never-downloaded",
+                "external_id": "2222222222",
+            },
+            updated_at=now - datetime.timedelta(days=35),  # Updated long ago
+            last_downloaded_at=None,  # Never downloaded
+        )
+
+        # Archive with recent last_downloaded_at (should NOT be cleaned up)
+        recent_downloaded_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/recent-downloaded_3333333333.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "recent-downloaded",
+                "external_id": "3333333333",
+            },
+            updated_at=now - datetime.timedelta(days=35),  # Updated long ago
+            last_downloaded_at=now - datetime.timedelta(days=10),  # Downloaded recently
+        )
+
+        # Archive with null last_downloaded_at and recent updated_at (should NOT be cleaned up)
+        recent_updated_archive = self._create_test_repo_archive(
+            blob_path="repos/1/github/test-owner/recent-updated_4444444444.tar.gz",
+            repo_definition={
+                "provider": "github",
+                "owner": "test-owner",
+                "name": "recent-updated",
+                "external_id": "4444444444",
+            },
+            updated_at=now - datetime.timedelta(days=10),  # Updated recently
+            last_downloaded_at=None,  # Never downloaded
+        )
+
+        with Session() as session:
+            session.add(old_downloaded_archive)
+            session.add(never_downloaded_archive)
+            session.add(recent_downloaded_archive)
+            session.add(recent_updated_archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Should clean up exactly 2 archives (old_downloaded and never_downloaded)
+        assert mock_repo_client.call_count == 2
+        assert mock_repo_manager_class.call_count == 2
+        assert mock_repo_manager_instance.delete_archive.call_count == 2
+
+        # Verify which archives were processed
+        call_args_list = mock_repo_client.call_args_list
+        processed_repos = [call[0][0].name for call in call_args_list]
+
+        assert "old-downloaded" in processed_repos
+        assert "never-downloaded" in processed_repos
+        assert "recent-downloaded" not in processed_repos
+        assert "recent-updated" not in processed_repos
+
+    @patch("seer.automation.codebase.tasks.RepoManager")
+    @patch("seer.automation.codebase.tasks.RepoClient.from_repo_definition")
+    def test_run_repo_archive_cleanup_respects_flagged_orgs_only(
+        self, mock_repo_client, mock_repo_manager_class
+    ):
+        """Test that cleanup only processes archives from flagged organizations."""
+        from seer.automation.codebase.tasks import run_repo_archive_cleanup
+
+        # Create old archives - one from flagged org, one from non-flagged org
+        flagged_org_archive = self._create_test_repo_archive(
+            organization_id=1,  # This is in FLAGGED_ORG_IDS
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=35),  # Downloaded long ago
+        )
+
+        non_flagged_org_archive = self._create_test_repo_archive(
+            organization_id=2,  # This is NOT in FLAGGED_ORG_IDS
+            blob_path="repos/2/github/test-owner/test-repo_1234567890.tar.gz",
+            updated_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=35),
+            last_downloaded_at=datetime.datetime.now(datetime.UTC)
+            - datetime.timedelta(days=35),  # Downloaded long ago
+        )
+
+        with Session() as session:
+            session.add(flagged_org_archive)
+            session.add(non_flagged_org_archive)
+            session.commit()
+
+        # Mock RepoClient and RepoManager
+        mock_repo_client_instance = MagicMock()
+        mock_repo_client.return_value = mock_repo_client_instance
+        mock_repo_manager_instance = MagicMock()
+        mock_repo_manager_class.return_value = mock_repo_manager_instance
+
+        run_repo_archive_cleanup()
+
+        # Only the flagged org archive should be processed
+        assert mock_repo_client.call_count == 1
+        assert mock_repo_manager_class.call_count == 1
+        mock_repo_manager_instance.delete_archive.assert_called_once()
+
+        # Verify the correct archive was processed
+        call_args = mock_repo_client.call_args[0]
+        repo_definition = call_args[0]
+        assert repo_definition.owner == "test-owner"
+        assert repo_definition.name == "test-repo"

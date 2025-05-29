@@ -641,6 +641,12 @@ class RepoManager:
 
             self.git_repo = git.Repo(self.repo_path)
 
+            with Session() as session:
+                repo_archive = self.get_db_archive_entry(session)
+                if repo_archive:
+                    repo_archive.last_downloaded_at = datetime.datetime.now(datetime.UTC)
+                    session.commit()
+
             logger.info(f"Successfully downloaded repository from GCS to {self.repo_path}")
         except Exception:
             logger.exception("Failed to download repository from GCS")

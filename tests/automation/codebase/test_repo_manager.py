@@ -404,6 +404,31 @@ def test_download_from_gcs_blob_not_exists(repo_manager, mock_repo_client):
 
 def test_download_from_gcs_success(repo_manager, mock_repo_client):
     """Test successful download_from_gcs sequence."""
+    # Create a test database record that simulates an existing archive
+    from seer.automation.models import RepoDefinition
+    from seer.db import DbSeerRepoArchive, Session
+
+    repo_definition = RepoDefinition(
+        provider="github",
+        owner="test-owner",
+        name="test-repo",
+        external_id="1234567890",
+    )
+
+    # Create initial archive without last_downloaded_at
+    with Session() as session:
+        repo_archive = DbSeerRepoArchive(
+            organization_id=1,
+            bucket_name="bucket-name",
+            blob_path=repo_manager.blob_name,
+            commit_sha="abcd123",
+            repo_definition=repo_definition.model_dump(),
+            last_downloaded_at=None,  # Initially not downloaded
+        )
+        session.add(repo_archive)
+        session.commit()
+        initial_archive_id = repo_archive.id
+
     mock_blob = MagicMock()
     mock_blob.exists.return_value = True
     mock_blob.size = 1024  # Add a numeric size for chunk calculations
@@ -449,6 +474,80 @@ def test_download_from_gcs_success(repo_manager, mock_repo_client):
         fake_tar.extractall.assert_called_once_with(path=repo_manager.repo_path, members=[])
         mock_unlink.assert_called_once_with(temp_tar)
         assert repo_manager.git_repo is not None
+
+        # Verify that last_downloaded_at was updated
+        with Session() as session:
+            updated_archive = (
+                session.query(DbSeerRepoArchive)
+                .filter(DbSeerRepoArchive.id == initial_archive_id)
+                .first()
+            )
+            assert updated_archive is not None
+            assert updated_archive.last_downloaded_at is not None
+            # Verify it's a recent timestamp (within the last minute)
+            import datetime
+
+            time_diff = datetime.datetime.now(
+                datetime.UTC
+            ) - updated_archive.last_downloaded_at.replace(tzinfo=datetime.UTC)
+            assert time_diff.total_seconds() < 60
+
+
+def test_download_from_gcs_success_no_db_entry(repo_manager, mock_repo_client):
+    """Test successful download_from_gcs when no database entry exists."""
+    mock_blob = MagicMock()
+    mock_blob.exists.return_value = True
+    mock_blob.size = 1024  # Add a numeric size for chunk calculations
+    mock_blob.reload = MagicMock()  # Mock the reload method
+    mock_blob.download_as_bytes = MagicMock(return_value=b"fake data")  # Mock download_as_bytes
+    mock_bucket = MagicMock()
+    mock_bucket.blob.return_value = mock_blob
+    mock_storage_instance = MagicMock()
+    mock_storage_instance.bucket.return_value = mock_bucket
+
+    fake_tar = MagicMock()
+    fake_tar.__enter__.return_value = fake_tar
+    fake_tar.getmembers.return_value = []
+    fake_tar.extractall = MagicMock()
+
+    with (
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client",
+            return_value=mock_storage_instance,
+        ),
+        patch("seer.automation.codebase.repo_manager.cleanup_dir") as mock_cleanup_dir,
+        patch("seer.automation.codebase.repo_manager.tarfile.open", return_value=fake_tar),
+        patch("seer.automation.codebase.repo_manager.open", mock_open(), create=True),
+        patch(
+            "seer.automation.codebase.repo_manager.git.Repo", return_value=MagicMock(spec=git.Repo)
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.os.makedirs"),
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["some_file.txt"]),
+        patch("seer.automation.codebase.repo_manager.os.unlink") as mock_unlink,
+    ):
+        # Should complete successfully even without a database entry
+        repo_manager.download_from_gcs(chunk_size=512)
+
+        temp_tar = os.path.join(repo_manager.tmp_dir, "repo_archive.tar.gz")
+        mock_cleanup_dir.assert_called_once_with(repo_manager.repo_path)
+        mock_storage_instance.bucket.assert_called_once_with(repo_manager.get_bucket_name())
+        mock_bucket.blob.assert_called_once_with(repo_manager.blob_name)
+        mock_blob.exists.assert_called_once()
+        mock_blob.reload.assert_called_once()
+
+        fake_tar.getmembers.assert_called_once()
+        fake_tar.extractall.assert_called_once_with(path=repo_manager.repo_path, members=[])
+        mock_unlink.assert_called_once_with(temp_tar)
+        assert repo_manager.git_repo is not None
+
+        # Verify no database entries were created (since this is just a download without existing entry)
+        from seer.db import DbSeerRepoArchive, Session
+
+        with Session() as session:
+            archives = session.query(DbSeerRepoArchive).all()
+            assert len(archives) == 0
 
 
 def test_upload_lock_success(repo_manager):
