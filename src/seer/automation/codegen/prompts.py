@@ -582,7 +582,7 @@ class BugPredictionPrompts:
         located_followups: list[LocatedBugPredictionFollowup],
     ) -> str:
         followups_xml = "\n\n".join(
-            f'<followup id="{i+1}" encoded_location="{located_followup.encoded_location}">\n{located_followup.followup}\n</followup>'
+            f'<bug_prediction_analysis_id="{i+1}" encoded_location="{located_followup.encoded_location}">\n{located_followup.followup}\n</bug_prediction_analysis_id="{i+1}">'
             for i, located_followup in enumerate(located_followups)
         )
 
@@ -590,18 +590,17 @@ class BugPredictionPrompts:
             """
             You are a helpful assistant that extracts structured information from bug prediction analyses.
             You are given the following bug prediction analyses for a pull request.
-            <followups_with_location>
+            <bug_prediction_analyses>
             {followups}
-            </followups_with_location>
+            </bug_prediction_analyses>
 
             # Your goal:
-            Review the bug prediction analyses and extract the requested output information.
+            Review the bug prediction analyses and extract a list of unique bug predictions.
 
             # Guidelines:
-            - Ensure all fields are properly populated based on each analysis.
+            - The list output should not contain bug predictions that reflect the same core issue. Consolidate any that are related to the same bug.
             - Filter the output to only include bugs introduced by the new code in the pull request, not bugs that existed in the previous version of the code or bugs that are fixed by the new code. Pay special attention to the timing of bugs: if the analysis refers to "previous code", this indicates the bug existed in an older version and should be filtered out.
             - Filter the output to only include predicted bugs that are fatal or critical such as one that would crash a server. To determine if the bug is fatal or critical, read the bug prediction analysis carefully and focus on the conclusion of the analysis.
-            - Deduplicate bug predictions that reflect the same core issue. Consolidate any that are related to the same bug.
             - Use the provided encoded location on each followup to report the encoded location of the bug in the codebase.
 
             # Focus:
