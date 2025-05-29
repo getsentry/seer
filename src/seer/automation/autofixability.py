@@ -29,9 +29,9 @@ class AutofixabilityModel:
             "This issue is complex and very difficult to resolve",
             "This issue is in the codebase, simple and easily resolved",
         ]
-        self.embeddings_fixable = self.model.encode(self.fixable_range)
+        self.embeddings_fixable = self.model.encode(self.fixable_range, show_progress_bar=False)
 
     def score(self, issue_summary_input: str) -> float:
-        embedding_issue_summary = self.model.encode(issue_summary_input)
+        embedding_issue_summary = self.model.encode(issue_summary_input, show_progress_bar=False)
         pred_probs = softmax(embedding_issue_summary @ self.embeddings_fixable.T, axis=-1)
         return float(pred_probs[1])  # upcast from np.float32 to float

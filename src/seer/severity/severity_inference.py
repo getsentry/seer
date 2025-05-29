@@ -37,8 +37,9 @@ def _init_embeddings_model(path: str) -> SentenceTransformer:
         path,
         device=(torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")),
     )
+    # Ensure warm start
     test_str = """Error: [GraphQL error]: Message: "Not a team repl", Location: [{"line":2,"column":3}], Path: ["startTeamReplPresenceSession"]..."""
-    _ = embeddings_model.encode(test_str, convert_to_numpy=True)  # Ensure warm start
+    _ = embeddings_model.encode(test_str, convert_to_numpy=True, show_progress_bar=False)
     return embeddings_model
 
 
@@ -63,7 +64,7 @@ class SeverityInference:
 
     def get_embeddings(self, text) -> np.ndarray:
         """Generate embeddings for the given text using the pre-trained model."""
-        return self.embeddings_model.encode(text, convert_to_numpy=True)
+        return self.embeddings_model.encode(text, convert_to_numpy=True, show_progress_bar=False)
 
     def severity_score(self, data: SeverityRequest) -> SeverityResponse:
         """Predict the severity score for the given text using the pre-trained classifier."""
