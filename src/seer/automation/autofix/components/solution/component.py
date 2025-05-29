@@ -184,7 +184,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                     model=(
                         GeminiProvider.model("gemini-2.0-flash-001")
                         if config.SENTRY_REGION == "de"
-                        else GeminiProvider.model("gemini-2.5-flash-preview-05-20")
+                        else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
                     ),
                     response_format=SolutionOutput,
                     run_name="Solution Extraction & Formatting",
