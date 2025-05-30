@@ -10,7 +10,7 @@ from seer.automation.autofix.config import (
     AUTOFIX_EXECUTION_HARD_TIME_LIMIT_SECS,
     AUTOFIX_EXECUTION_SOFT_TIME_LIMIT_SECS,
 )
-from seer.automation.codebase.models import PrFile
+from seer.automation.codebase.models import PrFile, PullRequest
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.bug_prediction_component import (
     BugPredictorComponent,
@@ -18,8 +18,8 @@ from seer.automation.codegen.bug_prediction_component import (
     FormatterComponent,
 )
 from seer.automation.codegen.models import (
+    BugPrediction,
     BugPredictorRequest,
-    CodeBugPredictionsOutput,
     CodegenRelevantWarningsRequest,
     FilterFilesRequest,
     FormatterRequest,
@@ -59,7 +59,7 @@ class BugPredictionStep(CodegenStep):
     @inject
     def _post_results_to_overwatch(
         self,
-        bug_predictions: CodeBugPredictionsOutput | None,
+        bug_predictions: list[BugPrediction] | None,
         diagnostics: list | None,
         config: AppConfig = injected,
     ):
@@ -68,7 +68,7 @@ class BugPredictionStep(CodegenStep):
             return
 
         bug_predictions_json = (
-            [bp.model_dump() for bp in bug_predictions.bug_predictions] if bug_predictions else []
+            [bp.model_dump() for bp in bug_predictions] if bug_predictions else []
         )
 
         request = {
@@ -90,17 +90,17 @@ class BugPredictionStep(CodegenStep):
 
     def _complete_run(
         self,
-        bug_predictions_output: CodeBugPredictionsOutput | None,
+        bug_predictions: list[BugPrediction] | None,
         diagnostics: list | None,
     ):
         try:
-            self._post_results_to_overwatch(bug_predictions_output, diagnostics)
+            self._post_results_to_overwatch(bug_predictions, diagnostics)
         except Exception:
             self.logger.exception("Error posting relevant warnings results to Overwatch")
             raise
         finally:
             self.context.event_manager.mark_completed_and_extend_bug_predictions(
-                bug_predictions_output.bug_predictions if bug_predictions_output else []
+                bug_predictions if bug_predictions else []
             )
 
     @observe(name="Codegen - Bug Prediction Step")
@@ -139,37 +139,31 @@ class BugPredictionStep(CodegenStep):
             for file in files
             if file.patch
         ]
+        pull_request = PullRequest(files=pr_files, title=pr.title, description=pr.body)
 
         # 2. Filter files to ones that are most error prone.
-        pr_files = (
+        pull_request.files = (
             FilterFilesComponent(self.context)
-            .invoke(
-                FilterFilesRequest(
-                    pr_files=pr_files, pr_title=pr.title or "", pr_body=pr.body or ""
-                )
-            )
+            .invoke(FilterFilesRequest(pull_request=pull_request))
             .pr_files
         )
         # TODO: populate diagnostics
 
         # 3. Predict bugs, producing a thorough analysis of each hypothesis.
         bug_predictor_output = BugPredictorComponent(self.context).invoke(
-            BugPredictorRequest(
-                pr_files=pr_files,
-                repo_full_name=self.request.repo.full_name,
-                pr_title=pr.title or "",
-                pr_body=pr.body or "",
-            )
+            BugPredictorRequest(pull_request=pull_request)
         )
 
         # 4. Post-process the analyses into a list of presentable, verified bug predictions.
-        formatter = FormatterComponent(self.context)
-        formatter_output = formatter.invoke(
-            FormatterRequest(
-                located_followups=bug_predictor_output.get_located_followups(),
-            ),
+        bug_predictions = (
+            FormatterComponent(self.context)
+            .invoke(
+                FormatterRequest(
+                    located_followups=bug_predictor_output.get_located_followups(),
+                ),
+            )
+            .bug_predictions
         )
-        bug_predictions = CodeBugPredictionsOutput(bug_predictions=formatter_output.bug_predictions)
 
         # 5. Save results.
         self._complete_run(bug_predictions, diagnostics=None)
