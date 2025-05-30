@@ -1,3 +1,4 @@
+import random
 import unittest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
@@ -24,39 +25,118 @@ from seer.db import (
     Session,
     TaskStatus,
 )
+from seer.exceptions import ClientError
+
+
+def _create_dummy_alert():
+    organization_id = 100
+    project_id = 101
+    config = AnomalyDetectionConfig(
+        time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+    )
+    point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
+    point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
+    anomalies = MPTimeSeriesAnomalies(
+        flags=["none", "none"],
+        scores=[1.0, 0.95],
+        matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+        matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
+        window_size=1,
+        thresholds=[],
+        original_flags=["none", "none"],
+        use_suss=[True, True],
+        confidence_levels=[
+            ConfidenceLevel.MEDIUM,
+            ConfidenceLevel.MEDIUM,
+        ],
+        algorithm_types=[
+            AlertAlgorithmType.NONE,
+            AlertAlgorithmType.NONE,
+        ],
+    )
+    return organization_id, project_id, config, point1, point2, anomalies
+
+
+def _create_alert_and_save(
+    alert_data_accessor: DbAlertDataAccessor,
+    external_alert_id: int,
+    external_alert_source_id: int,
+    external_alert_source_type: int,
+):
+    # Create and save alert
+    organization_id, project_id, config, point1, point2, anomalies = _create_dummy_alert()
+    alert_data_accessor.save_alert(
+        organization_id=organization_id,
+        project_id=project_id,
+        external_alert_id=external_alert_id,
+        external_alert_source_id=external_alert_source_id,
+        external_alert_source_type=external_alert_source_type,
+        config=config,
+        timeseries=[point1, point2],
+        anomalies=anomalies,
+        anomaly_algo_data={"window_size": 1},
+        data_purge_flag=TaskStatus.NOT_QUEUED,
+    )
 
 
 class TestDbAlertDataAccessor(unittest.TestCase):
-    def test_save_alert(self):
-        organization_id = 100
-        project_id = 101
+    @patch("seer.anomaly_detection.accessors.logger.error")
+    def test_query_invalid_alert_id(self, mock_logger_error):
+        alert_data_accessor = DbAlertDataAccessor()
+        alert = alert_data_accessor.query(external_alert_id=999999)
+        mock_logger_error.assert_called_once_with(
+            "alert_not_found",
+            extra={"external_alert_id": 999999},
+        )
+        assert alert is None
+
+    @patch("seer.anomaly_detection.accessors.logger.error")
+    def test_query_by_source_invalid_alert_id(self, mock_logger_error):
+        alert_data_accessor = DbAlertDataAccessor()
+        alert = alert_data_accessor.query_by_source(
+            external_alert_source_id=999999,
+            external_alert_source_type=1,
+        )
+        mock_logger_error.assert_called_once_with(
+            "alert_not_found",
+            extra={
+                "external_alert_source_id": 999999,
+                "external_alert_source_type": 1,
+            },
+        )
+        assert alert is None
+
+    def test_save_alert_by_source(self):
         external_alert_id = 10
-        config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
+        external_alert_source_id = 10
+        external_alert_source_type = 1
+        organization_id, project_id, config, point1, point2, anomalies = _create_dummy_alert()
+        alert_data_accessor = DbAlertDataAccessor()
+        ret = alert_data_accessor.save_alert_by_source(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
+            config=config,
+            timeseries=[point1, point2],
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 1},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
         )
-        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
-        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
-        anomalies = MPTimeSeriesAnomalies(
-            flags=["none", "none"],
-            scores=[1.0, 0.95],
-            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            window_size=1,
-            thresholds=[],
-            original_flags=["none", "none"],
-            use_suss=[True, True],
-            confidence_levels=[
-                ConfidenceLevel.MEDIUM,
-                ConfidenceLevel.MEDIUM,
-            ],
-            algorithm_types=[AlertAlgorithmType.NONE, AlertAlgorithmType.NONE],
-        )
+        assert ret is NotImplemented
+
+    def test_save_alert(self):
+        organization_id, project_id, config, point1, point2, anomalies = _create_dummy_alert()
+        external_alert_id = 10
         # Verify saving
         alert_data_accessor = DbAlertDataAccessor()
         alert_data_accessor.save_alert(
             organization_id=organization_id,
             project_id=project_id,
             external_alert_id=external_alert_id,
+            external_alert_source_id=None,
+            external_alert_source_type=None,
             config=config,
             timeseries=[point1, point2],
             anomalies=anomalies,
@@ -240,6 +320,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             organization_id=organization_id,
             project_id=project_id,
             external_alert_id=external_alert_id,
+            external_alert_source_id=None,
+            external_alert_source_type=None,
             config=config,
             timeseries=[point1],
             anomalies=MPTimeSeriesAnomalies(
@@ -325,6 +407,203 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             self.assertEqual(db_dynamic_alert.timeseries[0].timestamp.timestamp(), point1.timestamp)
             self.assertAlmostEqual(db_dynamic_alert.timeseries[0].value, point1.value)
 
+    def test_timepoint_save_invalid_alert_id(self):
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_id = random.randint(1, 1000000)
+        with self.assertRaises(ClientError) as e:
+            alert_data_accessor.save_timepoint(
+                external_alert_id=alert_id,
+                timepoint=TimeSeriesPoint(timestamp=500.0, value=42.42),
+                anomaly=MPTimeSeriesAnomalies(
+                    flags=["none"],
+                    scores=[1.0],
+                    matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
+                    matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
+                    window_size=1,
+                    thresholds=[],
+                    original_flags=["none"],
+                    use_suss=[True],
+                    confidence_levels=[ConfidenceLevel.MEDIUM],
+                    algorithm_types=[AlertAlgorithmType.NONE],
+                ),
+                anomaly_algo_data={"window_size": 1},
+            )
+        assert f"Alert with id {alert_id} not found" in str(e.exception)
+
+    def test_timepoint_save_invalid_source_id(self):
+        alert_data_accessor = DbAlertDataAccessor()
+        source_id = random.randint(1, 1000000)
+        source_type = 1
+        with self.assertRaises(ClientError) as e:
+            alert_data_accessor.save_timepoint_by_source(
+                external_alert_source_id=source_id,
+                external_alert_source_type=source_type,
+                timepoint=TimeSeriesPoint(timestamp=500.0, value=42.42),
+                anomaly=MPTimeSeriesAnomalies(
+                    flags=["none"],
+                    scores=[1.0],
+                    matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
+                    matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
+                    window_size=1,
+                    thresholds=[],
+                    original_flags=["none"],
+                    use_suss=[True],
+                    confidence_levels=[ConfidenceLevel.MEDIUM],
+                    algorithm_types=[AlertAlgorithmType.NONE],
+                ),
+                anomaly_algo_data={"window_size": 1},
+            )
+        assert f"Alert with source id {source_id} and type {source_type} not found" in str(
+            e.exception
+        )
+
+    def test_save_alert_with_source_id(self):
+        organization_id, project_id, config, point1, point2, anomalies = _create_dummy_alert()
+        external_alert_id = random.randint(1, 1000000)
+        external_alert_source_id = random.randint(1, 1000000)
+        external_alert_source_type = 1
+        # Verify saving
+        alert_data_accessor = DbAlertDataAccessor()
+        alert_data_accessor.save_alert(
+            organization_id=organization_id,
+            project_id=project_id,
+            external_alert_id=external_alert_id,
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
+            config=config,
+            timeseries=[point1, point2],
+            anomalies=anomalies,
+            anomaly_algo_data={"window_size": 1},
+            data_purge_flag=TaskStatus.NOT_QUEUED,
+        )
+
+        with Session() as session:
+            self.assertEqual(
+                session.query(DbDynamicAlert).count(), 1, "One and only one dynamic alert row saved"
+            )
+            self.assertEqual(
+                session.query(DbDynamicAlert)
+                .filter_by(external_alert_id=external_alert_id)
+                .count(),
+                1,
+                f"One and only one dynamic alert with the external_alert_id {external_alert_id}",
+            )
+
+        alert_from_db = alert_data_accessor.query_by_source(
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
+        )
+
+        self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
+        self.assertEqual(
+            alert_from_db.organization_id,
+            organization_id,
+            "Organization id should match",
+        )
+        self.assertEqual(alert_from_db.project_id, project_id, "Project id should match")
+        self.assertEqual(
+            alert_from_db.external_alert_id,
+            external_alert_id,
+            "external_alert_id id should match",
+        )
+        self.assertEqual(
+            alert_from_db.external_alert_source_id,
+            external_alert_source_id,
+            "external_alert_source_id id should match",
+        )
+        self.assertEqual(
+            alert_from_db.external_alert_source_type,
+            external_alert_source_type,
+            "external_alert_source_type id should match",
+        )
+        self.assertEqual(
+            alert_from_db.config.time_period,
+            config.time_period,
+            "time_period in config should match",
+        )
+
+        self.assertEqual(
+            alert_from_db.config.sensitivity,
+            config.sensitivity,
+            "sensitivity in config should match",
+        )
+
+        self.assertEqual(
+            alert_from_db.config.direction, config.direction, "direction in config should match"
+        )
+
+        self.assertEqual(
+            alert_from_db.config.expected_seasonality,
+            config.expected_seasonality,
+            "seasonality in config should match",
+        )
+
+        self.assertEqual(
+            len(alert_from_db.timeseries.timestamps), 2, "Must have two data points in timeseries"
+        )
+        self.assertEqual(
+            len(alert_from_db.timeseries.values), 2, "Must have two data points in timeseries"
+        )
+        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
+
+        # Adding a new timepoint with new timestamp should succeed
+        point3 = TimeSeriesPoint(
+            timestamp=3000.0,
+            value=500.0,
+            anomaly=Anomaly(anomaly_type="none", anomaly_score=1.0),
+        )
+        alert_data_accessor.save_timepoint_by_source(
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
+            timepoint=point3,
+            anomaly=MPTimeSeriesAnomalies(
+                flags=["none"],
+                scores=[0.8],
+                matrix_profile_suss=np.array([[1.0, 10, -1, -1]]),
+                matrix_profile_fixed=np.array([[1.0, 10, -1, -1]]),
+                window_size=1,
+                thresholds=[],
+                original_flags=["none"],
+                use_suss=[True],
+                confidence_levels=[
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                    ConfidenceLevel.MEDIUM,
+                ],
+                algorithm_types=[
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                    AlertAlgorithmType.NONE,
+                ],
+            ),
+            anomaly_algo_data={
+                "mp_suss": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+                "mp_fixed": {"dist": 1.0, "idx": 10, "l_idx": -1, "r_idx": -1},
+            },
+        )
+        alert_from_db = alert_data_accessor.query_by_source(
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
+        )
+        self.assertIsNotNone(alert_from_db, "Should retrieve the alert record")
+        self.assertEqual(
+            len(alert_from_db.timeseries.timestamps), 3, "Must have three data points in timeseries"
+        )
+        self.assertEqual(
+            len(alert_from_db.timeseries.values), 3, "Must have three data points in timeseries"
+        )
+        self.assertEqual(alert_from_db.timeseries.timestamps[0], point1.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[0], point1.value)
+        self.assertEqual(alert_from_db.timeseries.timestamps[1], point2.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[1], point2.value)
+        self.assertEqual(alert_from_db.timeseries.timestamps[2], point3.timestamp)
+        self.assertEqual(alert_from_db.timeseries.values[2], point3.value)
+
     def test_skip_fixed_window(self):
         """Test that matrix profiles are recalculated when missing from timeseries points"""
         # Create and save alert with timeseries points missing matrix profile data
@@ -357,6 +636,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             organization_id=organization_id,
             project_id=project_id,
             external_alert_id=external_alert_id,
+            external_alert_source_id=None,
+            external_alert_source_type=None,
             config=config,
             timeseries=points,
             anomalies=anomalies,
@@ -384,12 +665,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
 
     def test_original_flags_padding(self):
         """Test that original_flags gets padded with 'none' even when there is missing original flag data"""
-        organization_id = 100
-        project_id = 101
+        organization_id, project_id, config, _, _, _ = _create_dummy_alert()
         external_alert_id = 10
-        config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
-        )
 
         points = [TimeSeriesPoint(timestamp=100.0 * i, value=42.42) for i in range(5)]
 
@@ -423,6 +700,8 @@ class TestDbAlertDataAccessor(unittest.TestCase):
             organization_id=organization_id,
             project_id=project_id,
             external_alert_id=external_alert_id,
+            external_alert_source_id=None,
+            external_alert_source_type=None,
             config=config,
             timeseries=points,
             anomalies=anomalies,
@@ -454,46 +733,10 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         )
 
     def test_queue_data_purge_flag(self):
-
-        # Create and save alert
-        organization_id = 100
-        project_id = 101
-        external_alert_id = 10
-        config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
-        )
-        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
-        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
-        anomalies = MPTimeSeriesAnomalies(
-            flags=["none", "none"],
-            scores=[1.0, 0.95],
-            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            window_size=1,
-            thresholds=[],
-            original_flags=["none", "none"],
-            use_suss=[True, True],
-            confidence_levels=[
-                ConfidenceLevel.MEDIUM,
-                ConfidenceLevel.MEDIUM,
-            ],
-            algorithm_types=[
-                AlertAlgorithmType.NONE,
-                AlertAlgorithmType.NONE,
-            ],
-        )
         alert_data_accessor = DbAlertDataAccessor()
-        alert_data_accessor.save_alert(
-            organization_id=organization_id,
-            project_id=project_id,
-            external_alert_id=external_alert_id,
-            config=config,
-            timeseries=[point1, point2],
-            anomalies=anomalies,
-            anomaly_algo_data={"window_size": 1},
-            data_purge_flag=TaskStatus.NOT_QUEUED,
-        )
 
+        external_alert_id = random.randint(1, 1000000)
+        _create_alert_and_save(alert_data_accessor, external_alert_id, None, None)
         alert_data_accessor.queue_data_purge_flag(external_alert_id)
 
         with Session() as session:
@@ -513,57 +756,54 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         with self.assertRaises(Exception):
             alert_data_accessor.queue_data_purge_flag(999)
 
-    def test_can_queue_cleanup_and_predict_task(self):
+        external_alert_source_id = random.randint(1, 1000000)
+        external_alert_source_type = 1
+        _create_alert_and_save(
+            alert_data_accessor,
+            external_alert_id,
+            external_alert_source_id,
+            external_alert_source_type,
+        )
+        alert_data_accessor.queue_data_purge_flag_by_source(
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
+        )
 
-        # Create and save alert
-        organization_id = 100
-        project_id = 101
-        external_alert_id = 10
-        config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
-        )
-        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
-        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
-        anomalies = MPTimeSeriesAnomalies(
-            flags=["none", "none"],
-            scores=[1.0, 0.95],
-            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            window_size=1,
-            thresholds=[],
-            original_flags=["none", "none"],
-            use_suss=[True, True],
-            confidence_levels=[
-                ConfidenceLevel.MEDIUM,
-                ConfidenceLevel.MEDIUM,
-            ],
-            algorithm_types=[
-                AlertAlgorithmType.NONE,
-                AlertAlgorithmType.NONE,
-            ],
-        )
+        with Session() as session:
+
+            assert session.query(DbDynamicAlert).count() == 1
+
+            dynamic_alert = (
+                session.query(DbDynamicAlert)
+                .filter_by(
+                    external_alert_source_id=external_alert_source_id,
+                    external_alert_source_type=external_alert_source_type,
+                )
+                .one_or_none()
+            )
+            assert dynamic_alert is not None
+            assert dynamic_alert.data_purge_flag == TaskStatus.QUEUED
+            assert (
+                dynamic_alert.last_queued_at < datetime.now()
+                and dynamic_alert.last_queued_at > datetime.now() - timedelta(minutes=1)
+            )
+
+        with self.assertRaises(Exception):
+            alert_data_accessor.queue_data_purge_flag_by_source(999, 1)
+
+    def test_can_queue_cleanup_and_predict_task(self):
         alert_data_accessor = DbAlertDataAccessor()
-        alert_data_accessor.save_alert(
-            organization_id=organization_id,
-            project_id=project_id,
-            external_alert_id=external_alert_id,
-            config=config,
-            timeseries=[point1, point2],
-            anomalies=anomalies,
-            anomaly_algo_data={"window_size": 1},
-            data_purge_flag=TaskStatus.NOT_QUEUED,
-        )
+        external_alert_id = random.randint(1, 1000000)
+        _create_alert_and_save(alert_data_accessor, external_alert_id, None, None)
 
         assert alert_data_accessor.can_queue_cleanup_predict_task(external_alert_id)
 
         # Manually adjust dynamic_alert and assert accordingly
         with Session() as session:
-
             assert session.query(DbDynamicAlert).count() == 1
             dynamic_alert = (
                 session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).first()
             )
-
             dynamic_alert.data_purge_flag = TaskStatus.PROCESSING
             session.commit()
             assert not alert_data_accessor.can_queue_cleanup_predict_task(external_alert_id)
@@ -578,45 +818,51 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         with self.assertRaises(Exception):
             alert_data_accessor.can_queue_cleanup_predict_task(999)
 
-    def test_delete_alert_data(self):
-        # Create and save alert
-        organization_id = 100
-        project_id = 101
-        external_alert_id = 10
-        config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
-        )
-        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
-        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
-        anomalies = MPTimeSeriesAnomalies(
-            flags=["none", "none"],
-            scores=[1.0, 0.95],
-            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            window_size=1,
-            thresholds=[],
-            original_flags=["none", "none"],
-            use_suss=[True, True],
-            confidence_levels=[
-                ConfidenceLevel.MEDIUM,
-                ConfidenceLevel.MEDIUM,
-            ],
-            algorithm_types=[
-                AlertAlgorithmType.NONE,
-                AlertAlgorithmType.NONE,
-            ],
-        )
+    def test_can_queue_cleanup_and_predict_task_by_source(self):
         alert_data_accessor = DbAlertDataAccessor()
-        alert_data_accessor.save_alert(
-            organization_id=organization_id,
-            project_id=project_id,
-            external_alert_id=external_alert_id,
-            config=config,
-            timeseries=[point1, point2],
-            anomalies=anomalies,
-            anomaly_algo_data={"window_size": 1},
-            data_purge_flag=TaskStatus.NOT_QUEUED,
+        external_alert_id = random.randint(1, 1000000)
+        external_alert_source_id = random.randint(1, 1000000)
+        external_alert_source_type = 1
+        _create_alert_and_save(
+            alert_data_accessor,
+            external_alert_id,
+            external_alert_source_id,
+            external_alert_source_type,
         )
+
+        assert alert_data_accessor.can_queue_cleanup_predict_task_by_source(
+            external_alert_source_id, external_alert_source_type
+        )
+
+        # Manually adjust dynamic_alert and assert accordingly
+        with Session() as session:
+            assert session.query(DbDynamicAlert).count() == 1
+            dynamic_alert = (
+                session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).first()
+            )
+            dynamic_alert.data_purge_flag = TaskStatus.PROCESSING
+            session.commit()
+            assert not alert_data_accessor.can_queue_cleanup_predict_task_by_source(
+                external_alert_source_id, external_alert_source_type
+            )
+
+            dynamic_alert.last_queued_at = datetime.now()
+            session.commit()
+            assert not alert_data_accessor.can_queue_cleanup_predict_task_by_source(
+                external_alert_source_id, external_alert_source_type
+            )
+            assert not alert_data_accessor.can_queue_cleanup_predict_task_by_source(
+                external_alert_source_id, external_alert_source_type, apply_time_threshold=False
+            )
+
+        with self.assertRaises(Exception):
+            alert_data_accessor.can_queue_cleanup_predict_task_by_source(999, 1)
+
+    def test_delete_alert_data(self):
+        alert_data_accessor = DbAlertDataAccessor()
+
+        external_alert_id = random.randint(1, 1000000)
+        _create_alert_and_save(alert_data_accessor, external_alert_id, None, None)
 
         # Add some prophet predictions to the alert manually
         with Session() as session:
@@ -658,45 +904,36 @@ class TestDbAlertDataAccessor(unittest.TestCase):
         with self.assertRaises(Exception):
             alert_data_accessor.delete_alert_data(999)
 
+        external_alert_source_id = random.randint(1, 1000000)
+        external_alert_source_type = 1
+        _create_alert_and_save(
+            alert_data_accessor,
+            external_alert_id,
+            external_alert_source_id,
+            external_alert_source_type,
+        )
+
+        alert_data_accessor.delete_alert_data_by_source(
+            external_alert_source_id, external_alert_source_type
+        )
+
+        with Session() as session:
+            dynamic_alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+
+            assert dynamic_alert is None
+
+        with self.assertRaises(Exception):
+            alert_data_accessor.delete_alert_data_by_source(999, 1)
+
     def test_reset_cleanup_and_predict_task(self):
         # Create and save alert
-        organization_id = 100
-        project_id = 101
-        external_alert_id = 10
-        config = AnomalyDetectionConfig(
-            time_period=15, sensitivity="high", direction="both", expected_seasonality="auto"
-        )
-        point1 = TimeSeriesPoint(timestamp=500.0, value=42.42)
-        point2 = TimeSeriesPoint(timestamp=1000.0, value=500.0)
-        anomalies = MPTimeSeriesAnomalies(
-            flags=["none", "none"],
-            scores=[1.0, 0.95],
-            matrix_profile_suss=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            matrix_profile_fixed=np.array([[1.0, 10, -1, -1], [1.5, 15, -1, -1]]),
-            window_size=1,
-            thresholds=[],
-            original_flags=["none", "none"],
-            use_suss=[True, True],
-            confidence_levels=[
-                ConfidenceLevel.MEDIUM,
-                ConfidenceLevel.MEDIUM,
-            ],
-            algorithm_types=[
-                AlertAlgorithmType.NONE,
-                AlertAlgorithmType.NONE,
-            ],
-        )
         alert_data_accessor = DbAlertDataAccessor()
-        alert_data_accessor.save_alert(
-            organization_id=organization_id,
-            project_id=project_id,
-            external_alert_id=external_alert_id,
-            config=config,
-            timeseries=[point1, point2],
-            anomalies=anomalies,
-            anomaly_algo_data={"window_size": 1},
-            data_purge_flag=TaskStatus.NOT_QUEUED,
-        )
+        external_alert_id = random.randint(1, 1000000)
+        _create_alert_and_save(alert_data_accessor, external_alert_id, None, None)
 
         alert_data_accessor.reset_cleanup_predict_task(external_alert_id)
 
@@ -713,6 +950,37 @@ class TestDbAlertDataAccessor(unittest.TestCase):
 
         with self.assertRaises(Exception):
             alert_data_accessor.reset_cleanup_predict_task(999)
+
+    def test_reset_cleanup_and_predict_task_by_source(self):
+        # Create and save alert
+        alert_data_accessor = DbAlertDataAccessor()
+        external_alert_id = random.randint(1, 1000000)
+        external_alert_source_id = random.randint(1, 1000000)
+        external_alert_source_type = 1
+        _create_alert_and_save(
+            alert_data_accessor,
+            external_alert_id,
+            external_alert_source_id,
+            external_alert_source_type,
+        )
+
+        alert_data_accessor.reset_cleanup_predict_task_by_source(
+            external_alert_source_id, external_alert_source_type
+        )
+
+        with Session() as session:
+            dynamic_alert = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+
+            assert dynamic_alert is not None
+            assert dynamic_alert.last_queued_at is None
+            assert dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
+
+        with self.assertRaises(Exception):
+            alert_data_accessor.reset_cleanup_predict_task_by_source(999, 1)
 
     def test_combine_anomalies(self):
         suss_thresholds = [

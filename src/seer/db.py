@@ -408,11 +408,20 @@ class DbDynamicAlert(Base):
             "ix_dynamic_alert_external_alert_id",
             "external_alert_id",
         ),
+        Index(
+            "ix_dynamic_alert_external_alert_source_id_source_type",
+            "external_alert_source_id",
+            "external_alert_source_type",
+        ),
     )
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
     organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    external_alert_id: Mapped[int] = mapped_column(
+        BigInteger, nullable=False
+    )  # TODO: Make nullable once we fully migrate to source based alerts
+    external_alert_source_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    external_alert_source_type: Mapped[int] = mapped_column(BigInteger, nullable=True)
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
     anomaly_algo_data: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -497,7 +506,11 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     __tablename__ = "dynamic_alert_time_series_history"
     __table_args__ = (Index("ix_dynamic_alert_time_series_history_timestamp", "timestamp"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    alert_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    alert_id: Mapped[int] = mapped_column(
+        BigInteger, primary_key=True
+    )  # Note: This is actually the external id
+    external_alert_source_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
+    external_alert_source_type: Mapped[int] = mapped_column(BigInteger, nullable=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )

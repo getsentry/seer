@@ -679,6 +679,8 @@ class AnomalyDetection(BaseModel):
             organization_id=request.organization_id,
             project_id=request.project_id,
             external_alert_id=request.alert.id,
+            external_alert_source_id=None,  # TODO: Add source id and type once the store API is updated
+            external_alert_source_type=None,
             config=request.config,
             timeseries=ts,
             anomalies=anomalies,
