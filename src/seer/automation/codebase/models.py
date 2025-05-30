@@ -127,6 +127,7 @@ class PrFile(BaseModel):
             if start_line <= hunk_end and hunk_start <= end_line
         ]
 
+    @property
     def should_show_hunks(self) -> bool:
         if self.status == "removed":
             return False
@@ -147,7 +148,7 @@ class PrFile(BaseModel):
         repo_name_addendum = f" in repo {self.repo_full_name}" if self.repo_full_name else ""
         title = title + repo_name_addendum
 
-        if self.should_show_hunks():
+        if self.should_show_hunks:
             formatted_hunks = self.format_hunks()
         else:
             formatted_hunks = ""
@@ -160,6 +161,67 @@ class PrFile(BaseModel):
 def format_diff(pr_files: list[PrFile]) -> str:
     body = "\n\n".join(pr_file.format() for pr_file in pr_files)
     return f"<diff>\n\n{body}\n\n</diff>"
+
+
+class PullRequest(BaseModel):
+    files: list[PrFile]
+    title: str | None = None
+    description: str | None = None
+    # NOTE: PyGithub's type annotation is wrong. pr.body is None when empty
+
+    def format_title_and_description(self, max_description_length: int = 4 * 2_000) -> str:
+        if self.title:
+            title_formatted = textwrap.dedent(
+                """\
+                Pull request title: {title}
+                """
+            ).format(title=self.title)
+        else:
+            title_formatted = ""
+
+        if self.description:
+            needs_truncation = len(self.description) > max_description_length
+            description_formatted = textwrap.dedent(
+                """
+                Pull request description:
+                {pr_body}
+                {truncation_warning}
+                """
+            ).format(
+                pr_body=self.description[:max_description_length],
+                truncation_warning=(
+                    "< Pull request description truncated due to excessive length >"
+                    if needs_truncation
+                    else ""
+                ),
+            )
+        else:
+            description_formatted = ""
+
+        return textwrap.dedent(
+            """\
+            {title_formatted}
+            {description_formatted}
+            """
+        ).format(
+            title_formatted=title_formatted,
+            description_formatted=description_formatted,
+        )
+
+    def format_diff(self) -> str:
+        diff = "\n\n".join(pr_file.format() for pr_file in self.files)
+        return f"<diff>\n\n{diff}\n\n</diff>"
+
+    def format(self) -> str:
+        """
+        Formats the PR title, description, and diff for prompt consumption.
+        """
+        return textwrap.dedent(
+            """\
+            {title_and_description}
+            {diff}
+            """
+        ).format(title_and_description=self.format_title_and_description(), diff=self.format_diff())
 
 
 # Mostly copied from https://github.com/codecov/bug-prediction-research/blob/main/src/core/database/models.py

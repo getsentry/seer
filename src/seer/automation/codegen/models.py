@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from seer.automation.agent.models import Message
-from seer.automation.codebase.models import Location, PrFile, StaticAnalysisWarning
+from seer.automation.codebase.models import Location, PrFile, PullRequest, StaticAnalysisWarning
 from seer.automation.component import BaseComponentOutput, BaseComponentRequest
 from seer.automation.models import FileChange, IssueDetails, RepoDefinition
 from seer.db import DbRunMemory
@@ -353,14 +353,8 @@ class CodePredictRelevantWarningsOutput(BaseComponentOutput):
     relevant_warning_results: list[RelevantWarningResult]
 
 
-class CodeBugPredictionsOutput(BaseComponentOutput):
-    bug_predictions: list[BugPrediction]
-
-
 class FilterFilesRequest(BaseComponentRequest):
-    pr_files: list[PrFile]
-    pr_title: str
-    pr_body: str
+    pull_request: PullRequest
     shuffle_files: bool = True
     num_files_desired: int = 5
 
@@ -370,10 +364,7 @@ class FilterFilesOutput(BaseComponentOutput):
 
 
 class BugPredictorRequest(BaseComponentRequest):
-    pr_files: list[PrFile]
-    repo_full_name: str
-    pr_title: str
-    pr_body: str
+    pull_request: PullRequest
     max_num_concurrent_calls: int = 6
 
 

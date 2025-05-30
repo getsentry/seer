@@ -3,7 +3,7 @@ import textwrap
 from pydantic import BaseModel
 
 from seer.automation.autofix.components.coding.models import PlanStepsPromptXml, PlanTaskPromptXml
-from seer.automation.codebase.models import PrFile, format_diff
+from seer.automation.codebase.models import PullRequest
 from seer.automation.codegen.models import LocatedBugPredictionFollowup, StaticAnalysisSuggestion
 
 
@@ -472,28 +472,28 @@ class BugPredictionPrompts:
 
     @staticmethod
     def format_prompt_file_filter(
-        pr_files: list[PrFile],
+        pull_request: PullRequest,
         num_files_desired: int = 5,
     ) -> str:
         return textwrap.dedent(
             """\
             Here's a code change.
 
-            {diff}
+            {pull_request}
 
             We need you to narrow down the list of files we want to analyze for finding bugs.
             Return the top {num_files_desired} unique files we should analyze.
             We don't care to predict bugs for code that won't be run in production, e.g., test files. So please filter out test files. We want to predict bugs for files that might contain error-prone, untested code that could cause a crash in production.
             For context, this is just a preprocessing step. You'll have the chance to do an extensive code search and analysis of this code change later. For now, we just want you to filter down the list of files to a more manageable number."""
         ).format(
-            diff=format_diff(pr_files),
+            pull_request=pull_request.format(),
             num_files_desired=num_files_desired,
         )
 
     @staticmethod
-    def format_prompt_draft_hypotheses(repos_str: str, diff: str) -> str:
+    def format_prompt_draft_hypotheses(repos_str: str, pull_request: PullRequest) -> str:
         return textwrap.dedent(
-            """
+            """\
             You'll be given a code change. We're looking for bugs that might cause errors in production. We don't know if there are any. After all, most code changes are safe.
             {focus}
 
@@ -510,18 +510,18 @@ class BugPredictionPrompts:
 
             Here's the code change in question:
 
-            {diff}
+            {pull_request}
             """
         ).format(
             repos_str=repos_str,
-            diff=diff,
+            pull_request=pull_request.format(),
             focus=BugPredictionPrompts._focus_on_crashes(),
         )
 
     @staticmethod
     def format_prompt_structured_hypothesis(hypothesis_unstructured: str) -> str:
         return textwrap.dedent(
-            """
+            """\
             You were given a code change and asked to hypothesize about potential bugs. Here's what you said:
 
             <what_you_said>
@@ -536,13 +536,13 @@ class BugPredictionPrompts:
 
     @staticmethod
     def format_prompt_followup(
-        repos_str: str, diff: str, hypothesis_unstructured: str, hypothesis: str
+        repos_str: str, pull_request: PullRequest, hypothesis_unstructured: str, hypothesis: str
     ) -> str:
         return textwrap.dedent(
-            """
+            """\
             You were given a code change:
 
-            {diff}
+            {pull_request}
 
             You were asked to hypothesize about potential bugs. Here's what you said:
 
@@ -571,7 +571,7 @@ class BugPredictionPrompts:
             """
         ).format(
             repos_str=repos_str,
-            diff=diff,
+            pull_request=pull_request.format(),
             hypothesis_unstructured=hypothesis_unstructured,
             hypothesis=hypothesis,
             focus=BugPredictionPrompts._focus_on_crashes(),
@@ -587,7 +587,7 @@ class BugPredictionPrompts:
         )
 
         return textwrap.dedent(
-            """
+            """\
             You are a helpful assistant that extracts structured information from bug prediction analyses.
             You are given the following bug prediction analyses for a pull request.
             <followups_with_location>

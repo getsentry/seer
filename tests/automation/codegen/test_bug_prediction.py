@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from seer.automation.agent.models import LlmGenerateStructuredResponse
-from seer.automation.codebase.models import PrFile
+from seer.automation.codebase.models import PrFile, PullRequest
 from seer.automation.codegen.bug_prediction_component import (
     BugPredictorComponent,
     FilterFilesComponent,
@@ -92,6 +92,13 @@ def mock_pr_files():
 
 
 @pytest.fixture
+def mock_pull_request(mock_pr_files):
+    return PullRequest(
+        files=mock_pr_files, title="Test PR Title", description="Test PR description body"
+    )
+
+
+@pytest.fixture
 def mock_bug_predictions():
     return [
         BugPrediction(
@@ -134,20 +141,19 @@ class TestFilterFilesComponent:
         )
 
     def test_invoke_no_filtering_needed(self, component: FilterFilesComponent, mock_pr_files):
-        request = FilterFilesRequest(
-            pr_files=mock_pr_files[:1], pr_title="Title", pr_body="Body", num_files_desired=2
+        pull_request = PullRequest(
+            files=mock_pr_files[:1], title="Test Title", description="Test Body"
         )
+        request = FilterFilesRequest(pull_request=pull_request, num_files_desired=2)
         output = component.invoke(request)
         assert output.pr_files == [mock_pr_files[0]]
 
     def test_invoke_with_filtering(
-        self, component: FilterFilesComponent, mock_pr_files, patch_generate_structured
+        self, component: FilterFilesComponent, mock_pull_request, patch_generate_structured
     ):
-        request = FilterFilesRequest(
-            pr_files=mock_pr_files, pr_title="Title", pr_body="Body", num_files_desired=1
-        )
+        request = FilterFilesRequest(pull_request=mock_pull_request, num_files_desired=1)
         output = component.invoke(request)
-        assert output.pr_files == [mock_pr_files[pr_idx] for pr_idx in [0, 2, 3]]
+        assert output.pr_files == [mock_pull_request.files[pr_idx] for pr_idx in [0, 2, 3]]
         # 0 b/c of mock. 2 and 3 b/c their hunks won't be shown
 
     @pytest.fixture
@@ -165,21 +171,19 @@ class TestFilterFilesComponent:
     def test_invoke_with_filtering_failure(
         self,
         component: FilterFilesComponent,
-        mock_pr_files: list[PrFile],
+        mock_pull_request: PullRequest,
         patch_generate_structured_failure,
     ):
         request = FilterFilesRequest(
-            pr_files=mock_pr_files,
-            pr_title="Title",
-            pr_body="Body",
-            num_files_desired=len(mock_pr_files),
+            pull_request=mock_pull_request,
+            num_files_desired=len(mock_pull_request.files),
             shuffle_files=False,
         )
         output = component.invoke(request)
 
         assert isinstance(output, FilterFilesOutput)
         assert len(output.pr_files) == request.num_files_desired
-        assert output.pr_files == mock_pr_files
+        assert output.pr_files == mock_pull_request.files
 
 
 class TestFormatterComponent:
@@ -337,7 +341,7 @@ class TestBugPredictorComponent:
     def test_invoke(
         self,
         component: BugPredictorComponent,
-        mock_pr_files: list[PrFile],
+        mock_pull_request: PullRequest,
         mock_repo_def: RepoDefinition,
         mock_hypotheses_unstructured: str,
         mock_hypotheses: list[BugPredictorHypothesis],
@@ -346,12 +350,7 @@ class TestBugPredictorComponent:
         patch_generate_structured,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        bug_predictor_request = BugPredictorRequest(
-            pr_files=mock_pr_files,
-            repo_full_name=mock_repo_def.full_name,
-            pr_title="Test PR",
-            pr_body="Test description",
-        )
+        bug_predictor_request = BugPredictorRequest(pull_request=mock_pull_request)
         bug_predictor_output = component.invoke(bug_predictor_request)
 
         assert isinstance(bug_predictor_output, BugPredictorOutput)
@@ -457,17 +456,23 @@ def test_bug_prediction_step_invoke(
     mock_repo_client.repo.get_pull.assert_called_once_with(request["pr_id"])
 
     mock_invoke_filter_files_component.assert_called_once()
-    assert mock_invoke_filter_files_component.call_args[0][0].pr_files == mock_pr_files
+    filter_request = mock_invoke_filter_files_component.call_args[0][0]
+    assert isinstance(filter_request.pull_request, PullRequest)
+    assert filter_request.pull_request.files == mock_pr_files
+    assert filter_request.pull_request.title == "Test PR"
+    assert filter_request.pull_request.description == "Test PR description"
 
     mock_invoke_bug_predictor_component.assert_called_once()
     bug_predictor_request = mock_invoke_bug_predictor_component.call_args[0][0]
-    assert bug_predictor_request.pr_files == mock_filtered_pr_files
-    assert bug_predictor_request.pr_title == "Test PR"
-    assert bug_predictor_request.pr_body == "Test PR description"
+    assert isinstance(bug_predictor_request.pull_request, PullRequest)
+    assert bug_predictor_request.pull_request.files == mock_filtered_pr_files
+    assert bug_predictor_request.pull_request.title == "Test PR"
+    assert bug_predictor_request.pull_request.description == "Test PR description"
 
     mock_invoke_formatter_component.assert_called_once()
     formatter_input = mock_invoke_formatter_component.call_args[0][0]
     assert formatter_input.located_followups == bug_predictor_output.get_located_followups()
 
     mock_post_results_to_overwatch.assert_called_once()
-    assert mock_post_results_to_overwatch.call_args[0][0].bug_predictions == bug_predictions
+    assert mock_post_results_to_overwatch.call_args[0][0] == bug_predictions
+    assert mock_post_results_to_overwatch.call_args[0][1] is None  # diagnostics
