@@ -22,6 +22,18 @@ def mock_repo_client():
     client.get_current_commit_info.return_value = {
         "timestamp": "2021-01-01",
     }
+
+    # Add repo and github_auth attributes for tarball download functionality
+    mock_github_repo = MagicMock()
+    mock_github_repo.get_archive_link.return_value = (
+        "https://api.github.com/repos/test-owner/test-repo/tarball/abcd123"
+    )
+    client.repo = mock_github_repo
+
+    mock_github_auth = MagicMock()
+    mock_github_auth.token = "test-token"
+    client.github_auth = mock_github_auth
+
     return client
 
 
@@ -201,55 +213,62 @@ def test_initialize_in_background(
 
 
 def test_initialize_success_without_gcs(repo_manager, mock_repo_client):
-    """Test successful initialization sequence."""
-    repo_manager._use_gcs = False
-
-    with (
-        patch.object(repo_manager, "_clone_repo") as mock_clone,
-        patch.object(repo_manager, "download_from_gcs") as mock_download,
-        patch.object(repo_manager, "_sync_repo") as mock_sync,
-        patch.object(repo_manager, "_copy_repo", return_value="copied_repo_path") as mock_copy,
-        patch.object(repo_manager, "upload_to_gcs") as mock_upload,
-    ):
+    """Test successful initialization sequence using tarball download."""
+    with (patch.object(repo_manager, "_download_github_tar") as mock_download_tar,):
         repo_manager.initialize()
 
-        # Verify sequence
-        mock_clone.assert_called_once()
-        mock_download.assert_not_called()
-        mock_sync.assert_called_once()
-        mock_copy.assert_not_called()
-        mock_upload.assert_not_called()
+        # Verify tarball download was called instead of clone/sync
+        mock_download_tar.assert_called_once()
         assert repo_manager.initialization_future is None
 
 
 def test_initialize_from_gcs_download(repo_manager, mock_repo_client):
-    """Test initialization from a GCS download."""
-    repo_manager._use_gcs = True
-
-    mock_repo_client.get_current_commit_info.side_effect = [
-        {"timestamp": "2021-01-01"},
-        {"timestamp": "2021-01-01"},
-    ]
-
-    with (
-        patch.object(repo_manager, "_clone_repo") as mock_clone,
-        patch.object(
-            repo_manager, "gcs_archive_exists", return_value=MagicMock(commit_sha="123")
-        ) as mock_gcs_exists,
-        patch.object(repo_manager, "download_from_gcs") as mock_download,
-        patch.object(repo_manager, "_sync_repo") as mock_sync,
-        patch.object(repo_manager, "_copy_repo", return_value="copied_repo_path") as mock_copy,
-        patch.object(repo_manager, "upload_to_gcs") as mock_upload,
-    ):
+    """Test initialization with tarball download (previously GCS download test)."""
+    with (patch.object(repo_manager, "_download_github_tar") as mock_download_tar,):
         repo_manager.initialize()
 
-        # Verify sequence
-        mock_clone.assert_not_called()
-        mock_gcs_exists.assert_called_once()
-        mock_download.assert_called_once()
-        mock_sync.assert_called_once()
-        mock_copy.assert_not_called()
-        mock_upload.assert_not_called()
+        # Verify tarball download was called
+        mock_download_tar.assert_called_once()
+        assert repo_manager.initialization_future is None
+
+
+def test_initialize_tarball_download_success(repo_manager, mock_repo_client):
+    """Test successful initialization using GitHub tarball download."""
+    # Mock successful tarball extraction
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.iter_content.return_value = [b"chunk1", b"chunk2"]
+
+    fake_tar = MagicMock()
+    fake_tar.__enter__.return_value = fake_tar
+    fake_tar.getmembers.return_value = [MagicMock(name="file1.py")]
+
+    with (
+        patch("seer.automation.codebase.repo_manager.requests.get", return_value=mock_response),
+        patch("seer.automation.codebase.repo_manager.tarfile.open", return_value=fake_tar),
+        patch("seer.automation.codebase.repo_manager.cleanup_dir"),
+        patch("seer.automation.codebase.repo_manager.os.makedirs"),
+        patch(
+            "seer.automation.codebase.repo_manager.os.listdir", return_value=["extracted_folder"]
+        ),
+        patch("seer.automation.codebase.repo_manager.os.path.isdir", return_value=True),
+        patch("seer.automation.codebase.repo_manager.shutil.move"),
+        patch("seer.automation.codebase.repo_manager.shutil.rmtree"),
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.os.unlink"),
+        patch("seer.automation.codebase.repo_manager.git.Repo.init") as mock_repo_init,
+        patch("seer.automation.codebase.repo_manager.open", mock_open(), create=True),
+        patch.object(repo_manager, "_verify_repo_state"),
+    ):
+        mock_git_repo = MagicMock(spec=git.Repo)
+        mock_repo_init.return_value = mock_git_repo
+
+        repo_manager.initialize()
+
+        # Verify the process completed successfully
+        mock_repo_client.repo.get_archive_link.assert_called_once_with("tarball", ref="abcd123")
+        mock_repo_init.assert_called_once_with(repo_manager.repo_path)
+        assert repo_manager.git_repo == mock_git_repo
         assert repo_manager.initialization_future is None
 
 
@@ -258,12 +277,12 @@ def test_initialize_cleans_up_on_timeout(repo_manager):
     repo_manager.is_cancelled = True
 
     with (
-        patch.object(repo_manager, "_clone_repo") as mock_clone,
+        patch.object(repo_manager, "_download_github_tar") as mock_download_tar,
         patch.object(repo_manager, "cleanup") as mock_cleanup,
     ):
         repo_manager.initialize()
 
-        mock_clone.assert_not_called()
+        mock_download_tar.assert_called_once()
         mock_cleanup.assert_called_once()
 
 
@@ -1260,3 +1279,125 @@ def test_delete_archive_concurrent_deletion_safety(repo_manager):
         # Verify the calls were made even though resources were already deleted
         mock_blob.exists.assert_called_once()
         mock_blob.delete.assert_not_called()
+
+
+def test_validate_tar_members_security(repo_manager):
+    """Test that _validate_tar_members properly filters out dangerous paths."""
+    # Create mock tar members with various path types
+    mock_members = []
+
+    # Safe member
+    safe_member = MagicMock()
+    safe_member.name = "safe_file.txt"
+    mock_members.append(safe_member)
+
+    # Member with directory traversal
+    traversal_member = MagicMock()
+    traversal_member.name = "../../../etc/passwd"
+    mock_members.append(traversal_member)
+
+    # Member with absolute path
+    absolute_member = MagicMock()
+    absolute_member.name = "/etc/passwd"
+    mock_members.append(absolute_member)
+
+    # Member with prefix that should be stripped
+    prefixed_member = MagicMock()
+    prefixed_member.name = "copied_repo/valid_file.py"
+    mock_members.append(prefixed_member)
+
+    # Member with directory traversal after prefix
+    prefixed_traversal_member = MagicMock()
+    prefixed_traversal_member.name = "copied_repo/../dangerous.txt"
+    mock_members.append(prefixed_traversal_member)
+
+    # Test without prefix stripping
+    result = repo_manager._validate_tar_members(mock_members)
+
+    # Should only contain safe members
+    assert len(result) == 2  # safe_file.txt and copied_repo/valid_file.py
+    assert safe_member in result
+    assert prefixed_member in result
+    assert traversal_member not in result
+    assert absolute_member not in result
+    assert prefixed_traversal_member not in result
+
+    # Test with prefix stripping
+    # Reset member names for second test
+    prefixed_member.name = "copied_repo/valid_file.py"
+    prefixed_traversal_member.name = "copied_repo/../dangerous.txt"
+
+    result_with_prefix = repo_manager._validate_tar_members(
+        mock_members, strip_prefix="copied_repo/"
+    )
+
+    # Should have safe_file.txt and valid_file.py (with prefix stripped)
+    assert len(result_with_prefix) == 2
+    assert safe_member in result_with_prefix
+    assert prefixed_member in result_with_prefix
+    assert prefixed_member.name == "valid_file.py"  # Prefix should be stripped
+    assert traversal_member not in result_with_prefix
+    assert absolute_member not in result_with_prefix
+    assert prefixed_traversal_member not in result_with_prefix
+
+
+def test_validate_tar_members(repo_manager):
+    """Test that _validate_tar_members properly validates tar archive members and prevents directory traversal attacks."""
+    # Setup storage blob
+    storage_instance = MagicMock()
+    bucket = MagicMock()
+    blob = MagicMock()
+    blob.exists.return_value = True
+    blob.size = 1024  # Add a numeric size for chunk calculations
+    blob.reload = MagicMock()  # Mock the reload method
+    blob.download_as_bytes = MagicMock(return_value=b"fake data")  # Mock download_as_bytes
+    storage_instance.bucket.return_value = bucket
+    bucket.blob.return_value = blob
+
+    # Create fake tar members
+    fake_member_safe = MagicMock()
+    fake_member_safe.name = "copied_repo/safe.txt"
+    fake_member_unsafe = MagicMock()
+    fake_member_unsafe.name = "copied_repo/../unsafe.txt"
+    fake_member_abs = MagicMock()
+    fake_member_abs.name = "/absolute/path"
+
+    fake_tar = MagicMock()
+
+    with (
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client", return_value=storage_instance
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.cleanup_dir"),
+        patch("seer.automation.codebase.repo_manager.os.makedirs"),
+        patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["safe.txt"]),
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.open", mock_open(), create=True),
+        patch("seer.automation.codebase.repo_manager.tarfile.open") as mock_tar_open,
+        patch(
+            "seer.automation.codebase.repo_manager.git.Repo", return_value=MagicMock(spec=git.Repo)
+        ),
+        patch("seer.automation.codebase.repo_manager.os.unlink"),
+    ):
+        # Configure tarfile context manager
+        mock_tar_open.return_value.__enter__.return_value = fake_tar
+        fake_tar.getmembers.return_value = [fake_member_safe, fake_member_unsafe, fake_member_abs]
+        fake_tar.extractall = MagicMock()
+
+        # Run download
+        repo_manager.download_from_gcs(chunk_size=512)  # Use smaller chunk size for test
+
+        # Member name should be sanitized for safe member
+        assert fake_member_safe.name == "safe.txt"
+
+        # extractall called with only the safe member
+        args, kwargs = fake_tar.extractall.call_args
+        assert kwargs["path"] == repo_manager.repo_path
+        members_list = kwargs.get("members", [])
+        assert fake_member_safe in members_list
+        assert fake_member_unsafe not in members_list
+        assert fake_member_abs not in members_list
+
+        # Git repo should be set
+        assert repo_manager.git_repo is not None
