@@ -112,7 +112,9 @@ def create_query_from_natural_language(
             use_local_endpoint=True,
         )
         requested_fields = (
-            relevant_fields_response.parsed.fields if relevant_fields_response.parsed else []
+            relevant_fields_response.parsed.requested_fields
+            if relevant_fields_response.parsed
+            else []
         )
 
     for field in REQUIRED_FIELDS:

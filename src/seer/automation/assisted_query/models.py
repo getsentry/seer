@@ -47,7 +47,7 @@ class ModelResponse(BaseModel):
 
 
 class RelevantFieldsResponse(BaseModel):
-    fields: list[str]
+    requested_fields: list[str]
 
 
 class QueryOrFieldsResponse(BaseModel):

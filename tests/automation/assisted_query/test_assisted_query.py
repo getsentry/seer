@@ -16,6 +16,7 @@ from seer.automation.assisted_query.models import (
     CreateCacheResponse,
     ModelResponse,
     QueryOrFieldsResponse,
+    RelevantFieldsResponse,
     TranslateRequest,
     TranslateResponses,
 )
@@ -336,4 +337,148 @@ class TestAssistedQuery:
             ],
             sort="-count",
             confidence_score=0.95,
+        )
+
+    @patch("seer.automation.assisted_query.assisted_query.RpcClient")
+    @patch("seer.automation.agent.client.LlmClient")
+    def test_create_query_from_natural_language_direct_queries(
+        self, mock_llm_client_class, mock_rpc_client_class
+    ):
+        mock_rpc_client = MagicMock()
+        mock_llm_client = MagicMock()
+
+        mock_rpc_client_class.return_value = mock_rpc_client
+        mock_llm_client_class.return_value = mock_llm_client
+
+        expected_response = ModelResponse(
+            explanation="This is a test explanation that was short circuited",
+            query="error",
+            stats_period="24h",
+            group_by=["project"],
+            visualization=[
+                Chart(
+                    chart_type=1,
+                    y_axes=["Test y-axis 1", "Test y-axis 2"],
+                )
+            ],
+            sort="-count",
+            confidence_score=0.95,
+        )
+
+        mock_llm_client.generate_structured.return_value = LlmGenerateStructuredResponse(
+            QueryOrFieldsResponse(
+                queries=[expected_response],
+                requested_fields=None,
+            ),
+            metadata=LlmResponseMetadata(
+                model="gemini-2.5-flash-preview-05-20",
+                provider_name=LlmProviderType.GEMINI,
+                usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+            ),
+        )
+
+        response = create_query_from_natural_language(
+            natural_language_query="Show me the slowest database operations in the last 24 hours",
+            cache_name="test-cache",
+            org_id=1,
+            project_ids=[1, 2],
+            rpc_client=mock_rpc_client,
+            llm_client=mock_llm_client,
+        )
+
+        assert isinstance(response, LlmGenerateStructuredResponse)
+        assert len(response.parsed) == 1
+        assert response.parsed[0] == expected_response
+
+        mock_llm_client.generate_structured.assert_called_once()
+        mock_rpc_client.call.assert_not_called()
+
+    @patch("seer.automation.assisted_query.assisted_query.RpcClient")
+    @patch("seer.automation.agent.client.LlmClient")
+    def test_create_query_from_natural_language_no_direct_queries_or_requested_fields(
+        self, mock_rpc_client_class, mock_llm_client_class
+    ):
+        mock_rpc_client = MagicMock()
+        mock_llm_client = MagicMock()
+
+        mock_llm_client.generate_structured.side_effect = [
+            LlmGenerateStructuredResponse(
+                QueryOrFieldsResponse(queries=None, requested_fields=None),
+                metadata=LlmResponseMetadata(
+                    model="gemini-2.5-flash-preview-05-20",
+                    provider_name=LlmProviderType.GEMINI,
+                    usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+                ),
+            ),
+            LlmGenerateStructuredResponse(
+                RelevantFieldsResponse(requested_fields=["span.op", "span.description"]),
+                metadata=LlmResponseMetadata(
+                    model="gemini-2.5-flash-preview-05-20",
+                    provider_name=LlmProviderType.GEMINI,
+                    usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+                ),
+            ),
+            LlmGenerateStructuredResponse(
+                [
+                    ModelResponse(
+                        explanation="This is a test explanation",
+                        query="error",
+                        stats_period="24h",
+                        group_by=["project"],
+                        visualization=[
+                            Chart(
+                                chart_type=1,
+                                y_axes=["Test y-axis 1", "Test y-axis 2"],
+                            )
+                        ],
+                        sort="-count",
+                        confidence_score=0.95,
+                    )
+                ],
+                metadata=LlmResponseMetadata(
+                    model="gemini-2.5-flash-preview-05-20",
+                    provider_name=LlmProviderType.GEMINI,
+                    usage=Usage(prompt_tokens=10, completion_tokens=10, total_tokens=20),
+                ),
+            ),
+        ]
+
+        mock_llm_client_class.return_value = mock_llm_client
+        mock_rpc_client_class.return_value = mock_rpc_client
+
+        response = create_query_from_natural_language(
+            natural_language_query="Show me the slowest database operations in the last 24 hours",
+            cache_name="test-cache",
+            org_id=1,
+            project_ids=[1, 2],
+            rpc_client=mock_rpc_client,
+            llm_client=mock_llm_client,
+        )
+
+        assert isinstance(response, LlmGenerateStructuredResponse)
+        assert response.parsed == [
+            ModelResponse(
+                explanation="This is a test explanation",
+                query="error",
+                stats_period="24h",
+                group_by=["project"],
+                visualization=[
+                    Chart(
+                        chart_type=1,
+                        y_axes=["Test y-axis 1", "Test y-axis 2"],
+                    )
+                ],
+                sort="-count",
+                confidence_score=0.95,
+            )
+        ]
+        assert mock_llm_client.generate_structured.call_count == 3
+
+        mock_rpc_client.call.assert_called_once_with(
+            "get_attribute_values",
+            org_id=1,
+            fields=["span.op", "span.description", "transaction"],
+            project_ids=[1, 2],
+            stats_period="48h",
+            limit=200,
         )
