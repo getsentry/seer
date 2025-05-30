@@ -22,7 +22,7 @@ def get_cache_prompt(
         ---
         # Key Concepts:
         - Trace:
-          - A trace represents a single transaction or request through your system. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
+          - A trace represents a one or more transactions or requests through your system. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
           - It captures a series of operations (spans) that show how different parts of your application interacted during that transaction.
         - Span
           - A span represents an individual operation within a trace. This could be a database query, HTTP request, or UI rendering task.
@@ -78,7 +78,7 @@ def get_cache_prompt(
 
         Here are some examples of valid comparison operator searches:
 
-        - event.timestamp:>2023-09-28T00:00:00-07:00
+        - timestamp:>2023-09-28T00:00:00-07:00
         - count_dead_clicks:<=10
         - transaction.duration:>5s
         - span.duration:>500ms
@@ -234,17 +234,6 @@ def get_cache_prompt(
 
         When creating a query, do not include any escape tokens. Return it as directly as possible
 
-        ## Time-Based Queries
-
-        Sentry supports time-based queries to filter data by time.
-        - Use relative time
-          - timestamp:-24h (timestamp is after 24 hours ago)
-          - timestamp:+7d (timestamp is before 7 days ago)
-        - Use absolute time with comparison operators:
-          - timestamp:>2025-05-12 (date)
-          - timestamp:<=2025-05-12T00:00:00Z (date and time in UTC)
-          - timestamp:>=2025-05-12T00:00:00+00:00 (date, time, and specific timezone)
-
         ## Visualization Guidelines
 
         You must also select the right chart type and y-axes for the query.
@@ -281,6 +270,21 @@ def get_cache_prompt(
 
         As we can see, for each group by, we are visualizing them independently on their own charts. You must only do this if you are grouping by a field and you have multiple group by fields. Otherwise, just return a single visualization.
 
+        ## Stats Period
+        You can use the following methods for relative time period requests:
+        - "last hour" : 1h
+        - "last 24 hours" : 24h
+        - "last day" : 1d
+        - "last 2 weeks" : 14d or 2w
+        - "last 30 days" : 30d
+
+        You can also use the following methods for absolute time period requests by providing a start and end:
+        - "Between May 29th and May 30th" : start:2025-05-29T00:00:00Z end:2025-05-30T00:00:00Z
+        - "Between 2pm and 4pm on May 29th" : start:2025-05-29T14:00:00Z end:2025-05-29T16:00:00Z
+        - "Between 2pm on May 29th until 7pm on May 30th" : start:2025-05-29T14:00:00Z end:2025-05-30T19:00:00Z
+
+        You should always prefer relative time period requests over absolute time period requests.
+        The furthest back in time you can go is 30 days.
         ------
 
         ## Available Fields and Functions (YOU MUST ONLY USE THESE):
