@@ -63,7 +63,11 @@ from seer.automation.autofix.tasks import (
 )
 from seer.automation.codebase.models import RepoAccessCheckRequest, RepoAccessCheckResponse
 from seer.automation.codebase.repo_client import RepoClient
-from seer.automation.codebase.tasks import collect_all_repos_for_backfill, run_repo_sync
+from seer.automation.codebase.tasks import (
+    collect_all_repos_for_backfill,
+    run_repo_archive_cleanup,
+    run_repo_sync,
+)
 from seer.automation.codegen.evals.models import (
     CodegenRelevantWarningsEvaluationRequest,
     CodegenRelevantWarningsEvaluationSummary,
@@ -335,6 +339,17 @@ def autofix_sync_start_endpoint(data: AutofixNoopRequest) -> AutofixEndpointResp
         raise RuntimeError("The sync endpoint is only available in development mode")
 
     run_repo_sync.apply_async()
+
+    return AutofixEndpointResponse(started=True, run_id=-1)
+
+
+@json_api(blueprint, "/v1/automation/autofix/cache-ttl/start")
+def autofix_cache_ttl_endpoint(data: AutofixNoopRequest) -> AutofixEndpointResponse:
+    config = resolve(AppConfig)
+    if not config.DEV:
+        raise RuntimeError("The cache ttl endpoint is only available in development mode")
+
+    run_repo_archive_cleanup.apply_async()
 
     return AutofixEndpointResponse(started=True, run_id=-1)
 

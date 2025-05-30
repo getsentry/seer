@@ -24,12 +24,15 @@ logger = logging.getLogger(__name__)
 # These lock keys ensure that only one backfill or sync task runs at a time, given our current setup with multiple celerybeat instances.
 BACKFILL_LOCK_KEY = 1234567890123456780
 SYNC_LOCK_KEY = 1234567890123456781
+CLEANUP_LOCK_KEY = 1234567890123456782
 
 MAX_QUERIED_PROJECT_IDS = 250
 THRESHOLD_BACKFILL_JOBS_UNTIL_STOP_LOOPING = 32
 
 MAX_REPO_ARCHIVES_PER_SYNC = 32
 REPO_ARCHIVE_UPDATE_INTERVAL = datetime.timedelta(days=7)
+REPO_ARCHIVE_CLEANUP_INTERVAL = datetime.timedelta(days=30)
+MAX_REPO_ARCHIVES_PER_CLEANUP = 50
 
 # Temporarily limit processing to specific organization IDs
 FLAGGED_ORG_IDS = {1}
@@ -494,6 +497,7 @@ def run_repo_sync():
             # 2. Query for repository archives that haven't been updated within the interval (7 days)
             # 3. Order archives by their last update time to prioritize the oldest ones
             # 4. Limit processing to MAX_REPO_ARCHIVES_PER_SYNC (32) archives per run
+            # Only sync repos that have been used (downloaded) within the last 7 days
             repo_archives = (
                 main_session.query(DbSeerRepoArchive)
                 .where(
@@ -501,6 +505,9 @@ def run_repo_sync():
                         DbSeerRepoArchive.updated_at.isnot(None),
                         DbSeerRepoArchive.updated_at
                         < datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL,
+                        DbSeerRepoArchive.last_downloaded_at.isnot(None),
+                        DbSeerRepoArchive.last_downloaded_at
+                        >= datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_UPDATE_INTERVAL,
                         DbSeerRepoArchive.organization_id.in_(
                             FLAGGED_ORG_IDS
                         ),  # Temporarily only run on flagged org ids
@@ -634,3 +641,100 @@ def run_repo_sync_for_repo_archive(repo_sync_job_dict: dict):
         raise
 
     logger.info("Repo sync job done.")
+
+
+@celery_app.task(
+    soft_time_limit=timedelta(minutes=5).total_seconds(),
+    time_limit=timedelta(minutes=5, seconds=30).total_seconds(),
+)
+def run_repo_archive_cleanup():
+    """
+    Removes repository archives that haven't been updated in the last 30 days.
+
+    This task helps manage storage costs by cleaning up old repository archives that are
+    no longer being actively maintained. It removes both the database records and the
+    corresponding GCS blobs to free up storage space.
+
+    The cleanup process:
+    1. Uses an advisory lock to ensure only one cleanup process runs at a time
+    2. Queries for archives older than REPO_ARCHIVE_CLEANUP_INTERVAL (30 days)
+    3. Limits processing to MAX_REPO_ARCHIVES_PER_CLEANUP (50) archives per run
+    4. Uses RepoManager.delete_archive() to remove both GCS blob and database record
+    5. Logs the cleanup actions for monitoring and debugging
+
+    Returns:
+        None - This task performs cleanup but doesn't return a value
+    """
+    logger.info("Starting repository archive cleanup")
+
+    archives_to_cleanup = []
+
+    with Session() as main_session:
+        # 1. Use a PostgreSQL advisory lock to ensure only one cleanup process runs at a time
+        with acquire_lock(main_session, lock_key=CLEANUP_LOCK_KEY, lock_name="cleanup") as got_lock:
+            if not got_lock:
+                return
+
+            # 2. Query for repository archives that haven't been updated within the cleanup interval (30 days)
+            cutoff_date = datetime.datetime.now(datetime.UTC) - REPO_ARCHIVE_CLEANUP_INTERVAL
+
+            repo_archives = (
+                main_session.query(DbSeerRepoArchive)
+                .where(
+                    and_(
+                        or_(
+                            and_(
+                                DbSeerRepoArchive.last_downloaded_at.isnot(None),
+                                DbSeerRepoArchive.last_downloaded_at < cutoff_date,
+                            ),
+                            and_(
+                                DbSeerRepoArchive.last_downloaded_at.is_(None),
+                                DbSeerRepoArchive.updated_at < cutoff_date,
+                            ),
+                        ),
+                        DbSeerRepoArchive.organization_id.in_(
+                            FLAGGED_ORG_IDS
+                        ),  # Temporarily only run on flagged org ids
+                    )
+                )
+                .order_by(DbSeerRepoArchive.updated_at)  # Clean up oldest first
+                .limit(MAX_REPO_ARCHIVES_PER_CLEANUP)
+                .all()
+            )
+
+            logger.info(f"Found {len(repo_archives)} repository archives to clean up")
+
+            # 3. For each archive, use RepoManager to delete both GCS blob and database record
+            for repo_archive in repo_archives:
+                try:
+                    # Create a RepoClient and RepoManager for the repository
+                    # TODO: What if they revoke access to this repo? We should still be able to delete the archive.
+                    repo_client = RepoClient.from_repo_definition(
+                        RepoDefinition.model_validate(repo_archive.repo_definition),
+                        RepoClientType.READ,
+                    )
+                    repo_manager = RepoManager(
+                        repo_client, organization_id=repo_archive.organization_id
+                    )
+
+                    # Use RepoManager's delete_archive method to handle both GCS and DB cleanup
+                    repo_manager.delete_archive()
+                    archives_to_cleanup.append(repo_archive.blob_path)
+
+                except Exception as e:
+                    logger.exception(
+                        "Failed to cleanup repository archive",
+                        extra={
+                            "repo_archive_id": repo_archive.id,
+                            "blob_path": repo_archive.blob_path,
+                            "error": str(e),
+                        },
+                    )
+                    # Continue with other archives even if one fails
+                    continue
+
+        # Note: No need to commit here since RepoManager.delete_archive() handles its own session
+
+    logger.info(f"Successfully cleaned up {len(archives_to_cleanup)} repository archives")
+    if archives_to_cleanup:
+        logger.info(f"Cleaned up archives: {archives_to_cleanup}")
