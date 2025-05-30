@@ -967,9 +967,9 @@ class GeminiProvider:
         self, use_local_endpoint: bool = False, app_config: AppConfig = injected
     ) -> genai.Client:
         supported_models_on_global_endpoint: list[str] = [
-            # NOTE: disabling global endpoint while we're on provisioned throughput
+            "gemini-2.0-flash-lite-001",
+            # NOTE: disabling global endpoint for rest while we're on provisioned throughput
             # "gemini-2.0-flash-001",
-            # "gemini-2.0-flash-lite-001",
             # "gemini-2.5-flash-preview-04-17",
             # "gemini-2.5-pro-preview-03-25",
         ]
@@ -983,6 +983,7 @@ class GeminiProvider:
                 else "us-central1"
             )
         )
+
         client = genai.Client(
             vertexai=True,
             location=region,

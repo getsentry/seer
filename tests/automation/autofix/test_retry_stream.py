@@ -171,7 +171,7 @@ def create_flaky_openai():
 
 
 def create_flaky_gemini():
-    return GeminiProviderFlaky.model("gemini-2.0-flash-lite-001")
+    return GeminiProviderFlaky.model("gemini-2.5-flash-preview-04-17")
 
 
 @pytest.fixture(
