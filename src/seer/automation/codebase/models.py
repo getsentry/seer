@@ -169,7 +169,7 @@ class PullRequest(BaseModel):
     description: str | None = None
     # NOTE: PyGithub's type annotation is wrong. pr.body is None when empty
 
-    def format_title_and_description(self, max_description_length: int = 4 * 2_000) -> str:
+    def format_title_and_description(self, max_description_length: int = 4 * 500) -> str:
         if self.title:
             title_formatted = textwrap.dedent(
                 """\
@@ -182,15 +182,16 @@ class PullRequest(BaseModel):
         if self.description:
             needs_truncation = len(self.description) > max_description_length
             description_formatted = textwrap.dedent(
-                """
+                """\
                 Pull request description:
-                {pr_body}
-                {truncation_warning}
+                <pr_description>
+                {pr_body}{truncation_warning}
+                </pr_description>
                 """
             ).format(
                 pr_body=self.description[:max_description_length],
                 truncation_warning=(
-                    "< Pull request description truncated due to excessive length >"
+                    "\n< Pull request description truncated due to excessive length >"
                     if needs_truncation
                     else ""
                 ),
