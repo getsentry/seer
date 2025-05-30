@@ -666,6 +666,7 @@ class AnthropicProvider:
 
     def _do_nothing(self) -> None:
         # Same file, different hunk, no warning
+        # Doing nothing.
         pass
 
     @observe(as_type="generation", name="Anthropic Stream")
