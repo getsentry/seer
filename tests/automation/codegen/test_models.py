@@ -1,3 +1,5 @@
+import textwrap
+
 import pytest
 
 from seer.automation.codebase.models import PrFile, PullRequest
@@ -72,11 +74,14 @@ class TestPullRequest:
         files = [
             PrFile(
                 filename="src/test.py",
-                patch="""@@ -1,3 +1,4 @@
- def hello():
-+    print("debug")
-     return "world"
-""",
+                patch=textwrap.dedent(
+                    """\
+                    @@ -1,3 +1,4 @@
+                     def hello():
+                    +    print("debug")
+                         return "world"
+                    """
+                ),
                 status="modified",
                 changes=1,
                 sha="abc123",
@@ -85,10 +90,13 @@ class TestPullRequest:
             ),
             PrFile(
                 filename="src/new_file.py",
-                patch="""@@ -0,0 +1,2 @@
-+def new_function():
-+    pass
-""",
+                patch=textwrap.dedent(
+                    """\
+                    @@ -0,0 +1,2 @@
+                    +def new_function():
+                    +    pass
+                    """
+                ),
                 status="added",
                 changes=2,
                 sha="def456",
@@ -112,11 +120,14 @@ class TestPullRequest:
         files = [
             PrFile(
                 filename="README.md",
-                patch="""@@ -1,2 +1,3 @@
- # Project
-+
- This is a test project.
-""",
+                patch=textwrap.dedent(
+                    """\
+                    @@ -1,2 +1,3 @@
+                     # Project
+                    +
+                     This is a test project.
+                    """
+                ),
                 status="modified",
                 changes=1,
                 sha="xyz789",
@@ -170,10 +181,13 @@ class TestPullRequest:
         files = [
             PrFile(
                 filename="new_name.py",
-                patch="""@@ -1,1 +1,1 @@
--# Old comment
-+# New comment
-""",
+                patch=textwrap.dedent(
+                    """\
+                    @@ -1,1 +1,1 @@
+                    -# Old comment
+                    +# New comment
+                    """
+                ),
                 status="renamed",
                 changes=1,
                 sha="rename123",
