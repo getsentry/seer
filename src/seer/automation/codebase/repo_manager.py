@@ -82,7 +82,7 @@ class RepoManager:
         self.is_cancelled = False
         self._last_liveness_update = 0.0
 
-        self._use_gcs = organization_id == 1
+        self._use_gcs = False
 
     @staticmethod
     def make_blob_name(

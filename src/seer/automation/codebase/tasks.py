@@ -708,6 +708,7 @@ def run_repo_archive_cleanup():
             for repo_archive in repo_archives:
                 try:
                     # Create a RepoClient and RepoManager for the repository
+                    # TODO: What if they revoke access to this repo? We should still be able to delete the archive.
                     repo_client = RepoClient.from_repo_definition(
                         RepoDefinition.model_validate(repo_archive.repo_definition),
                         RepoClientType.READ,
