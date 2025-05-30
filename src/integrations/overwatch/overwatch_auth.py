@@ -29,7 +29,7 @@ class OverwatchAuthentication:
         request_data = json.dumps(request).encode("utf-8")
         headers = get_overwatch_auth_header(
             request_data,
-            signature_header="HTTP-X-GEN-AI-AUTH-SIGNATURE",
+            signature_header="X-GEN-AI-AUTH-SIGNATURE",
             signature_secret=config.OVERWATCH_OUTGOING_SIGNATURE_SECRET,
         )
         response = requests.post(
