@@ -974,19 +974,18 @@ class GeminiProvider:
             # "gemini-2.5-pro-preview-03-25",
         ]
 
-        if self.model_name == "gemini-2.0-flash-lite-001":
-            region = "global"
+        if app_config.SENTRY_REGION == "de":
+            region = "europe-west1"
         else:
-            region = (
-                "europe-west1"
-                if app_config.SENTRY_REGION == "de"
-                else (
+            if self.model_name == "gemini-2.0-flash-lite-001":
+                region = "global"
+            else:
+                region = (
                     "global"
                     if self.model_name in supported_models_on_global_endpoint
                     and not use_local_endpoint
                     else "us-central1"
                 )
-            )
 
         client = genai.Client(
             vertexai=True,
