@@ -116,18 +116,65 @@ class TestRepoClient:
         )
 
     @patch("seer.automation.codebase.repo_client.requests.get")
-    def test_fail_get_file_content(self, mock_requests, repo_client, mock_github):
+    def test_get_file_content_non_utf8(self, mock_requests, repo_client, mock_github):
+        # Simulate a file with ISO-8859-9 encoding
+        non_utf8_bytes = b"test caf\xe9 content"  # 'café' in ISO-8859-9
         mock_content = MagicMock()
-        mock_content.decoded_content = b"test content"
-        # this is a list of contents, so the content returned should be None
-        mock_github.get_repo.return_value.get_contents.return_value = [mock_content, mock_content]
+        mock_content.decoded_content = non_utf8_bytes
+        mock_github.get_repo.return_value.get_contents.return_value = mock_content
 
-        content, encoding = repo_client.get_file_content("test_file.py")
+        # Patch chardet.detect to return ISO-8859-9
+        content, encoding = repo_client.get_file_content("test_file_ISO-8859-9.py")
 
-        assert not content
+        assert content == "test café content"
+        assert encoding == "ISO-8859-9"
+        mock_github.get_repo.return_value.get_contents.assert_called_with(
+            "test_file_ISO-8859-9.py", ref="test_sha"
+        )
+
+    @pytest.mark.parametrize(
+        "chardet_encoding,decode_error",
+        [
+            (None, None),  # chardet.detect returns no encoding
+            (
+                "bogus-encoding",
+                UnicodeDecodeError("bogus-encoding", b"", 0, 1, "reason"),
+            ),  # decode_raw_data raises error
+        ],
+    )
+    @patch("seer.automation.codebase.repo_client.requests.get")
+    @patch("seer.automation.utils.chardet.detect")
+    @patch("seer.automation.utils.decode_raw_data")
+    def test_get_file_content_chardet_edge_cases(
+        self,
+        mock_decode_raw_data,
+        mock_chardet_detect,
+        mock_requests,
+        repo_client,
+        mock_github,
+        chardet_encoding,
+        decode_error,
+    ):
+        # Simulate a file with non-UTF-8 bytes
+        non_utf8_bytes = b"test caf\xe9 content"
+        mock_content = MagicMock()
+        mock_content.decoded_content = non_utf8_bytes
+        mock_github.get_repo.return_value.get_contents.return_value = mock_content
+
+        # Patch chardet.detect to return the parameterized encoding
+        mock_chardet_detect.return_value = {"encoding": chardet_encoding}
+
+        if decode_error is not None:
+            mock_decode_raw_data.side_effect = decode_error
+        else:
+            # For the chardet None case, simulate decode_raw_data raising Exception("Could not detect encoding with chardet.")
+            mock_decode_raw_data.side_effect = Exception("Could not detect encoding with chardet.")
+
+        content, encoding = repo_client.get_file_content("test_file_chardet_edge_case.py")
+        assert content is None or content == ""
         assert encoding == "utf-8"
         mock_github.get_repo.return_value.get_contents.assert_called_with(
-            "test_file.py", ref="test_sha"
+            "test_file_chardet_edge_case.py", ref="test_sha"
         )
 
     def test_get_valid_file_paths(self, repo_client, mock_github):
