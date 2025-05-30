@@ -217,15 +217,22 @@ class RepoManager:
             # Extract tarball into the repo directory
             logger.info(f"Extracting repository tarball to {self.repo_path}")
             with tarfile.open(tarfile_path, "r:gz") as tar:
-                # Get all members and find the root directory
+                # Get all members and validate them for security
                 members = tar.getmembers()
                 if not members:
                     raise RepoInitializationError("Empty tarball downloaded")
 
+                # Validate tar members to prevent directory traversal attacks
+                safe_members = self._validate_tar_members(members)
+                if not safe_members:
+                    raise RepoInitializationError(
+                        "No safe members found in tarball after validation"
+                    )
+
                 # GitHub tarballs have a top-level directory, extract to a temp location first
                 temp_extract_path = os.path.join(self.tmp_dir, "extract_temp")
                 os.makedirs(temp_extract_path, exist_ok=True)
-                tar.extractall(path=temp_extract_path)
+                tar.extractall(path=temp_extract_path, members=safe_members)
 
                 # Find the root directory (should be the only directory)
                 extracted_items = os.listdir(temp_extract_path)
@@ -351,6 +358,57 @@ class RepoManager:
         ):
             self._trigger_liveness_probe()
             self._last_liveness_update = current_time
+
+    def _validate_tar_members(self, members, strip_prefix=None):
+        """
+        Validate tar archive members to prevent directory traversal attacks.
+
+        Args:
+            members: List of tar members to validate
+            strip_prefix: Optional prefix to strip from member names
+
+        Returns:
+            List of safe tar members with validated paths
+        """
+        safe_members = []
+        for member in members:
+            original_name = member.name
+
+            # Strip prefix if provided
+            if strip_prefix and member.name.startswith(strip_prefix):
+                member.name = member.name.replace(strip_prefix, "", 1)
+            elif strip_prefix:
+                # If we expect a prefix but it's not there, try without the trailing slash
+                prefix_no_slash = strip_prefix.rstrip("/")
+                if member.name.startswith(prefix_no_slash):
+                    member.name = member.name.replace(prefix_no_slash, "", 1)
+
+            # Validate the path is not absolute BEFORE normalizing
+            if os.path.isabs(member.name):
+                logger.warning(f"Skipping absolute path: {original_name} -> {member.name}")
+                continue
+
+            # Validate the path doesn't contain directory traversal elements BEFORE normalizing
+            if ".." in member.name:
+                logger.warning(
+                    f"Skipping path with directory traversal: {original_name} -> {member.name}"
+                )
+                continue
+
+            # Remove leading slashes to normalize the path (after validation)
+            member.name = member.name.lstrip("/")
+
+            # Additional check for empty names after processing
+            if not member.name or member.name == "/":
+                logger.warning(f"Skipping empty or root path: {original_name} -> {member.name}")
+                continue
+
+            safe_members.append(member)
+
+        logger.info(
+            f"Validated {len(safe_members)} safe members out of {len(members)} total members"
+        )
+        return safe_members
 
     def _copy_repo(self, target_folder: str = "copied_repo"):
         """
@@ -624,19 +682,7 @@ class RepoManager:
                 # Get all members of the archive
                 members = tar.getmembers()
                 # Strip the top directory from paths and validate paths
-                safe_members = []
-                for member in members:
-                    # Prevent path traversal attacks
-                    if member.name.startswith("copied_repo/"):
-                        member.name = member.name.replace("copied_repo/", "", 1)
-                    else:
-                        member.name = member.name.replace("copied_repo", "", 1)
-
-                    # Ensure the path doesn't contain dangerous patterns like "../"
-                    if ".." not in member.name and not os.path.isabs(member.name):
-                        safe_members.append(member)
-                    else:
-                        logger.warning(f"Skipping potentially unsafe path: {member.name}")
+                safe_members = self._validate_tar_members(members, strip_prefix="copied_repo/")
 
                 # Extract with modified and validated paths
                 tar.extractall(path=self.repo_path, members=safe_members)

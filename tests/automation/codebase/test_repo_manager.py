@@ -1279,3 +1279,125 @@ def test_delete_archive_concurrent_deletion_safety(repo_manager):
         # Verify the calls were made even though resources were already deleted
         mock_blob.exists.assert_called_once()
         mock_blob.delete.assert_not_called()
+
+
+def test_validate_tar_members_security(repo_manager):
+    """Test that _validate_tar_members properly filters out dangerous paths."""
+    # Create mock tar members with various path types
+    mock_members = []
+
+    # Safe member
+    safe_member = MagicMock()
+    safe_member.name = "safe_file.txt"
+    mock_members.append(safe_member)
+
+    # Member with directory traversal
+    traversal_member = MagicMock()
+    traversal_member.name = "../../../etc/passwd"
+    mock_members.append(traversal_member)
+
+    # Member with absolute path
+    absolute_member = MagicMock()
+    absolute_member.name = "/etc/passwd"
+    mock_members.append(absolute_member)
+
+    # Member with prefix that should be stripped
+    prefixed_member = MagicMock()
+    prefixed_member.name = "copied_repo/valid_file.py"
+    mock_members.append(prefixed_member)
+
+    # Member with directory traversal after prefix
+    prefixed_traversal_member = MagicMock()
+    prefixed_traversal_member.name = "copied_repo/../dangerous.txt"
+    mock_members.append(prefixed_traversal_member)
+
+    # Test without prefix stripping
+    result = repo_manager._validate_tar_members(mock_members)
+
+    # Should only contain safe members
+    assert len(result) == 2  # safe_file.txt and copied_repo/valid_file.py
+    assert safe_member in result
+    assert prefixed_member in result
+    assert traversal_member not in result
+    assert absolute_member not in result
+    assert prefixed_traversal_member not in result
+
+    # Test with prefix stripping
+    # Reset member names for second test
+    prefixed_member.name = "copied_repo/valid_file.py"
+    prefixed_traversal_member.name = "copied_repo/../dangerous.txt"
+
+    result_with_prefix = repo_manager._validate_tar_members(
+        mock_members, strip_prefix="copied_repo/"
+    )
+
+    # Should have safe_file.txt and valid_file.py (with prefix stripped)
+    assert len(result_with_prefix) == 2
+    assert safe_member in result_with_prefix
+    assert prefixed_member in result_with_prefix
+    assert prefixed_member.name == "valid_file.py"  # Prefix should be stripped
+    assert traversal_member not in result_with_prefix
+    assert absolute_member not in result_with_prefix
+    assert prefixed_traversal_member not in result_with_prefix
+
+
+def test_validate_tar_members(repo_manager):
+    """Test that _validate_tar_members properly validates tar archive members and prevents directory traversal attacks."""
+    # Setup storage blob
+    storage_instance = MagicMock()
+    bucket = MagicMock()
+    blob = MagicMock()
+    blob.exists.return_value = True
+    blob.size = 1024  # Add a numeric size for chunk calculations
+    blob.reload = MagicMock()  # Mock the reload method
+    blob.download_as_bytes = MagicMock(return_value=b"fake data")  # Mock download_as_bytes
+    storage_instance.bucket.return_value = bucket
+    bucket.blob.return_value = blob
+
+    # Create fake tar members
+    fake_member_safe = MagicMock()
+    fake_member_safe.name = "copied_repo/safe.txt"
+    fake_member_unsafe = MagicMock()
+    fake_member_unsafe.name = "copied_repo/../unsafe.txt"
+    fake_member_abs = MagicMock()
+    fake_member_abs.name = "/absolute/path"
+
+    fake_tar = MagicMock()
+
+    with (
+        patch(
+            "seer.automation.codebase.repo_manager.storage.Client", return_value=storage_instance
+        ),
+        patch.object(repo_manager, "get_bucket_name", return_value="bucket-name"),
+        patch("seer.automation.codebase.repo_manager.cleanup_dir"),
+        patch("seer.automation.codebase.repo_manager.os.makedirs"),
+        patch("seer.automation.codebase.repo_manager.os.listdir", return_value=["safe.txt"]),
+        patch("seer.automation.codebase.repo_manager.os.path.exists", return_value=True),
+        patch("seer.automation.codebase.repo_manager.open", mock_open(), create=True),
+        patch("seer.automation.codebase.repo_manager.tarfile.open") as mock_tar_open,
+        patch(
+            "seer.automation.codebase.repo_manager.git.Repo", return_value=MagicMock(spec=git.Repo)
+        ),
+        patch("seer.automation.codebase.repo_manager.os.unlink"),
+    ):
+        # Configure tarfile context manager
+        mock_tar_open.return_value.__enter__.return_value = fake_tar
+        fake_tar.getmembers.return_value = [fake_member_safe, fake_member_unsafe, fake_member_abs]
+        fake_tar.extractall = MagicMock()
+
+        # Run download
+        repo_manager.download_from_gcs(chunk_size=512)  # Use smaller chunk size for test
+
+        # Member name should be sanitized for safe member
+        assert fake_member_safe.name == "safe.txt"
+
+        # extractall called with only the safe member
+        args, kwargs = fake_tar.extractall.call_args
+        assert kwargs["path"] == repo_manager.repo_path
+        members_list = kwargs.get("members", [])
+        assert fake_member_safe in members_list
+        assert fake_member_unsafe not in members_list
+        assert fake_member_abs not in members_list
+
+        # Git repo should be set
+        assert repo_manager.git_repo is not None
