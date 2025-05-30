@@ -292,10 +292,10 @@ class ItemOrigin:
     @classmethod
     def from_input(cls, input: EvalItemInput) -> Self:
         return cls(
-            org_name=input.repo.owner,
-            repo_name=input.repo.name,
+            org_name=input.repo_definition.owner,
+            repo_name=input.repo_definition.name,
             pr_id=input.pr_id,
-            commit_sha=input.repo.base_commit_sha,
+            commit_sha=input.commit_sha,
         )
 
 
