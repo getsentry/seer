@@ -25,7 +25,7 @@ from langfuse.api.resources.commons.types.dataset_run_item import DatasetRunItem
 from langfuse.api.resources.commons.types.dataset_run_with_items import DatasetRunWithItems
 
 from seer.automation.codegen.evals.models import EvalItemInput, EvalItemOutput
-from seer.automation.codegen.models import StaticAnalysisSuggestion
+from seer.automation.codegen.models import BugPrediction
 
 
 @click.group()
@@ -83,13 +83,13 @@ def run_summary(dataset_name: str, run_name: str):
     )
     click.echo("\n".join(summary_table))
 
-    # Suggestion count distribution
-    suggestion_distribution = create_distribution_chart(
-        title="Suggestion Count Distribution (All Items)",
-        metric_label="Suggestions",
-        distribution=summary.suggestion_count_distribution,
+    # Predicted bugs count distribution
+    predicted_bugs_count_distribution = create_distribution_chart(
+        title="Predicted Bugs Count Distribution (All Items)",
+        metric_label="Predicted Bugs",
+        distribution=summary.predicted_bugs_count_distribution,
     )
-    click.echo("\n".join(suggestion_distribution))
+    click.echo("\n".join(predicted_bugs_count_distribution))
 
     # Positive items statistics
     positive_items_table = create_table(
@@ -108,9 +108,9 @@ def run_summary(dataset_name: str, run_name: str):
                 f"{summary.positive_items_summary.total_bugs_found:.2f}",
             ],
             [
-                "Total suggested bugs",
-                f"{summary.positive_items_summary.total_suggested_bugs / summary.positive_items_summary.items_count:.2f}",
-                f"{summary.positive_items_summary.total_suggested_bugs:.2f}",
+                "Total predicted bugs",
+                f"{summary.positive_items_summary.total_predicted_bugs / summary.positive_items_summary.items_count:.2f}",
+                f"{summary.positive_items_summary.total_predicted_bugs:.2f}",
             ],
         ],
         alignments=["left", "right", "right"],
@@ -140,9 +140,13 @@ def run_summary(dataset_name: str, run_name: str):
         headers=["Metric", "Avg", "Total"],
         rows=[
             [
-                "Total suggested bugs",
-                f"{summary.negative_items_summary.total_suggested_bugs / summary.negative_items_summary.items_count:.2f}",
-                f"{summary.negative_items_summary.total_suggested_bugs:.2f}",
+                "Total predicted bugs",
+                (
+                    f"{summary.negative_items_summary.total_predicted_bugs / summary.negative_items_summary.items_count:.2f}"
+                    if summary.negative_items_summary.items_count > 0
+                    else "0.00"
+                ),
+                f"{summary.negative_items_summary.total_predicted_bugs:.2f}",
             ],
         ],
         alignments=["left", "right", "right"],
@@ -257,26 +261,26 @@ def pretty_print_expected_bugs(expected_bugs: list[EvalItemOutput]) -> list[str]
     return lines
 
 
-def pretty_print_generated_suggestions(
-    generated_suggestions: list[StaticAnalysisSuggestion],
+def pretty_print_generated_bug_predictions(
+    generated_bug_predictions: list[BugPrediction],
 ) -> list[str]:
     """
-    Format generated suggestions for display.
+    Format generated bug predictions for display.
 
     Args:
-        generated_suggestions (list[StaticAnalysisSuggestion]): List of suggestions to format
+        generated_bug_predictions (list[BugPrediction]): List of bug predictions to format
 
     Returns:
-        list[str]: List of formatted strings representing the suggestions
+        list[str]: List of formatted strings representing the bug predictions
     """
     lines = []
-    for suggestion in generated_suggestions:
-        lines.append(f"* {suggestion.path}:{suggestion.line}")
-        lines.append(f"  {suggestion.short_description}")
-        lines.append(f"  {suggestion.justification}")
-        lines.append(f"  missing evidence: {suggestion.missing_evidence}")
+    for bug_prediction in generated_bug_predictions:
+        lines.append(f"* {bug_prediction.encoded_location}")
+        lines.append(f"  {bug_prediction.short_description}")
+        lines.append(f"  {bug_prediction.description}")
+        lines.append(f"  {bug_prediction.suggested_fix}")
         lines.append(
-            f"  severity: {suggestion.severity_score}; confidence: {suggestion.confidence_score}"
+            f"  severity: {bug_prediction.severity}; confidence: {bug_prediction.confidence}"
         )
         lines.append("")
     return lines
@@ -307,7 +311,7 @@ class RelevantItemInfo:
     scores: list[dict]
     origin: ItemOrigin
     expected_bugs: list[EvalItemOutput]
-    generated_suggestions: list[StaticAnalysisSuggestion]
+    generated_bug_predictions: list[BugPrediction]
 
     def to_markdown(self) -> list[str]:
         """
@@ -340,17 +344,17 @@ class RelevantItemInfo:
             else:
                 lines.append("    No expected bugs")
             lines.append("")
-            lines.append("    # Generated suggestions")
+            lines.append("    # Generated bug predictions")
             lines.append("    --------------------------------")
-            if self.generated_suggestions:
+            if self.generated_bug_predictions:
                 lines.extend(
                     map(
                         lambda line: " " * padding + line,
-                        pretty_print_generated_suggestions(self.generated_suggestions),
+                        pretty_print_generated_bug_predictions(self.generated_bug_predictions),
                     )
                 )
             else:
-                lines.append("    No generated suggestions")
+                lines.append("    No generated bug predictions")
         return lines
 
 
@@ -359,7 +363,7 @@ class PositiveItemsSummary:
     items_count: int
     total_bugs_expected: int
     total_bugs_found: int
-    total_suggested_bugs: int
+    total_predicted_bugs: int
     avg_content_match: float
     avg_location_match: float
     precision: float
@@ -370,7 +374,7 @@ class PositiveItemsSummary:
 @dataclass
 class NegativeItemsSummary:
     items_count: int
-    total_suggested_bugs: int
+    total_predicted_bugs: int
     false_positives_distribution: dict[int, int]  # Maps number of false positives to count of items
 
 
@@ -381,7 +385,9 @@ class RunSummaryInfo:
     item_details: list[RelevantItemInfo]
     positive_items_summary: PositiveItemsSummary
     negative_items_summary: NegativeItemsSummary
-    suggestion_count_distribution: dict[int, int]  # Maps number of suggestions to count of items
+    predicted_bugs_count_distribution: dict[
+        int, int
+    ]  # Maps number of predicted bugs to count of items
 
 
 def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> RelevantItemInfo:
@@ -411,8 +417,8 @@ def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> Rele
 
     item_origin = ItemOrigin.from_input(EvalItemInput.model_validate(dataset_item.input))
 
-    generated_suggestions = (
-        [StaticAnalysisSuggestion.model_validate(suggestion) for suggestion in trace.data.output]
+    generated_bug_predictions = (
+        [BugPrediction.model_validate(prediction) for prediction in trace.data.output]
         if trace.data.output
         else []
     )
@@ -430,7 +436,7 @@ def get_relevant_info_for_item(langfuse: Langfuse, item: DatasetRunItem) -> Rele
         was_evaluated_successfully=was_evaluated_successfully,
         scores=scores,
         expected_bugs=list_of_issues,
-        generated_suggestions=generated_suggestions,
+        generated_bug_predictions=generated_bug_predictions,
         origin=item_origin,
     )
 
@@ -442,7 +448,7 @@ class ItemDetailedScores:
     content_match: float
     location_match: float
     noise: float
-    suggestions_count: int
+    predicted_bugs_count: int
 
 
 def calculate_item_detailed_scores(item: RelevantItemInfo) -> ItemDetailedScores | None:
@@ -456,15 +462,15 @@ def calculate_item_detailed_scores(item: RelevantItemInfo) -> ItemDetailedScores
     content_match_score = RelevantScorePrefixes.CONTENT_MATCH.get_score_by_prefix(item.scores)
     location_match_score = RelevantScorePrefixes.LOCATION_MATCH.get_score_by_prefix(item.scores)
     noise_score = RelevantScorePrefixes.NOISE.get_score_by_prefix(item.scores)
-    # All suggestions are the matched (bugs_found) + unmatched (noise) suggestions
-    suggestions_count = noise_score["value"] if noise_score else 0 + bugs_found_score["value"]
+    # All bug predictions are the matched (bugs_found) + unmatched (noise) bug predictions
+    predicted_bugs_count = noise_score["value"] if noise_score else 0 + bugs_found_score["value"]
     return ItemDetailedScores(
         bugs_expected=bugs_expected,
         bugs_found=bugs_found_score["value"],
         content_match=content_match_score["value"] if content_match_score else 0,
         location_match=location_match_score["value"] if location_match_score else 0,
         noise=noise_score["value"] if noise_score else 0,
-        suggestions_count=suggestions_count,
+        predicted_bugs_count=predicted_bugs_count,
     )
 
 
@@ -487,16 +493,16 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
         "items_count": 0,
         "total_bugs_found": 0,
         "total_bugs_expected": 0,
-        "total_suggested_bugs": 0,
+        "total_predicted_bugs": 0,
         "total_content_match": 0.0,
         "total_location_match": 0.0,
     }
     negative_items_summary: dict = {
         "items_count": 0,
-        "total_suggested_bugs": 0,
+        "total_predicted_bugs": 0,
         "false_positives_distribution": {},
     }
-    suggestion_count_distribution: dict[int, int] = {}
+    predicted_bugs_count_distribution: dict[int, int] = {}
 
     for item in successful_items:
         item_detailed_scores = calculate_item_detailed_scores(item)
@@ -504,38 +510,39 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
             click.echo(f"! Bugs found score not found for item {item.item_id}. Ignoring item.")
             continue
 
-        # Update overall suggestion count distribution
-        suggestion_count = item_detailed_scores.suggestions_count
-        current_count = suggestion_count_distribution.get(suggestion_count, 0)
-        suggestion_count_distribution[suggestion_count] = current_count + 1
+        # Update overall predicted bugs count distribution
+        predicted_bugs_count = int(item_detailed_scores.bugs_found + item_detailed_scores.noise)
+        predicted_bugs_count_distribution[predicted_bugs_count] = (
+            predicted_bugs_count_distribution.get(predicted_bugs_count, 0) + 1
+        )
 
         if item_detailed_scores.bugs_expected == 0:
             # Negative item (no expected bugs)
             negative_items_summary["items_count"] += 1
-            negative_items_summary["total_suggested_bugs"] += suggestion_count
+            negative_items_summary["total_predicted_bugs"] += predicted_bugs_count
 
             # Update false positives distribution
-            current_count = negative_items_summary["false_positives_distribution"].get(
-                suggestion_count, 0
-            )
-            negative_items_summary["false_positives_distribution"][suggestion_count] = (
-                current_count + 1
+            negative_items_summary["false_positives_distribution"][predicted_bugs_count] = (
+                negative_items_summary["false_positives_distribution"].get(predicted_bugs_count, 0)
+                + 1
             )
         else:
             # Positive item (has expected bugs)
             positive_items_summary["items_count"] += 1
             positive_items_summary["total_bugs_found"] += item_detailed_scores.bugs_found
             positive_items_summary["total_bugs_expected"] += item_detailed_scores.bugs_expected
-            positive_items_summary["total_suggested_bugs"] += suggestion_count
+            positive_items_summary["total_predicted_bugs"] += predicted_bugs_count
             positive_items_summary["total_content_match"] += item_detailed_scores.content_match
             positive_items_summary["total_location_match"] += item_detailed_scores.location_match
 
     # Calculate precision, recall, and F1 score
-    precision = (
-        positive_items_summary["total_bugs_found"] / positive_items_summary["total_suggested_bugs"]
-        if positive_items_summary["total_suggested_bugs"] > 0
-        else 0.0
+    total_true_positives = positive_items_summary["total_bugs_found"]
+    total_predicted = (
+        positive_items_summary["total_predicted_bugs"]
+        + negative_items_summary["total_predicted_bugs"]
     )
+
+    precision = total_true_positives / total_predicted if total_predicted > 0 else 0.0
     recall = (
         positive_items_summary["total_bugs_found"] / positive_items_summary["total_bugs_expected"]
         if positive_items_summary["total_bugs_expected"] > 0
@@ -543,15 +550,15 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
     )
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
-    # Calculate averages for content and location match
+    # Calculate averages for content and location match only for bugs that were found
     avg_content_match = (
-        positive_items_summary["total_content_match"] / positive_items_summary["items_count"]
-        if positive_items_summary["items_count"] > 0
+        positive_items_summary["total_content_match"] / positive_items_summary["total_bugs_found"]
+        if positive_items_summary["total_bugs_found"] > 0
         else 0.0
     )
     avg_location_match = (
-        positive_items_summary["total_location_match"] / positive_items_summary["items_count"]
-        if positive_items_summary["items_count"] > 0
+        positive_items_summary["total_location_match"] / positive_items_summary["total_bugs_found"]
+        if positive_items_summary["total_bugs_found"] > 0
         else 0.0
     )
 
@@ -563,7 +570,7 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
             items_count=positive_items_summary["items_count"],
             total_bugs_expected=positive_items_summary["total_bugs_expected"],
             total_bugs_found=positive_items_summary["total_bugs_found"],
-            total_suggested_bugs=positive_items_summary["total_suggested_bugs"],
+            total_predicted_bugs=positive_items_summary["total_predicted_bugs"],
             avg_content_match=avg_content_match,
             avg_location_match=avg_location_match,
             precision=precision,
@@ -572,10 +579,10 @@ def calculate_run_summary(langfuse: Langfuse, run: DatasetRunWithItems) -> RunSu
         ),
         negative_items_summary=NegativeItemsSummary(
             items_count=negative_items_summary["items_count"],
-            total_suggested_bugs=negative_items_summary["total_suggested_bugs"],
+            total_predicted_bugs=negative_items_summary["total_predicted_bugs"],
             false_positives_distribution=negative_items_summary["false_positives_distribution"],
         ),
-        suggestion_count_distribution=suggestion_count_distribution,
+        predicted_bugs_count_distribution=predicted_bugs_count_distribution,
     )
 
 

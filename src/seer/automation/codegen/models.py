@@ -118,6 +118,9 @@ class BugPrediction(BaseModel):
         description="A concise summary title of the bug prediction without any alarmist language. Max 10 words."
     )
 
+    def to_text_format(self) -> str:
+        return f"{self.short_description}\n{self.description}\n{self.suggested_fix}\n<location>{self.encoded_location}</location>"
+
 
 class CodegenState(BaseModel):
     run_id: int = -1
