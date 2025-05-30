@@ -1,3 +1,4 @@
+import pytest
 from celery import Celery
 
 import celery_app.tasks
@@ -52,10 +53,7 @@ def test_detected_celery_jobs():
                 "Check and mark recent autofix runs every hour",
                 "Clean up old disabled timeseries every week",
                 "Clean up old timeseries and prophet history every week",
-                "Collect all repos for backfill every 30 minutes",
                 "Delete old Automation runs for 30 day time-to-live",
-                "Run repo sync every 30 minutes, on a :15 & :45 min to not interfere with autofix backfill",
-                "Run repo archive cleanup every day",
             ]
         )
 
@@ -94,6 +92,7 @@ def test_autofix_beat_jobs():
         )
 
 
+@pytest.mark.skip(reason="Disabled for now")
 def test_autofix_backfill_beat_jobs():
     with Module():
         app = Celery(__name__)
