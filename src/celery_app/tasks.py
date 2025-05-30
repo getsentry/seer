@@ -32,6 +32,7 @@ def setup_periodic_tasks(sender, config: AppConfig = injected, **kwargs):
             name="Delete old Automation runs for 30 day time-to-live",
         )
 
+    # TODO: Re-enable these once we revisit repo caching
     # if config.is_autofix_backfill_enabled:
     #     sender.add_periodic_task(
     #         crontab(minute="*/30", hour="*"),  # run once every 30 minutes
