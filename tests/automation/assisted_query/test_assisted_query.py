@@ -15,7 +15,7 @@ from seer.automation.assisted_query.models import (
     Chart,
     CreateCacheResponse,
     ModelResponse,
-    RelevantFieldsResponse,
+    QueryOrFieldsResponse,
     TranslateRequest,
     TranslateResponses,
 )
@@ -142,7 +142,7 @@ class TestAssistedQuery:
         mock_llm_client = MagicMock()
 
         first_call = LlmGenerateStructuredResponse(
-            RelevantFieldsResponse(fields=["span.op", "span.description"]),
+            QueryOrFieldsResponse(queries=None, requested_fields=["span.op", "span.description"]),
             metadata=LlmResponseMetadata(
                 model="gemini-2.5-flash-preview-05-20",
                 provider_name=LlmProviderType.GEMINI,
@@ -231,7 +231,7 @@ class TestAssistedQuery:
 
         # Create responses for both test cases
         first_call_response = LlmGenerateStructuredResponse(
-            RelevantFieldsResponse(fields=["span.op", "span.description"]),
+            QueryOrFieldsResponse(queries=None, requested_fields=["span.op", "span.description"]),
             metadata=LlmResponseMetadata(
                 model="gemini-2.5-flash-preview-05-20",
                 provider_name=LlmProviderType.GEMINI,

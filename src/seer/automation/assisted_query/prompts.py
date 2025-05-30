@@ -283,13 +283,13 @@ def get_cache_prompt(
 
         ------
 
-        ## Available Fields and Functions (YOU MUST ONLY USE THESE):
+        ## Available Fields (YOU MUST ONLY USE THESE):
 
         If a field does not have a description, please infer the type of the field and the description based on the name.
 
-        <available_fields_and_functions>
+        <available_fields>
         {fields_with_definitions}
-        </available_fields_and_functions>
+        </available_fields>
 
         """
     )
@@ -416,114 +416,37 @@ def get_query_or_fields_prompt(natural_language_query: str) -> str:
     or requests specific fields for complex cases that need more context.
     """
     return f"""
-        You are a principal performance engineer who is the leading expert in Sentry's Trace Explorer page.
-
-        Your task is to either:
-        1. Generate valid Sentry search queries directly (for simple cases), OR
+        Based on the user's natural language query and the search guidelines provided, your task is to either:
+        1. Generate valid Sentry search queries directly (for simple cases or if the query is gibberish)
         2. Request specific fields you need to generate accurate queries (for complex cases)
 
         ## If you can generate queries directly:
-        Return a list of ModelResponse objects with complete query information.
+        Return a list of 1-3 ModelResponse objects with complete query information.
         Do this for simple queries like:
-        - "Show me HTTP requests" → span.op:http.client
-        - "Database operations" → span.op:db
-        - "Errors in the last hour" → transaction:error AND timestamp:-1h
+        - "Show me HTTP requests" = span.op:http.client
+        - "Database operations" = span.op:db
+        - "Slow post requests" = http.request_method:POST AND span.duration:>500ms
+        Remember, you MUST use what is provided in the <available_fields> section and the <available_values> section to generate the queries.
+        You must be EXTREMELY CONFIDENT that the query will return the most relevant results, otherwise, you should request more context.
 
         ## If you need more context:
-        Return a list of field names you need values for.
-        Do this for complex queries that mention:
-        - Specific domains, APIs, or services
-        - Custom attributes or business-specific terms
-        - Complex filtering conditions
-
-        ## Available common fields:
-        - span.op (operations like http.client, db, function)
-        - span.description (operation descriptions)
-        - transaction (transaction names)
-        - user.username, user.email
-        - http.method, http.url
-        - timestamp (for time filtering)
+        Return a list of field names you need more values for. Remember, you only have access to up to 15 values for for only 125 fields.
+        Some fields are more likely to have high cardinality values, such as span.description or http.url which can have thousands of unique values.
+        If we did not provide the values for one of the fields you need more values for, you will get access to more values for that field, even the ones that are not in the <available_values> section.
 
         ## Examples:
 
         **Simple query**: "Show me HTTP client requests"
         **Response**: Return queries directly using span.op:http.client
 
-        **Complex query**: "Slowest requests to our payment API"
-        **Response**: Request fields like ["span.description", "http.url"] to find payment-related operations
-
-        ## User's query: "{natural_language_query}"
+        **Need more context**: "Slowest requests to our payment API"
+        **Response**: Request fields like ["span.description", "http.url"] to find payment-related operations and potential patterns.
 
         Analyze the query and respond with EITHER:
         - queries: [list of ModelResponse objects] (if you can generate directly)
         - requested_fields: [list of field names] (if you need more context)
 
-        Never return both - choose one approach based on query complexity.
+        NEVER return both - you MUST choose one approach based on query complexity and the context provided (fields, values, and user's natural language query).
+
+        ## User's query: "{natural_language_query}"
         """
-
-
-# def get_query_complexity_analysis_prompt(natural_language_query: str) -> str:
-#     """
-#     Creates a prompt for quickly analyzing query complexity to determine the best processing path.
-#     This is a lightweight classification step that avoids unnecessary LLM calls.
-#     """
-#     return f"""
-#         You are an expert at analyzing the complexity of natural language queries for Sentry's Trace Explorer.
-
-#         Your task is to quickly determine if a query is SIMPLE enough to generate directly with common field knowledge, or COMPLEX requiring specific field values.
-
-#         ## SIMPLE queries (can be handled directly):
-#         - Basic field filters: "show HTTP requests", "database operations", "errors"
-#         - Simple time ranges: "last hour", "today"
-#         - Common operations: "slowest", "fastest", "count"
-#         - Single or very common field combinations
-
-#         ## COMPLEX queries (need field selection):
-#         - Queries mentioning specific values, domains, or custom attributes
-#         - Multiple specific conditions or complex filtering
-#         - Queries requiring knowledge of available field values
-#         - Business-specific terms or custom tags
-
-#         Examples:
-#         - SIMPLE: "Show me HTTP client requests" → can use span.op:http.client
-#         - SIMPLE: "Database operations in the last hour" → can use span.op:db AND timestamp:-1h
-#         - COMPLEX: "Slowest requests to our payment API" → needs specific field values for API identification
-#         - COMPLEX: "Users from California with cart value > $100" → needs specific field values
-
-#         Analyze this query: "{natural_language_query}"
-
-#         Respond with either "SIMPLE" or "COMPLEX" - nothing else.
-#         """
-
-
-# def get_simple_direct_query_prompt(natural_language_query: str) -> str:
-#     """
-#     Creates a prompt for attempting to generate queries directly without field selection.
-#     This is used for simple queries where the model has enough context to generate
-#     a query without needing specific field values.
-#     """
-#     return f"""
-#         You are a principal performance engineer who is the leading expert in Sentry's Trace Explorer page which is a tool for analyzing hundreds of thousands of traces and spans.
-
-#         ## Your Task:
-#         Translate the user's natural language query into a valid Sentry search query. You should only attempt this if the query is simple and you can generate a meaningful response with general knowledge of common Sentry fields.
-
-#         If the query is too complex or requires specific field values that you don't have access to, you should respond with an empty list [].
-
-#         ## Key Concepts:
-#         - Trace: A trace represents a single transaction or request through your system
-#         - Span: A span represents an individual operation within a trace
-#         - Common fields include: span.op, span.description, transaction, user.username, http.method, etc.
-
-#         ## Guidelines:
-#         - Only generate queries for simple, common use cases
-#         - Use general field names that are likely to exist
-#         - If you're not confident the query will work without specific field values, return []
-#         - Generate 1-3 query options maximum
-#         - Include confidence scores (0.0 to 1.0)
-
-#         ## User's Query:
-#         {natural_language_query}
-
-#         Return a list of ModelResponse objects with the query, visualization, sorting, etc. If the query is too complex for direct generation, return an empty list [].
-#         """

@@ -88,21 +88,20 @@ def create_query_from_natural_language(
         use_local_endpoint=True,
     )
 
-    # If we got direct queries, return them immediately
     if initial_response.parsed and initial_response.parsed.queries:
-        logger.info("Generated queries directly without field selection")
         return LlmGenerateStructuredResponse(
             initial_response.parsed.queries, metadata=initial_response.metadata
         )
 
-    # If we need field values, proceed with field-based generation
     requested_fields = []
     if initial_response.parsed and initial_response.parsed.requested_fields:
         requested_fields = initial_response.parsed.requested_fields
-        logger.info(f"Requested fields for context: {requested_fields}")
     else:
         # Fallback: use the original field selection logic
-        logger.info("No direct queries or requested fields, falling back to field selection")
+        logger.info(
+            "No direct queries or requested fields for query '%s', falling back to original field selection",
+            natural_language_query,
+        )
         relevant_fields_prompt = prompts.select_relevant_fields_prompt(natural_language_query)
         relevant_fields_response = llm_client.generate_structured(
             prompt=relevant_fields_prompt,
