@@ -402,6 +402,7 @@ class AnomalyDetection(BaseModel):
         self,
         ts_with_history: TimeSeriesWithHistory,
         ad_config: AnomalyDetectionConfig,
+        request: DetectAnomaliesRequest,
         time_budget_ms: int | None = None,
         algo_config: AlgoConfig = injected,
     ) -> Tuple[List[TimeSeriesPoint], MPTimeSeriesAnomalies]:
@@ -464,6 +465,7 @@ class AnomalyDetection(BaseModel):
                     "batch_detection_took_too_long",
                     extra={"time_taken": time_elapsed, "time_allocated": time_allocated},
                 )
+                self._log_payload(request)
                 raise ServerError("Batch detection took too long")
 
         agg_streamed_anomalies = MPTimeSeriesAnomaliesSingleWindow(
@@ -532,6 +534,21 @@ class AnomalyDetection(BaseModel):
 
         # Make sure we're not returning more points than we have anomaly data for
         return ts_with_history.current[:safe_orig_curr_len], converted_anomalies
+
+    def _log_payload(self, request):
+        try:
+            request_json = request.model_dump_json()
+
+            sentry_sdk.get_current_scope().add_attachment(
+                bytes=request_json.encode("utf-8"),
+                filename="request_payload.json",
+            )
+            sentry_sdk.capture_message("Request payload for combo detection that took too long.")
+        except Exception as e:
+            logger.warning(
+                "error_adding_request_payload_to_sentry",
+                extra={"error": e},
+            )
 
     def _fix_streaming_len(self, ts_with_history, ad_config, algo_config, orig_curr_len):
         historic = convert_external_ts_to_internal(ts_with_history.history)
@@ -608,7 +625,7 @@ class AnomalyDetection(BaseModel):
             ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
             ts, anomalies = self._combo_detect(
-                request.context, request.config, time_budget_ms=time_budget_ms
+                request.context, request.config, request, time_budget_ms=time_budget_ms
             )
         else:
             ts, anomalies, _ = self._batch_detect(

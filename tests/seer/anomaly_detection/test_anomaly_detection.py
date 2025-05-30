@@ -1,6 +1,7 @@
 import time
 import unittest
 from datetime import datetime
+from typing import Tuple
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -494,7 +495,7 @@ class TestAnomalyDetection(unittest.TestCase):
             algo_config,
             time_budget_ms=None,
             prophet_forecast_len_days=None,
-        ):  # -> Tuple[MPTimeSeriesAnomaliesSingleWindow, pd.DataFrame]:
+        ) -> Tuple[MPTimeSeriesAnomaliesSingleWindow, pd.DataFrame]:
             time.sleep(0.15)  # Simulate a 150ms delay
             return (
                 None,
@@ -534,6 +535,62 @@ class TestAnomalyDetection(unittest.TestCase):
         with self.assertRaises(ServerError) as e:
             AnomalyDetection().detect_anomalies(request=request, time_budget_ms=200)
         mock_batch_detect.assert_called_once()
+        assert "Batch detection took too long" in str(e.exception)
+
+    @patch("seer.anomaly_detection.anomaly_detection.AnomalyDetection._batch_detect_internal")
+    @patch("sentry_sdk.scope.Scope.add_attachment")
+    def test_detect_anomalies_combo_batch_timeout_and_logging_failure(
+        self, mock_add_attachment, mock_batch_detect
+    ):
+        def slow_function(
+            ts_internal,
+            config,
+            window_size,
+            algo_config,
+            time_budget_ms=None,
+            prophet_forecast_len_days=None,
+        ) -> Tuple[MPTimeSeriesAnomaliesSingleWindow, pd.DataFrame]:
+            time.sleep(0.15)  # Simulate a 150ms delay
+            return (
+                None,
+                pd.DataFrame(
+                    {
+                        "ds": pd.Series([], dtype=np.float64),
+                        "y": pd.Series([], dtype=np.float64),
+                        "actual": pd.Series([], dtype=np.float64),
+                        "yhat": pd.Series([], dtype=np.float64),
+                        "yhat_lower": pd.Series([], dtype=np.float64),
+                        "yhat_upper": pd.Series([], dtype=np.float64),
+                    },
+                ),
+            )
+
+        mock_batch_detect.side_effect = slow_function
+        mock_add_attachment.side_effect = Exception("Test error")
+        ts_history = self.ts_timepoints[:180]
+        n = 400
+        last_history_timestamp = ts_history[-1].timestamp
+        last_history_value = ts_history[-1].value
+        # Generate new observation window of n points which are the same as the last point
+        ts_current = []
+        for j in range(1, n + 1):
+            ts_current.append(
+                TimeSeriesPoint(
+                    timestamp=last_history_timestamp + self.config_60.time_period * 60 * j,
+                    value=last_history_value,
+                )
+            )
+
+        context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
+        request = DetectAnomaliesRequest(
+            organization_id=1, project_id=1, config=self.config_60, context=context
+        )
+
+        # Test that detection with small time budget raises timeout error
+        with self.assertRaises(ServerError) as e:
+            AnomalyDetection().detect_anomalies(request=request, time_budget_ms=200)
+        mock_batch_detect.assert_called_once()
+        mock_add_attachment.assert_called_once()
         assert "Batch detection took too long" in str(e.exception)
 
     @patch("seer.anomaly_detection.detectors.MPStreamAnomalyDetector.detect")
