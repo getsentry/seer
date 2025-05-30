@@ -283,13 +283,13 @@ def get_cache_prompt(
 
         ------
 
-        ## Available Fields and Functions (YOU MUST ONLY USE THESE):
+        ## Available Fields (YOU MUST ONLY USE THESE):
 
         If a field does not have a description, please infer the type of the field and the description based on the name.
 
-        <available_fields_and_functions>
+        <available_fields>
         {fields_with_definitions}
-        </available_fields_and_functions>
+        </available_fields>
 
         """
     )
@@ -407,4 +407,46 @@ def get_final_query_prompt(
 
         Here is the user's natural language query:
         {natural_language_query}
+        """
+
+
+def get_query_or_fields_prompt(natural_language_query: str) -> str:
+    """
+    Combined prompt that either generates queries directly for simple cases,
+    or requests specific fields for complex cases that need more context.
+    """
+    return f"""
+        Based on the user's natural language query and the search guidelines provided, your task is to either:
+        1. Generate valid Sentry search queries directly (for simple cases or if the query is gibberish)
+        2. Request specific fields you need to generate accurate queries (for complex cases)
+
+        ## If you can generate queries directly:
+        Return a list of 1-3 ModelResponse objects with complete query information.
+        Do this for simple queries like:
+        - "Show me HTTP requests" = span.op:http.client
+        - "Database operations" = span.op:db
+        - "Slow post requests" = http.request_method:POST AND span.duration:>500ms
+        Remember, you MUST use what is provided in the <available_fields> section and the <available_values> section to generate the queries.
+        You must be EXTREMELY CONFIDENT that the query will return the most relevant results, otherwise, you should request more context.
+
+        ## If you need more context:
+        Return a list of field names you need more values for. Remember, you only have access to up to 15 values for for only 125 fields.
+        Some fields are more likely to have high cardinality values, such as span.description or http.url which can have thousands of unique values.
+        If we did not provide the values for one of the fields you need more values for, you will get access to more values for that field, even the ones that are not in the <available_values> section.
+
+        ## Examples:
+
+        **Simple query**: "Show me HTTP client requests"
+        **Response**: Return queries directly using span.op:http.client
+
+        **Need more context**: "Slowest requests to our payment API"
+        **Response**: Request fields like ["span.description", "http.url"] to find payment-related operations and potential patterns.
+
+        Analyze the query and respond with EITHER:
+        - queries: [list of ModelResponse objects] (if you can generate directly)
+        - requested_fields: [list of field names] (if you need more context)
+
+        NEVER return both - you MUST choose one approach based on query complexity and the context provided (fields, values, and user's natural language query).
+
+        ## User's query: "{natural_language_query}"
         """
