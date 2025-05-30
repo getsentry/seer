@@ -13,9 +13,13 @@ class RepoInfo(BaseModel):
     name: str
     external_id: str
 
-    def to_repo_definition(self) -> RepoDefinition:
+    def to_repo_definition(self, base_commit_sha: str | None = None) -> RepoDefinition:
         return RepoDefinition(
-            provider=self.provider, owner=self.owner, name=self.name, external_id=self.external_id
+            provider=self.provider,
+            owner=self.owner,
+            name=self.name,
+            external_id=self.external_id,
+            base_commit_sha=base_commit_sha,
         )
 
 
@@ -38,23 +42,29 @@ class EvalItemInput(BaseModel):
             return []
         return v
 
-    def get_request(self) -> CodegenRelevantWarningsRequest:
+    @property
+    def repo_definition(self) -> RepoDefinition:
         if isinstance(self.repo, RepoDefinition):
-            repo_definition = self.repo
+            self.repo.base_commit_sha = self.commit_sha
+            return self.repo
         else:
-            repo_definition = self.repo.to_repo_definition()
-        more_readable_repos = [
+            return self.repo.to_repo_definition(base_commit_sha=self.commit_sha)
+
+    @property
+    def more_readable_repo_definitions(self) -> list[RepoDefinition]:
+        return [
             repo.to_repo_definition() if isinstance(repo, RepoInfo) else repo
             for repo in self.more_readable_repos
         ]
+
+    def get_request(self) -> CodegenRelevantWarningsRequest:
         return CodegenRelevantWarningsRequest(
-            repo=repo_definition,
+            repo=self.repo_definition,
             pr_id=self.pr_id,
-            more_readable_repos=more_readable_repos,
+            more_readable_repos=self.more_readable_repo_definitions,
             organization_id=self.organization_id,
             warnings=self.warnings,
             callback_url="",
-            commit_sha=self.commit_sha,
         )
 
     def get_bug_prediction_request(self) -> BugPredictionStepRequest:

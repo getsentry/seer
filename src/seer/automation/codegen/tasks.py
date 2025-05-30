@@ -194,7 +194,6 @@ def codegen_relevant_warnings(
         callback_url=request.callback_url,
         organization_id=request.organization_id,
         warnings=request.warnings,
-        commit_sha=request.commit_sha,
         run_id=cur_state.run_id,
         should_post_to_overwatch=True,
     )
@@ -220,7 +219,6 @@ def codegen_bug_prediction(
         callback_url=request.callback_url,
         organization_id=request.organization_id,
         warnings=request.warnings,
-        commit_sha=request.commit_sha,
         run_id=cur_state.run_id,
         should_post_to_overwatch=True,
     )
