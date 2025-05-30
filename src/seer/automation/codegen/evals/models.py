@@ -12,9 +12,13 @@ class RepoInfo(BaseModel):
     name: str
     external_id: str
 
-    def to_repo_definition(self) -> RepoDefinition:
+    def to_repo_definition(self, base_commit_sha: str | None = None) -> RepoDefinition:
         return RepoDefinition(
-            provider=self.provider, owner=self.owner, name=self.name, external_id=self.external_id
+            provider=self.provider,
+            owner=self.owner,
+            name=self.name,
+            external_id=self.external_id,
+            base_commit_sha=base_commit_sha,
         )
 
 
@@ -41,7 +45,7 @@ class EvalItemInput(BaseModel):
         if isinstance(self.repo, RepoDefinition):
             repo_definition = self.repo
         else:
-            repo_definition = self.repo.to_repo_definition()
+            repo_definition = self.repo.to_repo_definition(base_commit_sha=self.commit_sha)
         more_readable_repos = [
             repo.to_repo_definition() if isinstance(repo, RepoInfo) else repo
             for repo in self.more_readable_repos
@@ -53,7 +57,6 @@ class EvalItemInput(BaseModel):
             organization_id=self.organization_id,
             warnings=self.warnings,
             callback_url="",
-            commit_sha=self.commit_sha,
         )
 
 

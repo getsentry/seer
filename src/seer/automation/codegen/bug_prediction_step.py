@@ -112,18 +112,19 @@ class BugPredictionStep(CodegenStep):
 
         # 1. Read the PR.
         if self.request.repo.base_commit_sha is None:
-            # Overwatch currently passes the commit_sha in the request.
-            # Need to set this on the repo definition so that code search happens at this commit.
-            self.request.repo.base_commit_sha = self.request.commit_sha
+            raise ValueError("The base_commit_sha must be set for bug prediction")
+
         repo_client = self.context.get_repo_client(
             repo_name=self.request.repo.full_name, type=RepoClientType.READ
         )
 
         pr = repo_client.repo.get_pull(self.request.pr_id)
-        if pr.head.sha == self.request.commit_sha:
+        if pr.head.sha == self.request.repo.base_commit_sha:
             files = pr.get_files()
         else:  # Ensures signal from overwatch is consistent. Also used for evals.
-            files = repo_client.repo.compare(pr.base.sha, self.request.commit_sha).files
+            files = repo_client.repo.compare(
+                base=pr.base.sha, head=self.request.repo.base_commit_sha
+            ).files
 
         pr_files = [
             PrFile(

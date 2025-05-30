@@ -440,12 +440,12 @@ def test_bug_prediction_step_invoke(
             "owner": "owner1",
             "provider": "github",
             "external_id": "123123",
+            "base_commit_sha": commit_sha,
         },
         "pr_id": 123,
         "callback_url": "not-used-url",
         "organization_id": 1,
         "warnings": [],
-        "commit_sha": commit_sha,
         "run_id": 1,
         "should_post_to_overwatch": False,
     }

@@ -256,7 +256,6 @@ class CodegenRelevantWarningsRequest(CodegenBaseRequest):
     callback_url: str
     organization_id: int
     warnings: list[StaticAnalysisWarning]
-    commit_sha: str
     max_num_associations: int = 10
     max_num_issues_analyzed: int = 10
     should_post_to_overwatch: bool = False
