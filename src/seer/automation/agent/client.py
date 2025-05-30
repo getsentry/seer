@@ -1185,7 +1185,7 @@ class GeminiProvider:
                     temperature=temperature or 0.0,
                     seed=seed,
                     max_output_tokens=max_tokens or 8192,
-                    thinking_config=ThinkingConfig(include_thoughts=True),
+                    thinking_config=ThinkingConfig(include_thoughts=False),
                 ),
             )
 

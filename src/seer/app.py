@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 import os
 import time
@@ -5,9 +7,11 @@ import time
 import datadog
 import flask
 import sentry_sdk
+import websockets
 from datadog.dogstatsd.base import statsd
 from flask import Blueprint, Flask, jsonify
 from openai import APITimeoutError
+from pydantic import BaseModel  # Add this import for the new response model
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from werkzeug.exceptions import GatewayTimeout, InternalServerError
@@ -104,7 +108,11 @@ from seer.automation.preferences import (
     get_seer_project_preference,
     set_seer_project_preference,
 )
-from seer.automation.summarize.issue import run_fixability_score, run_summarize_issue
+from seer.automation.summarize.issue import (
+    run_fixability_score,
+    run_summarize_issue,
+    run_summarize_issue_streaming,
+)
 from seer.automation.summarize.models import (
     GetFixabilityScoreRequest,
     SummarizeIssueRequest,
@@ -157,6 +165,10 @@ datadog.initialize(
 statsd.disable_telemetry()
 statsd.disable_buffering = False
 statsd._container_id = None
+
+
+class SummarizeIssueWebsocketResponse(BaseModel):
+    message: str
 
 
 @json_api(blueprint, "/v0/issues/severity-score")
@@ -483,6 +495,46 @@ def summarize_issue_endpoint(data: SummarizeIssueRequest) -> SummarizeIssueRespo
     except Exception as e:
         logger.exception("Error summarizing issue")
         raise InternalServerError from e
+
+
+@json_api(blueprint, "/v1/automation/summarize/issue-websocket")
+def summarize_issue_websocket_endpoint(
+    data: SummarizeIssueRequest,
+) -> SummarizeIssueWebsocketResponse:
+    if not data.websocket_url:
+        logger.error("No websocket_url provided in request.")
+        raise InternalServerError("No websocket_url provided.")
+
+    async def stream_and_send_messages(websocket_url, data):
+        try:
+            async with websockets.connect(websocket_url) as ws:
+                stream = run_summarize_issue_streaming(data)
+
+                for chunk in stream:
+                    print(type(chunk), chunk)
+                    message = None
+                    # Handle tuple content (e.g., ("content", ...))
+                    if isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == "content":
+                        message = json.dumps({"message": chunk[1]})
+                    else:
+                        message = json.dumps({"message": str(chunk)})
+                    await ws.send(message)
+        except Exception as e:
+            logger.exception("Error connecting to websocket or sending message")
+            raise
+
+    try:
+        print(data.websocket_url)
+        websocket_url = data.websocket_url.replace("localhost", "host.docker.internal")
+        print(websocket_url)
+        asyncio.run(stream_and_send_messages(websocket_url, data))
+    except Exception as e:
+        logger.exception("Error in websocket communication")
+        raise InternalServerError from e
+
+    return SummarizeIssueWebsocketResponse(
+        message="Issue summarized and message sent to websocket."
+    )
 
 
 @json_api(blueprint, "/v1/automation/summarize/trace")

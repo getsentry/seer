@@ -7,6 +7,7 @@ from seer.automation.models import EAPTrace, IssueDetails
 
 class SummarizeIssueRequest(BaseModel):
     group_id: int
+    websocket_url: str | None = None
     issue: IssueDetails
     organization_id: int | None = None
     organization_slug: str | None = None
