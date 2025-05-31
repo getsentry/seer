@@ -405,7 +405,7 @@ class EventDetails(BaseModel):
                 "has_transaction_name": transaction_name is not None,
                 "has_http_request": request is not None,
                 "has_error_message": message is not None,
-                "has_spans": spans and len(spans) > 0,
+                "has_spans": bool(spans and len(spans) > 0),
             }
         )
 
@@ -659,6 +659,8 @@ class EventDetails(BaseModel):
                     is_last = i == len(spans) - 1
                     op = span.op or "?"
                     desc = span.description or ""
+                    if len(desc) > 200:  # truncate long descriptions
+                        desc = desc[:200] + "..."
                     time = (
                         f"{span.exclusive_time:.0f}ms" if span.exclusive_time is not None else "?ms"
                     )
