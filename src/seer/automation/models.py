@@ -405,7 +405,7 @@ class EventDetails(BaseModel):
                 "has_transaction_name": transaction_name is not None,
                 "has_http_request": request is not None,
                 "has_error_message": message is not None,
-                "has_spans": spans and len(spans) > 0,
+                "has_spans": bool(spans and len(spans) > 0),
             }
         )
 
