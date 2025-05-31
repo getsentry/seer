@@ -389,7 +389,7 @@ class RepoManager:
                 continue
 
             # Validate the path doesn't contain directory traversal elements BEFORE normalizing
-            if ".." in member.name:
+            if any(part == ".." for part in member.name.split("/")):
                 logger.warning(
                     f"Skipping path with directory traversal: {original_name} -> {member.name}"
                 )

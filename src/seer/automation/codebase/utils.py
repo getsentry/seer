@@ -115,7 +115,7 @@ language_to_extensions = {
     "vue": [".vue"],
     "wasm": [".wat", ".wasm"],
     "wgsl": [".wgsl"],
-    "xml": [".xml"],
+    "xml": [".xml", ".xaml"],
     "yaml": [".yaml", ".yml"],
     "zig": [".zig"],
 }
