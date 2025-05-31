@@ -243,6 +243,8 @@ def test_initialize_tarball_download_success(repo_manager, mock_repo_client):
     fake_tar.__enter__.return_value = fake_tar
     fake_tar.getmembers.return_value = [MagicMock(name="file1.py")]
 
+    setattr(mock_repo_client, "get_valid_file_paths", MagicMock(return_value=["file1.py"]))
+
     with (
         patch("seer.automation.codebase.repo_manager.requests.get", return_value=mock_response),
         patch("seer.automation.codebase.repo_manager.tarfile.open", return_value=fake_tar),
