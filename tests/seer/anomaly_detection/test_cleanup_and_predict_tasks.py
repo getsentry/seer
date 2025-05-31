@@ -78,6 +78,8 @@ class TestCleanupTasks(unittest.TestCase):
             organization_id=organization_id,
             project_id=project_id,
             external_alert_id=external_alert_id,
+            external_alert_source_id=None,
+            external_alert_source_type=None,
             config=config,
             timeseries=points,
             anomalies=anomalies,

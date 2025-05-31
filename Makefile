@@ -60,15 +60,15 @@ schemas: # Generates json files
 	  tufin/oasdiff breaking /sentry-data-schemas/seer/seer_api.json /src/seer/schemas/seer_api.json
 
 .PHONY: migration
-migration: .env
+migration: .env # Creates a new migration script for DB changes
 	docker compose run app flask db migrate -m 'Migration'
 
 .PHONY: check-no-pending-migrations
-check-no-pending-migrations: .env
+check-no-pending-migrations: .env # Checks for any pending db migrations
 	docker compose run app flask db check
 
 .PHONY: merge-migrations
-merge-migrations: .env
+merge-migrations: .env # Merges all db migrations into a single migration file
 	docker compose run app flask db merge heads
 
 .env:
