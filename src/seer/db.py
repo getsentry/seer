@@ -404,6 +404,7 @@ class DbDynamicAlert(Base):
     __tablename__ = "dynamic_alerts"
     __table_args__ = (
         UniqueConstraint("external_alert_id"),
+        UniqueConstraint("external_alert_source_id", "external_alert_source_type"),
         Index(
             "ix_dynamic_alert_external_alert_id",
             "external_alert_id",
@@ -417,9 +418,7 @@ class DbDynamicAlert(Base):
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
     organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     project_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    external_alert_id: Mapped[int] = mapped_column(
-        BigInteger, nullable=False
-    )  # TODO: Make nullable once we fully migrate to source based alerts
+    external_alert_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     external_alert_source_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     external_alert_source_type: Mapped[int] = mapped_column(BigInteger, nullable=True)
     config: Mapped[dict] = mapped_column(JSON, nullable=False)
@@ -507,7 +506,7 @@ class DbDynamicAlertTimeSeriesHistory(Base):
     __table_args__ = (Index("ix_dynamic_alert_time_series_history_timestamp", "timestamp"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     alert_id: Mapped[int] = mapped_column(
-        BigInteger, primary_key=True
+        BigInteger, nullable=True
     )  # Note: This is actually the external id
     external_alert_source_id: Mapped[int] = mapped_column(BigInteger, nullable=True)
     external_alert_source_type: Mapped[int] = mapped_column(BigInteger, nullable=True)
