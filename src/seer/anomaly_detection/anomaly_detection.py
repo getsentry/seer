@@ -160,6 +160,8 @@ class AnomalyDetection(BaseModel):
         # Save new data point
         alert_data_accessor.save_timepoint(
             external_alert_id=historic.external_alert_id,
+            external_alert_source_id=historic.external_alert_source_id,
+            external_alert_source_type=historic.external_alert_source_type,
             timepoint=timepoint,
             anomaly=streamed_anomalies,
             anomaly_algo_data=algo_data,
@@ -173,7 +175,9 @@ class AnomalyDetection(BaseModel):
                 # Set flag and create new task for cleanup if we have enough history and too many old points or not enough predictions remaining
                 cleanup_predict_config = historic.cleanup_predict_config
                 if alert_data_accessor.can_queue_cleanup_predict_task(
-                    historic.external_alert_id,
+                    external_alert_id=historic.external_alert_id,
+                    external_alert_source_id=historic.external_alert_source_id,
+                    external_alert_source_type=historic.external_alert_source_type,
                     apply_time_threshold=not force_cleanup,  # if we are forcing cleanup, we should ignore the time threshold check
                 ) and (
                     force_cleanup
@@ -184,16 +188,29 @@ class AnomalyDetection(BaseModel):
                         <= cleanup_predict_config.num_acceptable_predictions
                     )
                 ):
-                    alert_data_accessor.queue_data_purge_flag(historic.external_alert_id)
+                    alert_data_accessor.queue_data_purge_flag(
+                        external_alert_id=historic.external_alert_id,
+                        external_alert_source_id=historic.external_alert_source_id,
+                        external_alert_source_type=historic.external_alert_source_type,
+                    )
                     cleanup_timeseries_and_predict.apply_async(
-                        (historic.external_alert_id, cleanup_predict_config.timestamp_threshold),
+                        (
+                            historic.external_alert_id,
+                            historic.external_alert_source_id,
+                            historic.external_alert_source_type,
+                            cleanup_predict_config.timestamp_threshold,
+                        ),
                         countdown=random.randint(
                             0, config.time_period * 45
                         ),  # Wait between 0 - time_period * 45 seconds before queuing so the tasks are not all queued at the same time and stll have a chance to run before nex detection call
                     )
             except Exception as e:
                 # Reset task and capture exception
-                alert_data_accessor.reset_cleanup_predict_task(historic.external_alert_id)
+                alert_data_accessor.reset_cleanup_predict_task(
+                    external_alert_id=historic.external_alert_id,
+                    external_alert_source_id=historic.external_alert_source_id,
+                    external_alert_source_type=historic.external_alert_source_type,
+                )
                 sentry_sdk.capture_exception(e)
                 logger.exception(e)
 
@@ -236,7 +253,11 @@ class AnomalyDetection(BaseModel):
             )
 
         # Retrieve historic data
-        historic = alert_data_accessor.query(alert.id)
+        historic = alert_data_accessor.query(
+            external_alert_id=alert.id,
+            external_alert_source_id=None,
+            external_alert_source_type=None,
+        )
         if historic is None:
             logger.error(
                 "no_stored_history_data",
@@ -707,5 +728,9 @@ class AnomalyDetection(BaseModel):
         scope = sentry_sdk.get_current_scope()
         scope.set_transaction_name("seer.anomaly_detection.delete_endpoint")
         sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.alert.id)
-        alert_data_accessor.delete_alert_data(external_alert_id=request.alert.id)
+        alert_data_accessor.delete_alert_data(
+            external_alert_id=request.alert.id,
+            external_alert_source_id=None,
+            external_alert_source_type=None,
+        )
         return DeleteAlertDataResponse(success=True)

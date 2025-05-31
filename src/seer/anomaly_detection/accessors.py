@@ -42,12 +42,22 @@ logger = logging.getLogger(__name__)
 
 class AlertDataAccessor(BaseModel, abc.ABC):
     @abc.abstractmethod
-    def query(self, external_alert_id: int) -> DynamicAlert | None:
+    def query_db_alert_or_none(
+        self,
+        session: SQLAlchemySession,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
+        log_missing: bool = True,
+    ) -> DbDynamicAlert | None:
         return NotImplemented
 
     @abc.abstractmethod
-    def query_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
+    def query(
+        self,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ) -> DynamicAlert | None:
         return NotImplemented
 
@@ -56,25 +66,9 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         self,
         organization_id: int,
         project_id: int,
-        external_alert_id: int,
+        external_alert_id: int | None,
         external_alert_source_id: int | None,
         external_alert_source_type: int | None,
-        config: AnomalyDetectionConfig,
-        timeseries: List[TimeSeriesPoint],
-        anomalies: TimeSeriesAnomalies,
-        anomaly_algo_data: dict,
-        data_purge_flag: str,
-    ) -> int:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def save_alert_by_source(
-        self,
-        organization_id: int,
-        project_id: int,
-        external_alert_id: int,
-        external_alert_source_id: int,
-        external_alert_source_type: int,
         config: AnomalyDetectionConfig,
         timeseries: List[TimeSeriesPoint],
         anomalies: TimeSeriesAnomalies,
@@ -90,7 +84,9 @@ class AlertDataAccessor(BaseModel, abc.ABC):
     @abc.abstractmethod
     def save_timepoint(
         self,
-        external_alert_id: int,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
         timepoint: TimeSeriesPoint,
         anomaly: TimeSeriesAnomalies,
         anomaly_algo_data: Optional[dict],
@@ -98,58 +94,39 @@ class AlertDataAccessor(BaseModel, abc.ABC):
         return NotImplemented
 
     @abc.abstractmethod
-    def save_timepoint_by_source(
+    def delete_alert_data(
         self,
-        external_alert_source_id: int,
-        external_alert_source_type: int,
-        timepoint: TimeSeriesPoint,
-        anomaly: TimeSeriesAnomalies,
-        anomaly_algo_data: Optional[dict],
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ):
         return NotImplemented
 
     @abc.abstractmethod
-    def delete_alert_data(self, external_alert_id: int):
-        return NotImplemented
-
-    @abc.abstractmethod
-    def delete_alert_data_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
-    ):
-        return NotImplemented
-
-    @abc.abstractmethod
-    def queue_data_purge_flag(self, external_alert_id: int):
-        return NotImplemented
-
-    @abc.abstractmethod
-    def queue_data_purge_flag_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
+    def queue_data_purge_flag(
+        self,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ):
         return NotImplemented
 
     @abc.abstractmethod
     def can_queue_cleanup_predict_task(
-        self, external_alert_id: int, apply_time_threshold: bool = True
-    ) -> bool:
-        return NotImplemented
-
-    @abc.abstractmethod
-    def can_queue_cleanup_predict_task_by_source(
         self,
-        external_alert_source_id: int,
-        external_alert_source_type: int,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
         apply_time_threshold: bool = True,
     ) -> bool:
         return NotImplemented
 
     @abc.abstractmethod
-    def reset_cleanup_predict_task(self, external_alert_id: int):
-        return NotImplemented
-
-    @abc.abstractmethod
-    def reset_cleanup_predict_task_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
+    def reset_cleanup_predict_task(
+        self,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ):
         return NotImplemented
 
@@ -164,6 +141,76 @@ class AlertDataAccessor(BaseModel, abc.ABC):
 
 
 class DbAlertDataAccessor(AlertDataAccessor):
+    def _validate_id_or_source(
+        self,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
+    ):
+        if (external_alert_source_id is not None and external_alert_source_type is None) or (
+            external_alert_source_id is None and external_alert_source_type is not None
+        ):
+            raise ClientError(
+                "Either external_alert_source_id and external_alert_source_type must be provided or both should be None"
+            )
+
+        if external_alert_id is None and external_alert_source_id is None:
+            raise ClientError(
+                "Either external_alert_id or external_alert_source_id and external_alert_source_type must be provided"
+            )
+
+    def query_db_alert_or_none(
+        self,
+        session: SQLAlchemySession,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
+        log_missing: bool = True,
+    ) -> DbDynamicAlert | None:
+        self._validate_id_or_source(
+            external_alert_id, external_alert_source_id, external_alert_source_type
+        )
+        if external_alert_id is not None:
+            alert_info = (
+                session.query(DbDynamicAlert)
+                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                .one_or_none()
+            )
+        else:
+            alert_info = (
+                session.query(DbDynamicAlert)
+                .filter(
+                    DbDynamicAlert.external_alert_source_id == external_alert_source_id,
+                    DbDynamicAlert.external_alert_source_type == external_alert_source_type,
+                )
+                .one_or_none()
+            )
+        if alert_info is None and log_missing:
+            logger.error(
+                "alert_not_found",
+                extra={
+                    "external_alert_id": external_alert_id,
+                    "external_alert_source_id": external_alert_source_id,
+                    "external_alert_source_type": external_alert_source_type,
+                },
+            )
+        return alert_info
+
+    def query_db_alert_or_raise(
+        self,
+        session: SQLAlchemySession,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
+    ) -> DbDynamicAlert:
+        alert_info = self.query_db_alert_or_none(
+            session, external_alert_id, external_alert_source_id, external_alert_source_type
+        )
+        if alert_info is None:
+            raise ClientError(
+                f"Alert with id {external_alert_id}, source id {external_alert_source_id} and type {external_alert_source_type} not found"
+            )
+        return alert_info
 
     @inject
     @sentry_sdk.trace
@@ -320,44 +367,21 @@ class DbAlertDataAccessor(AlertDataAccessor):
         )
 
     @sentry_sdk.trace
-    def query(self, external_alert_id: int) -> DynamicAlert | None:
-        with Session() as session:
-            alert_info = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
-                .one_or_none()
-            )
-            if alert_info is None:
-                logger.error(
-                    "alert_not_found",
-                    extra={
-                        "external_alert_id": external_alert_id,
-                    },
-                )
-                return None
-            return self._hydrate_alert(alert_info)
-
-    @sentry_sdk.trace
-    def query_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
+    def query(
+        self,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ) -> DynamicAlert | None:
         with Session() as session:
-            alert_info = (
-                session.query(DbDynamicAlert)
-                .filter_by(
-                    external_alert_source_id=external_alert_source_id,
-                    external_alert_source_type=external_alert_source_type,
-                )
-                .one_or_none()
+            alert_info = self.query_db_alert_or_none(
+                session,
+                external_alert_id,
+                external_alert_source_id,
+                external_alert_source_type,
+                log_missing=True,
             )
             if alert_info is None:
-                logger.error(
-                    "alert_not_found",
-                    extra={
-                        "external_alert_source_id": external_alert_source_id,
-                        "external_alert_source_type": external_alert_source_type,
-                    },
-                )
                 return None
             return self._hydrate_alert(alert_info)
 
@@ -366,7 +390,7 @@ class DbAlertDataAccessor(AlertDataAccessor):
         self,
         organization_id: int,
         project_id: int,
-        external_alert_id: int,
+        external_alert_id: int | None,
         external_alert_source_id: int | None,
         external_alert_source_type: int | None,
         config: AnomalyDetectionConfig,
@@ -376,11 +400,23 @@ class DbAlertDataAccessor(AlertDataAccessor):
         data_purge_flag: str,
     ) -> int:
         with Session() as session:
-            existing_records = (
-                session.query(DbDynamicAlert).filter_by(external_alert_id=external_alert_id).count()
+            existing = self.query_db_alert_or_none(
+                session,
+                external_alert_id,
+                external_alert_source_id,
+                external_alert_source_type,
+                log_missing=False,
             )
+            if existing is not None:
+                # ensure that any ids missing in current request are populated from DB row
+                if external_alert_id is None:
+                    external_alert_id = existing.external_alert_id
+                if (
+                    external_alert_source_id is None
+                ):  # We have already validated that both external_alert_source_id and external_alert_source_type are present or both are absent.
+                    external_alert_source_id = existing.external_alert_source_id
+                    external_alert_source_type = existing.external_alert_source_type
 
-            if existing_records > 0:
                 # This logic assumes that alert id is unique across organizations and projects.
                 # If this assumption changes then alerts can get randomly overwritten.
                 logger.info(
@@ -389,11 +425,19 @@ class DbAlertDataAccessor(AlertDataAccessor):
                         "organization_id": organization_id,
                         "project_id": project_id,
                         "external_alert_id": external_alert_id,
+                        "external_alert_source_id": external_alert_source_id,
+                        "external_alert_source_type": external_alert_source_type,
                     },
                 )
-                delete_q = delete(DbDynamicAlert).where(
-                    DbDynamicAlert.external_alert_id == external_alert_id
-                )
+                if external_alert_id is not None:
+                    delete_q = delete(DbDynamicAlert).where(
+                        DbDynamicAlert.external_alert_id == external_alert_id
+                    )
+                else:
+                    delete_q = delete(DbDynamicAlert).where(
+                        DbDynamicAlert.external_alert_source_id == external_alert_source_id,
+                        DbDynamicAlert.external_alert_source_type == external_alert_source_type,
+                    )
                 session.execute(delete_q)
                 session.flush()
 
@@ -425,31 +469,25 @@ class DbAlertDataAccessor(AlertDataAccessor):
             return new_record.id
 
     @sentry_sdk.trace
-    def save_alert_by_source(
+    def save_timepoint(
         self,
-        organization_id: int,
-        project_id: int,
-        external_alert_id: int,
-        external_alert_source_id: int,
-        external_alert_source_type: int,
-        config: AnomalyDetectionConfig,
-        timeseries: List[TimeSeriesPoint],
-        anomalies: TimeSeriesAnomalies,
-        anomaly_algo_data: dict,
-        data_purge_flag: str,
-    ) -> int:
-        return NotImplemented  # TODO: Implement this once we fully migrate to source based alerts and the external alert id can be nullable
-
-    def _save_timepoint(
-        self,
-        dynamic_alert_id: int,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
         timepoint: TimeSeriesPoint,
         anomaly: TimeSeriesAnomalies,
         anomaly_algo_data: Optional[dict],
-        session: SQLAlchemySession,
     ):
+        with Session() as session:
+            existing = self.query_db_alert_or_raise(
+                session,
+                external_alert_id,
+                external_alert_source_id,
+                external_alert_source_type,
+            )
+
         new_record = DbDynamicAlertTimeSeries(
-            dynamic_alert_id=dynamic_alert_id,
+            dynamic_alert_id=existing.id,
             timestamp=datetime.fromtimestamp(timepoint.timestamp),
             value=timepoint.value,
             anomaly_type=anomaly.flags[0],
@@ -460,249 +498,120 @@ class DbAlertDataAccessor(AlertDataAccessor):
         session.commit()
 
     @sentry_sdk.trace
-    def save_timepoint(
+    def delete_alert_data(
         self,
-        external_alert_id: int,
-        timepoint: TimeSeriesPoint,
-        anomaly: TimeSeriesAnomalies,
-        anomaly_algo_data: Optional[dict],
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ):
         with Session() as session:
-            existing = (
-                session.query(DbDynamicAlert)
-                .filter_by(external_alert_id=external_alert_id)
-                .one_or_none()
+            existing = self.query_db_alert_or_raise(
+                session,
+                external_alert_id,
+                external_alert_source_id,
+                external_alert_source_type,
             )
-            if existing is None:
-                raise ClientError(f"Alert with id {external_alert_id} not found")
 
-            self._save_timepoint(existing.id, timepoint, anomaly, anomaly_algo_data, session)
-
-    @sentry_sdk.trace
-    def save_timepoint_by_source(
-        self,
-        external_alert_source_id: int,
-        external_alert_source_type: int,
-        timepoint: TimeSeriesPoint,
-        anomaly: TimeSeriesAnomalies,
-        anomaly_algo_data: Optional[dict],
-    ):
-        with Session() as session:
-            existing = (
-                session.query(DbDynamicAlert)
-                .filter_by(
-                    external_alert_source_id=external_alert_source_id,
-                    external_alert_source_type=external_alert_source_type,
-                )
-                .one_or_none()
-            )
-            if existing is None:
-                raise ClientError(
-                    f"Alert with source id {external_alert_source_id} and type {external_alert_source_type} not found"
-                )
-
-            self._save_timepoint(existing.id, timepoint, anomaly, anomaly_algo_data, session)
-
-    def _delete_alert_data(self, existing: DbDynamicAlert, session: SQLAlchemySession):
-        # Store the alert timeseries and the prophet predictions in the history table prior to deleting the alert
-        history_values = [
-            {
-                "alert_id": existing.external_alert_id,
-                "external_alert_source_id": existing.external_alert_source_id,
-                "external_alert_source_type": existing.external_alert_source_type,
-                "timestamp": existing.timeseries[i].timestamp,
-                "value": existing.timeseries[i].value,
-                "anomaly_type": existing.timeseries[i].anomaly_type,
-            }
-            for i in range(len(existing.timeseries))
-        ]
-        stmt = insert(DbDynamicAlertTimeSeriesHistory).values(history_values)
-        update_stmt = stmt.on_conflict_do_nothing()
-        session.execute(update_stmt)
-
-        # There may not be generated prophet predictions so skip in those cases
-        if existing.prophet_predictions:
-            prophet_predictions_history_values = [
+            # Store the alert timeseries and the prophet predictions in the history table prior to deleting the alert
+            history_values = [
                 {
-                    "alert_id": existing.prophet_predictions[i].dynamic_alert_id,
-                    "timestamp": existing.prophet_predictions[i].timestamp,
-                    "yhat": existing.prophet_predictions[i].yhat,
-                    "yhat_lower": existing.prophet_predictions[i].yhat_lower,
-                    "yhat_upper": existing.prophet_predictions[i].yhat_upper,
+                    "alert_id": existing.external_alert_id,
+                    "external_alert_source_id": existing.external_alert_source_id,
+                    "external_alert_source_type": existing.external_alert_source_type,
+                    "timestamp": existing.timeseries[i].timestamp,
+                    "value": existing.timeseries[i].value,
+                    "anomaly_type": existing.timeseries[i].anomaly_type,
                 }
-                for i in range(len(existing.prophet_predictions))
+                for i in range(len(existing.timeseries))
             ]
-            stmt = insert(DbProphetAlertTimeSeriesHistory).values(
-                prophet_predictions_history_values
-            )
+            stmt = insert(DbDynamicAlertTimeSeriesHistory).values(history_values)
             update_stmt = stmt.on_conflict_do_nothing()
             session.execute(update_stmt)
 
-        session.delete(existing)
-        session.commit()
+            # There may not be generated prophet predictions so skip in those cases
+            if existing.prophet_predictions:
+                prophet_predictions_history_values = [
+                    {
+                        "alert_id": existing.prophet_predictions[i].dynamic_alert_id,
+                        "timestamp": existing.prophet_predictions[i].timestamp,
+                        "yhat": existing.prophet_predictions[i].yhat,
+                        "yhat_lower": existing.prophet_predictions[i].yhat_lower,
+                        "yhat_upper": existing.prophet_predictions[i].yhat_upper,
+                    }
+                    for i in range(len(existing.prophet_predictions))
+                ]
+                stmt = insert(DbProphetAlertTimeSeriesHistory).values(
+                    prophet_predictions_history_values
+                )
+                update_stmt = stmt.on_conflict_do_nothing()
+                session.execute(update_stmt)
+
+            session.delete(existing)
+            session.commit()
 
     @sentry_sdk.trace
-    def delete_alert_data(self, external_alert_id: int):
-        with Session() as session:
-            existing = (
-                session.query(DbDynamicAlert)
-                .filter_by(external_alert_id=external_alert_id)
-                .one_or_none()
-            )
-            if existing is None:
-                raise ClientError(f"Alert with id {external_alert_id} not found")
-            self._delete_alert_data(existing, session)
-
-    @sentry_sdk.trace
-    def delete_alert_data_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
+    def queue_data_purge_flag(
+        self,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ):
-        with Session() as session:
-            existing = (
-                session.query(DbDynamicAlert)
-                .filter_by(
-                    external_alert_source_id=external_alert_source_id,
-                    external_alert_source_type=external_alert_source_type,
-                )
-                .one_or_none()
-            )
-            if existing is None:
-                raise ClientError(
-                    f"Alert with source id {external_alert_source_id} and type {external_alert_source_type} not found"
-                )
-
-            self._delete_alert_data(existing, session)
-
-    @sentry_sdk.trace
-    def queue_data_purge_flag(self, alert_id: int):
         # Set flag to queued and time when queued
         with Session() as session:
-            dynamic_alert = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == alert_id)
-                .one_or_none()
+            dynamic_alert = self.query_db_alert_or_raise(
+                session,
+                external_alert_id,
+                external_alert_source_id,
+                external_alert_source_type,
             )
-
-            if not dynamic_alert:
-                raise ClientError(f"Alert with id {alert_id} not found")
 
             dynamic_alert.last_queued_at = datetime.now()
             dynamic_alert.data_purge_flag = TaskStatus.QUEUED
             session.commit()
-
-    @sentry_sdk.trace
-    def queue_data_purge_flag_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
-    ):
-        with Session() as session:
-            dynamic_alert = (
-                session.query(DbDynamicAlert)
-                .filter_by(
-                    external_alert_source_id=external_alert_source_id,
-                    external_alert_source_type=external_alert_source_type,
-                )
-                .one_or_none()
-            )
-
-            if not dynamic_alert:
-                raise ClientError(
-                    f"Alert with source id {external_alert_source_id} and type {external_alert_source_type} not found"
-                )
-
-            dynamic_alert.last_queued_at = datetime.now()
-            dynamic_alert.data_purge_flag = TaskStatus.QUEUED
-            session.commit()
-
-    def _can_queue_cleanup_predict_task(
-        self, dynamic_alert: DbDynamicAlert, apply_time_threshold: bool = True
-    ) -> bool:
-        if apply_time_threshold:
-            queued_at_threshold = datetime.now() - timedelta(hours=12)
-            return (
-                dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
-                or dynamic_alert.last_queued_at is not None
-                and dynamic_alert.last_queued_at < queued_at_threshold
-            )
-        else:
-            return dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
 
     @sentry_sdk.trace
     def can_queue_cleanup_predict_task(
-        self, external_alert_id: int, apply_time_threshold: bool = True
+        self,
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
+        apply_time_threshold: bool = True,
     ) -> bool:
         """
         Checks if cleanup_predict task can be queued based on current flag or previous time of queueing
         """
         with Session() as session:
-            dynamic_alert = (
-                session.query(DbDynamicAlert)
-                .filter_by(external_alert_id=external_alert_id)
-                .one_or_none()
+            dynamic_alert = self.query_db_alert_or_raise(
+                session,
+                external_alert_id,
+                external_alert_source_id,
+                external_alert_source_type,
             )
 
-            if not dynamic_alert:
-                raise ClientError(f"Alert with id {external_alert_id} not found")
-
-            return self._can_queue_cleanup_predict_task(dynamic_alert, apply_time_threshold)
+            if apply_time_threshold:
+                queued_at_threshold = datetime.now() - timedelta(hours=12)
+                return (
+                    dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
+                    or dynamic_alert.last_queued_at is not None
+                    and dynamic_alert.last_queued_at < queued_at_threshold
+                )
+            else:
+                return dynamic_alert.data_purge_flag == TaskStatus.NOT_QUEUED
 
     @sentry_sdk.trace
-    def can_queue_cleanup_predict_task_by_source(
+    def reset_cleanup_predict_task(
         self,
-        external_alert_source_id: int,
-        external_alert_source_type: int,
-        apply_time_threshold: bool = True,
-    ) -> bool:
-        with Session() as session:
-            dynamic_alert = (
-                session.query(DbDynamicAlert)
-                .filter_by(
-                    external_alert_source_id=external_alert_source_id,
-                    external_alert_source_type=external_alert_source_type,
-                )
-                .one_or_none()
-            )
-
-            if not dynamic_alert:
-                raise ClientError(
-                    f"Alert with source id {external_alert_source_id} and type {external_alert_source_type} not found"
-                )
-
-            return self._can_queue_cleanup_predict_task(dynamic_alert, apply_time_threshold)
-
-    @sentry_sdk.trace
-    def reset_cleanup_predict_task(self, alert_id: int) -> None:
-        with Session() as session:
-            dynamic_alert = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == alert_id)
-                .one_or_none()
-            )
-
-            if not dynamic_alert:
-                raise ClientError(f"Alert with id {alert_id} not found")
-
-            dynamic_alert.last_queued_at = None
-            dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED
-            session.commit()
-
-    @sentry_sdk.trace
-    def reset_cleanup_predict_task_by_source(
-        self, external_alert_source_id: int, external_alert_source_type: int
+        external_alert_id: int | None,
+        external_alert_source_id: int | None,
+        external_alert_source_type: int | None,
     ) -> None:
         with Session() as session:
-            dynamic_alert = (
-                session.query(DbDynamicAlert)
-                .filter_by(
-                    external_alert_source_id=external_alert_source_id,
-                    external_alert_source_type=external_alert_source_type,
-                )
-                .one_or_none()
+            dynamic_alert = self.query_db_alert_or_raise(
+                session,
+                external_alert_id,
+                external_alert_source_id,
+                external_alert_source_type,
             )
-
-            if not dynamic_alert:
-                raise ClientError(
-                    f"Alert with source id {external_alert_source_id} and type {external_alert_source_type} not found"
-                )
 
             dynamic_alert.last_queued_at = None
             dynamic_alert.data_purge_flag = TaskStatus.NOT_QUEUED

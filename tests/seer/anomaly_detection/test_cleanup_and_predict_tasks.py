@@ -151,19 +151,19 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_invalid_alert_id(self):
         with self.assertRaises(ValueError, msg="Alert with id 100 not found"):
-            cleanup_timeseries_and_predict(100, datetime.now().timestamp())
+            cleanup_timeseries_and_predict(100, None, None, datetime.now().timestamp())
 
     def test_cleanup_timeseries_no_points(self):
         # Save alert with no points
         external_alert_id, config, _, _, _ = self._save_alert(0, 0, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, None, None, date_threshold)
 
     def test_only_old_points_deleted(self):
         # Create and save alert with 1000 points (all old)
         external_alert_id, config, points, anomalies, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, None, None, date_threshold)
 
         # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
         with Session() as session:
@@ -214,7 +214,7 @@ class TestCleanupTasks(unittest.TestCase):
             old_timeseries_points = alert.timeseries
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, None, None, date_threshold)
 
         # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
         with Session() as session:
@@ -266,7 +266,7 @@ class TestCleanupTasks(unittest.TestCase):
 
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):
-            cleanup_timeseries_and_predict(999, date_threshold)
+            cleanup_timeseries_and_predict(999, None, None, date_threshold)
 
     def test_make_prophet_predictions(self):
         # Create and save alert with 6 points (3 old, 3 new)
@@ -277,7 +277,7 @@ class TestCleanupTasks(unittest.TestCase):
         )
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, None, None, date_threshold)
 
         with Session() as session:
             alert = (
@@ -365,7 +365,7 @@ class TestCleanupTasks(unittest.TestCase):
         # Create and save alert with 1000 points (all old)
         external_alert_id, _, _, _, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, None, None, date_threshold)
 
         # Confirm the historical table is populated with 1000 points
 

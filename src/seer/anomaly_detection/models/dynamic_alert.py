@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DynamicAlert(BaseModel):
     organization_id: int
     project_id: int
-    external_alert_id: int
+    external_alert_id: int | None
     external_alert_source_id: int | None = None
     external_alert_source_type: int | None = None
     config: AnomalyDetectionConfig
