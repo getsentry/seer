@@ -3,9 +3,11 @@ import json
 import logging
 import os
 import time
+from urllib.parse import urlparse
 
 import datadog
 import flask
+import requests
 import sentry_sdk
 import websockets
 from datadog.dogstatsd.base import statsd
@@ -513,24 +515,32 @@ def summarize_issue_websocket_endpoint(
                 for chunk in stream:
                     print(type(chunk), chunk)
                     message = None
-                    # Handle tuple content (e.g., ("content", ...))
                     if isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == "content":
                         message = json.dumps({"message": chunk[1]})
                     else:
                         message = json.dumps({"message": str(chunk)})
                     await ws.send(message)
+                await ws.close()
+            print("Websocket connection closed")
         except Exception as e:
             logger.exception("Error connecting to websocket or sending message")
             raise
 
     try:
-        print(data.websocket_url)
         websocket_url = data.websocket_url.replace("localhost", "host.docker.internal")
         print(websocket_url)
         asyncio.run(stream_and_send_messages(websocket_url, data))
     except Exception as e:
         logger.exception("Error in websocket communication")
         raise InternalServerError from e
+
+    channel_id = websocket_url.rstrip("/").split("/")[-2]
+    parsed = urlparse(websocket_url)
+    response = requests.post(f"http://{parsed.netloc}/api/deleteroom", json={"roomId": channel_id})
+    if response.status_code == 200:
+        print(f"Deleted channel {channel_id}")
+    else:
+        print(f"Failed to delete channel {channel_id}: {response.status_code}")
 
     return SummarizeIssueWebsocketResponse(
         message="Issue summarized and message sent to websocket."
