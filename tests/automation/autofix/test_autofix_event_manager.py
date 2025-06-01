@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from johen import generate
@@ -18,7 +18,7 @@ from seer.automation.autofix.models import (
     RootCauseStep,
 )
 from seer.automation.models import FileChange
-from seer.automation.state import LocalMemoryState
+from seer.automation.state import LocalMemoryState, State
 from seer.automation.utils import make_kill_signal
 from seer.events import SeerEventNames
 
@@ -32,7 +32,9 @@ class TestAutofixEventManager:
     def event_manager(self, state):
         return AutofixEventManager(state)
 
-    def test_on_error_marks_running_steps_errored(self, event_manager, state):
+    def test_on_error_marks_running_steps_errored(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         state.get().steps = [
             RootCauseStep(id="1", title="Step 1", status=AutofixStatus.PROCESSING),
             RootCauseStep(id="2", title="Step 2", status=AutofixStatus.COMPLETED),
@@ -45,7 +47,9 @@ class TestAutofixEventManager:
         assert state.get().steps[1].status == AutofixStatus.COMPLETED
         assert state.get().steps[2].status == AutofixStatus.ERROR
 
-    def test_on_error_sets_last_step_completed_message(self, event_manager, state):
+    def test_on_error_sets_last_step_completed_message(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         state.get().steps = [
             RootCauseStep(id="1", title="Test Step", status=AutofixStatus.PROCESSING),
         ]
@@ -54,18 +58,24 @@ class TestAutofixEventManager:
 
         assert state.get().steps[-1].completedMessage == "Test error message"
 
-    def test_on_error_sets_state_status_to_error(self, event_manager, state):
+    def test_on_error_sets_state_status_to_error(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         event_manager.on_error("Test error message")
 
         assert state.get().status == AutofixStatus.ERROR
 
-    def test_on_error_does_not_set_state_status_when_flag_is_false(self, event_manager, state):
+    def test_on_error_does_not_set_state_status_when_flag_is_false(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         initial_status = state.get().status
         event_manager.on_error("Test error message", should_completely_error=False)
 
         assert state.get().status == initial_status
 
-    def test_add_log_to_current_step(self, event_manager, state):
+    def test_add_log_to_current_step(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         state.get().steps = [
             RootCauseStep(id="1", title="Test Step", status=AutofixStatus.PROCESSING, progress=[])
         ]
@@ -76,7 +86,9 @@ class TestAutofixEventManager:
         assert state.get().steps[0].progress[0].message == "Test log message"
         assert state.get().steps[0].progress[0].type == ProgressType.INFO
 
-    def test_add_log_no_processing_step(self, event_manager, state):
+    def test_add_log_no_processing_step(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         state.get().steps = [
             RootCauseStep(id="1", title="Test Step", status=AutofixStatus.COMPLETED, progress=[])
         ]
@@ -85,7 +97,9 @@ class TestAutofixEventManager:
 
         assert len(state.get().steps[0].progress) == 1
 
-    def test_add_log_empty_steps(self, event_manager, state):
+    def test_add_log_empty_steps(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         state.get().steps = []
 
         event_manager.add_log("Test log message")
@@ -94,7 +108,9 @@ class TestAutofixEventManager:
 
     @pytest.mark.skip(reason="Flaky")
     @patch("time.sleep")
-    def test_reset_steps_to_point(self, mock_time, event_manager, state):
+    def test_reset_steps_to_point(
+        self, mock_time: Mock, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         with state.update() as cur:
             cur.steps = [
                 RootCauseStep(id="1", title="Step 1", status=AutofixStatus.COMPLETED),
@@ -205,7 +221,9 @@ class TestAutofixEventManager:
         assert mock_time.call_count == 2  # Called twice before signals are cleared
 
     @patch("time.sleep")
-    def test_reset_steps_to_point_clears_file_changes(self, mock_time, event_manager, state):
+    def test_reset_steps_to_point_clears_file_changes(
+        self, mock_time: Mock, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         with state.update() as cur:
             cur.steps = [
                 RootCauseStep(id="1", title="Step 1", status=AutofixStatus.COMPLETED),
@@ -239,7 +257,9 @@ class TestAutofixEventManager:
         assert len(state.get().steps) == 2
         assert len(state.get().codebases["repo1"].file_changes) == 0
 
-    def test_send_root_cause_analysis_start(self, event_manager, state):
+    def test_send_root_cause_analysis_start(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         # No existing root cause step
         event_manager.send_root_cause_analysis_start()
 
@@ -271,7 +291,9 @@ class TestAutofixEventManager:
         assert root_cause_step.key == event_manager.root_cause_analysis_processing_step.key
         assert root_cause_step.status == AutofixStatus.PROCESSING
 
-    def test_send_coding_start(self, event_manager, state):
+    def test_send_coding_start(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         # No existing plan step
         event_manager.send_coding_start()
 
@@ -303,7 +325,9 @@ class TestAutofixEventManager:
         assert plan_step.key == event_manager.plan_step.key
         assert plan_step.status == AutofixStatus.PROCESSING
 
-    def test_ask_user_question(self, event_manager, state):
+    def test_ask_user_question(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         # Setup initial state with a processing step
         state.get().steps = [
             RootCauseStep(id="1", title="Test Step", status=AutofixStatus.PROCESSING, progress=[])
@@ -323,7 +347,9 @@ class TestAutofixEventManager:
         # Check overall state status
         assert state.get().status == AutofixStatus.WAITING_FOR_USER_RESPONSE
 
-    def test_send_solution_start(self, event_manager, state):
+    def test_send_solution_start(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         # No existing solution step
         event_manager.send_solution_start()
 
@@ -355,7 +381,9 @@ class TestAutofixEventManager:
         assert solution_step.key == event_manager.solution_processing_step.key
         assert solution_step.status == AutofixStatus.PROCESSING
 
-    def test_send_solution_result(self, event_manager, state):
+    def test_send_solution_result(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         # Create a mock solution output
         mock_solution_output = next(generate(SolutionOutput))
         mock_code_urls = []
@@ -397,7 +425,9 @@ class TestAutofixEventManager:
                     assert timeline_item.relevant_code_file.url == mock_code_urls[i]
         assert state_obj.status == AutofixStatus.NEED_MORE_INFORMATION
 
-    def test_set_selected_solution(self, event_manager, state):
+    def test_set_selected_solution(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         payload = AutofixSolutionUpdatePayload(
             solution=[
                 SolutionTimelineEvent(
@@ -456,9 +486,15 @@ class TestAutofixEventManager:
         assert state.get().steps[1].key == event_manager.solution_step.key
 
     @patch("seer.automation.autofix.event_manager.log_seer_event")
-    def test_log_coding_start(self, mock_log_seer_event, event_manager, state):
+    def test_log_coding_start(
+        self,
+        mock_log_seer_event: Mock,
+        event_manager: AutofixEventManager,
+        state: State[AutofixContinuation],
+    ):
         """Test logging coding start event with various solution combinations."""
-        run_id = 12345
+        run_id = state.get().run_id
+        group_id = state.get().request.issue.id
 
         # Test Case 1: No added steps, no removed steps, no unit tests
         original_solution = [
@@ -471,12 +507,13 @@ class TestAutofixEventManager:
             SolutionTimelineEvent(title="Step 2", is_most_important_event=False),
         ]
 
-        event_manager._log_coding_start(run_id, new_solution, original_solution)
+        event_manager._log_coding_start(run_id, group_id, new_solution, original_solution)
 
         mock_log_seer_event.assert_called_once_with(
             SeerEventNames.AUTOFIX_CODING_STARTED,
             {
                 "run_id": run_id,
+                "group_id": group_id,
                 "has_unit_tests": False,
                 "has_removed_steps": False,
                 "has_added_steps": False,
@@ -489,12 +526,15 @@ class TestAutofixEventManager:
             SolutionTimelineEvent(title="Step 3", is_most_important_event=False)
         ]
 
-        event_manager._log_coding_start(run_id, new_solution_with_added, original_solution)
+        event_manager._log_coding_start(
+            run_id, group_id, new_solution_with_added, original_solution
+        )
 
         mock_log_seer_event.assert_called_once_with(
             SeerEventNames.AUTOFIX_CODING_STARTED,
             {
                 "run_id": run_id,
+                "group_id": group_id,
                 "has_unit_tests": False,
                 "has_removed_steps": False,
                 "has_added_steps": True,
@@ -505,12 +545,15 @@ class TestAutofixEventManager:
         # Test Case 3: With removed steps
         new_solution_with_removed = [original_solution[0]]
 
-        event_manager._log_coding_start(run_id, new_solution_with_removed, original_solution)
+        event_manager._log_coding_start(
+            run_id, group_id, new_solution_with_removed, original_solution
+        )
 
         mock_log_seer_event.assert_called_once_with(
             SeerEventNames.AUTOFIX_CODING_STARTED,
             {
                 "run_id": run_id,
+                "group_id": group_id,
                 "has_unit_tests": False,
                 "has_removed_steps": True,
                 "has_added_steps": False,
@@ -527,12 +570,13 @@ class TestAutofixEventManager:
             )
         ]
 
-        event_manager._log_coding_start(run_id, new_solution_with_test, original_solution)
+        event_manager._log_coding_start(run_id, group_id, new_solution_with_test, original_solution)
 
         mock_log_seer_event.assert_called_once_with(
             SeerEventNames.AUTOFIX_CODING_STARTED,
             {
                 "run_id": run_id,
+                "group_id": group_id,
                 "has_unit_tests": True,
                 "has_removed_steps": False,
                 "has_added_steps": True,
@@ -551,19 +595,22 @@ class TestAutofixEventManager:
             ),
         ]
 
-        event_manager._log_coding_start(run_id, new_complex_solution, original_solution)
+        event_manager._log_coding_start(run_id, group_id, new_complex_solution, original_solution)
 
         mock_log_seer_event.assert_called_once_with(
             SeerEventNames.AUTOFIX_CODING_STARTED,
             {
                 "run_id": run_id,
+                "group_id": group_id,
                 "has_unit_tests": True,
                 "has_removed_steps": True,
                 "has_added_steps": True,
             },
         )
 
-    def test_send_coding_result_no_termination(self, event_manager, state):
+    def test_send_coding_result_no_termination(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         event_manager.send_coding_result()
 
         state_obj = state.get()
@@ -579,7 +626,9 @@ class TestAutofixEventManager:
         assert changes_step is None  # Changes step should not be completed
         assert state_obj.status == AutofixStatus.PROCESSING
 
-    def test_send_coding_result_with_termination(self, event_manager, state):
+    def test_send_coding_result_with_termination(
+        self, event_manager: AutofixEventManager, state: State[AutofixContinuation]
+    ):
         termination_reason = "The code is perfect as is. I wouldn't dare to change it."
         event_manager.send_coding_result(termination_reason=termination_reason)
 

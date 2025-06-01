@@ -118,6 +118,7 @@ class AutofixEventManager:
 
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
                 "is_auto_run": cur.request.options.auto_run_source is not None,
                 "auto_run_source": cur.request.options.auto_run_source,
             }
@@ -145,6 +146,7 @@ class AutofixEventManager:
 
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
             }
 
         if log_payload:
@@ -189,6 +191,7 @@ class AutofixEventManager:
 
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
             }
 
         if log_payload:
@@ -228,6 +231,7 @@ class AutofixEventManager:
 
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
             }
 
         if log_payload:
@@ -257,6 +261,7 @@ class AutofixEventManager:
             cur.status = AutofixStatus.PROCESSING
 
             run_id = cur.run_id
+            group_id = cur.request.issue.id
             new_solution = solution_step.solution
             old_solution = original_solution
 
@@ -264,6 +269,7 @@ class AutofixEventManager:
         # set_selected_solution is called at coding start anyways.
         self._log_coding_start(
             run_id=run_id,
+            group_id=group_id,
             new_solution=new_solution,
             original_solution=old_solution,
         )
@@ -294,6 +300,7 @@ class AutofixEventManager:
 
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
             }
 
         if log_payload:
@@ -315,6 +322,7 @@ class AutofixEventManager:
 
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
             }
 
         if log_payload:
@@ -339,10 +347,12 @@ class AutofixEventManager:
                 changes_step.status = AutofixStatus.COMPLETED
 
     def on_confidence_question(self, question: str):
+        cur = self.state.get()
         log_seer_event(
             SeerEventNames.AUTOFIX_ASKED_USER_QUESTION,
             {
-                "run_id": self.state.get().run_id,
+                "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
                 "question": question,
             },
         )
@@ -396,6 +406,7 @@ class AutofixEventManager:
             cur.status = AutofixStatus.WAITING_FOR_USER_RESPONSE
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
                 "question": question,
             }
 
@@ -421,6 +432,7 @@ class AutofixEventManager:
 
             log_payload = {
                 "run_id": cur.run_id,
+                "group_id": cur.request.issue.id,
                 "error_msg": error_msg,
                 "current_running_step": (
                     current_running_step.key if current_running_step else None
@@ -478,6 +490,7 @@ class AutofixEventManager:
     def _log_coding_start(
         self,
         run_id: int,
+        group_id: int,
         new_solution: list[SolutionTimelineEvent],
         original_solution: list[SolutionTimelineEvent],
     ):
@@ -485,6 +498,7 @@ class AutofixEventManager:
             SeerEventNames.AUTOFIX_CODING_STARTED,
             {
                 "run_id": run_id,
+                "group_id": group_id,
                 "has_unit_tests": any(
                     step.timeline_item_type == "repro_test" for step in new_solution
                 ),
