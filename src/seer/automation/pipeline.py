@@ -101,9 +101,8 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
     @cached_property
     def logger(self):
         run_id = self.context.run_id
-        name = self.name
-        prefix = f"[{run_id=}] [{name}] "
-        return prefix_logger(prefix, logger)
+        prefix = f"[{self.name}] "
+        return prefix_logger(prefix, logger, extra={"run_id": run_id})
 
     @staticmethod
     @abc.abstractmethod
