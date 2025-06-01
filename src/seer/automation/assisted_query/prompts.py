@@ -22,7 +22,9 @@ def get_cache_prompt(
         ---
         # Key Concepts:
         - Trace:
-          - A trace represents a single transaction or request through your system. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
+          - A trace represents a collection of one or more transactions through your system.
+        - Transaction:
+          - A transaction represents a single instance of a service being called. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
           - It captures a series of operations (spans) that show how different parts of your application interacted during that transaction.
         - Span
           - A span represents an individual operation within a trace. This could be a database query, HTTP request, or UI rendering task.
@@ -78,7 +80,6 @@ def get_cache_prompt(
 
         Here are some examples of valid comparison operator searches:
 
-        - event.timestamp:>2023-09-28T00:00:00-07:00
         - count_dead_clicks:<=10
         - transaction.duration:>5s
         - span.duration:>500ms
@@ -233,17 +234,6 @@ def get_cache_prompt(
         - Query: "Slowest browser requests", group by: [] (no fields)
 
         When creating a query, do not include any escape tokens. Return it as directly as possible
-
-        ## Time-Based Queries
-
-        Sentry supports time-based queries to filter data by time.
-        - Use relative time
-          - timestamp:-24h (timestamp is after 24 hours ago)
-          - timestamp:+7d (timestamp is before 7 days ago)
-        - Use absolute time with comparison operators:
-          - timestamp:>2025-05-12 (date)
-          - timestamp:<=2025-05-12T00:00:00Z (date and time in UTC)
-          - timestamp:>=2025-05-12T00:00:00+00:00 (date, time, and specific timezone)
 
         ## Visualization Guidelines
 
