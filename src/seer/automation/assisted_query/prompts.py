@@ -45,7 +45,7 @@ def get_cache_prompt(
 
         # Search Query and Syntax Guidelines:
         You will use the user's query below to create a valid Sentry search query. The search query will be used to filter the traces and spans that are displayed in the Trace Explorer page and ultimately help you answer the user's question.
-        You will be given a list of available fields and functions that you can use to create your query. You must only use these fields and functions to create your query.
+        You will be given a list of available fields that you can use to create your query. You must only use these fields to create your query.
         You must adhere to the following query syntax guidelines:
 
         ## Search Query Syntax Guidelines
