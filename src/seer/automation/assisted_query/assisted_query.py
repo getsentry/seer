@@ -16,6 +16,7 @@ from seer.automation.assisted_query.models import (
     TranslateResponse,
     TranslateResponses,
 )
+from seer.automation.assisted_query.tools import SearchTools
 from seer.automation.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
@@ -74,6 +75,7 @@ def create_query_from_natural_language(
     llm_client: LlmClient = injected,
     rpc_client: RpcClient = injected,
 ) -> LlmGenerateStructuredResponse:
+    tools = SearchTools(org_id, project_ids)
     model = get_model_provider()
 
     # Step 1: Try to generate query directly OR request specific fields
@@ -86,6 +88,7 @@ def create_query_from_natural_language(
         temperature=0.2,
         thinking_budget=0,
         use_local_endpoint=True,
+        tools=tools.get_tools(),
     )
 
     if initial_response.parsed and initial_response.parsed.queries:
@@ -93,6 +96,9 @@ def create_query_from_natural_language(
             initial_response.parsed.queries, metadata=initial_response.metadata
         )
 
+    # Check for tool calls
+
+    # TODO: Turn this into a tool call? ----------------------------------------------------------------
     requested_fields = []
     if initial_response.parsed and initial_response.parsed.requested_fields:
         requested_fields = initial_response.parsed.requested_fields
@@ -120,6 +126,8 @@ def create_query_from_natural_language(
     for field in REQUIRED_FIELDS:
         if field not in requested_fields:
             requested_fields.append(field)
+
+    # -----------------------------------------------------------------------------------------------------
 
     # Step 2: Fetch values for requested fields
     field_values_response = rpc_client.call(
