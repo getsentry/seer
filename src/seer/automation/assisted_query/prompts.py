@@ -359,7 +359,8 @@ def get_final_query_prompt(
         1. Deeply analyze the available values for each field to identify patterns
         2. For String fields, decide whether to use exact matches or wildcards based on the patterns found
         3. For numeric fields, use comparison operators to find close or exact matches
-        4. Construct the query using the most appropriate matching strategy
+        4. Explain succinctly why you generated this query. If you think that you did not have enough information or did not know how to properly construct the overlal query, please explain what additional information and context you would have needed to successfuly create it.
+        5. Construct the overall query using the most appropriate matching strategy
 
         Please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places.
 
