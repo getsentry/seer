@@ -1302,6 +1302,7 @@ class GeminiProvider:
                 inactivity_timeout=inactivity_timeout,
                 on_cleanup=cleanup,
             ):
+
                 # Handle function calls
                 if (
                     chunk.candidates
@@ -1702,6 +1703,10 @@ class LlmClient:
         Determine if an exception warrants trying the next model in a fallback sequence.
         Currently targets 429 (rate limit) and 422 (unprocessable entity) errors.
         """
+
+        if isinstance(exception, LlmStreamTimeoutError):
+            return True
+
         if provider.provider_name == LlmProviderType.OPENAI:
             return (
                 isinstance(exception, openai.RateLimitError)
@@ -1739,6 +1744,7 @@ class LlmClient:
                     ]
                 )
             )
+
         return False
 
     def _execute_with_fallback(
@@ -1765,22 +1771,22 @@ class LlmClient:
                 if self._is_fallback_worthy_exception(e, model):
                     if i < len(models) - 1:  # Not the last model
                         logger.warning(
-                            f"{operation_name} failed with {model.provider_name} model '{model.model_name}' "
+                            f"{operation_name} failed with {model.provider_name} model '{model.model_name}' region '{model.region}' "
                             f"due to {type(e).__name__}: {str(e)}. "
-                            f"Trying next model ({i + 2}/{len(models)}): {models[i + 1].provider_name} '{models[i + 1].model_name}'"
+                            f"Trying next model ({i + 2}/{len(models)}): {models[i + 1].provider_name} '{models[i + 1].model_name}' region '{models[i + 1].region}'"
                         )
                         continue
                     else:
                         logger.error(
                             f"{operation_name} failed with all {len(models)} models. "
-                            f"Last attempt with {model.provider_name} model '{model.model_name}' "
+                            f"Last attempt with {model.provider_name} model '{model.model_name}' region '{model.region}' "
                             f"failed with {type(e).__name__}: {str(e)}"
                         )
                         raise e
                 else:
                     # Non-fallback-worthy exception, fail immediately
                     logger.error(
-                        f"{operation_name} failed with {model.provider_name} model '{model.model_name}' "
+                        f"{operation_name} failed with {model.provider_name} model '{model.model_name}' region '{model.region}' "
                         f"due to non-retryable {type(e).__name__}: {str(e)}"
                     )
                     raise e
