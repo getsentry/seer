@@ -448,7 +448,7 @@ class BugPredictionPrompts:
             - performance concerns.
 
             Focus exclusively on bugs that will cause the server to unexpectedly crash.
-            Be careful about interpreting a code change that *intentionally* raises an error."""
+            Don't pay much attention to a part of a code change that *intentionally and sensibly* raises an error, as this wouldn't be an unexpected crash."""
         )
 
     @staticmethod
@@ -483,7 +483,7 @@ class BugPredictionPrompts:
 
             We need you to narrow down the list of files we want to analyze for finding bugs.
             Return the top {num_files_desired} unique files we should analyze.
-            We don't care to predict bugs for code that won't be run in production, e.g., test files. So please filter out test files. We want to predict bugs for files that might contain error-prone, untested code that could cause a crash in production.
+            We don't care to predict bugs for code that won't be run in production. So please filter out things like test files or documentation. We want to predict bugs for files that might contain error-prone, untested code that could cause a crash in production.
             For context, this is just a preprocessing step. You'll have the chance to do an extensive code search and analysis of this code change later. For now, we just want you to filter down the list of files to a more manageable number."""
         ).format(
             diff=format_diff(pr_files),
