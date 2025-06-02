@@ -129,6 +129,17 @@ class RepoManager:
 
         try:
             self._download_github_tar()
+        except RepoInitializationError as e:
+            if "Download cancelled for" in str(e):
+                logger.info(
+                    f"Repository download for {self.repo_client.repo_full_name} was cancelled (expected)."
+                )
+            else:
+                logger.exception(
+                    "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
+                )
+                self.cleanup()
+                raise
         except Exception:
             logger.exception(
                 "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
