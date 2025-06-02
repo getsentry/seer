@@ -196,9 +196,9 @@ class AnomalyDetection(BaseModel):
                     cleanup_timeseries_and_predict.apply_async(
                         (
                             historic.external_alert_id,
+                            cleanup_predict_config.timestamp_threshold,
                             historic.external_alert_source_id,
                             historic.external_alert_source_type,
-                            cleanup_predict_config.timestamp_threshold,
                         ),
                         countdown=random.randint(
                             0, config.time_period * 45
@@ -236,7 +236,9 @@ class AnomalyDetection(BaseModel):
         Returns:
         Tuple with input timeseries and identified anomalies
         """
-        logger.info(f"Detecting anomalies for alert ID: {alert.id}")
+        logger.info(
+            f"Detecting anomalies for alert ID: {alert.id}, source ID: {alert.source_id}, source type: {alert.source_type}"
+        )
         ts_external: List[TimeSeriesPoint] = []
         if alert.cur_window:
             if alert.cur_window.value is None:
@@ -255,14 +257,16 @@ class AnomalyDetection(BaseModel):
         # Retrieve historic data
         historic = alert_data_accessor.query(
             external_alert_id=alert.id,
-            external_alert_source_id=None,
-            external_alert_source_type=None,
+            external_alert_source_id=alert.source_id,
+            external_alert_source_type=alert.source_type,
         )
         if historic is None:
             logger.error(
                 "no_stored_history_data",
                 extra={
                     "alert_id": alert.id,
+                    "alert_source_id": alert.source_id,
+                    "alert_source_type": alert.source_type,
                 },
             )
             raise ClientError("No timeseries data found for alert")
@@ -279,6 +283,8 @@ class AnomalyDetection(BaseModel):
                 "data_purge_flag_invalid",
                 extra={
                     "alert_id": alert.id,
+                    "alert_source_id": alert.source_id,
+                    "alert_source_type": alert.source_type,
                     "data_purge_flag": historic.data_purge_flag,
                     "last_queued_at": historic.last_queued_at,
                 },
@@ -626,6 +632,8 @@ class AnomalyDetection(BaseModel):
         """
         if isinstance(request.context, AlertInSeer):
             sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.context.id)
+            sentry_sdk.set_tag("alert_source_id", request.context.source_id)
+            sentry_sdk.set_tag("alert_source_type", request.context.source_type)
             ts, anomalies = self._online_detect(request.context, request.config)
         elif isinstance(request.context, TimeSeriesWithHistory):
             ts, anomalies = self._combo_detect(
@@ -655,6 +663,8 @@ class AnomalyDetection(BaseModel):
         scope = sentry_sdk.get_current_scope()
         scope.set_transaction_name("seer.anomaly_detection.store_endpoint")
         sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.alert.id)
+        sentry_sdk.set_tag("alert_source_id", request.alert.source_id)
+        sentry_sdk.set_tag("alert_source_type", request.alert.source_type)
         # Ensure we have at least 7 days of data in the time series
         min_len = self._min_required_timesteps(request.config.time_period)
         if len(request.timeseries) < min_len:
@@ -664,6 +674,8 @@ class AnomalyDetection(BaseModel):
                     "organization_id": request.organization_id,
                     "project_id": request.project_id,
                     "external_alert_id": request.alert.id,
+                    "external_alert_source_id": request.alert.source_id,
+                    "external_alert_source_type": request.alert.source_type,
                     "num_datapoints": len(request.timeseries),
                     "minimum_required": min_len,
                     "config": request.config.model_dump(),
@@ -677,6 +689,8 @@ class AnomalyDetection(BaseModel):
                 "organization_id": request.organization_id,
                 "project_id": request.project_id,
                 "external_alert_id": request.alert.id,
+                "external_alert_source_id": request.alert.source_id,
+                "external_alert_source_type": request.alert.source_type,
                 "num_datapoints": len(request.timeseries),
                 "config": request.config.model_dump(),
             },
@@ -700,8 +714,8 @@ class AnomalyDetection(BaseModel):
             organization_id=request.organization_id,
             project_id=request.project_id,
             external_alert_id=request.alert.id,
-            external_alert_source_id=None,  # TODO: Add source id and type once the store API is updated
-            external_alert_source_type=None,
+            external_alert_source_id=request.alert.source_id,
+            external_alert_source_type=request.alert.source_type,
             config=request.config,
             timeseries=ts,
             anomalies=anomalies,
@@ -728,9 +742,11 @@ class AnomalyDetection(BaseModel):
         scope = sentry_sdk.get_current_scope()
         scope.set_transaction_name("seer.anomaly_detection.delete_endpoint")
         sentry_sdk.set_tag(AnomalyDetectionTags.ALERT_ID, request.alert.id)
+        sentry_sdk.set_tag("alert_source_id", request.alert.source_id)
+        sentry_sdk.set_tag("alert_source_type", request.alert.source_type)
         alert_data_accessor.delete_alert_data(
             external_alert_id=request.alert.id,
-            external_alert_source_id=None,
-            external_alert_source_type=None,
+            external_alert_source_id=request.alert.source_id,
+            external_alert_source_type=request.alert.source_type,
         )
         return DeleteAlertDataResponse(success=True)

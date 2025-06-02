@@ -47,10 +47,14 @@ def _init_stumpy():
 @sentry_sdk.trace
 def cleanup_timeseries_and_predict(
     external_alert_id: int | None,
-    external_alert_source_id: int | None,
-    external_alert_source_type: int | None,
     date_threshold: float,
-):  # TODO: Add support for the new external alert id and source id
+    external_alert_source_id: int | None = None,
+    external_alert_source_type: int | None = None,
+):
+    """
+    The source_id and source_type parameters are added at the end and have default parameters to keep the method signature backward compatible.
+    Otherwise, any tasks already queued when this change is deployed will fail.
+    """
     sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     span = sentry_sdk.get_current_span()
 

@@ -15,7 +15,6 @@ from sqlalchemy import (
     TIMESTAMP,
     BigInteger,
     Boolean,
-    CheckConstraint,
     Connection,
     DateTime,
     Enum,
@@ -411,10 +410,11 @@ class DbDynamicAlert(Base):
             "external_alert_source_type",
             unique=True,
         ),
-        CheckConstraint(
-            "external_alert_id IS NOT NULL OR (external_alert_source_id IS NOT NULL AND external_alert_source_type IS NOT NULL)",  # noqa: E501
-            name="check_external_alert_id_or_source_id_type",
-        ),
+        # Check constraints is not working. Alembic seems to completely ignore them.
+        # CheckConstraint(
+        #     "external_alert_id IS NOT NULL OR (external_alert_source_id IS NOT NULL AND external_alert_source_type IS NOT NULL)",  # noqa: E501
+        #     name="check_external_alert_id_or_source_id_type",
+        # ),
     )
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
     organization_id: Mapped[int] = mapped_column(BigInteger, nullable=False)

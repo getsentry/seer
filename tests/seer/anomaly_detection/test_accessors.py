@@ -82,74 +82,72 @@ def _create_alert_and_save(
 class TestDbAlertDataAccessor(unittest.TestCase):
     @patch("seer.anomaly_detection.accessors.logger.error")
     def test_query_invalid_alert_id(self, mock_logger_error):
-        alert_data_accessor = DbAlertDataAccessor()
-        alert = alert_data_accessor.query(
-            external_alert_id=999999, external_alert_source_id=None, external_alert_source_type=None
-        )
-        mock_logger_error.assert_called_once_with(
-            "alert_not_found",
-            extra={
-                "external_alert_id": 999999,
-                "external_alert_source_id": None,
-                "external_alert_source_type": None,
-            },
-        )
-        assert alert is None
-
-    @patch("seer.anomaly_detection.accessors.logger.error")
-    def test_query_by_source_invalid_alert_id(self, mock_logger_error):
-        alert_data_accessor = DbAlertDataAccessor()
-        alert = alert_data_accessor.query(
-            external_alert_id=None,
-            external_alert_source_id=999999,
-            external_alert_source_type=1,
-        )
-        mock_logger_error.assert_called_once_with(
-            "alert_not_found",
-            extra={
-                "external_alert_id": None,
-                "external_alert_source_id": 999999,
-                "external_alert_source_type": 1,
-            },
-        )
+        ids = [
+            (999999, None, None),
+            (None, 99, 1),
+        ]
+        for external_alert_id, external_alert_source_id, external_alert_source_type in ids:
+            print(
+                f"Testing with external_alert_id: {external_alert_id}, external_alert_source_id: {external_alert_source_id}, external_alert_source_type: {external_alert_source_type}"
+            )
+            alert_data_accessor = DbAlertDataAccessor()
+            alert = alert_data_accessor.query(
+                external_alert_id=external_alert_id,
+                external_alert_source_id=external_alert_source_id,
+                external_alert_source_type=external_alert_source_type,
+            )
+            mock_logger_error.assert_called_once_with(
+                "alert_not_found",
+                extra={
+                    "external_alert_id": external_alert_id,
+                    "external_alert_source_id": external_alert_source_id,
+                    "external_alert_source_type": external_alert_source_type,
+                },
+            )
+            mock_logger_error.reset_mock()
         assert alert is None
 
     def test_query_by_source_null_id(self):
-        alert_data_accessor = DbAlertDataAccessor()
-        with self.assertRaises(ClientError) as e:
-            alert_data_accessor.query(
-                external_alert_id=None,
-                external_alert_source_id=None,
-                external_alert_source_type=None,
+        ids = [
+            (
+                None,
+                None,
+                None,
+                "Either external_alert_id or external_alert_source_id and external_alert_source_type must be provided",
+            ),
+            (
+                None,
+                9999,
+                None,
+                "Either external_alert_source_id and external_alert_source_type must be provided or both should be None",
+            ),
+            (
+                None,
+                None,
+                1,
+                "Either external_alert_source_id and external_alert_source_type must be provided or both should be None",
+            ),
+        ]
+        for (
+            external_alert_id,
+            external_alert_source_id,
+            external_alert_source_type,
+            error_message,
+        ) in ids:
+            print(
+                f"Testing with external_alert_id: {external_alert_id}, external_alert_source_id: {external_alert_source_id}, external_alert_source_type: {external_alert_source_type}"
             )
-        self.assertEqual(
-            str(e.exception),
-            "Either external_alert_id or external_alert_source_id and external_alert_source_type must be provided",
-        )
-
-    def test_query_by_source_null_id_or_type(self):
-        alert_data_accessor = DbAlertDataAccessor()
-        with self.assertRaises(ClientError) as e:
-            alert_data_accessor.query(
-                external_alert_id=None,
-                external_alert_source_id=9999,
-                external_alert_source_type=None,
-            )
-        self.assertEqual(
-            str(e.exception),
-            "Either external_alert_source_id and external_alert_source_type must be provided or both should be None",
-        )
-
-        with self.assertRaises(ClientError) as e:
-            alert_data_accessor.query(
-                external_alert_id=None,
-                external_alert_source_id=None,
-                external_alert_source_type=1,
-            )
-        self.assertEqual(
-            str(e.exception),
-            "Either external_alert_source_id and external_alert_source_type must be provided or both should be None",
-        )
+            alert_data_accessor = DbAlertDataAccessor()
+            with self.assertRaises(ClientError) as e:
+                alert_data_accessor.query(
+                    external_alert_id=external_alert_id,
+                    external_alert_source_id=external_alert_source_id,
+                    external_alert_source_type=external_alert_source_type,
+                )
+                self.assertEqual(
+                    str(e.exception),
+                    error_message,
+                )
 
     def test_resave_alert_with_source_id(self):
         organization_id, project_id, config, point1, point2, anomalies = _create_dummy_alert()
