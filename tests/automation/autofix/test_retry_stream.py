@@ -68,15 +68,15 @@ class FlakyProvider(Protocol):
     def _max_num_flaky_clients(self) -> int: ...
 
 
-_T = TypeVar("_T", bound=LlmProvider)
+_LlmProviderType = TypeVar("_LlmProviderType", bound=LlmProvider)
 
 
 def flakify(
-    provider_class: type[_T],
+    provider_class: type[_LlmProviderType],
     retryable_exception: Exception,
     get_obj_with_create_stream_method_from_client: Callable,
     create_stream_method_name: str,
-) -> type[_T]:
+) -> type[_LlmProviderType]:
     """
     Mock an LLM provider that will return a flaky stream for the first `_max_num_flaky_clients` clients.
     After that, it will return a normal stream.
@@ -117,60 +117,55 @@ def flakify(
     return FlakyProvider
 
 
-# Define your flaky providers here
-anthropic_overloaded_error_data = {
-    "type": "error",
-    "error": {"type": "overloaded_error", "message": "Overloaded"},
-}
-AnthropicProviderFlaky = flakify(
-    AnthropicProvider,
-    retryable_exception=anthropic.APIStatusError(
-        message=str(anthropic_overloaded_error_data),
-        response=httpx.Response(status_code=200, request=httpx.Request("POST", "dummy_url")),
-        body=anthropic_overloaded_error_data,
-    ),
-    # https://sentry.sentry.io/issues/6267320373/
-    get_obj_with_create_stream_method_from_client=lambda client: client.messages,
-    create_stream_method_name="create",
-)
-
-OpenAiProviderFlaky = flakify(
-    OpenAiProvider,
-    retryable_exception=openai.InternalServerError(
-        message="Internal server error",
-        response=httpx.Response(status_code=200, request=httpx.Request("POST", "dummy_url")),
-        body={},
-    ),
-    get_obj_with_create_stream_method_from_client=lambda client: client.chat.completions,
-    create_stream_method_name="create",
-)
-
-gemini_exhausted_response = requests.Response()
-gemini_exhausted_response.status_code = 429
-gemini_exhausted_response._content = b"429 RESOURCE_EXHAUSTED."
-gemini_exhausted_response.headers = CaseInsensitiveDict({"Content-Type": "text/plain"})
-GeminiProviderFlaky = flakify(
-    GeminiProvider,
-    retryable_exception=ClientError(
-        code=429,
-        response=gemini_exhausted_response,
-        response_json={"error": {"code": 429, "message": "429 RESOURCE_EXHAUSTED"}},
-    ),
-    # https://sentry.sentry.io/issues/6301072208
-    get_obj_with_create_stream_method_from_client=lambda client: client.models,
-    create_stream_method_name="generate_content_stream",
-)
-
-
 def create_flaky_anthropic():
+    anthropic_overloaded_error_data = {
+        "type": "error",
+        "error": {"type": "overloaded_error", "message": "Overloaded"},
+    }
+    AnthropicProviderFlaky = flakify(
+        AnthropicProvider,
+        retryable_exception=anthropic.APIStatusError(
+            message=str(anthropic_overloaded_error_data),
+            response=httpx.Response(status_code=200, request=httpx.Request("POST", "dummy_url")),
+            body=anthropic_overloaded_error_data,
+        ),
+        # https://sentry.sentry.io/issues/6267320373/
+        get_obj_with_create_stream_method_from_client=lambda client: client.messages,
+        create_stream_method_name="create",
+    )
     return AnthropicProviderFlaky.model("claude-3-5-sonnet@20240620")
 
 
 def create_flaky_openai():
+    OpenAiProviderFlaky = flakify(
+        OpenAiProvider,
+        retryable_exception=openai.InternalServerError(
+            message="Internal server error",
+            response=httpx.Response(status_code=200, request=httpx.Request("POST", "dummy_url")),
+            body={},
+        ),
+        get_obj_with_create_stream_method_from_client=lambda client: client.chat.completions,
+        create_stream_method_name="create",
+    )
     return OpenAiProviderFlaky.model("gpt-4o-mini-2024-07-18")
 
 
 def create_flaky_gemini():
+    gemini_exhausted_response = requests.Response()
+    gemini_exhausted_response.status_code = 429
+    gemini_exhausted_response._content = b"429 RESOURCE_EXHAUSTED."
+    gemini_exhausted_response.headers = CaseInsensitiveDict({"Content-Type": "text/plain"})
+    GeminiProviderFlaky = flakify(
+        GeminiProvider,
+        retryable_exception=ClientError(
+            code=429,
+            response=gemini_exhausted_response,
+            response_json={"error": {"code": 429, "message": "429 RESOURCE_EXHAUSTED"}},
+        ),
+        # https://sentry.sentry.io/issues/6301072208
+        get_obj_with_create_stream_method_from_client=lambda client: client.models,
+        create_stream_method_name="generate_content_stream",
+    )
     return GeminiProviderFlaky.model("gemini-2.5-flash-preview-04-17")
 
 

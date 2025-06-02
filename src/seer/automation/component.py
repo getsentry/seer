@@ -42,5 +42,5 @@ class BaseComponent(abc.ABC, Generic[BCR, BCO]):
     def logger(self):
         run_id = self.context.run_id
         name = f"{type(self).__module__}.{type(self).__qualname__}"
-        prefix = f"[{run_id=}] [{name}] "
-        return prefix_logger(prefix, logger)
+        prefix = f"[{name}] "
+        return prefix_logger(prefix, logger, extra={"run_id": run_id})
