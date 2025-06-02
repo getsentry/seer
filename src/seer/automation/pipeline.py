@@ -149,8 +149,10 @@ class PipelineChain(PipelineStep):
     A PipelineStep which can call other steps.
     """
 
-    def next(self, sig: SerializedSignature | Signature, **apply_async_kwargs):
-        if PIPELINE_SYNC_SIGNAL in self.context.signals:
+    def next(
+        self, sig: SerializedSignature | Signature, run_sync: bool = False, **apply_async_kwargs
+    ):
+        if PIPELINE_SYNC_SIGNAL in self.context.signals or run_sync:
             signature(sig).apply(**apply_async_kwargs)
         else:
             signature(sig).apply_async(**apply_async_kwargs)

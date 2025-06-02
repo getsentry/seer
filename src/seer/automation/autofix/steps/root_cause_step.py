@@ -185,6 +185,7 @@ class RootCauseStep(AutofixPipelineStep):
                 ),
             ),
             queue=app_config.CELERY_WORKER_QUEUE,
+            run_sync=True,
         )
 
     def _get_reproduction_urls(self, root_cause_output: RootCauseAnalysisOutput):
