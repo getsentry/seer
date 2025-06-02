@@ -22,10 +22,13 @@ def get_cache_prompt(
         ---
         # Key Concepts:
         - Trace:
-          - A trace represents a single transaction or request through your system. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
+          - A trace represents a collection of one or more transactions through your system.
+          - Each trace consists of one or more tree-like structures called transactions, with nodes called spans.
+        - Transaction:
+          - A transaction represents a single instance of a service being called. This includes things like user browser sessions, DB server requests, backend requests with API calls, browser page-loads, work done by caching services, and more.
           - It captures a series of operations (spans) that show how different parts of your application interacted during that transaction.
         - Span
-          - A span represents an individual operation within a trace. This could be a database query, HTTP request, or UI rendering task.
+          - A span represents an individual operation or unit of work within a trace. This could be an individual database query, HTTP request, or UI rendering task.
           - Each span has:
             - Attributes: Key-value pairs like http.method, db.query, span.description, or custom attributes like cart.value, provide additional context that can be useful for debugging and investigating patterns. These are either numbers or strings. Note: numeric span attributes can be used to calculate span metrics, shown below.
             - Duration (span.duration): The time the operation took, used to measure performance.
@@ -43,7 +46,7 @@ def get_cache_prompt(
 
         # Search Query and Syntax Guidelines:
         You will use the user's query below to create a valid Sentry search query. The search query will be used to filter the traces and spans that are displayed in the Trace Explorer page and ultimately help you answer the user's question.
-        You will be given a list of available fields and functions that you can use to create your query. You must only use these fields and functions to create your query.
+        You will be given a list of available fields that you can use to create your query. You must only use these fields to create your query.
         You must adhere to the following query syntax guidelines:
 
         ## Search Query Syntax Guidelines
@@ -78,7 +81,6 @@ def get_cache_prompt(
 
         Here are some examples of valid comparison operator searches:
 
-        - event.timestamp:>2023-09-28T00:00:00-07:00
         - count_dead_clicks:<=10
         - transaction.duration:>5s
         - span.duration:>500ms
@@ -234,17 +236,6 @@ def get_cache_prompt(
 
         When creating a query, do not include any escape tokens. Return it as directly as possible
 
-        ## Time-Based Queries
-
-        Sentry supports time-based queries to filter data by time.
-        - Use relative time
-          - timestamp:-24h (timestamp is after 24 hours ago)
-          - timestamp:+7d (timestamp is before 7 days ago)
-        - Use absolute time with comparison operators:
-          - timestamp:>2025-05-12 (date)
-          - timestamp:<=2025-05-12T00:00:00Z (date and time in UTC)
-          - timestamp:>=2025-05-12T00:00:00+00:00 (date, time, and specific timezone)
-
         ## Visualization Guidelines
 
         You must also select the right chart type and y-axes for the query.
@@ -369,7 +360,8 @@ def get_final_query_prompt(
         1. Deeply analyze the available values for each field to identify patterns
         2. For String fields, decide whether to use exact matches or wildcards based on the patterns found
         3. For numeric fields, use comparison operators to find close or exact matches
-        4. Construct the query using the most appropriate matching strategy
+        4. Explain succinctly in two sentences maximum why you generated this query. If you think that you did not have enough information or did not know how to properly construct the overall query, please explain what additional information and context you would have needed to successfuly create it.
+        5. Construct the overall query using the most appropriate matching strategy
 
         Please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places.
 
