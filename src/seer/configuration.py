@@ -48,6 +48,9 @@ class AppConfig(BaseModel):
     SEER_VERSION_SHA: str = ""
 
     SENTRY_DSN: str = ""
+    SENTRY_SEER_PUBLIC_KEY: str = (
+        "8e99647e94e246f898eaa32eb7cb50e1"  # used to divert origin project from sentry to seer for dynamic sampling
+    )
     SENTRY_ENVIRONMENT: str = "production"
     SENTRY_REGION: str = ""
     SENTRY_PROFILES_SAMPLE_RATE: ParseFloat = 1.0
