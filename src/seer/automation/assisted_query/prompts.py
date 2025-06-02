@@ -23,11 +23,12 @@ def get_cache_prompt(
         # Key Concepts:
         - Trace:
           - A trace represents a collection of one or more transactions through your system.
+          - Each trace consists of one or more tree-like structures called transactions, with nodes called spans.
         - Transaction:
-          - A transaction represents a single instance of a service being called. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
+          - A transaction represents a single instance of a service being called. This includes things like user browser sessions, DB server requests, backend requests with API calls, browser page-loads, work done by caching services, and more.
           - It captures a series of operations (spans) that show how different parts of your application interacted during that transaction.
         - Span
-          - A span represents an individual operation within a trace. This could be a database query, HTTP request, or UI rendering task.
+          - A span represents an individual operation or unit of work within a trace. This could be an individual database query, HTTP request, or UI rendering task.
           - Each span has:
             - Attributes: Key-value pairs like http.method, db.query, span.description, or custom attributes like cart.value, provide additional context that can be useful for debugging and investigating patterns. These are either numbers or strings. Note: numeric span attributes can be used to calculate span metrics, shown below.
             - Duration (span.duration): The time the operation took, used to measure performance.
