@@ -41,6 +41,24 @@ class RunConfig(BaseModel):
     run_name: str | None = None
     reasoning_effort: str | None = None
 
+    def merge_with_partial(self, partial: "PartialRunConfig") -> "RunConfig":
+        """Merge this RunConfig with a PartialRunConfig, overriding fields that are set."""
+        update_data = {}
+        for field_name, field_value in partial.model_dump(exclude_unset=True).items():
+            update_data[field_name] = field_value
+
+        return self.model_copy(update=update_data)
+
+
+class PartialRunConfig(BaseModel):
+    """Partial configuration that can be merged with a RunConfig."""
+
+    max_tokens: int | None = None
+    model: LlmProvider | None = None
+    models: list[LlmProvider] | None = None
+    temperature: float | None = None
+    reasoning_effort: str | None = None
+
 
 class LlmAgent:
     @inject
