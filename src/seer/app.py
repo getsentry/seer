@@ -527,7 +527,10 @@ def summarize_issue_websocket_endpoint(
             raise
 
     try:
-        websocket_url = data.websocket_url.replace("localhost", "host.docker.internal")
+        if "localhost" in data.websocket_url:
+            websocket_url = data.websocket_url.replace("localhost", "host.docker.internal")
+        else:
+            websocket_url = data.websocket_url
         print(websocket_url)
         asyncio.run(stream_and_send_messages(websocket_url, data))
     except Exception as e:
