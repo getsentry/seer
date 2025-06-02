@@ -19,15 +19,10 @@ from seer.automation.autofix.models import (
 from seer.automation.autofix.state import ContinuationState
 from seer.automation.codebase.file_patches import make_file_patches
 from seer.automation.codebase.models import BaseDocument
-from seer.automation.codebase.repo_client import (
-    RepoClient,
-    RepoClientType,
-    autocorrect_repo_name,
-    get_repo_client,
-)
+from seer.automation.codebase.repo_client import RepoClient, RepoClientType
 from seer.automation.codebase.utils import potential_frame_match
+from seer.automation.context import BasePipelineContext
 from seer.automation.models import EventDetails, FileChange, FilePatch, RepoDefinition, Stacktrace
-from seer.automation.pipeline import PipelineContext
 from seer.automation.state import State
 from seer.automation.summarize.issue import IssueSummaryWithScores
 from seer.automation.utils import AgentError
@@ -43,7 +38,7 @@ RepoKey = RepoExternalId | RepoInternalId
 RepoIdentifiers = tuple[RepoExternalId, RepoInternalId]
 
 
-class AutofixContext(PipelineContext):
+class AutofixContext(BasePipelineContext):
     state: State[AutofixContinuation]
     repos: list[RepoDefinition]
 
@@ -80,19 +75,6 @@ class AutofixContext(PipelineContext):
 
         return cls(state, event_manager)
 
-    @property
-    def run_id(self) -> int:
-        return self.state.get().run_id
-
-    @property
-    def signals(self) -> list[str]:
-        return self.state.get().signals
-
-    @signals.setter
-    def signals(self, value: list[str]):
-        with self.state.update() as state:
-            state.signals = value
-
     def get_issue_summary(self) -> IssueSummaryWithScores | None:
         group_id = self.state.get().request.issue.id
         with Session() as session:
@@ -110,21 +92,6 @@ class AutofixContext(PipelineContext):
         }
 
         return repos_by_key
-
-    def get_repo_client(
-        self,
-        repo_name: str | None = None,
-        repo_external_id: str | None = None,
-        type: RepoClientType = RepoClientType.READ,
-    ) -> RepoClient:
-        return get_repo_client(
-            repos=self.repos, repo_name=repo_name, repo_external_id=repo_external_id, type=type
-        )
-
-    def autocorrect_repo_name(self, repo_name: str) -> str | None:
-        return autocorrect_repo_name(
-            readable_repos=self.state.get().readable_repos, repo_name=repo_name
-        )
 
     def get_file_contents(
         self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
@@ -165,32 +132,6 @@ class AutofixContext(PipelineContext):
                 file_contents = file_change.apply(file_contents)
 
         return file_contents
-
-    def does_file_exist(
-        self, path: str, repo_name: str | None = None, ignore_local_changes: bool = False
-    ) -> bool:
-        if len(self.repos) > 1:
-            if not repo_name:
-                raise ValueError("Repo name is required when there are multiple repos.")
-
-            if repo_name not in [repo.full_name for repo in self.repos]:
-                raise ValueError(f"Repo '{repo_name}' not found in the list of repos.")
-
-        repo_client = self.get_repo_client(repo_name)
-        does_exist_on_remote = repo_client.does_file_exist(path)
-        if does_exist_on_remote:
-            return True
-
-        if not ignore_local_changes:
-            cur_state = self.state.get()
-            repo_file_changes = cur_state.codebases[repo_client.repo_external_id].file_changes
-            current_file_changes = list(
-                filter(lambda x: x.path == path and x.change_type == "create", repo_file_changes)
-            )
-            if current_file_changes:
-                return True
-
-        return False
 
     def get_commit_history_for_file(
         self, path: str, repo_name: str | None = None, max_commits: int = 10
