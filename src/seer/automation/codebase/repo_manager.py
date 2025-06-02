@@ -272,6 +272,7 @@ class RepoManager:
                         if rel_path not in valid_files:
                             try:
                                 os.remove(os.path.join(root, file))
+                                logger.info(f"Removed unsupported file from download: {rel_path}")
                             except Exception as e:
                                 logger.warning(f"Failed to remove file {rel_path}: {e}")
                     # Remove empty directories
