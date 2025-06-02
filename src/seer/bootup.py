@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 module = Module()
 stub_module = Module()
 
+
 def traces_sampler(sampling_context: dict):
     if "wsgi_environ" in sampling_context:
         path_info = sampling_context["wsgi_environ"].get("PATH_INFO")
