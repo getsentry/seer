@@ -448,7 +448,7 @@ class BugPredictionPrompts:
             - performance concerns.
 
             Focus exclusively on bugs that will cause the server to unexpectedly crash.
-            Don't pay much attention to a code change that *intentionally and sensibly* raises an error, as these are not unexpected crashes."""
+            Don't pay much attention to a part of a code change that *intentionally and sensibly* raises an error, as this wouldn't be an unexpected crash."""
         )
 
     @staticmethod
