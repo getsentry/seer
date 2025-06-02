@@ -77,8 +77,7 @@ def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = i
             "continuous_profiling_auto_start": True,
             "enable_logs": True,
         },
-        transport=CustomTransport,
-
+        transport=CustomTransport if config.SENTRY_SEER_PUBLIC_KEY else HttpTransport,
     )
 
     if config.SENTRY_REGION:
