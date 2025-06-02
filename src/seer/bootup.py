@@ -49,7 +49,7 @@ class CustomTransport(HttpTransport):
     def __init__(self, *args, config: AppConfig = injected, **kwargs):
         super().__init__(*args, **kwargs)
         self.config = config
-    
+
     def capture_envelope(self, envelope):
         try:
             # Set public key to seer's public key
