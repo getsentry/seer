@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 from seer.automation.agent.models import Message
 from seer.automation.codebase.repo_client import (
@@ -7,12 +8,14 @@ from seer.automation.codebase.repo_client import (
     autocorrect_repo_name,
     get_repo_client,
 )
+from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
 
 
 class BasePipelineContext(PipelineContext, ABC):
-    state: any  # Should be more specific if possible
-    event_manager: any
+    state: Any  # Child class specific state
+    event_manager: Any
+    repos: list[RepoDefinition]
 
     @property
     def run_id(self) -> int:
