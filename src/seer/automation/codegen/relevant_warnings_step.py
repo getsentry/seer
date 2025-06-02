@@ -141,7 +141,7 @@ class RelevantWarningsStep(CodegenStep):
         repo_client = self.context.get_repo_client(
             repo_name=self.request.repo.full_name, type=RepoClientType.READ
         )
-        pr_files = repo_client.repo.get_pull(self.request.pr_id).get_files()
+        raw_pr_files = repo_client.repo.get_pull(self.request.pr_id).get_files()
         pr_files = [
             PrFile(
                 filename=file.filename,
@@ -152,7 +152,7 @@ class RelevantWarningsStep(CodegenStep):
                 previous_filename=file.previous_filename or file.filename,
                 repo_full_name=self.request.repo.full_name,
             )
-            for file in pr_files
+            for file in raw_pr_files
             if file.patch
         ]
         diagnostics.append(

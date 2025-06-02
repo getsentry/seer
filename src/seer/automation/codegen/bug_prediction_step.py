@@ -120,7 +120,7 @@ class BugPredictionStep(CodegenStep):
 
         pr = repo_client.repo.get_pull(self.request.pr_id)
         if pr.head.sha == self.request.repo.base_commit_sha:
-            files = pr.get_files()
+            files = list(pr.get_files())
         else:  # Ensures signal from overwatch is consistent. Also used for evals.
             files = repo_client.repo.compare(
                 base=pr.base.sha, head=self.request.repo.base_commit_sha
