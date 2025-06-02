@@ -64,6 +64,7 @@ class LlmAgent:
         return self.client.generate_text(
             messages=self.memory,
             model=run_config.model,
+            models=run_config.models,
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
             temperature=run_config.temperature or 0.0,
