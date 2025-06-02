@@ -89,6 +89,6 @@ def format_trace_tree(trace_tree: TraceTree | None):
 
 
 def format_logs(logs: Logs | None):
-    if not logs:
+    if not logs or not logs.logs:
         return ""
     return f"\nHere are some logs from the system as it was running: \n{logs.format_logs()}\n"
