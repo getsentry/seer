@@ -29,15 +29,11 @@ class CodegenContext(BasePipelineContext):
 
         request = state.get().request
 
-        self.repo = request.repo
+        self.repos = [request.repo]
         self.state = state
         self.event_manager = CodegenEventManager(state)
 
         logger.info(f"CodegenContext initialized with run_id {self.run_id}")
-
-    @property
-    def repos(self) -> list[RepoDefinition]:
-        return [self.repo]
 
     @classmethod
     def from_run_id(cls, run_id: int, type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST):

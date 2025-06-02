@@ -77,7 +77,3 @@ class BasePipelineContext(PipelineContext, ABC):
     @abstractmethod
     def store_memory(self, key: str, memory: list[Message]):
         pass
-
-    @abstractmethod
-    def get_memory(self, key: str, past_run_id: int = None) -> list[Message]:
-        pass
