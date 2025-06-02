@@ -49,7 +49,7 @@ class AppConfig(BaseModel):
 
     SENTRY_DSN: str = ""
     SENTRY_SEER_PUBLIC_KEY: str = (
-        ""  # used to divert origin project from sentry to seer for dynamic sampling
+        "8e99647e94e246f898eaa32eb7cb50e1"  # used to divert origin project from sentry to seer for dynamic sampling
     )
     SENTRY_ENVIRONMENT: str = "production"
     SENTRY_REGION: str = ""
