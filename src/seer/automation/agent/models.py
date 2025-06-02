@@ -99,11 +99,10 @@ class LlmProviderDefaults(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     reasoning_effort: str | None = None
-    timeout: float | None = None
     seed: int | None = None
+    timeout: float | None = None
     first_token_timeout: float | None = None
     inactivity_timeout: float | None = None
-    timeout: float | None = None
 
 
 class ResolvedParameters(BaseModel):

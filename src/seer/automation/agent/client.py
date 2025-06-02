@@ -1272,8 +1272,6 @@ class GeminiProvider:
         output_yielded = False
 
         try:
-            if self.model_name == "gemini-2.5-flash-preview-04-17":
-                raise Exception("429 RESOURCE_EXHAUSTED")
             stream = client.models.generate_content_stream(
                 model=self.model_name,
                 contents=message_dicts,  # type: ignore[arg-type]
