@@ -154,13 +154,34 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 )
 
             try:
+                de_discovery_config = {
+                    "models": [
+                        AnthropicProvider.model(
+                            "claude-3-7-sonnet@20250219", region="europe-west1"
+                        ),
+                        AnthropicProvider.model(
+                            "claude-3-5-sonnet-v2@20241022", region="europe-west1"
+                        ),  # Fallback to 3.5 sonnet so we don't use the global endpoint
+                    ],
+                    "max_tokens": 8192,
+                }
+
+                us_discovery_config = {
+                    "models": [
+                        GeminiProvider.model(
+                            "gemini-2.5-pro-preview-05-06", region="us-central1", max_tokens=32000
+                        ),
+                        AnthropicProvider.model(
+                            "claude-3-7-sonnet@20250219", region="us-east5", max_tokens=8192
+                        ),
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-05-20", region="us-central1", max_tokens=32000
+                        ),
+                    ],
+                }
+
                 response = agent.run(
                     run_config=RunConfig(
-                        model=(
-                            AnthropicProvider.model("claude-3-7-sonnet@20250219")
-                            if config.SENTRY_REGION == "de"
-                            else GeminiProvider.model("gemini-2.5-pro-preview-05-06")
-                        ),
                         system_prompt=SolutionPrompts.format_system_msg(
                             repos_str=repos_str, has_tools=has_tools
                         ),
@@ -168,7 +189,11 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         run_name="Solution Discovery",
                         max_iterations=64,
                         temperature=0.0,
-                        max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
+                        **(
+                            de_discovery_config
+                            if config.SENTRY_REGION == "de"
+                            else us_discovery_config
+                        ),
                     ),
                 )
 
@@ -178,17 +203,34 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
 
                 self.context.event_manager.add_log("Formatting for human consumption...")
 
+                de_config = {
+                    "models": [
+                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west1"),
+                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west4"),
+                    ],
+                }
+
+                us_config = {
+                    "models": [
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-04-17",
+                            region="us-central1",
+                        ),
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-05-20", region="us-central1"
+                        ),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20", region="global"),
+                        GeminiProvider.model("gemini-2.0-flash-001", region="us-central1"),
+                    ],
+                }
+
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
                     prompt=SolutionPrompts.solution_formatter_msg(),
-                    model=(
-                        GeminiProvider.model("gemini-2.0-flash-001")
-                        if config.SENTRY_REGION == "de"
-                        else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
-                    ),
                     response_format=SolutionOutput,
                     run_name="Solution Extraction & Formatting",
                     max_tokens=8192,
+                    **(de_config if config.SENTRY_REGION == "de" else us_config),
                 )
 
                 if not formatted_response or not formatted_response.parsed:

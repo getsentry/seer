@@ -7,9 +7,9 @@ import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
 
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
+from seer.automation.agent.client import LlmProvider
 from seer.automation.agent.models import (
     LlmGenerateTextResponse,
-    LlmProviderType,
     LlmResponseMetadata,
     Message,
     ToolCall,
@@ -142,18 +142,15 @@ class AutofixAgent(LlmAgent):
         stream = self.client.generate_text_stream(
             messages=messages,
             model=run_config.model,
+            models=run_config.models,
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
             temperature=run_config.temperature or 0.0,
             reasoning_effort=run_config.reasoning_effort,
-            first_token_timeout=(
-                90.0
-                if (run_config.model.provider_name == LlmProviderType.OPENAI)
-                and run_config.model.model_name.startswith("o")
-                else 40.0
-            ),
             max_tokens=run_config.max_tokens,
         )
+
+        model_used = run_config.models[0] if run_config.models else run_config.model
 
         cleared = False
         for chunk in stream:
@@ -208,20 +205,22 @@ class AutofixAgent(LlmAgent):
                 tool_calls.append(chunk)
             elif isinstance(chunk, Usage):
                 usage += chunk
+            elif isinstance(chunk, LlmProvider):
+                model_used = chunk
 
         message = self.client.construct_message_from_stream(
             content_chunks=content_chunks,
             thinking_content_chunks=thinking_content_chunks,
             thinking_signature=thinking_signature,
             tool_calls=tool_calls,
-            model=run_config.model,
+            model=model_used,
         )
 
         return LlmGenerateTextResponse(
             message=message,
             metadata=LlmResponseMetadata(
-                model=run_config.model.model_name,
-                provider_name=run_config.model.provider_name,
+                model=model_used.model_name,
+                provider_name=model_used.provider_name,
                 usage=usage,
             ),
         )

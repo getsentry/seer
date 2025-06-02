@@ -1,8 +1,11 @@
 import dataclasses
 from enum import Enum
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel
+
+DEFAULT_FIRST_TOKEN_TIMEOUT = 40.0
+DEFAULT_INACTIVITY_TIMEOUT = 20.0
 
 
 class ToolCall(BaseModel):
@@ -75,6 +78,7 @@ class LlmResponseMetadata(BaseModel):
     model: str
     provider_name: LlmProviderType
     usage: Usage
+    provider_instance: Any | None = None  # The actual provider instance that was used
 
 
 class LlmGenerateTextResponse(BaseModel):
@@ -93,6 +97,28 @@ class LlmGenerateStructuredResponse(Generic[StructuredOutputType]):
 
 class LlmProviderDefaults(BaseModel):
     temperature: float | None = None
+    max_tokens: int | None = None
+    reasoning_effort: str | None = None
+    timeout: float | None = None
+    seed: int | None = None
+    first_token_timeout: float | None = None
+    inactivity_timeout: float | None = None
+    timeout: float | None = None
+
+
+class ResolvedParameters(BaseModel):
+    """
+    Resolved parameters after applying precedence: function params > model defaults > provider defaults.
+    This model provides type safety and better IDE support compared to using dictionaries.
+    """
+
+    temperature: float | None = None
+    max_tokens: int | None = None
+    reasoning_effort: str | None = None
+    timeout: float | None = None
+    seed: int | None = None
+    first_token_timeout: float = DEFAULT_FIRST_TOKEN_TIMEOUT
+    inactivity_timeout: float = DEFAULT_INACTIVITY_TIMEOUT
 
 
 class LlmModelDefaultConfig(BaseModel):

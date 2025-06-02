@@ -55,13 +55,27 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
             try:
+                de_discovery_config = {
+                    "model": AnthropicProvider.model(
+                        "claude-3-7-sonnet@20250219", region="europe-west1"
+                    ),
+                    "max_tokens": 8192,
+                }
+                us_discovery_config = {
+                    "models": [
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-04-17", region="us-central1"
+                        ),
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-05-20", region="us-central1"
+                        ),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20", region="global"),
+                    ],
+                    "max_tokens": 32000,
+                }
+
                 response = agent.run(
                     run_config=RunConfig(
-                        model=(
-                            AnthropicProvider.model("claude-3-7-sonnet@20250219")
-                            if config.SENTRY_REGION == "de"
-                            else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
-                        ),
                         prompt=(
                             RootCauseAnalysisPrompts.format_default_msg(
                                 event=request.event_details.format_event(),
@@ -81,7 +95,11 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         memory_storage_key="root_cause_analysis",
                         run_name="Root Cause Discovery",
                         temperature=0.0,
-                        max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
+                        **(
+                            de_discovery_config
+                            if config.SENTRY_REGION == "de"
+                            else us_discovery_config
+                        ),
                     ),
                 )
 
@@ -94,11 +112,24 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
                 self.context.event_manager.add_log("Simulating profound thought...")
 
+                de_reasoning_config = {
+                    "model": AnthropicProvider.model(
+                        "claude-3-7-sonnet@20250219", region="europe-west1"
+                    ),
+                    "max_tokens": 8192,
+                }
+                us_reasoning_config = {
+                    "models": [
+                        AnthropicProvider.model("claude-3-7-sonnet@20250219", region="us-east5"),
+                        AnthropicProvider.model("claude-3-7-sonnet@20250219", region="global"),
+                    ],
+                    "max_tokens": 32000,
+                }
+
                 # reason to propose final root cause
                 agent.tools = []
                 response = agent.run(
                     run_config=RunConfig(
-                        model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                         prompt=RootCauseAnalysisPrompts.root_cause_proposal_msg(),
                         system_prompt=RootCauseAnalysisPrompts.format_system_msg(
                             repos_str=repos_str, mode="reasoning"
@@ -107,7 +138,11 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         run_name="Root Cause Proposal",
                         temperature=1.0,
                         reasoning_effort="high",
-                        max_tokens=32000,
+                        **(
+                            de_reasoning_config
+                            if config.SENTRY_REGION == "de"
+                            else us_reasoning_config
+                        ),
                     )
                 )
 
@@ -128,17 +163,35 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                     "Arranging data in a way that looks intentional..."
                 )
 
+                de_formatter_config = {
+                    "models": [
+                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west1"),
+                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west4"),
+                    ],
+                    "max_tokens": 8192,
+                }
+
+                us_formatter_config = {
+                    "models": [
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-04-17", region="us-central1"
+                        ),
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-05-20", region="us-central1"
+                        ),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20", region="global"),
+                    ],
+                    "max_tokens": 32000,
+                }
+
                 formatted_response = llm_client.generate_structured(
                     messages=agent.memory,
                     prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                    model=(
-                        GeminiProvider.model("gemini-2.0-flash-001")
-                        if config.SENTRY_REGION == "de"
-                        else GeminiProvider.model("gemini-2.5-flash-preview-04-17")
-                    ),
                     response_format=MultipleRootCauseAnalysisOutputPrompt,
                     run_name="Root Cause Extraction & Formatting",
-                    max_tokens=8192 if config.SENTRY_REGION == "de" else 32000,
+                    **(
+                        de_formatter_config if config.SENTRY_REGION == "de" else us_formatter_config
+                    ),
                 )
 
                 if not formatted_response or not getattr(formatted_response, "parsed", None):

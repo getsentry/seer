@@ -34,11 +34,36 @@ class RunConfig(BaseModel):
         default=16, description="Maximum number of iterations the agent can perform"
     )
     max_tokens: int | None = None
-    model: LlmProvider
+    model: LlmProvider | None = None
+    models: list[LlmProvider] | None = None
     memory_storage_key: str | None = None
     temperature: float | None = 0.0
     run_name: str | None = None
     reasoning_effort: str | None = None
+
+    def model_post_init(self, __context) -> None:
+        """Validate that either model or models is provided, but not both."""
+        if self.models is not None and self.model is not None:
+            raise ValueError(
+                "Cannot specify both 'model' and 'models' parameters. Use 'models' for fallback functionality or 'model' for single model usage."
+            )
+
+        if self.models is None and self.model is None:
+            raise ValueError("Must specify either 'model' or 'models' parameter.")
+
+        if self.models is not None and len(self.models) == 0:
+            raise ValueError("At least one model must be provided in the 'models' list.")
+
+    @property
+    def effective_models(self) -> list[LlmProvider]:
+        """Get the effective list of models to use, whether from model or models field."""
+        if self.models is not None:
+            return self.models
+        elif self.model is not None:
+            return [self.model]
+        else:
+            # This should never happen due to validation, but just in case
+            raise ValueError("No models configured")
 
 
 class LlmAgent:
