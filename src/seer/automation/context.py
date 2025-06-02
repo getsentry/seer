@@ -15,7 +15,7 @@ from seer.automation.pipeline import PipelineContext
 class BasePipelineContext(PipelineContext, ABC):
     state: Any  # Child class specific state
     event_manager: Any
-    repos: list[RepoDefinition]
+    repos: list
 
     @property
     def run_id(self) -> int:
