@@ -44,11 +44,16 @@ def bootup(
         initialize_models(start_model_loading)
 
 
+@inject
 class CustomTransport(HttpTransport):
-    def capture_envelope(self, envelope, config: AppConfig = injected):
+    def __init__(self, *args, config: AppConfig = injected, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config
+    
+    def capture_envelope(self, envelope):
         try:
             # Set public key to seer's public key
-            envelope.headers["trace"]["public_key"] = config.SENTRY_SEER_PUBLIC_KEY
+            envelope.headers["trace"]["public_key"] = self.config.SENTRY_SEER_PUBLIC_KEY
         except KeyError:
             pass
 
