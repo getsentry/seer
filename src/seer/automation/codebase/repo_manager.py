@@ -203,7 +203,9 @@ class RepoManager:
 
                         # Check for cancellation
                         if self.is_cancelled:
-                            logger.info(f"Download cancelled for {self.repo_client.repo_full_name}, but continuing anyway")
+                            logger.info(
+                                f"Download cancelled for {self.repo_client.repo_full_name}, but continuing anyway"
+                            )
                             return self.repo_path
             else:
                 logger.error(
