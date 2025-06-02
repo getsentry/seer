@@ -8,7 +8,6 @@ from seer.automation.codebase.repo_client import (
     autocorrect_repo_name,
     get_repo_client,
 )
-from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
 
 
