@@ -46,7 +46,17 @@ class AnomalyDetectionConfig(BaseModel):
 
 
 class AlertInSeer(BaseModel):
-    id: int
+    id: int | None = Field(
+        description="Alert id. Either id or source_id and source_type must be provided.",
+    )
+    source_id: int | None = Field(
+        None,
+        description="Alert source id. Either id or source_id and source_type must be provided.",
+    )
+    source_type: int | None = Field(
+        None,
+        description="Alert source type. Either id or source_id and source_type must be provided.",
+    )
     cur_window: Optional[TimeSeriesPoint] = Field(
         None, description="Timestamp and the measured value for current time window."
     )

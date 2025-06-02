@@ -555,6 +555,8 @@ def store_data_endpoint(data: StoreDataRequest) -> StoreDataResponse:
     sentry_sdk.set_tag("organization_id", data.organization_id)
     sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
+    sentry_sdk.set_tag("alert_source_id", data.alert.source_id)
+    sentry_sdk.set_tag("alert_source_type", data.alert.source_type)
     try:
         with statsd.timed("seer.anomaly_detection.store.duration"):
             response = load_anomaly_detection().store_data(data)
@@ -579,6 +581,8 @@ def delete_alert__data_endpoint(
     if data.project_id is not None:
         sentry_sdk.set_tag("project_id", data.project_id)
     sentry_sdk.set_tag("alert_id", data.alert.id)
+    sentry_sdk.set_tag("alert_source_id", data.alert.source_id)
+    sentry_sdk.set_tag("alert_source_type", data.alert.source_type)
     try:
         with statsd.timed("seer.anomaly_detection.delete_alert_data.duration"):
             response = load_anomaly_detection().delete_alert_data(data)
