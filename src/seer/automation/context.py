@@ -81,3 +81,9 @@ class BasePipelineContext(PipelineContext, ABC):
     @abstractmethod
     def get_memory(self, key: str, past_run_id: int = None) -> list[Message]:
         pass
+
+    @property
+    @abstractmethod
+    def repos(self) -> list:
+        """Subclasses must provide a list of repos."""
+        pass

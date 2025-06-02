@@ -24,15 +24,20 @@ class CodegenContext(BasePipelineContext):
 
     def __init__(
         self,
+        repo: RepoDefinition,
         state: CodegenContinuationState,
     ):
         request = state.get().request
 
-        self.repo = request.repo
+        self.repo = repo
         self.state = state
         self.event_manager = CodegenEventManager(state)
 
         logger.info(f"CodegenContext initialized with run_id {self.run_id}")
+
+    @property
+    def repos(self) -> list[RepoDefinition]:
+        return [self.repo]
 
     @classmethod
     def from_run_id(cls, run_id: int, type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST):
@@ -65,6 +70,27 @@ class CodegenContext(BasePipelineContext):
 
             if not memory_record:
                 memory_model = UnitTestRunMemory(run_id=self.run_id)
+            else:
+                memory_model = UnitTestRunMemory.from_db_model(memory_record)
+
+            memory_model.memory[key] = memory
+            memory_record = memory_model.to_db_model()
+
+            session.merge(memory_record)
+            session.commit()
+
+    def update_stored_memory(self, key: str, memory: list[Message], original_run_id: int):
+        with Session() as session:
+            memory_record = (
+                session.query(DbRunMemory)
+                .where(DbRunMemory.run_id == original_run_id)
+                .one_or_none()
+            )
+
+            if not memory_record:
+                raise RuntimeError(
+                    f"No memory record found for run_id {original_run_id}. Cannot update stored memory."
+                )
             else:
                 memory_model = UnitTestRunMemory.from_db_model(memory_record)
 
