@@ -783,8 +783,10 @@ class AnthropicProvider:
         cls,
         *,
         messages: list[Message] | None = None,
+        unused: str | None = None,
         prompt: str | None = None,
         system_prompt: str | None = None,
+        unused2: str | None = None,  # first hunk
         tools: list[FunctionTool | ClaudeTool] | None = None,
     ) -> tuple[list[MessageParam], list[ToolParam] | None, list[TextBlockParam] | None]:
         message_dicts = [cls.to_message_param(message) for message in messages] if messages else []
@@ -804,6 +806,11 @@ class AnthropicProvider:
         )
 
         return message_dicts, tool_dicts, system_prompt_block
+
+    def _do_nothing(self) -> None:
+        # Same file, different hunk, no warning
+        # Doing nothing.
+        pass
 
     @observe(as_type="generation", name="Anthropic Stream")
     @sentry_sdk.trace
