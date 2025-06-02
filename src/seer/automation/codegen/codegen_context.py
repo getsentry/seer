@@ -24,12 +24,12 @@ class CodegenContext(BasePipelineContext):
 
     def __init__(
         self,
-        repo: RepoDefinition,
         state: CodegenContinuationState,
     ):
+
         request = state.get().request
 
-        self.repo = repo
+        self.repo = request.repo
         self.state = state
         self.event_manager = CodegenEventManager(state)
 
