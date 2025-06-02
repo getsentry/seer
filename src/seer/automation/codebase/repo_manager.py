@@ -129,11 +129,23 @@ class RepoManager:
 
         try:
             self._download_github_tar()
+        except RepoInitializationError as e:
+            expected_cancel_message = f"Download cancelled for {self.repo_client.repo_full_name}"
+            if str(e) == expected_cancel_message:
+                logger.info(
+                    f"Repository download for {self.repo_client.repo_full_name} was cancelled (expected)."
+                )
+                return  # Handle gracefully
+            else:
+                # Log and re-raise other RepoInitializationErrors
+                logger.exception(
+                    "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
+                )
+                raise
         except Exception:
             logger.exception(
                 "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
             )
-            self.cleanup()
             raise
         finally:
             self.initialization_future = None
