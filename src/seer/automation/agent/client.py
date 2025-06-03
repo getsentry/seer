@@ -65,6 +65,23 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+@dataclass
+class BaseLlmProvider:
+    model_name: str
+    provider_name: LlmProviderType
+    defaults: LlmProviderDefaults | None = None
+    region: str | None = None
+
+    default_configs: ClassVar[list[LlmModelDefaultConfig]]
+
+    @classmethod
+    def get_config(cls, model_name: str):
+        for config in cls.default_configs:
+            if re.match(config.match, model_name):
+                return config
+        return None
+
+
 def _iterate_with_timeouts(
     stream_generator: Iterator[T],
     first_token_timeout: float,
@@ -136,22 +153,12 @@ def _iterate_with_timeouts(
 
 
 @dataclass
-class OpenAiProvider:
-    model_name: str
+class OpenAiProvider(BaseLlmProvider):
     provider_name = LlmProviderType.OPENAI
-    defaults: LlmProviderDefaults | None = None
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
-            match=r"^o1-mini.*",
-            defaults=LlmProviderDefaults(temperature=1.0),
-        ),
-        LlmModelDefaultConfig(
-            match=r"^o1-preview.*",
-            defaults=LlmProviderDefaults(temperature=1.0),
-        ),
-        LlmModelDefaultConfig(
-            match=r"^o3-mini.*",
+            match=r"^o.*",
             defaults=LlmProviderDefaults(temperature=1.0),
         ),
         LlmModelDefaultConfig(
@@ -518,10 +525,8 @@ class OpenAiProvider:
 
 
 @dataclass
-class AnthropicProvider:
-    model_name: str
+class AnthropicProvider(BaseLlmProvider):
     provider_name = LlmProviderType.ANTHROPIC
-    defaults: LlmProviderDefaults | None = None
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
@@ -541,34 +546,33 @@ class AnthropicProvider:
             # "claude-3-7-sonnet@20250219",
         ]
 
-        if app_config.DEV:
-            return anthropic.AnthropicVertex(
-                project_id=project_id,
-                region="us-east5",
-                max_retries=max_retries,
-            )
+        # Use provided region if available, otherwise fall back to automatic region selection
+        if self.region:
+            selected_region = self.region
+        elif app_config.DEV:
+            selected_region = "us-east5"
         elif app_config.SENTRY_REGION == "de":
-            return anthropic.AnthropicVertex(
-                project_id=project_id,
-                region="europe-west4",  # we have PT here
-                max_retries=max_retries,
-            )
+            selected_region = "europe-west4"
         elif (
             app_config.SENTRY_REGION == "us"
             or self.model_name not in supported_models_on_global_endpoint
         ):
-            return anthropic.AnthropicVertex(
-                project_id=project_id,
-                region="europe-west4",  # we have PT here for US also
-                max_retries=max_retries,
-            )
+            selected_region = "us-east5"
         else:
-            return anthropic.AnthropicVertex(
-                project_id=project_id,
-                region="global",
-                base_url="https://aiplatform.googleapis.com/v1/",
-                max_retries=max_retries,
-            )
+            selected_region = "global"
+
+        base_url = None
+        if selected_region == "global":
+            base_url = "https://aiplatform.googleapis.com/v1/"
+
+        client = anthropic.AnthropicVertex(
+            project_id=project_id,
+            region=selected_region,
+            base_url=base_url,
+            max_retries=max_retries,
+        )
+
+        return client
 
     @classmethod
     def model(cls, model_name: str) -> "AnthropicProvider":
@@ -950,10 +954,8 @@ class AnthropicProvider:
 
 
 @dataclass
-class GeminiProvider:
-    model_name: str
+class GeminiProvider(BaseLlmProvider):
     provider_name = LlmProviderType.GEMINI
-    defaults: LlmProviderDefaults | None = None
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
@@ -975,15 +977,20 @@ class GeminiProvider:
             # "gemini-2.5-pro-preview-03-25",
         ]
 
-        region = (
-            "europe-west1"
-            if app_config.SENTRY_REGION == "de"
-            else (
-                "global"
-                if self.model_name in supported_models_on_global_endpoint and not use_local_endpoint
-                else "us-central1"
+        # Use provided region if available, otherwise fall back to automatic region selection
+        if self.region:
+            region = self.region
+        else:
+            region = (
+                "europe-west1"
+                if app_config.SENTRY_REGION == "de"
+                else (
+                    "global"
+                    if self.model_name in supported_models_on_global_endpoint
+                    and not use_local_endpoint
+                    else "us-central1"
+                )
             )
-        )
 
         client = genai.Client(
             vertexai=True,
@@ -997,11 +1004,12 @@ class GeminiProvider:
         return client
 
     @classmethod
-    def model(cls, model_name: str) -> "GeminiProvider":
+    def model(cls, model_name: str, region: str | None = None) -> "GeminiProvider":
         model_config = cls._get_config(model_name)
         return cls(
             model_name=model_name,
             defaults=model_config.defaults if model_config else None,
+            region=region,
         )
 
     @classmethod
