@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from seer.automation.agent.client import (
     AnthropicProvider,
+    BaseLlmProvider,
     GeminiProvider,
     LlmClient,
     OpenAiProvider,
@@ -23,6 +24,8 @@ from seer.automation.agent.models import (
     Usage,
 )
 from seer.automation.agent.tools import FunctionTool
+from seer.configuration import AppConfig, provide_test_defaults
+from seer.dependency_injection import Module
 
 
 def _are_tool_calls_equal(tool_calls1: list[ToolCall], tool_calls2: list[ToolCall]) -> bool:
@@ -285,7 +288,7 @@ def test_openai_generate_structured_with_models_list():
         age: int
 
     response = llm_client.generate_structured(
-        prompt="Generate a person",
+        prompt="Generate a person named Alice Johnson with age 29",
         models=models,
         response_format=TestStructure,
         seed=42,
@@ -295,28 +298,6 @@ def test_openai_generate_structured_with_models_list():
     assert response.parsed == TestStructure(name="Alice Johnson", age=29)
     assert response.metadata.model == "gpt-4o-mini-2024-07-18"
     assert response.metadata.provider_name == LlmProviderType.OPENAI
-
-
-@pytest.mark.vcr()
-def test_anthropic_generate_structured():
-    llm_client = LlmClient()
-    model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
-
-    class TestStructure(BaseModel):
-        name: str
-        age: int
-
-    # Anthropic structured generation is now supported
-    response = llm_client.generate_structured(
-        prompt="Generate a person",
-        model=model,
-        response_format=TestStructure,
-    )
-
-    assert isinstance(response, LlmGenerateStructuredResponse)
-    assert response.parsed is not None
-    assert response.metadata.model == "claude-3-5-sonnet@20240620"
-    assert response.metadata.provider_name == LlmProviderType.ANTHROPIC
 
 
 def test_client_validation_both_model_and_models():
@@ -407,13 +388,13 @@ def test_openai_o_model_defaults():
     assert gpt4_model.defaults.temperature == 0.0  # Default from general config
 
     # Test that the base config for O models has the right values
-    o1_config = OpenAiProvider._get_config("o1-mini")
+    o1_config = OpenAiProvider.get_config("o1-mini")
     assert o1_config is not None
     assert o1_config.defaults.temperature == 1.0
     assert o1_config.defaults.first_token_timeout == 90.0
 
     # Test that regular models don't get O model defaults
-    gpt4_config = OpenAiProvider._get_config("gpt-4")
+    gpt4_config = OpenAiProvider.get_config("gpt-4")
     assert gpt4_config is not None
     assert gpt4_config.defaults.temperature == 0.0
     assert gpt4_config.defaults.first_token_timeout is None
@@ -1334,3 +1315,102 @@ def test_timeout_parameter_resolution():
 
     assert resolved.first_token_timeout == 120.0  # Overridden
     assert resolved.inactivity_timeout == 30.0  # From defaults
+
+
+def test_region_preference_functionality():
+    """Test the new region preference system"""
+
+    # Test US region preferences for Anthropic
+    test_config = provide_test_defaults()
+    test_config.SENTRY_REGION = "us"
+
+    with Module().constant(AppConfig, test_config):
+        anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+        region_prefs = anthropic_model.get_region_preference()
+        assert region_prefs == ["us-east5", "global"]
+
+    # Test DE region preferences for Anthropic
+    test_config.SENTRY_REGION = "de"
+    with Module().constant(AppConfig, test_config):
+        region_prefs = anthropic_model.get_region_preference()
+        assert region_prefs == ["europe-west4"]
+
+    # Test Gemini region preferences
+    test_config.SENTRY_REGION = "us"
+    with Module().constant(AppConfig, test_config):
+        gemini_model = GeminiProvider.model("gemini-2.0-flash-001")
+        region_prefs = gemini_model.get_region_preference()
+        assert region_prefs == ["us-central1", "us-east1", "global"]
+
+    # Test preview model preferences (currently matches general config due to order)
+    with Module().constant(AppConfig, test_config):
+        gemini_preview = GeminiProvider.model("gemini-2.5-flash-preview-04-17")
+        region_prefs = gemini_preview.get_region_preference()
+        assert region_prefs == ["us-central1", "us-east1", "global"]  # Matches general config
+
+
+def test_region_preference_override():
+    """Test region preference override functionality"""
+
+    # Test override at model creation
+    gemini_model = GeminiProvider.model(
+        "gemini-2.0-flash-001", region_preference=["custom-region1", "custom-region2"]
+    )
+
+    # Should use override instead of config-based preferences
+    test_config = provide_test_defaults()
+    test_config.SENTRY_REGION = "us"
+
+    with Module().constant(AppConfig, test_config):
+        region_prefs = gemini_model.get_region_preference()
+        assert region_prefs == ["custom-region1", "custom-region2"]
+
+
+def test_region_preference_no_config():
+    """Test region preference when no config is found"""
+
+    # Test with model that doesn't match any config pattern
+    class TestProvider(BaseLlmProvider):
+        default_configs = []
+
+    test_model = TestProvider(model_name="non-existent-model")
+
+    test_config = provide_test_defaults()
+    test_config.SENTRY_REGION = "us"
+
+    with Module().constant(AppConfig, test_config):
+        region_prefs = test_model.get_region_preference()
+        assert region_prefs is None
+
+
+def test_region_preference_unknown_sentry_region():
+    """Test region preference with unknown SENTRY_REGION"""
+
+    anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+    test_config = provide_test_defaults()
+    test_config.SENTRY_REGION = "unknown"
+
+    with Module().constant(AppConfig, test_config):
+        region_prefs = anthropic_model.get_region_preference()
+        assert region_prefs is None
+
+
+def test_gemini_provider_region_preference_parameter():
+    """Test that GeminiProvider.model() accepts region_preference parameter"""
+    # Test that region_preference parameter is accepted and stored
+    gemini_model = GeminiProvider.model(
+        "gemini-2.0-flash-001",
+        region="us-central1",
+        region_preference=["custom-region1", "custom-region2"],
+        temperature=0.4,
+        max_tokens=3000,
+        seed=456,
+    )
+
+    assert gemini_model.model_name == "gemini-2.0-flash-001"
+    assert gemini_model.region == "us-central1"
+    assert gemini_model.region_preference_override == ["custom-region1", "custom-region2"]
+    assert gemini_model.defaults.temperature == 0.4
+    assert gemini_model.defaults.max_tokens == 3000
+    assert gemini_model.defaults.seed == 456

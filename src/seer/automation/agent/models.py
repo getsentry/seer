@@ -123,6 +123,7 @@ class ResolvedParameters(BaseModel):
 class LlmModelDefaultConfig(BaseModel):
     match: str
     defaults: LlmProviderDefaults
+    region_preference: dict[str, list[str]] | None = None
 
 
 class LlmRefusalError(Exception):

@@ -56,20 +56,16 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
             try:
                 de_discovery_config = {
-                    "model": AnthropicProvider.model(
-                        "claude-3-7-sonnet@20250219", region="europe-west1"
-                    ),
+                    "model": AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     "max_tokens": 8192,
                 }
                 us_discovery_config = {
                     "models": [
                         GeminiProvider.model(
-                            "gemini-2.5-flash-preview-04-17", region="us-central1"
+                            "gemini-2.5-flash-preview-04-17",
+                            region="us-central1",  # Only try in this region for this model.
                         ),
-                        GeminiProvider.model(
-                            "gemini-2.5-flash-preview-05-20", region="us-central1"
-                        ),
-                        GeminiProvider.model("gemini-2.5-flash-preview-05-20", region="global"),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20"),
                     ],
                     "max_tokens": 32000,
                 }
@@ -112,20 +108,6 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
                 self.context.event_manager.add_log("Simulating profound thought...")
 
-                de_reasoning_config = {
-                    "model": AnthropicProvider.model(
-                        "claude-3-7-sonnet@20250219", region="europe-west1"
-                    ),
-                    "max_tokens": 8192,
-                }
-                us_reasoning_config = {
-                    "models": [
-                        AnthropicProvider.model("claude-3-7-sonnet@20250219", region="us-east5"),
-                        AnthropicProvider.model("claude-3-7-sonnet@20250219", region="global"),
-                    ],
-                    "max_tokens": 32000,
-                }
-
                 # reason to propose final root cause
                 agent.tools = []
                 response = agent.run(
@@ -138,11 +120,8 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         run_name="Root Cause Proposal",
                         temperature=1.0,
                         reasoning_effort="high",
-                        **(
-                            de_reasoning_config
-                            if config.SENTRY_REGION == "de"
-                            else us_reasoning_config
-                        ),
+                        model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        max_tokens=8192,
                     )
                 )
 
@@ -164,22 +143,17 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 )
 
                 de_formatter_config = {
-                    "models": [
-                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west1"),
-                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west4"),
-                    ],
+                    "model": GeminiProvider.model("gemini-2.0-flash-001"),
                     "max_tokens": 8192,
                 }
 
                 us_formatter_config = {
                     "models": [
                         GeminiProvider.model(
-                            "gemini-2.5-flash-preview-04-17", region="us-central1"
+                            "gemini-2.5-flash-preview-04-17",
+                            region="us-central1",  # Only try in this region for this model.
                         ),
-                        GeminiProvider.model(
-                            "gemini-2.5-flash-preview-05-20", region="us-central1"
-                        ),
-                        GeminiProvider.model("gemini-2.5-flash-preview-05-20", region="global"),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20"),
                     ],
                     "max_tokens": 32000,
                 }

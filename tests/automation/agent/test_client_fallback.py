@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from pydantic import BaseModel
 
@@ -335,6 +337,147 @@ class TestFallbackBehavior:
         assert models[0].defaults.temperature == 0.1
         assert models[1].defaults.temperature == 0.3
         assert models[2].defaults.temperature == 0.5
+
+    def test_region_fallback_behavior(self):
+        """Test that fallback tries all regions for a model before moving to next model"""
+        from unittest.mock import Mock, patch
+
+        llm_client = LlmClient()
+
+        # Create a model that should have region preferences
+        base_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+        # Mock the get_region_preference to return multiple regions
+        with patch.object(
+            base_model, "get_region_preference", return_value=["region1", "region2", "region3"]
+        ):
+            call_count = 0
+            attempted_regions = []
+
+            def mock_operation(model):
+                nonlocal call_count, attempted_regions
+                call_count += 1
+                attempted_regions.append(model.region)
+
+                # Fail for first two regions, succeed on third
+                if call_count <= 2:
+                    from anthropic import RateLimitError
+
+                    raise RateLimitError(
+                        message="Rate limit exceeded", body={}, response=Mock(status_code=429)
+                    )
+                return "success"
+
+            # Should try all regions and succeed on the third
+            result = llm_client._execute_with_fallback(
+                models=[base_model], operation_name="Test Operation", operation_func=mock_operation
+            )
+
+            assert result == "success"
+            assert call_count == 3
+            assert attempted_regions == ["region1", "region2", "region3"]
+
+    def test_region_fallback_explicit_region_no_fallback(self):
+        """Test that when a region is explicitly set, no region fallback occurs"""
+
+        llm_client = LlmClient()
+
+        # Create a model with explicit region
+        base_model = AnthropicProvider.model("claude-3-5-sonnet@20240620", region="explicit-region")
+
+        call_count = 0
+        attempted_regions = []
+
+        def mock_operation(model):
+            nonlocal call_count, attempted_regions
+            call_count += 1
+            attempted_regions.append(model.region)
+            return "success"
+
+        result = llm_client._execute_with_fallback(
+            models=[base_model], operation_name="Test Operation", operation_func=mock_operation
+        )
+
+        assert result == "success"
+        assert call_count == 1
+        assert attempted_regions == ["explicit-region"]
+
+    def test_region_fallback_multiple_models(self):
+        """Test region fallback across multiple models"""
+        from unittest.mock import Mock, patch
+
+        llm_client = LlmClient()
+
+        # Create multiple models
+        model1 = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+        model2 = GeminiProvider.model("gemini-2.0-flash-001")
+
+        call_count = 0
+        operation_calls = []
+
+        def mock_operation(model):
+            nonlocal call_count, operation_calls
+            call_count += 1
+            operation_calls.append((model.model_name, model.region))
+
+            # Fail for first model's regions, succeed on second model's first region
+            if model.model_name == "claude-3-5-sonnet@20240620":
+                from anthropic import RateLimitError
+
+                raise RateLimitError(
+                    message="Rate limit exceeded", body={}, response=Mock(status_code=429)
+                )
+            return "success"
+
+        # Mock region preferences for both models
+        with (
+            patch.object(model1, "get_region_preference", return_value=["us-east5", "global"]),
+            patch.object(model2, "get_region_preference", return_value=["us-central1", "global"]),
+        ):
+
+            result = llm_client._execute_with_fallback(
+                models=[model1, model2],
+                operation_name="Test Operation",
+                operation_func=mock_operation,
+            )
+
+            assert result == "success"
+            assert call_count == 3  # 2 calls for model1 regions + 1 call for model2's first region
+
+            # Should have tried both regions of model1, then first region of model2
+            expected_calls = [
+                ("claude-3-5-sonnet@20240620", "us-east5"),
+                ("claude-3-5-sonnet@20240620", "global"),
+                ("gemini-2.0-flash-001", "us-central1"),
+            ]
+            assert operation_calls == expected_calls
+
+    def test_region_fallback_no_region_preferences(self):
+        """Test fallback behavior when model has no region preferences"""
+
+        llm_client = LlmClient()
+
+        # Create a model
+        base_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+        call_count = 0
+        attempted_regions = []
+
+        def mock_operation(model):
+            nonlocal call_count, attempted_regions
+            call_count += 1
+            attempted_regions.append(model.region)
+            return "success"
+
+        # Mock no region preferences
+        with patch.object(base_model, "get_region_preference", return_value=None):
+            result = llm_client._execute_with_fallback(
+                models=[base_model], operation_name="Test Operation", operation_func=mock_operation
+            )
+
+            assert result == "success"
+            assert call_count == 1
+            assert attempted_regions == [None]  # Should try with None region
 
 
 class TestParameterResolutionIntegration:

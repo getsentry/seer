@@ -68,6 +68,41 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+@dataclass
+class BaseLlmProvider:
+    model_name: str
+    provider_name = LlmProviderType.ANTHROPIC
+    defaults: LlmProviderDefaults | None = None
+    region: str | None = None
+    region_preference_override: list[str] | None = None
+
+    default_configs: ClassVar[list[LlmModelDefaultConfig]]
+
+    @classmethod
+    def get_config(cls, model_name: str):
+        for config in cls.default_configs:
+            if re.match(config.match, model_name):
+                return config
+        return None
+
+    @inject
+    def get_region_preference(self, app_config: AppConfig = injected):
+        if self.region_preference_override:
+            return self.region_preference_override
+
+        config = self.get_config(self.model_name)
+        if config is None:
+            return None
+
+        if config.region_preference is None:
+            return None
+
+        if app_config.SENTRY_REGION in config.region_preference:
+            return config.region_preference[app_config.SENTRY_REGION]
+
+        return None
+
+
 def _iterate_with_timeouts(
     stream_generator: Iterator[T],
     first_token_timeout: float,
@@ -139,7 +174,7 @@ def _iterate_with_timeouts(
 
 
 @dataclass
-class OpenAiProvider:
+class OpenAiProvider(BaseLlmProvider):
     model_name: str
     provider_name = LlmProviderType.OPENAI
     defaults: LlmProviderDefaults | None = None
@@ -170,7 +205,7 @@ class OpenAiProvider:
         reasoning_effort: str | None = None,
         seed: int | None = None,
     ) -> "OpenAiProvider":
-        model_config = cls._get_config(model_name)
+        model_config = cls.get_config(model_name)
 
         # Merge model-level config with default config
         base_defaults = model_config.defaults if model_config else None
@@ -200,13 +235,6 @@ class OpenAiProvider:
             defaults=merged_defaults,
             region=region,
         )
-
-    @classmethod
-    def _get_config(cls, model_name: str):
-        for config in cls.default_configs:
-            if re.match(config.match, model_name):
-                return config
-        return None
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
@@ -547,7 +575,7 @@ class OpenAiProvider:
 
 
 @dataclass
-class AnthropicProvider:
+class AnthropicProvider(BaseLlmProvider):
     model_name: str
     provider_name = LlmProviderType.ANTHROPIC
     defaults: LlmProviderDefaults | None = None
@@ -557,6 +585,7 @@ class AnthropicProvider:
         LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={"us": ["us-east5", "global"], "de": ["europe-west4"]},
         ),
     ]
 
@@ -565,32 +594,17 @@ class AnthropicProvider:
         project_id = app_config.GOOGLE_CLOUD_PROJECT
         max_retries = 8
 
-        supported_models_on_global_endpoint: list[str] = [
-            # NOTE: disabling global endpoint while we're on provisioned throughput
-            # "claude-3-5-sonnet-v2@20241022",
-            # "claude-3-7-sonnet@20250219",
-        ]
-
         # Use provided region if available, otherwise fall back to automatic region selection
         if self.region:
             selected_region = self.region
-            base_url = None
-            if self.region == "global":
-                base_url = "https://aiplatform.googleapis.com/v1/"
         elif app_config.DEV:
             selected_region = "us-east5"
-            base_url = None
-        elif app_config.SENTRY_REGION == "de":
-            selected_region = "europe-west4"  # we have PT here
-            base_url = None
-        elif (
-            app_config.SENTRY_REGION == "us"
-            or self.model_name not in supported_models_on_global_endpoint
-        ):
-            selected_region = "europe-west4"  # we have PT here for US also
-            base_url = None
         else:
-            selected_region = "global"
+            # Default region if none specified
+            selected_region = "us-east5"
+
+        base_url = None
+        if selected_region == "global":
             base_url = "https://aiplatform.googleapis.com/v1/"
 
         return anthropic.AnthropicVertex(
@@ -610,7 +624,7 @@ class AnthropicProvider:
         reasoning_effort: str | None = None,
         timeout: float | None = None,
     ) -> "AnthropicProvider":
-        model_config = cls._get_config(model_name)
+        model_config = cls.get_config(model_name)
 
         # Merge model-level config with default config
         base_defaults = model_config.defaults if model_config else None
@@ -644,13 +658,6 @@ class AnthropicProvider:
             defaults=merged_defaults,
             region=region,
         )
-
-    @classmethod
-    def _get_config(cls, model_name: str):
-        for config in cls.default_configs:
-            if re.match(config.match, model_name):
-                return config
-        return None
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
@@ -1016,7 +1023,7 @@ class AnthropicProvider:
 
 
 @dataclass
-class GeminiProvider:
+class GeminiProvider(BaseLlmProvider):
     model_name: str
     provider_name = LlmProviderType.GEMINI
     defaults: LlmProviderDefaults | None = None
@@ -1024,8 +1031,19 @@ class GeminiProvider:
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
+            match=r"-preview-",  # contains the substring "-preview-"
+            defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": ["us-central1", "global"],
+            },
+        ),
+        LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": ["us-central1", "us-east1", "global"],
+                "de": ["europe-west1", "europe-west4"],
+            },
         ),
     ]
 
@@ -1072,11 +1090,12 @@ class GeminiProvider:
         cls,
         model_name: str,
         region: str | None = None,
+        region_preference: list[str] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         seed: int | None = None,
     ) -> "GeminiProvider":
-        model_config = cls._get_config(model_name)
+        model_config = cls.get_config(model_name)
 
         # Merge model-level config with default config
         base_defaults = model_config.defaults if model_config else None
@@ -1100,14 +1119,8 @@ class GeminiProvider:
             model_name=model_name,
             defaults=merged_defaults,
             region=region,
+            region_preference_override=region_preference,
         )
-
-    @classmethod
-    def _get_config(cls, model_name: str):
-        for config in cls.default_configs:
-            if re.match(config.match, model_name):
-                return config
-        return None
 
     @observe(as_type="generation", name="Gemini Generation with Grounding")
     @sentry_sdk.trace
@@ -1754,40 +1767,72 @@ class LlmClient:
         """
         Execute an operation with fallback through a list of models.
         Tries each model in sequence if the previous one fails with a fallback-worthy exception.
+        For each model, tries all regions in its region preference before moving to the next model.
         """
 
-        for i, model in enumerate(models):
-            try:
-                sentry_sdk.set_tag("llm_provider", model.provider_name)
-                sentry_sdk.set_tag("llm_model_attempt", i + 1)
-                sentry_sdk.set_tag("llm_total_models", len(models))
+        for i, base_model in enumerate(models):
+            # If a region is explicitly set, only try that region
+            # Otherwise, use region preferences
+            if base_model.region is not None:
+                regions_to_try = [base_model.region]
+            else:
+                region_preference = base_model.get_region_preference()
+                regions_to_try = region_preference if region_preference else [None]
 
-                return operation_func(model)
+            # Try each region for this model
+            for j, region in enumerate(regions_to_try):
+                # Create a copy of the model with the specific region
+                model_to_use = type(base_model)(
+                    model_name=base_model.model_name,
+                    defaults=base_model.defaults,
+                    region=region,
+                )
 
-            except Exception as e:
+                try:
+                    sentry_sdk.set_tag("llm_provider", model_to_use.provider_name)
+                    sentry_sdk.set_tag("llm_model_attempt", i + 1)
+                    sentry_sdk.set_tag("llm_model_region_attempt", j + 1)
+                    sentry_sdk.set_tag("llm_total_models", len(models))
+                    sentry_sdk.set_tag("llm_current_region", region)
 
-                if self._is_fallback_worthy_exception(e, model):
-                    if i < len(models) - 1:  # Not the last model
-                        logger.warning(
-                            f"{operation_name} failed with {model.provider_name} model '{model.model_name}' region '{model.region}' "
-                            f"due to {type(e).__name__}: {str(e)}. "
-                            f"Trying next model ({i + 2}/{len(models)}): {models[i + 1].provider_name} '{models[i + 1].model_name}' region '{models[i + 1].region}'"
-                        )
-                        continue
+                    return operation_func(model_to_use)
+
+                except Exception as e:
+                    if self._is_fallback_worthy_exception(e, model_to_use):
+                        is_last_region = j == len(regions_to_try) - 1
+                        is_last_model = i == len(models) - 1
+
+                        if not is_last_region:
+                            # Try next region for this model
+                            logger.warning(
+                                f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                f"due to {type(e).__name__}: {str(e)}. "
+                                f"Trying next region ({j + 2}/{len(regions_to_try)}): {regions_to_try[j + 1]}"
+                            )
+                            continue
+                        elif not is_last_model:
+                            # Try next model
+                            logger.warning(
+                                f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
+                                f"due to {type(e).__name__}: {str(e)}. "
+                                f"Trying next model ({i + 2}/{len(models)}): {models[i + 1].provider_name} '{models[i + 1].model_name}'"
+                            )
+                            break  # Break out of region loop to try next model
+                        else:
+                            # Last model and last region - fail
+                            logger.error(
+                                f"{operation_name} failed with all {len(models)} models and all regions. "
+                                f"Last attempt with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                f"failed with {type(e).__name__}: {str(e)}"
+                            )
+                            raise e
                     else:
+                        # Non-fallback-worthy exception, fail immediately
                         logger.error(
-                            f"{operation_name} failed with all {len(models)} models. "
-                            f"Last attempt with {model.provider_name} model '{model.model_name}' region '{model.region}' "
-                            f"failed with {type(e).__name__}: {str(e)}"
+                            f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                            f"due to non-retryable {type(e).__name__}: {str(e)}"
                         )
                         raise e
-                else:
-                    # Non-fallback-worthy exception, fail immediately
-                    logger.error(
-                        f"{operation_name} failed with {model.provider_name} model '{model.model_name}' region '{model.region}' "
-                        f"due to non-retryable {type(e).__name__}: {str(e)}"
-                    )
-                    raise e
 
         # This should never be reached since we validate that models is not empty
         raise ValueError("No models provided for fallback execution")
@@ -2005,8 +2050,6 @@ class LlmClient:
                 )
             elif model_to_use.provider_name == LlmProviderType.ANTHROPIC:
                 model_cast = cast(AnthropicProvider, model_to_use)
-                # Note: AnthropicProvider's generate_structured method doesn't exist, using generate_text instead
-                # This appears to be an issue in the original code - AnthropicProvider doesn't have generate_structured method
                 raise ValueError("Structured generation is not supported for Anthropic provider")
             elif model_to_use.provider_name == LlmProviderType.GEMINI:
                 model_cast = cast(GeminiProvider, model_to_use)
@@ -2051,6 +2094,7 @@ class LlmClient:
 
     @observe(name="Generate Text Stream")
     @sentry_sdk.trace
+    @inject
     def generate_text_stream(
         self,
         *,
@@ -2068,6 +2112,7 @@ class LlmClient:
         reasoning_effort: str | None = None,
         first_token_timeout: float | None = None,
         inactivity_timeout: float | None = None,
+        app_config: AppConfig = injected,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage | LlmProvider]:
         # Validate input parameters
         if models is not None and model is not None:
@@ -2183,48 +2228,79 @@ class LlmClient:
             # For streaming, we need to handle fallback during iteration, not just during generator creation
             # Try each model in the fallback chain
 
-            for i, model_to_use in enumerate(models_to_try):
-                try:
-                    sentry_sdk.set_tag("llm_provider", model_to_use.provider_name)
-                    sentry_sdk.set_tag("llm_model_attempt", i + 1)
-                    sentry_sdk.set_tag("llm_total_models", len(models_to_try))
+            for i, base_model in enumerate(models_to_try):
+                # If a region is explicitly set, only try that region
+                # Otherwise, use region preferences
+                if base_model.region is not None:
+                    regions_to_try = [base_model.region]
+                else:
+                    region_preference = base_model.get_region_preference()
+                    regions_to_try = region_preference if region_preference else [None]
 
-                    # Get the generator for this model
-                    generator = _generate_text_stream_operation(model_to_use)
+                # Try each region for this model
+                for j, region in enumerate(regions_to_try):
+                    # Create a copy of the model with the specific region
+                    model_to_use = type(base_model)(
+                        model_name=base_model.model_name,
+                        defaults=base_model.defaults,
+                        region=region,
+                    )
 
-                    # Try to consume the generator - exceptions will be raised here
-                    for item in generator:
-                        yield item
+                    try:
+                        sentry_sdk.set_tag("llm_provider", model_to_use.provider_name)
+                        sentry_sdk.set_tag("llm_model_attempt", i + 1)
+                        sentry_sdk.set_tag("llm_model_region_attempt", j + 1)
+                        sentry_sdk.set_tag("llm_total_models", len(models_to_try))
+                        sentry_sdk.set_tag("llm_current_region", region)
 
-                    yield model_to_use
+                        # Get the generator for this model
+                        generator = _generate_text_stream_operation(model_to_use)
 
-                    # If we get here, streaming was successful, so break out of fallback loop
-                    break
+                        # Try to consume the generator - exceptions will be raised here
+                        for item in generator:
+                            yield item
 
-                except Exception as e:
+                        yield model_to_use
 
-                    if self._is_fallback_worthy_exception(e, model_to_use):
-                        if i < len(models_to_try) - 1:  # Not the last model
-                            logger.warning(
-                                f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' "
-                                f"due to {type(e).__name__}: {str(e)}. "
-                                f"Trying next model ({i + 2}/{len(models_to_try)}): {models_to_try[i + 1].provider_name} '{models_to_try[i + 1].model_name}'"
-                            )
-                            continue
+                        # If we get here, streaming was successful, so break out of all fallback loops
+                        return
+
+                    except Exception as e:
+                        if self._is_fallback_worthy_exception(e, model_to_use):
+                            is_last_region = j == len(regions_to_try) - 1
+                            is_last_model = i == len(models_to_try) - 1
+
+                            if not is_last_region:
+                                # Try next region for this model
+                                logger.warning(
+                                    f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                    f"due to {type(e).__name__}: {str(e)}. "
+                                    f"Trying next region ({j + 2}/{len(regions_to_try)}): {regions_to_try[j + 1]}"
+                                )
+                                continue
+                            elif not is_last_model:
+                                # Try next model
+                                logger.warning(
+                                    f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
+                                    f"due to {type(e).__name__}: {str(e)}. "
+                                    f"Trying next model ({i + 2}/{len(models_to_try)}): {models_to_try[i + 1].provider_name} '{models_to_try[i + 1].model_name}'"
+                                )
+                                break  # Break out of region loop to try next model
+                            else:
+                                # Last model and last region - fail
+                                logger.error(
+                                    f"Text stream generation failed with all {len(models_to_try)} models and all regions. "
+                                    f"Last attempt with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                    f"failed with {type(e).__name__}: {str(e)}"
+                                )
+                                raise e
                         else:
+                            # Non-fallback-worthy exception, fail immediately
                             logger.error(
-                                f"Text stream generation failed with all {len(models_to_try)} models. "
-                                f"Last attempt with {model_to_use.provider_name} model '{model_to_use.model_name}' "
-                                f"failed with {type(e).__name__}: {str(e)}"
+                                f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                f"due to non-retryable {type(e).__name__}: {str(e)}"
                             )
                             raise e
-                    else:
-                        # Non-fallback-worthy exception, fail immediately
-                        logger.error(
-                            f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' "
-                            f"due to non-retryable {type(e).__name__}: {str(e)}"
-                        )
-                        raise e
 
         except Exception as e:
             logger.exception(f"Text stream generation failed with all provided models: {e}")

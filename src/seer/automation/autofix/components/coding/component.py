@@ -168,28 +168,16 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
                     ),
                 )
 
-            de_config = {
-                "models": [
-                    AnthropicProvider.model("claude-3-7-sonnet@20250219", region="europe-west1"),
-                    AnthropicProvider.model(
-                        "claude-3-5-sonnet-v2@20241022", region="europe-west1"
-                    ),  # Fallback to 3.5 sonnet so we don't use the global endpoint
-                ],
-            }
-            us_config = {
-                "models": [
-                    AnthropicProvider.model("claude-3-7-sonnet@20250219", region="us-east5"),
-                    AnthropicProvider.model("claude-3-7-sonnet@20250219", region="global"),
-                ],
-            }
-
             response = agent.run(
                 RunConfig(
                     system_prompt=CodingPrompts.format_system_msg(),
                     memory_storage_key="code",
                     run_name="Code",
                     max_iterations=64,
-                    **(de_config if config.SENTRY_REGION == "de" else us_config),
+                    models=[
+                        AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    ],
                 ),
             )
 

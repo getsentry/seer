@@ -156,27 +156,17 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             try:
                 de_discovery_config = {
                     "models": [
-                        AnthropicProvider.model(
-                            "claude-3-7-sonnet@20250219", region="europe-west1"
-                        ),
-                        AnthropicProvider.model(
-                            "claude-3-5-sonnet-v2@20241022", region="europe-west1"
-                        ),  # Fallback to 3.5 sonnet so we don't use the global endpoint
+                        AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
                     ],
                     "max_tokens": 8192,
                 }
 
                 us_discovery_config = {
                     "models": [
-                        GeminiProvider.model(
-                            "gemini-2.5-pro-preview-05-06", region="us-central1", max_tokens=32000
-                        ),
-                        AnthropicProvider.model(
-                            "claude-3-7-sonnet@20250219", region="us-east5", max_tokens=8192
-                        ),
-                        GeminiProvider.model(
-                            "gemini-2.5-flash-preview-05-20", region="us-central1", max_tokens=32000
-                        ),
+                        GeminiProvider.model("gemini-2.5-pro-preview-05-06", max_tokens=32000),
+                        AnthropicProvider.model("claude-3-7-sonnet@20250219", max_tokens=8192),
+                        AnthropicProvider.model("claude-3-5-sonnet-v2@20241022", max_tokens=8192),
                     ],
                 }
 
@@ -204,10 +194,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 self.context.event_manager.add_log("Formatting for human consumption...")
 
                 de_config = {
-                    "models": [
-                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west1"),
-                        GeminiProvider.model("gemini-2.0-flash-001", region="europe-west4"),
-                    ],
+                    "model": GeminiProvider.model("gemini-2.0-flash-001"),
                 }
 
                 us_config = {
@@ -216,11 +203,8 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                             "gemini-2.5-flash-preview-04-17",
                             region="us-central1",
                         ),
-                        GeminiProvider.model(
-                            "gemini-2.5-flash-preview-05-20", region="us-central1"
-                        ),
-                        GeminiProvider.model("gemini-2.5-flash-preview-05-20", region="global"),
-                        GeminiProvider.model("gemini-2.0-flash-001", region="us-central1"),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20"),
+                        GeminiProvider.model("gemini-2.0-flash-001"),
                     ],
                 }
 

@@ -65,27 +65,15 @@ class ChangeDescriptionComponent(BaseComponent[ChangeDescriptionRequest, ChangeD
         llm_client: LlmClient = injected,
         config: AppConfig = injected,
     ) -> ChangeDescriptionOutput | None:
-        de_config = {
-            "models": [
-                GeminiProvider.model("gemini-2.0-flash-001", region="europe-west1"),
-                GeminiProvider.model("gemini-2.0-flash-001", region="europe-west4"),
-            ],
-        }
-        us_config = {
-            "models": [
-                GeminiProvider.model("gemini-2.0-flash-001", region="us-central1"),
-                GeminiProvider.model("gemini-2.0-flash-001", region="us-east1"),
-            ],
-        }
 
         output = llm_client.generate_structured(
+            model=GeminiProvider.model("gemini-2.0-flash-001"),
             prompt=ChangeDescriptionPrompts.format_default_msg(
                 change_dump=request.change_dump,
                 hint=request.hint,
                 previous_commits=request.previous_commits,
             ),
             response_format=ChangeDescriptionOutput,
-            **(de_config if config.SENTRY_REGION == "de" else us_config),
         )
         data = output.parsed
 
