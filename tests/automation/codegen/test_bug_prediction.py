@@ -270,7 +270,7 @@ class TestBugPredictorComponent:
     @pytest.fixture
     def component(self, mock_repo_def: RepoDefinition):
         mock_context = MagicMock(spec=CodegenContext)
-        mock_context.repo = mock_repo_def
+        mock_context.repos = [mock_repo_def]
         mock_context.get_repo_client.return_value = MagicMock()
         mock_context.state = MagicMock()
         return BugPredictorComponent(context=mock_context)

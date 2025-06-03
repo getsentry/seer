@@ -31,7 +31,7 @@ class CodegenStep(PipelineStep):
     def _get_extra_invoke_kwargs(self) -> dict[str, Any]:
         try:
             current_state = self.context.state.get()
-            repo = self.context.repo
+            repo = self.context.repos[0]
 
             tags = {
                 "run_id": current_state.run_id,

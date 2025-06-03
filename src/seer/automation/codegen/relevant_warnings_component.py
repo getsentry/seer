@@ -208,15 +208,15 @@ class FetchIssuesComponent(BaseComponent[CodeFetchIssuesRequest, CodeFetchIssues
     @observe(name="Codegen - Relevant Warnings - Fetch Issues Component")
     @ai_track(description="Codegen - Relevant Warnings - Fetch Issues Component")
     def invoke(self, request: CodeFetchIssuesRequest) -> CodeFetchIssuesOutput:
-        if self.context.repo.provider_raw is None:
+        if self.context.repos[0].provider_raw is None:
             raise TypeError(
-                f"provider_raw is not set for repo: {self.context.repo}. "
+                f"provider_raw is not set for repo: {self.context.repos[0]}. "
                 "Something went wrong during initialization of the RepoDefinition."
             )
         filename_to_issues = self._fetch_issues(
             organization_id=request.organization_id,
-            provider=self.context.repo.provider_raw,
-            external_id=self.context.repo.external_id,
+            provider=self.context.repos[0].provider_raw,
+            external_id=self.context.repos[0].external_id,
             pr_files=request.pr_files,
         )
         for filename, issues in filename_to_issues.items():
