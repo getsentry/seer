@@ -53,7 +53,9 @@ class CustomTransport(HttpTransport):
     def capture_envelope(self, envelope):
         try:
             # Set public key to seer's public key
-            envelope.headers["trace"]["public_key"] = self.config.SENTRY_SEER_PUBLIC_KEY
+            envelope.headers["trace"]["public_key"] = sentry_sdk.utils.Dsn(
+                self.config.SENTRY_DSN
+            ).public_key
         except KeyError:
             pass
 
@@ -83,7 +85,7 @@ def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = i
             "continuous_profiling_auto_start": True,
             "enable_logs": True,
         },
-        transport=CustomTransport if config.SENTRY_SEER_PUBLIC_KEY else HttpTransport,
+        transport=CustomTransport,
     )
 
     if config.SENTRY_REGION:
