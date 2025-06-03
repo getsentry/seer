@@ -121,7 +121,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                         temperature=1.0,
                         reasoning_effort="high",
                         model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
-                        max_tokens=8192,
+                        max_tokens=32000,
                     )
                 )
 

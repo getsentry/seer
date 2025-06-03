@@ -34,7 +34,6 @@ from seer.automation.autofix.models import (
     DefaultStep,
 )
 from seer.automation.state import LocalMemoryState
-from seer.utils import MaxTriesExceeded
 
 
 class FlakyStream:
@@ -225,10 +224,16 @@ def run_config(create_flaky_provider: Callable[[], LlmProvider]):
 def test_flaky_stream(autofix_agent: AutofixAgent, run_config: RunConfig):
     """
     Repro the error. Meta-test that the flaky provider returns a stream which raises a retryable exception.
+    Note: This test verifies that retryable exceptions are still raised, but now they are handled
+    at the provider level rather than the agent level.
     """
-    with pytest.raises(MaxTriesExceeded) as exception_info:
-        _ = autofix_agent.get_completion(run_config, max_tries=1)  # prev behavior is don't retry
-    assert run_config.model.is_completion_exception_retryable(exception_info.value.__cause__)
+    # The flaky provider will now handle retries internally, but if it exhausts retries,
+    # it should still raise the exception
+    with pytest.raises(Exception) as exception_info:
+        _ = autofix_agent.get_completion(run_config)
+
+    # Verify the exception is still considered retryable by the provider
+    assert run_config.model.is_completion_exception_retryable(exception_info.value)
 
 
 @pytest.mark.vcr()
@@ -300,7 +305,7 @@ def test_retrying_succeeds(autofix_agent: AutofixAgent, run_config: RunConfig):
     assert run_config.model._num_flaky_clients < run_config.model._max_num_flaky_clients
     # Sanity check that the API will indeed be flaky
 
-    response = autofix_agent.get_completion(run_config, sleep_sec_scaler=lambda _: 0.5)
+    response = autofix_agent.get_completion(run_config)
     assert response.message.content.startswith("Here's a haiku:")
     # Test start of string to ensure the completion doesn't include the chunks from previous
     # completions which failed during streaming.
@@ -315,12 +320,12 @@ def test_max_tries_exceeded(autofix_agent: AutofixAgent, run_config: RunConfig):
         pytest.skip("This test was already ran for Anthropic. Skipping to avoid redundancy.")
 
     assert isinstance(run_config.model, FlakyProvider)
-    run_config.model._max_num_flaky_clients = 3
+    # Increase the number of flaky clients to exceed the retry limit at provider level
+    run_config.model._max_num_flaky_clients = 10  # Force more failures than provider can handle
 
-    with pytest.raises(MaxTriesExceeded) as exception_info:
-        _ = autofix_agent.get_completion(
-            run_config,
-            sleep_sec_scaler=lambda _: 0.1,
-            max_tries=run_config.model._max_num_flaky_clients,
-        )
-    assert run_config.model.is_completion_exception_retryable(exception_info.value.__cause__)
+    # With retries now at provider level, the provider should eventually exhaust its retries
+    with pytest.raises(Exception) as exception_info:
+        _ = autofix_agent.get_completion(run_config)
+
+    # Verify the exception is still considered retryable
+    assert run_config.model.is_completion_exception_retryable(exception_info.value)

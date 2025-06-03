@@ -1414,3 +1414,47 @@ def test_gemini_provider_region_preference_parameter():
     assert gemini_model.defaults.temperature == 0.4
     assert gemini_model.defaults.max_tokens == 3000
     assert gemini_model.defaults.seed == 456
+
+
+def test_openai_provider_retry_logic():
+    """Test that OpenAI provider applies retry logic to client methods"""
+    from unittest.mock import Mock, patch
+
+    provider = OpenAiProvider.model("gpt-3.5-turbo")
+
+    # Mock the backoff_on_exception decorator
+    with patch("seer.automation.agent.client.backoff_on_exception") as mock_backoff:
+        mock_retrier = Mock()
+        mock_backoff.return_value = mock_retrier
+
+        provider.get_client()
+
+        # Verify backoff_on_exception was called with the right parameters
+        mock_backoff.assert_called_once_with(
+            OpenAiProvider.is_completion_exception_retryable, max_tries=4
+        )
+
+        # Verify the retrier was applied to the correct client methods
+        assert mock_retrier.call_count == 2  # Should be called twice for both methods
+
+
+def test_anthropic_provider_retry_logic():
+    """Test that Anthropic provider applies retry logic to client methods"""
+    from unittest.mock import Mock, patch
+
+    provider = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
+    # Mock the backoff_on_exception decorator
+    with patch("seer.automation.agent.client.backoff_on_exception") as mock_backoff:
+        mock_retrier = Mock()
+        mock_backoff.return_value = mock_retrier
+
+        provider.get_client()
+
+        # Verify backoff_on_exception was called with the right parameters
+        mock_backoff.assert_called_once_with(
+            AnthropicProvider.is_completion_exception_retryable, max_tries=4
+        )
+
+        # Verify the retrier was applied to the correct client method
+        assert mock_retrier.call_count == 1  # Should be called once for messages.create

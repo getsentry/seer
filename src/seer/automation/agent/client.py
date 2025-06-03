@@ -193,7 +193,16 @@ class OpenAiProvider(BaseLlmProvider):
 
     @staticmethod
     def get_client() -> openai.Client:
-        return openai.Client(max_retries=4)
+        client = openai.Client(max_retries=4)
+
+        # Apply backoff retry mechanism to client methods
+        retrier = backoff_on_exception(
+            OpenAiProvider.is_completion_exception_retryable, max_tries=4
+        )
+        client.chat.completions.create = retrier(client.chat.completions.create)  # type: ignore[method-assign]
+        client.beta.chat.completions.parse = retrier(client.beta.chat.completions.parse)  # type: ignore[method-assign]
+
+        return client
 
     @classmethod
     def model(
@@ -580,6 +589,7 @@ class AnthropicProvider(BaseLlmProvider):
     provider_name = LlmProviderType.ANTHROPIC
     defaults: LlmProviderDefaults | None = None
     region: str | None = None
+    region_preference_override: list[str] | None = None
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
@@ -607,12 +617,20 @@ class AnthropicProvider(BaseLlmProvider):
         if selected_region == "global":
             base_url = "https://aiplatform.googleapis.com/v1/"
 
-        return anthropic.AnthropicVertex(
+        client = anthropic.AnthropicVertex(
             project_id=project_id,
             region=selected_region,
             base_url=base_url,
             max_retries=max_retries,
         )
+
+        # Apply backoff retry mechanism to client methods
+        retrier = backoff_on_exception(
+            AnthropicProvider.is_completion_exception_retryable, max_tries=4
+        )
+        client.messages.create = retrier(client.messages.create)  # type: ignore[method-assign]
+
+        return client
 
     @classmethod
     def model(
@@ -623,6 +641,7 @@ class AnthropicProvider(BaseLlmProvider):
         max_tokens: int | None = None,
         reasoning_effort: str | None = None,
         timeout: float | None = None,
+        region_preference: list[str] | None = None,
     ) -> "AnthropicProvider":
         model_config = cls.get_config(model_name)
 
@@ -657,6 +676,7 @@ class AnthropicProvider(BaseLlmProvider):
             model_name=model_name,
             defaults=merged_defaults,
             region=region,
+            region_preference_override=region_preference,
         )
 
     @staticmethod
@@ -1762,6 +1782,7 @@ class LlmClient:
         models: list[LlmProvider],
         operation_name: str,
         operation_func: Callable[[LlmProvider], Any],
+        on_fallback_used_callback: Callable[[], None] | None = None,
     ) -> Any:
         """
         Execute an operation with fallback through a list of models.
@@ -1790,6 +1811,7 @@ class LlmClient:
                     model_name=base_model.model_name,
                     defaults=base_model.defaults,
                     region=region,
+                    region_preference_override=base_model.region_preference_override,
                 )
 
                 try:
@@ -1808,6 +1830,10 @@ class LlmClient:
 
                         if not is_last_region:
                             # Try next region for this model
+                            if on_fallback_used_callback:
+
+                                on_fallback_used_callback()
+
                             logger.warning(
                                 f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
                                 f"due to {type(e).__name__}: {str(e)}. "
@@ -1816,6 +1842,10 @@ class LlmClient:
                             continue
                         elif not is_last_model:
                             # Try next model
+                            if on_fallback_used_callback:
+
+                                on_fallback_used_callback()
+
                             logger.warning(
                                 f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
                                 f"due to {type(e).__name__}: {str(e)}. "
@@ -1858,6 +1888,7 @@ class LlmClient:
         timeout: float | None = None,
         predicted_output: str | None = None,
         reasoning_effort: str | None = None,
+        on_fallback_used_callback: Callable[[], None] | None = None,
     ) -> LlmGenerateTextResponse:
         # Validate input parameters
         if models is not None and model is not None:
@@ -1962,6 +1993,7 @@ class LlmClient:
                 models=models_to_try,
                 operation_name="Text generation",
                 operation_func=_generate_text_operation,
+                on_fallback_used_callback=on_fallback_used_callback,
             )
         except Exception as e:
             logger.exception(f"Text generation failed with all provided models: {e}")
@@ -2096,7 +2128,6 @@ class LlmClient:
 
     @observe(name="Generate Text Stream")
     @sentry_sdk.trace
-    @inject
     def generate_text_stream(
         self,
         *,
@@ -2114,7 +2145,7 @@ class LlmClient:
         reasoning_effort: str | None = None,
         first_token_timeout: float | None = None,
         inactivity_timeout: float | None = None,
-        app_config: AppConfig = injected,
+        on_fallback_used_callback: Callable[[], None] | None = None,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage | LlmProvider]:
         # Validate input parameters
         if models is not None and model is not None:
@@ -2251,6 +2282,7 @@ class LlmClient:
                         model_name=base_model.model_name,
                         defaults=base_model.defaults,
                         region=region,
+                        region_preference_override=base_model.region_preference_override,
                     )
 
                     try:
@@ -2279,6 +2311,9 @@ class LlmClient:
 
                             if not is_last_region:
                                 # Try next region for this model
+                                if on_fallback_used_callback:
+                                    on_fallback_used_callback()
+
                                 logger.warning(
                                     f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
                                     f"due to {type(e).__name__}: {str(e)}. "
@@ -2287,6 +2322,10 @@ class LlmClient:
                                 continue
                             elif not is_last_model:
                                 # Try next model
+                                if on_fallback_used_callback:
+
+                                    on_fallback_used_callback()
+
                                 logger.warning(
                                     f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
                                     f"due to {type(e).__name__}: {str(e)}. "

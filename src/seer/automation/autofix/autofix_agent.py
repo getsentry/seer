@@ -1,7 +1,7 @@
 import contextlib
 import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
-from typing import Callable, Optional
+from typing import Optional
 
 import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
@@ -20,7 +20,7 @@ from seer.automation.autofix.components.insight_sharing.component import create_
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
 from seer.dependency_injection import copy_modules_initializer
-from seer.utils import backoff_on_exception, retry_once_with_modified_input
+from seer.utils import retry_once_with_modified_input
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +125,11 @@ class AutofixAgent(LlmAgent):
 
         return messages
 
+    def _fallback_callback(self):
+        self.context.event_manager.add_log(
+            "Our LLM provider is overloaded. Now retrying desperately..."
+        )
+
     def _get_completion(self, run_config: RunConfig, messages: list[Message]):
         """
         Streams the preliminary output to the current step and only returns when output is complete
@@ -147,6 +152,7 @@ class AutofixAgent(LlmAgent):
             temperature=run_config.temperature or 0.0,
             reasoning_effort=run_config.reasoning_effort,
             max_tokens=run_config.max_tokens,
+            on_fallback_used_callback=self._fallback_callback,
         )
 
         model_used = run_config.models[0] if run_config.models else run_config.model
@@ -238,33 +244,13 @@ class AutofixAgent(LlmAgent):
     def get_completion(
         self,
         run_config: RunConfig,
-        max_tries: int = 4,
-        sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
     ):
         """
         Streams the preliminary output to the current step and only returns when output is complete.
 
-        The completion request is retried `max_tries - 1` times if a retryable exception was just
-        raised, e.g, Anthropic's API is overloaded.
-
-        Additionally, if the input is too long, the tool messages are truncated and the completion is retried once.
+        If the input is too long, the tool messages are truncated and the completion is retried once.
+        Retryable exceptions (e.g., provider overload) are handled at the provider level.
         """
-
-        def _long_wait_logger():
-            self.context.event_manager.add_log(
-                "Our LLM provider is overloaded. Now retrying desperately..."
-            )
-
-        is_exception_retryable = getattr(
-            run_config.model, "is_completion_exception_retryable", lambda _: False
-        )
-        retrier = backoff_on_exception(
-            is_exception_retryable,
-            max_tries=max_tries,
-            sleep_sec_scaler=sleep_sec_scaler,
-            long_wait_callback=_long_wait_logger,
-            long_wait_threshold_sec=10,
-        )
 
         is_input_too_long_func = getattr(run_config.model, "is_input_too_long", lambda _: False)
         retry_input_too_long_decorator = retry_once_with_modified_input(
@@ -276,7 +262,7 @@ class AutofixAgent(LlmAgent):
         def attempt_completion(messages_to_send: list[Message]):
             return self._get_completion(run_config, messages=messages_to_send)
 
-        final_attempt_func = retry_input_too_long_decorator(retrier(attempt_completion))
+        final_attempt_func = retry_input_too_long_decorator(attempt_completion)
 
         return final_attempt_func(messages_to_send=self.memory)
 
