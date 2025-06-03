@@ -1776,10 +1776,12 @@ class LlmClient:
                 regions_to_try = [base_model.region]
             else:
                 region_preference = base_model.get_region_preference()
-                regions_to_try = region_preference if region_preference else []
+                regions_to_try = region_preference if region_preference else [None]
 
-            if not regions_to_try:
-                raise ValueError(f"No regions to run for model {base_model.model_name}")
+            if (
+                not regions_to_try or (len(regions_to_try) == 1 and regions_to_try[0] is None)
+            ) and base_model.provider_name != LlmProviderType.OPENAI:
+                logger.warning(f"No regions to run for model {base_model.model_name}.")
 
             # Try each region for this model
             for j, region in enumerate(regions_to_try):
@@ -1836,7 +1838,6 @@ class LlmClient:
                         )
                         raise e
 
-        # This should never be reached since we validate that models is not empty
         raise ValueError("No models provided for fallback execution")
 
     @observe(name="Generate Text")
@@ -2236,10 +2237,12 @@ class LlmClient:
                     regions_to_try = [base_model.region]
                 else:
                     region_preference = base_model.get_region_preference()
-                    regions_to_try = region_preference if region_preference else []
+                    regions_to_try = region_preference if region_preference else [None]
 
-                if not regions_to_try:
-                    raise ValueError(f"No regions to run for model {base_model.model_name}")
+                if (
+                    not regions_to_try or (len(regions_to_try) == 1 and regions_to_try[0] is None)
+                ) and base_model.provider_name != LlmProviderType.OPENAI:
+                    logger.warning(f"No regions to run for model {base_model.model_name}.")
 
                 # Try each region for this model
                 for j, region in enumerate(regions_to_try):
