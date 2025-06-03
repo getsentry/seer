@@ -213,16 +213,8 @@ class AutofixAgent(LlmAgent):
             elif hasattr(chunk, "model_name") and hasattr(chunk, "provider_name"):
                 model_used = chunk
 
-        # Ensure we have a valid model_used before proceeding
         if model_used is None:
-            # Fallback to the first model from run_config if available
-            if run_config.models:
-                model_used = run_config.models[0]
-            elif run_config.model:
-                model_used = run_config.model
-            else:
-                # This should not happen in normal circumstances, but provide a safe fallback
-                raise ValueError("No model information available for completion response")
+            raise ValueError("No model information available for completion response")
 
         message = self.client.construct_message_from_stream(
             content_chunks=content_chunks,
