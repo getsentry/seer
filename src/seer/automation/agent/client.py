@@ -68,7 +68,6 @@ T = TypeVar("T")
 @dataclass
 class BaseLlmProvider:
     model_name: str
-    provider_name: LlmProviderType
     defaults: LlmProviderDefaults | None = None
     region: str | None = None
 
@@ -565,21 +564,20 @@ class AnthropicProvider(BaseLlmProvider):
         if selected_region == "global":
             base_url = "https://aiplatform.googleapis.com/v1/"
 
-        client = anthropic.AnthropicVertex(
+        return anthropic.AnthropicVertex(
             project_id=project_id,
             region=selected_region,
             base_url=base_url,
             max_retries=max_retries,
         )
 
-        return client
-
     @classmethod
-    def model(cls, model_name: str) -> "AnthropicProvider":
+    def model(cls, model_name: str, region: str | None = None) -> "AnthropicProvider":
         model_config = cls._get_config(model_name)
         return cls(
             model_name=model_name,
             defaults=model_config.defaults if model_config else None,
+            region=region,
         )
 
     @classmethod
