@@ -1624,6 +1624,7 @@ class GeminiProvider(BaseLlmProvider):
         )
         return cache.name
 
+    @sentry_sdk.trace
     def get_cache(self, display_name: str) -> str | None:
         client = self.get_client(use_local_endpoint=True)
 
@@ -1756,8 +1757,6 @@ class LlmClient:
                 )
             )
 
-        return False
-
     def _execute_with_fallback(
         self,
         models: list[LlmProvider],
@@ -1777,7 +1776,10 @@ class LlmClient:
                 regions_to_try = [base_model.region]
             else:
                 region_preference = base_model.get_region_preference()
-                regions_to_try = region_preference if region_preference else [None]
+                regions_to_try = region_preference if region_preference else []
+
+            if not regions_to_try:
+                raise ValueError(f"No regions to run for model {base_model.model_name}")
 
             # Try each region for this model
             for j, region in enumerate(regions_to_try):
@@ -1889,7 +1891,7 @@ class LlmClient:
                 messages_cleaned = LlmClient.clean_tool_call_assistant_messages(messages_cleaned)
 
             if model_to_use.provider_name == LlmProviderType.OPENAI:
-                model_cast = cast(OpenAiProvider, model_to_use)
+                openai_model = cast(OpenAiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for OpenAI")
@@ -1903,7 +1905,7 @@ class LlmClient:
                     else None
                 )
 
-                return model_cast.generate_text(
+                return openai_model.generate_text(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -1916,8 +1918,8 @@ class LlmClient:
                     reasoning_effort=resolved.reasoning_effort,
                 )
             elif model_to_use.provider_name == LlmProviderType.ANTHROPIC:
-                model_cast = cast(AnthropicProvider, model_to_use)
-                return model_cast.generate_text(
+                anthropic_model = cast(AnthropicProvider, model_to_use)
+                return anthropic_model.generate_text(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -1928,7 +1930,7 @@ class LlmClient:
                     reasoning_effort=resolved.reasoning_effort,
                 )
             elif model_to_use.provider_name == LlmProviderType.GEMINI:
-                model_cast = cast(GeminiProvider, model_to_use)
+                gemini_model = cast(GeminiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
@@ -1942,7 +1944,7 @@ class LlmClient:
                     else None
                 )
 
-                return model_cast.generate_text(
+                return gemini_model.generate_text(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -2021,7 +2023,7 @@ class LlmClient:
             messages_cleaned = LlmClient.clean_message_content(messages if messages else [])
 
             if model_to_use.provider_name == LlmProviderType.OPENAI:
-                model_cast = cast(OpenAiProvider, model_to_use)
+                openai_model = cast(OpenAiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for OpenAI")
@@ -2036,7 +2038,7 @@ class LlmClient:
                     else None
                 )
 
-                return model_cast.generate_structured(
+                return openai_model.generate_structured(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -2049,10 +2051,9 @@ class LlmClient:
                     reasoning_effort=resolved.reasoning_effort,
                 )
             elif model_to_use.provider_name == LlmProviderType.ANTHROPIC:
-                model_cast = cast(AnthropicProvider, model_to_use)
                 raise ValueError("Structured generation is not supported for Anthropic provider")
             elif model_to_use.provider_name == LlmProviderType.GEMINI:
-                model_cast = cast(GeminiProvider, model_to_use)
+                gemini_model = cast(GeminiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
@@ -2066,7 +2067,7 @@ class LlmClient:
                     else None
                 )
 
-                return model_cast.generate_structured(
+                return gemini_model.generate_structured(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -2154,7 +2155,7 @@ class LlmClient:
 
             # Get the appropriate stream generator based on provider
             if model_to_use.provider_name == LlmProviderType.OPENAI:
-                model_cast = cast(OpenAiProvider, model_to_use)
+                openai_model = cast(OpenAiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for OpenAI")
@@ -2168,7 +2169,7 @@ class LlmClient:
                     else None
                 )
 
-                return model_cast.generate_text_stream(
+                return openai_model.generate_text_stream(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -2182,8 +2183,8 @@ class LlmClient:
                     inactivity_timeout=resolved.inactivity_timeout,
                 )
             elif model_to_use.provider_name == LlmProviderType.ANTHROPIC:
-                model_cast = cast(AnthropicProvider, model_to_use)
-                return model_cast.generate_text_stream(
+                anthropic_model = cast(AnthropicProvider, model_to_use)
+                return anthropic_model.generate_text_stream(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -2196,7 +2197,7 @@ class LlmClient:
                     inactivity_timeout=resolved.inactivity_timeout,
                 )
             elif model_to_use.provider_name == LlmProviderType.GEMINI:
-                model_cast = cast(GeminiProvider, model_to_use)
+                gemini_model = cast(GeminiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
@@ -2210,7 +2211,7 @@ class LlmClient:
                     else None
                 )
 
-                return model_cast.generate_text_stream(
+                return gemini_model.generate_text_stream(
                     max_tokens=resolved.max_tokens,
                     messages=messages_cleaned,
                     prompt=prompt,
@@ -2235,7 +2236,10 @@ class LlmClient:
                     regions_to_try = [base_model.region]
                 else:
                     region_preference = base_model.get_region_preference()
-                    regions_to_try = region_preference if region_preference else [None]
+                    regions_to_try = region_preference if region_preference else []
+
+                if not regions_to_try:
+                    raise ValueError(f"No regions to run for model {base_model.model_name}")
 
                 # Try each region for this model
                 for j, region in enumerate(regions_to_try):
@@ -2344,8 +2348,8 @@ class LlmClient:
             )
 
             if model_to_use.provider_name == LlmProviderType.GEMINI:
-                model_cast = cast(GeminiProvider, model_to_use)
-                return model_cast.search_the_web(
+                gemini_model = cast(GeminiProvider, model_to_use)
+                return gemini_model.search_the_web(
                     prompt, temperature=resolved.temperature, seed=resolved.seed
                 )
             else:
@@ -2420,16 +2424,16 @@ class LlmClient:
         thinking_signature: str | None = None,
     ) -> Message:
         if model.provider_name == LlmProviderType.OPENAI:
-            model = cast(OpenAiProvider, model)
-            return model.construct_message_from_stream(content_chunks, tool_calls)
+            openai_model = cast(OpenAiProvider, model)
+            return openai_model.construct_message_from_stream(content_chunks, tool_calls)
         elif model.provider_name == LlmProviderType.ANTHROPIC:
-            model = cast(AnthropicProvider, model)
-            return model.construct_message_from_stream(
+            anthropic_model = cast(AnthropicProvider, model)
+            return anthropic_model.construct_message_from_stream(
                 content_chunks, tool_calls, thinking_content_chunks, thinking_signature
             )
         elif model.provider_name == LlmProviderType.GEMINI:
-            model = cast(GeminiProvider, model)
-            return model.construct_message_from_stream(content_chunks, tool_calls)
+            gemini_model = cast(GeminiProvider, model)
+            return gemini_model.construct_message_from_stream(content_chunks, tool_calls)
         else:
             raise ValueError(f"Invalid provider: {model.provider_name}")
 
@@ -2438,8 +2442,8 @@ class LlmClient:
         self, contents: str, display_name: str, model: LlmProvider, ttl: int = 3600
     ) -> str:
         if model.provider_name == LlmProviderType.GEMINI:
-            model = cast(GeminiProvider, model)
-            cache_name = model.create_cache(contents, display_name, ttl)
+            gemini_model = cast(GeminiProvider, model)
+            cache_name = gemini_model.create_cache(contents, display_name, ttl)
             if not cache_name:
                 raise ValueError("Failed to create cache")
             return cache_name
@@ -2449,8 +2453,8 @@ class LlmClient:
     @sentry_sdk.trace
     def get_cache(self, display_name: str, model: LlmProvider) -> str | None:
         if model.provider_name == LlmProviderType.GEMINI:
-            model = cast(GeminiProvider, model)
-            return model.get_cache(display_name)
+            gemini_model = cast(GeminiProvider, model)
+            return gemini_model.get_cache(display_name)
         else:
             raise ValueError("Manual cache retrieval is only supported for Gemini.")
 
