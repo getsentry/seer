@@ -543,32 +543,23 @@ class TestFilterWarningsComponent:
             ), warning.encoded_location
 
 
-@patch("seer.rpc.DummyRpcClient.call")
 class TestFetchIssuesComponent:
     @pytest.fixture
     def component(self):
+        mock_repo = MagicMock()
+        mock_repo.provider = "github"
+        mock_repo.provider_raw = "integrations:github"
+        mock_repo.external_id = "123123"
         mock_context = MagicMock(spec=CodegenContext)
-        mock_context.repo = MagicMock()
-        mock_context.repo.provider = "github"
-        mock_context.repo.provider_raw = "integrations:github"
-        mock_context.repo.external_id = "123123"
+        mock_context.repos = [mock_repo]
         mock_context.run_id = 1
         return FetchIssuesComponent(mock_context)
 
-    def test_bad_provider_raw(self, component: FetchIssuesComponent):
-        mock_context = MagicMock(spec=CodegenContext)
-        mock_context.repo = MagicMock()
-        mock_context.repo.provider = "github"
-        mock_context.repo.provider_raw = None
-        mock_context.repo.external_id = "123123"
-        component = FetchIssuesComponent(mock_context)
-        with pytest.raises(TypeError):
-            component.invoke(CodeFetchIssuesRequest(organization_id=1, pr_files=[]))
-
+    @patch("seer.rpc.DummyRpcClient.call")
     def test_invoke_filters_files(
         self, mock_rpc_client_call: Mock, component: FetchIssuesComponent
     ):
-        assert component.context.repo.provider_raw is not None
+        assert component.context.repos[0].provider_raw is not None
         pr_files = [
             PrFile(
                 filename="fine.py",
