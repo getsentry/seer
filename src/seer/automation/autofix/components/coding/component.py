@@ -122,7 +122,8 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
 
     @observe(name="Code")
     @sentry_sdk.trace
-    def invoke(self, request: CodingRequest) -> None:
+    @inject
+    def invoke(self, request: CodingRequest, config: AppConfig = injected) -> None:
         with BaseTools(self.context) as tools:
             memory = request.initial_memory
             custom_solution = request.solution if isinstance(request.solution, str) else None
@@ -170,10 +171,13 @@ class CodingComponent(BaseComponent[CodingRequest, CodingOutput]):
             response = agent.run(
                 RunConfig(
                     system_prompt=CodingPrompts.format_system_msg(),
-                    model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
                     memory_storage_key="code",
                     run_name="Code",
                     max_iterations=64,
+                    models=[
+                        AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        AnthropicProvider.model("claude-3-5-sonnet-v2@20241022"),
+                    ],
                 ),
             )
 
