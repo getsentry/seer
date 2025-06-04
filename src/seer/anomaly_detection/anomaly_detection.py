@@ -291,7 +291,7 @@ class AnomalyDetection(BaseModel):
             )
 
         # Confirm that there is enough data (after purge)
-        min_data = self._min_required_timesteps(historic.config.time_period)
+        min_data = self._min_required_history(historic.config.time_period)
         if len(historic.timeseries.timestamps) < min_data:
             # If there is not enough data, we will not detect any anomalies. We still should save the timepoint
             # so that we can detect anomalies in the future.
@@ -406,7 +406,7 @@ class AnomalyDetection(BaseModel):
 
         return ts_external, streamed_anomalies_online
 
-    def _min_required_timesteps(self, time_period, min_num_days=7):
+    def _min_required_history(self, time_period, min_num_days=7):
         return int(min_num_days * 24 * 60 / time_period)
 
     def _shift_current_by(
@@ -448,7 +448,7 @@ class AnomalyDetection(BaseModel):
         Returns:
         Tuple with input timeseries and identified anomalies
         """
-        self._check_length(ts_with_history, ad_config)
+        self._validate_combo_detection_payload(ts_with_history, ad_config)
 
         orig_curr_len = len(ts_with_history.current)
         logger.info(
@@ -613,8 +613,9 @@ class AnomalyDetection(BaseModel):
             max_stream_detection_len,
         )
 
-    def _check_length(self, ts_with_history, ad_config):
-        min_len = self._min_required_timesteps(ad_config.time_period)
+    def _validate_combo_detection_payload(self, ts_with_history, ad_config):
+        # Check if we have enough history data
+        min_len = self._min_required_history(ad_config.time_period)
         if len(ts_with_history.history) < min_len:
             logger.warning(
                 "insufficient_history_data",
@@ -624,6 +625,34 @@ class AnomalyDetection(BaseModel):
                 },
             )
             raise ClientError("Insufficient history data")
+
+        # Check if we have enough current data
+        if len(ts_with_history.current) < 10:
+            logger.warning(
+                "insufficient_current_data",
+                extra={
+                    "num_datapoints": len(ts_with_history.current),
+                    "minimum_required": 10,
+                },
+            )
+            raise ClientError("Insufficient current data")
+
+        self._validate_time_series_duration(ts_with_history)
+
+    def _validate_time_series_duration(self, ts_with_history):
+        # calculate the duration of history and current
+        history_duration = (
+            ts_with_history.history[1].timestamp - ts_with_history.history[0].timestamp
+        )
+        current_duration = (
+            ts_with_history.current[1].timestamp - ts_with_history.current[0].timestamp
+        )
+        if history_duration != current_duration:
+            logger.warning(
+                "inconsistent_duration",
+                extra={"history_duration": history_duration, "current_duration": current_duration},
+            )
+            raise ClientError("Inconsistent time series duration")
 
     def _update_anomalies(
         self,
@@ -683,7 +712,7 @@ class AnomalyDetection(BaseModel):
         sentry_sdk.set_tag("alert_source_id", request.alert.source_id)
         sentry_sdk.set_tag("alert_source_type", request.alert.source_type)
         # Ensure we have at least 7 days of data in the time series
-        min_len = self._min_required_timesteps(request.config.time_period)
+        min_len = self._min_required_history(request.config.time_period)
         if len(request.timeseries) < min_len:
             logger.error(
                 "insufficient_timeseries_data",

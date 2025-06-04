@@ -427,7 +427,7 @@ class TestAnomalyDetection(unittest.TestCase):
             "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
         )
 
-        n = 5
+        n = 10
         for i, ts_history in enumerate(loaded_synthetic_data.timeseries):
 
             # Generate new observation window of n points which are the same as the last point
@@ -455,6 +455,69 @@ class TestAnomalyDetection(unittest.TestCase):
             assert isinstance(response.timeseries, list)
             assert len(response.timeseries) == n
             assert isinstance(response.timeseries[0], TimeSeriesPoint)
+
+    def test_combo_detect_insufficient_current(self):
+
+        loaded_synthetic_data = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+
+        n = 5
+        ts_history = loaded_synthetic_data.timeseries[0]
+
+        # Generate new observation window of n points which are the same as the last point
+        ts_current = []
+        last_history_timestamp = ts_history[-1].timestamp
+        last_history_value = ts_history[-1].value
+        for j in range(1, n + 1):
+            ts_current.append(
+                TimeSeriesPoint(
+                    timestamp=last_history_timestamp
+                    + 15 * 60 * j,  # timestamps with 15 min intervals (in seconds)
+                    value=last_history_value,
+                )
+            )
+
+        context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
+
+        request = DetectAnomaliesRequest(
+            organization_id=0, project_id=0, config=self.config_15, context=context
+        )
+        with self.assertRaises(ClientError) as e:
+            AnomalyDetection().detect_anomalies(request=request)
+        assert "Insufficient current data" in str(e.exception)
+
+    def test_combo_detect_duration_mismatch(self):
+        loaded_synthetic_data = convert_synthetic_ts(
+            "tests/seer/anomaly_detection/test_data/synthetic_series", as_ts_datatype=True
+        )
+
+        n = 15
+        ts_history = loaded_synthetic_data.timeseries[0]
+
+        # Generate new observation window of n points which are the same as the last point
+        ts_current = []
+        last_history_timestamp = ts_history[-1].timestamp
+        last_history_value = ts_history[-1].value
+        for j in range(1, n + 1):
+            ts_current.append(
+                TimeSeriesPoint(
+                    timestamp=last_history_timestamp
+                    + 30
+                    * 60
+                    * j,  # timestamps with 30 min instead of 15 min intervals (in seconds)
+                    value=last_history_value,
+                )
+            )
+
+        context = TimeSeriesWithHistory(history=ts_history, current=ts_current)
+
+        request = DetectAnomaliesRequest(
+            organization_id=0, project_id=0, config=self.config_15, context=context
+        )
+        with self.assertRaises(ClientError) as e:
+            AnomalyDetection().detect_anomalies(request=request)
+        assert "Inconsistent time series duration" in str(e.exception)
 
     def test_detect_anomalies_combo_large_current(self):
         ts_history = self.ts_timepoints
@@ -513,6 +576,7 @@ class TestAnomalyDetection(unittest.TestCase):
 
         mock_batch_detect.side_effect = slow_function
         ts_history = self.ts_timepoints[:180]
+        duration = ts_history[1].timestamp - ts_history[0].timestamp
         n = 400
         last_history_timestamp = ts_history[-1].timestamp
         last_history_value = ts_history[-1].value
@@ -521,7 +585,7 @@ class TestAnomalyDetection(unittest.TestCase):
         for j in range(1, n + 1):
             ts_current.append(
                 TimeSeriesPoint(
-                    timestamp=last_history_timestamp + self.config_60.time_period * 60 * j,
+                    timestamp=last_history_timestamp + duration * j,
                     value=last_history_value,
                 )
             )
@@ -610,13 +674,14 @@ class TestAnomalyDetection(unittest.TestCase):
         ts_history = self.ts_timepoints[:180]
         n = 400
         last_history_timestamp = ts_history[-1].timestamp
+        duration = ts_history[1].timestamp - ts_history[0].timestamp
         last_history_value = ts_history[-1].value
         # Generate new observation window of n points which are the same as the last point
         ts_current = []
         for j in range(1, n + 1):
             ts_current.append(
                 TimeSeriesPoint(
-                    timestamp=last_history_timestamp + self.config_60.time_period * 60 * j,
+                    timestamp=last_history_timestamp + duration * j,
                     value=last_history_value,
                 )
             )
