@@ -1276,9 +1276,9 @@ class GeminiProvider(BaseLlmProvider):
             for _ in range(max_retries + 1):
                 response = client.models.generate_content(
                     model=self.model_name,
-                    system_instruction=final_system_prompt,
                     contents=message_dicts,  # type: ignore[arg-type]
                     config=GenerateContentConfig(
+                        system_instruction=final_system_prompt,
                         tools=tool_dicts,
                         response_modalities=["TEXT"],
                         temperature=temperature or 0.0,
@@ -2552,10 +2552,18 @@ class LlmClient:
     ) -> str:
         if model.provider_name == LlmProviderType.GEMINI:
             gemini_model = cast(GeminiProvider, model)
-            cache_name = gemini_model.create_cache(contents, display_name, ttl)
-            if not cache_name:
-                raise ValueError("Failed to create cache")
-            return cache_name
+
+            def _create_cache(model_to_use: GeminiProvider):
+                cache_name = model_to_use.create_cache(contents, display_name, ttl)
+                if not cache_name:
+                    raise ValueError("Failed to create cache")
+                return cache_name
+
+            return self._execute_with_fallback(
+                models=[gemini_model],
+                operation_name="Create cache",
+                operation_func=_create_cache,
+            )
         else:
             raise ValueError("Manual cache creation is only supported for Gemini.")
 
