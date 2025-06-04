@@ -4,6 +4,9 @@ from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
+DEFAULT_FIRST_TOKEN_TIMEOUT = 40.0
+DEFAULT_INACTIVITY_TIMEOUT = 20.0
+
 
 class ToolCall(BaseModel):
     id: Optional[str] = None
@@ -93,11 +96,33 @@ class LlmGenerateStructuredResponse(Generic[StructuredOutputType]):
 
 class LlmProviderDefaults(BaseModel):
     temperature: float | None = None
+    max_tokens: int | None = None
+    reasoning_effort: str | None = None
+    seed: int | None = None
+    timeout: float | None = None
+    first_token_timeout: float | None = None
+    inactivity_timeout: float | None = None
+
+
+class ResolvedParameters(BaseModel):
+    """
+    Resolved parameters after applying precedence: function params > model defaults > provider defaults.
+    This model provides type safety and better IDE support compared to using dictionaries.
+    """
+
+    temperature: float | None = None
+    max_tokens: int | None = None
+    reasoning_effort: str | None = None
+    timeout: float | None = None
+    seed: int | None = None
+    first_token_timeout: float = DEFAULT_FIRST_TOKEN_TIMEOUT
+    inactivity_timeout: float = DEFAULT_INACTIVITY_TIMEOUT
 
 
 class LlmModelDefaultConfig(BaseModel):
     match: str
     defaults: LlmProviderDefaults
+    region_preference: dict[str, list[str]] | None = None
 
 
 class LlmRefusalError(Exception):

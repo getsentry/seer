@@ -38,6 +38,8 @@ from openai.types.chat import ChatCompletionMessageParam, ChatCompletionToolPara
 from requests.exceptions import ChunkedEncodingError
 
 from seer.automation.agent.models import (
+    DEFAULT_FIRST_TOKEN_TIMEOUT,
+    DEFAULT_INACTIVITY_TIMEOUT,
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
     LlmModelDefaultConfig,
@@ -50,6 +52,7 @@ from seer.automation.agent.models import (
     LlmStreamInactivityTimeoutError,
     LlmStreamTimeoutError,
     Message,
+    ResolvedParameters,
     StructuredOutputType,
     ToolCall,
     Usage,
@@ -78,6 +81,24 @@ class BaseLlmProvider:
         for config in cls.default_configs:
             if re.match(config.match, model_name):
                 return config
+        return None
+
+    @inject
+    def get_region_preference(self, app_config: AppConfig = injected):
+        config = self.get_config(self.model_name)
+        if config is None:
+            return None
+
+        if config.region_preference is None:
+            return None
+
+        if app_config.SENTRY_REGION != "de":
+            # All regions except DE will use the US region preference
+            return config.region_preference["us"]
+
+        if app_config.SENTRY_REGION in config.region_preference:
+            return config.region_preference[app_config.SENTRY_REGION]
+
         return None
 
 
@@ -158,7 +179,7 @@ class OpenAiProvider(BaseLlmProvider):
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
             match=r"^o.*",
-            defaults=LlmProviderDefaults(temperature=1.0),
+            defaults=LlmProviderDefaults(temperature=1.0, first_token_timeout=90.0),
         ),
         LlmModelDefaultConfig(
             match=r".*",
@@ -166,24 +187,64 @@ class OpenAiProvider(BaseLlmProvider):
         ),
     ]
 
-    @staticmethod
-    def get_client() -> openai.Client:
-        return openai.Client(max_retries=4)
+    @inject
+    def get_client(self, app_config: AppConfig = injected) -> openai.Client:
+        if app_config.SENTRY_REGION == "de":
+            raise ValueError("OpenAI is not available in de")
+        if self.region:
+            raise ValueError("Cannot set region for OpenAiProvider")
+
+        client = openai.Client(max_retries=4)
+
+        # Apply backoff retry mechanism to client methods
+        retrier = backoff_on_exception(
+            OpenAiProvider.is_completion_exception_retryable, max_tries=4
+        )
+        client.chat.completions.create = retrier(client.chat.completions.create)  # type: ignore[method-assign]
+        client.beta.chat.completions.parse = retrier(client.beta.chat.completions.parse)  # type: ignore[method-assign]
+
+        return client
 
     @classmethod
-    def model(cls, model_name: str) -> "OpenAiProvider":
-        model_config = cls._get_config(model_name)
-        return cls(
-            model_name=model_name,
-            defaults=model_config.defaults if model_config else None,
+    def model(
+        cls,
+        model_name: str,
+        region: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        reasoning_effort: str | None = None,
+        seed: int | None = None,
+    ) -> "OpenAiProvider":
+        model_config = cls.get_config(model_name)
+
+        # Merge model-level config with default config
+        base_defaults = model_config.defaults if model_config else None
+
+        # Create new defaults that override base defaults with model-level config
+        merged_defaults = LlmProviderDefaults(
+            temperature=(
+                temperature
+                if temperature is not None
+                else (base_defaults.temperature if base_defaults else None)
+            ),
+            max_tokens=(
+                max_tokens
+                if max_tokens is not None
+                else (base_defaults.max_tokens if base_defaults else None)
+            ),
+            reasoning_effort=(
+                reasoning_effort
+                if reasoning_effort is not None
+                else (base_defaults.reasoning_effort if base_defaults else None)
+            ),
+            seed=seed if seed is not None else (base_defaults.seed if base_defaults else None),
         )
 
-    @classmethod
-    def _get_config(cls, model_name: str):
-        for config in cls.default_configs:
-            if re.match(config.match, model_name):
-                return config
-        return None
+        return cls(
+            model_name=model_name,
+            defaults=merged_defaults,
+            region=region,
+        )
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
@@ -531,6 +592,7 @@ class AnthropicProvider(BaseLlmProvider):
         LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={"us": ["europe-west4", "global"], "de": ["europe-west4"]},
         ),
     ]
 
@@ -539,58 +601,82 @@ class AnthropicProvider(BaseLlmProvider):
         project_id = app_config.GOOGLE_CLOUD_PROJECT
         max_retries = 8
 
-        supported_models_on_global_endpoint: list[str] = [
-            # NOTE: disabling global endpoint while we're on provisioned throughput
-            # "claude-3-5-sonnet-v2@20241022",
-            # "claude-3-7-sonnet@20250219",
-        ]
-
         # Use provided region if available, otherwise fall back to automatic region selection
         if self.region:
             selected_region = self.region
-        elif app_config.DEV:
-            selected_region = "us-east5"
-        elif app_config.SENTRY_REGION == "de":
-            selected_region = "europe-west4"
-        elif (
-            app_config.SENTRY_REGION == "us"
-            or self.model_name not in supported_models_on_global_endpoint
-        ):
-            selected_region = "europe-west4"
-        else:
-            selected_region = "global"
+
+        if not selected_region:
+            raise ValueError(
+                f"No region selected for model {self.model_name}. AnthropicProvider requires explicit region selection."
+            )
+        if app_config.SENTRY_REGION == "de" and "europe" not in selected_region:
+            raise ValueError(
+                f"Cannot route to non europe region {selected_region} for model {self.model_name} while SENTRY_REGION is set to de"
+            )
 
         base_url = None
         if selected_region == "global":
             base_url = "https://aiplatform.googleapis.com/v1/"
 
-        return anthropic.AnthropicVertex(
+        client = anthropic.AnthropicVertex(
             project_id=project_id,
             region=selected_region,
             base_url=base_url,
             max_retries=max_retries,
         )
 
-    @classmethod
-    def model(cls, model_name: str, region: str | None = None) -> "AnthropicProvider":
-        model_config = cls._get_config(model_name)
-        return cls(
-            model_name=model_name,
-            defaults=model_config.defaults if model_config else None,
-            region=region,
+        # Apply backoff retry mechanism to client methods
+        retrier = backoff_on_exception(
+            AnthropicProvider.is_completion_exception_retryable, max_tries=4
         )
+        client.messages.create = retrier(client.messages.create)  # type: ignore[method-assign]
+
+        return client
 
     @classmethod
-    def _get_config(cls, model_name: str):
-        for config in cls.default_configs:
-            if re.match(config.match, model_name):
-                return config
-        return None
+    def model(
+        cls,
+        model_name: str,
+        region: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        reasoning_effort: str | None = None,
+        timeout: float | None = None,
+    ) -> "AnthropicProvider":
+        model_config = cls.get_config(model_name)
+
+        # Merge model-level config with default config
+        base_defaults = model_config.defaults if model_config else None
+
+        # Create new defaults that override base defaults with model-level config
+        merged_defaults = LlmProviderDefaults(
+            temperature=(
+                temperature
+                if temperature is not None
+                else (base_defaults.temperature if base_defaults else None)
+            ),
+            max_tokens=(
+                max_tokens
+                if max_tokens is not None
+                else (base_defaults.max_tokens if base_defaults else None)
+            ),
+            reasoning_effort=(
+                reasoning_effort
+                if reasoning_effort is not None
+                else (base_defaults.reasoning_effort if base_defaults else None)
+            ),
+            timeout=(
+                timeout
+                if timeout is not None
+                else (base_defaults.timeout if base_defaults else None)
+            ),
+        )
+
+        return cls(model_name=model_name, defaults=merged_defaults, region=region)
 
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
         retryable_errors = (
-            "overloaded_error",
             "Internal server error",
             "not_found_error",
             "404, 'message': 'Publisher Model",
@@ -954,45 +1040,47 @@ class AnthropicProvider(BaseLlmProvider):
 @dataclass
 class GeminiProvider(BaseLlmProvider):
     provider_name = LlmProviderType.GEMINI
+    local_regions_only: bool = False
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
+            match=r"-preview-",  # contains the substring "-preview-"
+            defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": ["us-central1", "global"],
+                # Leave blank for de as preview models are not available in de
+            },
+        ),
+        LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": ["us-central1", "us-east1", "global"],
+                "de": ["europe-west1", "europe-west4"],
+            },
         ),
     ]
 
-    @inject
-    def get_client(
-        self, use_local_endpoint: bool = False, app_config: AppConfig = injected
-    ) -> genai.Client:
-        supported_models_on_global_endpoint: list[str] = [
-            "gemini-2.0-flash-lite-001",
-            "gemini-2.5-pro-preview-05-06",
-            # NOTE: disabling global endpoint for rest while we're on provisioned throughput
-            # "gemini-2.0-flash-001",
-            # "gemini-2.5-flash-preview-04-17",
-            # "gemini-2.5-pro-preview-03-25",
-        ]
+    def get_region_preference(self) -> list[str]:
+        region_preference = super().get_region_preference()
+        if self.local_regions_only:
+            return [region for region in region_preference if region != "global"]
+        return region_preference
 
-        # Use provided region if available, otherwise fall back to automatic region selection
-        if self.region:
-            region = self.region
-        else:
-            region = (
-                "europe-west1"
-                if app_config.SENTRY_REGION == "de"
-                else (
-                    "global"
-                    if self.model_name in supported_models_on_global_endpoint
-                    and not use_local_endpoint
-                    else "us-central1"
-                )
+    @inject
+    def get_client(self, app_config: AppConfig = injected) -> genai.Client:
+        if not self.region:
+            raise ValueError(
+                f"No region selected for model {self.model_name}. GeminiProvider requires explicit region selection."
+            )
+        if app_config.SENTRY_REGION == "de" and "europe" not in self.region:
+            raise ValueError(
+                f"Cannot route to non europe region {self.region} for model {self.model_name} while SENTRY_REGION is set to de"
             )
 
         client = genai.Client(
             vertexai=True,
-            location=region,
+            location=self.region,
         )
         # The gemini client currently doesn't have a built-in retry mechanism.
         retrier = backoff_on_exception(
@@ -1002,20 +1090,41 @@ class GeminiProvider(BaseLlmProvider):
         return client
 
     @classmethod
-    def model(cls, model_name: str, region: str | None = None) -> "GeminiProvider":
-        model_config = cls._get_config(model_name)
-        return cls(
-            model_name=model_name,
-            defaults=model_config.defaults if model_config else None,
-            region=region,
+    def model(
+        cls,
+        model_name: str,
+        region: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        seed: int | None = None,
+        local_regions_only: bool = False,
+    ) -> "GeminiProvider":
+        model_config = cls.get_config(model_name)
+
+        # Merge model-level config with default config
+        base_defaults = model_config.defaults if model_config else None
+
+        # Create new defaults that override base defaults with model-level config
+        merged_defaults = LlmProviderDefaults(
+            temperature=(
+                temperature
+                if temperature is not None
+                else (base_defaults.temperature if base_defaults else None)
+            ),
+            max_tokens=(
+                max_tokens
+                if max_tokens is not None
+                else (base_defaults.max_tokens if base_defaults else None)
+            ),
+            seed=seed if seed is not None else (base_defaults.seed if base_defaults else None),
         )
 
-    @classmethod
-    def _get_config(cls, model_name: str):
-        for config in cls.default_configs:
-            if re.match(config.match, model_name):
-                return config
-        return None
+        return cls(
+            model_name=model_name,
+            defaults=merged_defaults,
+            region=region,
+            local_regions_only=local_regions_only,
+        )
 
     @observe(as_type="generation", name="Gemini Generation with Grounding")
     @sentry_sdk.trace
@@ -1049,8 +1158,6 @@ class GeminiProvider(BaseLlmProvider):
     @staticmethod
     def is_completion_exception_retryable(exception: Exception) -> bool:
         retryable_errors = (
-            "Resource exhausted. Please try again later.",
-            "429 RESOURCE_EXHAUSTED",
             # https://sentry.sentry.io/issues/6301072208
             "TLS/SSL connection has been closed",
             "Max retries exceeded with url",
@@ -1088,7 +1195,6 @@ class GeminiProvider(BaseLlmProvider):
         max_tokens: int | None = None,
         cache_name: str | None = None,
         thinking_budget: int | None = None,
-        use_local_endpoint: bool = False,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -1097,7 +1203,7 @@ class GeminiProvider(BaseLlmProvider):
             tools=tools,
         )
 
-        client = self.get_client(use_local_endpoint)
+        client = self.get_client()
 
         max_retries = 2  # Gemini sometimes doesn't fill in response.parsed
         for _ in range(max_retries + 1):
@@ -1210,6 +1316,7 @@ class GeminiProvider(BaseLlmProvider):
                 inactivity_timeout=inactivity_timeout,
                 on_cleanup=cleanup,
             ):
+
                 # Handle function calls
                 if (
                     chunk.candidates
@@ -1501,7 +1608,7 @@ class GeminiProvider(BaseLlmProvider):
         Returns:
             Cache name as specified by Gemini.
         """
-        client = self.get_client(use_local_endpoint=True)
+        client = self.get_client()
 
         # We cannot get the cache name from the display name, only from the generated name which we do not have betweeen sessions
         # So we must do an O(n) search to find the cache by display name
@@ -1520,8 +1627,9 @@ class GeminiProvider(BaseLlmProvider):
         )
         return cache.name
 
+    @sentry_sdk.trace
     def get_cache(self, display_name: str) -> str | None:
-        client = self.get_client(use_local_endpoint=True)
+        client = self.get_client()
 
         # We cannot get the cache name from the display_name, only from the generated name which we do not have betweeen sessions
         # So we must do an O(n) search to find the cache by display name
@@ -1536,6 +1644,224 @@ LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
 
 class LlmClient:
+    @staticmethod
+    def _resolve_parameters(
+        *,
+        defaults: LlmProviderDefaults | None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        seed: int | None = None,
+        reasoning_effort: str | None = None,
+        timeout: float | None = None,
+        first_token_timeout: float | None = None,
+        inactivity_timeout: float | None = None,
+    ) -> ResolvedParameters:
+        """
+        Resolve parameters using precedence: function params > model defaults > provider defaults.
+        Returns a ResolvedParameters Pydantic model with resolved parameter values.
+        """
+        return ResolvedParameters(
+            temperature=(
+                temperature
+                if temperature is not None
+                else (
+                    defaults.temperature if defaults and defaults.temperature is not None else None
+                )
+            ),
+            max_tokens=(
+                max_tokens
+                if max_tokens is not None
+                else (defaults.max_tokens if defaults and defaults.max_tokens is not None else None)
+            ),
+            seed=(
+                seed
+                if seed is not None
+                else (defaults.seed if defaults and defaults.seed is not None else None)
+            ),
+            reasoning_effort=(
+                reasoning_effort
+                if reasoning_effort is not None
+                else (
+                    defaults.reasoning_effort
+                    if defaults and defaults.reasoning_effort is not None
+                    else None
+                )
+            ),
+            timeout=(
+                timeout
+                if timeout is not None
+                else (defaults.timeout if defaults and defaults.timeout is not None else None)
+            ),
+            first_token_timeout=(
+                first_token_timeout
+                if first_token_timeout is not None
+                else (
+                    defaults.first_token_timeout
+                    if defaults and defaults.first_token_timeout is not None
+                    else DEFAULT_FIRST_TOKEN_TIMEOUT
+                )
+            ),
+            inactivity_timeout=(
+                inactivity_timeout
+                if inactivity_timeout is not None
+                else (
+                    defaults.inactivity_timeout
+                    if defaults and defaults.inactivity_timeout is not None
+                    else DEFAULT_INACTIVITY_TIMEOUT
+                )
+            ),
+        )
+
+    @staticmethod
+    def _is_fallback_worthy_exception(exception: Exception, provider: LlmProvider) -> bool:
+        """
+        Determine if an exception warrants trying the next model in a fallback sequence.
+        Currently targets 429 (rate limit) and 422 (unprocessable entity) errors.
+        """
+
+        if isinstance(exception, LlmStreamTimeoutError):
+            return True
+
+        if provider.provider_name == LlmProviderType.OPENAI:
+            return (
+                isinstance(exception, openai.RateLimitError)
+                or (isinstance(exception, openai.BadRequestError) and "422" in str(exception))
+                or (
+                    isinstance(exception, openai.APIStatusError)
+                    and exception.status_code in [422, 429]
+                )
+            )
+        elif provider.provider_name == LlmProviderType.ANTHROPIC:
+            return (
+                isinstance(exception, anthropic.RateLimitError)
+                or (isinstance(exception, anthropic.BadRequestError) and "422" in str(exception))
+                or (
+                    isinstance(exception, anthropic.APIStatusError)
+                    and exception.status_code in [422, 429]
+                )
+                or any(
+                    message in str(exception)
+                    for message in [
+                        "overloaded_error",
+                        "Quota exceeded",
+                    ]
+                )
+            )
+        elif provider.provider_name == LlmProviderType.GEMINI:
+            return (
+                isinstance(exception, ClientError)
+                and exception.code in [422, 429]
+                or any(
+                    message in str(exception)
+                    for message in [
+                        "Resource exhausted. Please try again later.",
+                        "429 RESOURCE_EXHAUSTED",
+                    ]
+                )
+            )
+
+    def _execute_with_fallback(
+        self,
+        models: list[LlmProvider],
+        operation_name: str,
+        operation_func: Callable[[LlmProvider], Any],
+        on_fallback_used_callback: Callable[[], None] | None = None,
+    ) -> Any:
+        """
+        Execute an operation with fallback through a list of models.
+        Tries each model in sequence if the previous one fails with a fallback-worthy exception.
+        For each model, tries all regions in its region preference before moving to the next model.
+        """
+        for i, base_model in enumerate(models):
+            regions_to_try = self._get_regions_to_try(base_model)
+
+            if (
+                not regions_to_try or (len(regions_to_try) == 1 and regions_to_try[0] is None)
+            ) and base_model.provider_name != LlmProviderType.OPENAI:
+                logger.warning(f"No regions to run for model {base_model.model_name}.")
+
+            # Try each region for this model
+            for j, region in enumerate(regions_to_try):
+                # Create a copy of the model with the specific region
+                model_to_use = type(base_model)(
+                    model_name=base_model.model_name,
+                    defaults=base_model.defaults,
+                    region=region,
+                )
+
+                try:
+                    self._set_fallback_sentry_tags(model_to_use, i + 1, j + 1, len(models), region)
+
+                    return operation_func(model_to_use)
+
+                except Exception as e:
+                    if self._is_fallback_worthy_exception(e, model_to_use):
+                        is_last_region = j == len(regions_to_try) - 1
+                        is_last_model = i == len(models) - 1
+
+                        if not is_last_region:
+                            # Try next region for this model
+                            if on_fallback_used_callback:
+                                on_fallback_used_callback()
+
+                            logger.warning(
+                                f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                f"due to {type(e).__name__}: {str(e)}. "
+                                f"Trying next region ({j + 2}/{len(regions_to_try)}): {regions_to_try[j + 1]}"
+                            )
+                            continue
+                        elif not is_last_model:
+                            # Try next model
+                            if on_fallback_used_callback:
+                                on_fallback_used_callback()
+
+                            logger.warning(
+                                f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
+                                f"due to {type(e).__name__}: {str(e)}. "
+                                f"Trying next model ({i + 2}/{len(models)}): {models[i + 1].provider_name} '{models[i + 1].model_name}'"
+                            )
+                            break  # Break out of region loop to try next model
+                        else:
+                            # Last model and last region - fail
+                            logger.error(
+                                f"{operation_name} failed with all {len(models)} models and all regions. "
+                                f"Last attempt with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                f"failed with {type(e).__name__}: {str(e)}"
+                            )
+                            raise e
+                    else:
+                        # Non-fallback-worthy exception, fail immediately
+                        logger.error(
+                            f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                            f"due to non-retryable {type(e).__name__}: {str(e)}"
+                        )
+                        raise e
+
+        raise ValueError("No models provided for fallback execution")
+
+    def _get_regions_to_try(self, model: LlmProvider) -> list[str | None]:
+        """Get the list of regions to try for a given model."""
+        if model.region is not None:
+            return [model.region]
+        else:
+            region_preference = model.get_region_preference()
+            return region_preference if region_preference else [None]
+
+    def _set_fallback_sentry_tags(
+        self,
+        model: LlmProvider,
+        model_attempt: int,
+        region_attempt: int,
+        total_models: int,
+        current_region: str | None,
+    ) -> None:
+        """Set Sentry tags for fallback tracking."""
+        sentry_sdk.set_tag("llm_provider", model.provider_name)
+        sentry_sdk.set_tag("llm_model_attempt", model_attempt)
+        sentry_sdk.set_tag("llm_model_region_attempt", region_attempt)
+        sentry_sdk.set_tag("llm_total_models", total_models)
+        sentry_sdk.set_tag("llm_current_region", current_region)
+
     @observe(name="Generate Text")
     @sentry_sdk.trace
     def generate_text(
@@ -1543,7 +1869,8 @@ class LlmClient:
         *,
         prompt: str | None = None,
         messages: list[Message] | None = None,
-        model: LlmProvider,
+        model: LlmProvider | None = None,
+        models: list[LlmProvider] | None = None,
         system_prompt: str | None = None,
         tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
@@ -1553,69 +1880,115 @@ class LlmClient:
         timeout: float | None = None,
         predicted_output: str | None = None,
         reasoning_effort: str | None = None,
+        on_fallback_used_callback: Callable[[], None] | None = None,
     ) -> LlmGenerateTextResponse:
-        try:
+        # Validate input parameters
+        if models is not None and model is not None:
+            raise ValueError(
+                "Cannot specify both 'model' and 'models' parameters. Use 'models' for fallback functionality or 'model' for single model usage."
+            )
+
+        if models is None and model is None:
+            raise ValueError("Must specify either 'model' or 'models' parameter.")
+
+        # Convert single model to list for unified processing
+        models_to_try = models if models is not None else ([model] if model is not None else [])
+
+        if not models_to_try:
+            raise ValueError("At least one model must be provided.")
+
+        def _generate_text_operation(model_to_use: LlmProvider) -> LlmGenerateTextResponse:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
 
-            sentry_sdk.set_tag("llm_provider", model.provider_name)
+            resolved = self._resolve_parameters(
+                defaults=model_to_use.defaults,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                seed=seed,
+                reasoning_effort=reasoning_effort,
+                timeout=timeout,
+            )
 
-            defaults = model.defaults
-            default_temperature = defaults.temperature if defaults else None
-
-            messages = LlmClient.clean_message_content(messages if messages else [])
+            messages_cleaned = LlmClient.clean_message_content(messages if messages else [])
             if not tools:
-                messages = LlmClient.clean_tool_call_assistant_messages(messages)
+                messages_cleaned = LlmClient.clean_tool_call_assistant_messages(messages_cleaned)
 
-            if model.provider_name == LlmProviderType.OPENAI:
-                model = cast(OpenAiProvider, model)
+            if model_to_use.provider_name == LlmProviderType.OPENAI:
+                openai_model = cast(OpenAiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for OpenAI")
 
-                return model.generate_text(
-                    max_tokens=max_tokens,
-                    messages=messages,
+                function_tools = (
+                    cast(
+                        list[FunctionTool],
+                        [tool for tool in tools if isinstance(tool, FunctionTool)],
+                    )
+                    if tools
+                    else None
+                )
+
+                return openai_model.generate_text(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
                     prompt=prompt,
                     system_prompt=system_prompt,
-                    temperature=temperature or default_temperature,
-                    seed=seed,
-                    tools=cast(list[FunctionTool], tools),
-                    timeout=timeout,
+                    temperature=resolved.temperature,
+                    seed=resolved.seed,
+                    tools=function_tools,
+                    timeout=resolved.timeout,
                     predicted_output=predicted_output,
-                    reasoning_effort=reasoning_effort,
+                    reasoning_effort=resolved.reasoning_effort,
                 )
-            elif model.provider_name == LlmProviderType.ANTHROPIC:
-                model = cast(AnthropicProvider, model)
-                return model.generate_text(
-                    max_tokens=max_tokens,
-                    messages=messages,
+            elif model_to_use.provider_name == LlmProviderType.ANTHROPIC:
+                anthropic_model = cast(AnthropicProvider, model_to_use)
+                return anthropic_model.generate_text(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
                     prompt=prompt,
                     system_prompt=system_prompt,
-                    temperature=temperature or default_temperature,
+                    temperature=resolved.temperature,
                     tools=tools,
-                    timeout=timeout,
-                    reasoning_effort=reasoning_effort,
+                    timeout=resolved.timeout,
+                    reasoning_effort=resolved.reasoning_effort,
                 )
-            elif model.provider_name == LlmProviderType.GEMINI:
-                model = cast(GeminiProvider, model)
+            elif model_to_use.provider_name == LlmProviderType.GEMINI:
+                gemini_model = cast(GeminiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
 
-                return model.generate_text(
-                    max_tokens=max_tokens,
-                    messages=messages,
+                function_tools = (
+                    cast(
+                        list[FunctionTool],
+                        [tool for tool in tools if isinstance(tool, FunctionTool)],
+                    )
+                    if tools
+                    else None
+                )
+
+                return gemini_model.generate_text(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
                     prompt=prompt,
                     system_prompt=system_prompt,
-                    temperature=temperature or default_temperature,
-                    seed=seed,
-                    tools=cast(list[FunctionTool], tools),
+                    temperature=resolved.temperature,
+                    seed=resolved.seed,
+                    tools=function_tools,
                 )
             else:
-                raise ValueError(f"Invalid provider: {model.provider_name}")
+                raise ValueError(f"Invalid provider: {model_to_use.provider_name}")
+
+        try:
+            return self._execute_with_fallback(
+                models=models_to_try,
+                operation_name="Text generation",
+                operation_func=_generate_text_operation,
+                on_fallback_used_callback=on_fallback_used_callback,
+            )
         except Exception as e:
-            logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
+            logger.exception(f"Text generation failed with all provided models: {e}")
             raise e
 
     @observe(name="Generate Structured")
@@ -1625,7 +1998,8 @@ class LlmClient:
         *,
         prompt: str | None = None,
         messages: list[Message] | None = None,
-        model: LlmProvider,
+        model: LlmProvider | None = None,
+        models: list[LlmProvider] | None = None,
         system_prompt: str | None = None,
         response_format: Type[StructuredOutputType],
         tools: list[FunctionTool | ClaudeTool] | None = None,
@@ -1637,61 +2011,109 @@ class LlmClient:
         reasoning_effort: str | None = None,
         cache_name: str | None = None,
         thinking_budget: int | None = None,
-        use_local_endpoint: bool = False,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
-        try:
+        # Validate input parameters
+        if models is not None and model is not None:
+            raise ValueError(
+                "Cannot specify both 'model' and 'models' parameters. Use 'models' for fallback functionality or 'model' for single model usage."
+            )
+
+        if models is None and model is None:
+            raise ValueError("Must specify either 'model' or 'models' parameter.")
+
+        # Convert single model to list for unified processing
+        models_to_try = models if models is not None else ([model] if model is not None else [])
+
+        if not models_to_try:
+            raise ValueError("At least one model must be provided.")
+
+        def _generate_structured_operation(
+            model_to_use: LlmProvider,
+        ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
             if run_name:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Structured"
                 )
 
-            sentry_sdk.set_tag("llm_provider", model.provider_name)
+            resolved = self._resolve_parameters(
+                defaults=model_to_use.defaults,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                seed=seed,
+                reasoning_effort=reasoning_effort,
+                timeout=timeout,
+            )
 
-            messages = LlmClient.clean_message_content(messages if messages else [])
+            messages_cleaned = LlmClient.clean_message_content(messages if messages else [])
 
-            if model.provider_name == LlmProviderType.OPENAI:
-                model = cast(OpenAiProvider, model)
+            if model_to_use.provider_name == LlmProviderType.OPENAI:
+                openai_model = cast(OpenAiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for OpenAI")
 
-                messages = LlmClient.clean_tool_call_assistant_messages(messages)
-                return model.generate_structured(
-                    max_tokens=max_tokens,
-                    messages=messages,
+                messages_cleaned = LlmClient.clean_tool_call_assistant_messages(messages_cleaned)
+                function_tools = (
+                    cast(
+                        list[FunctionTool],
+                        [tool for tool in tools if isinstance(tool, FunctionTool)],
+                    )
+                    if tools
+                    else None
+                )
+
+                return openai_model.generate_structured(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
                     prompt=prompt,
                     response_format=response_format,
                     system_prompt=system_prompt,
-                    temperature=temperature,
-                    seed=seed,
-                    tools=cast(list[FunctionTool], tools),
-                    timeout=timeout,
-                    reasoning_effort=reasoning_effort,
+                    temperature=resolved.temperature,
+                    seed=resolved.seed,
+                    tools=function_tools,
+                    timeout=resolved.timeout,
+                    reasoning_effort=resolved.reasoning_effort,
                 )
-            elif model.provider_name == LlmProviderType.ANTHROPIC:
-                raise NotImplementedError("Anthropic structured outputs are not yet supported")
-            elif model.provider_name == LlmProviderType.GEMINI:
-                model = cast(GeminiProvider, model)
+            elif model_to_use.provider_name == LlmProviderType.ANTHROPIC:
+                raise ValueError("Structured generation is not supported for Anthropic provider")
+            elif model_to_use.provider_name == LlmProviderType.GEMINI:
+                gemini_model = cast(GeminiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
-                return model.generate_structured(
-                    max_tokens=max_tokens,
-                    messages=messages,
+
+                function_tools = (
+                    cast(
+                        list[FunctionTool],
+                        [tool for tool in tools if isinstance(tool, FunctionTool)],
+                    )
+                    if tools
+                    else None
+                )
+
+                return gemini_model.generate_structured(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
                     prompt=prompt,
                     response_format=response_format,
                     system_prompt=system_prompt,
-                    temperature=temperature,
-                    seed=seed,
-                    tools=cast(list[FunctionTool], tools),
+                    temperature=resolved.temperature,
+                    seed=resolved.seed,
+                    tools=function_tools,
                     cache_name=cache_name,
                     thinking_budget=thinking_budget,
-                    use_local_endpoint=use_local_endpoint,
                 )
             else:
-                raise ValueError(f"Invalid provider: {model.provider_name}")
+                raise ValueError(f"Invalid provider: {model_to_use.provider_name}")
+
+        try:
+            return self._execute_with_fallback(
+                models=models_to_try,
+                operation_name="Structured generation",
+                operation_func=_generate_structured_operation,
+            )
         except Exception as e:
-            logger.exception(f"Text generation failed with provider {model.provider_name}: {e}")
+            logger.exception(f"Structured generation failed with all provided models: {e}")
             raise e
 
     @observe(name="Generate Text Stream")
@@ -1701,7 +2123,8 @@ class LlmClient:
         *,
         prompt: str | None = None,
         messages: list[Message] | None = None,
-        model: LlmProvider,
+        model: LlmProvider | None = None,
+        models: list[LlmProvider] | None = None,
         system_prompt: str | None = None,
         tools: list[FunctionTool | ClaudeTool] | None = None,
         temperature: float | None = None,
@@ -1710,85 +2133,201 @@ class LlmClient:
         run_name: str | None = None,
         timeout: float | None = None,
         reasoning_effort: str | None = None,
-        first_token_timeout: float = 40.0,
-        inactivity_timeout: float = 20.0,
-    ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
-        try:
+        first_token_timeout: float | None = None,
+        inactivity_timeout: float | None = None,
+        on_fallback_used_callback: Callable[[], None] | None = None,
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage | LlmProvider]:
+        # Validate input parameters
+        if models is not None and model is not None:
+            raise ValueError(
+                "Cannot specify both 'model' and 'models' parameters. Use 'models' for fallback functionality or 'model' for single model usage."
+            )
+
+        if models is None and model is None:
+            raise ValueError("Must specify either 'model' or 'models' parameter.")
+
+        # Convert single model to list for unified processing
+        models_to_try = models if models is not None else ([model] if model is not None else [])
+
+        if not models_to_try:
+            raise ValueError("At least one model must be provided.")
+
+        def _generate_text_stream_operation(
+            model_to_use: LlmProvider,
+        ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
             if run_name:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Text Stream"
                 )
 
-            sentry_sdk.set_tag("llm_provider", model.provider_name)
+            resolved = self._resolve_parameters(
+                defaults=model_to_use.defaults,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                seed=seed,
+                reasoning_effort=reasoning_effort,
+                timeout=timeout,
+                first_token_timeout=first_token_timeout,
+                inactivity_timeout=inactivity_timeout,
+            )
 
-            defaults = model.defaults
-            default_temperature = defaults.temperature if defaults else None
-
-            messages = LlmClient.clean_message_content(messages if messages else [])
+            messages_cleaned = LlmClient.clean_message_content(messages if messages else [])
             if not tools:
-                messages = LlmClient.clean_tool_call_assistant_messages(messages)
+                messages_cleaned = LlmClient.clean_tool_call_assistant_messages(messages_cleaned)
 
             # Get the appropriate stream generator based on provider
-            if model.provider_name == LlmProviderType.OPENAI:
-                model = cast(OpenAiProvider, model)
+            if model_to_use.provider_name == LlmProviderType.OPENAI:
+                openai_model = cast(OpenAiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for OpenAI")
 
-                stream_generator = model.generate_text_stream(
-                    max_tokens=max_tokens,
-                    messages=messages,
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                    temperature=temperature or default_temperature,
-                    seed=seed,
-                    tools=cast(list[FunctionTool], tools),
-                    timeout=timeout,
-                    reasoning_effort=reasoning_effort,
-                    first_token_timeout=first_token_timeout,
-                    inactivity_timeout=inactivity_timeout,
+                function_tools = (
+                    cast(
+                        list[FunctionTool],
+                        [tool for tool in tools if isinstance(tool, FunctionTool)],
+                    )
+                    if tools
+                    else None
                 )
-            elif model.provider_name == LlmProviderType.ANTHROPIC:
-                model = cast(AnthropicProvider, model)
-                stream_generator = model.generate_text_stream(
-                    max_tokens=max_tokens,
-                    messages=messages,
+
+                return openai_model.generate_text_stream(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
                     prompt=prompt,
                     system_prompt=system_prompt,
-                    temperature=temperature or default_temperature,
+                    temperature=resolved.temperature,
+                    seed=resolved.seed,
+                    tools=function_tools,
+                    timeout=resolved.timeout,
+                    reasoning_effort=resolved.reasoning_effort,
+                    first_token_timeout=resolved.first_token_timeout,
+                    inactivity_timeout=resolved.inactivity_timeout,
+                )
+            elif model_to_use.provider_name == LlmProviderType.ANTHROPIC:
+                anthropic_model = cast(AnthropicProvider, model_to_use)
+                return anthropic_model.generate_text_stream(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    temperature=resolved.temperature,
                     tools=tools,
-                    timeout=timeout,
-                    reasoning_effort=reasoning_effort,
-                    first_token_timeout=first_token_timeout,
-                    inactivity_timeout=inactivity_timeout,
+                    timeout=resolved.timeout,
+                    reasoning_effort=resolved.reasoning_effort,
+                    first_token_timeout=resolved.first_token_timeout,
+                    inactivity_timeout=resolved.inactivity_timeout,
                 )
-            elif model.provider_name == LlmProviderType.GEMINI:
-                model = cast(GeminiProvider, model)
+            elif model_to_use.provider_name == LlmProviderType.GEMINI:
+                gemini_model = cast(GeminiProvider, model_to_use)
 
                 if tools and any(isinstance(tool, ClaudeTool) for tool in tools):
                     raise ValueError("Claude tools are not supported for Gemini")
 
-                stream_generator = model.generate_text_stream(
-                    max_tokens=max_tokens,
-                    messages=messages,
+                function_tools = (
+                    cast(
+                        list[FunctionTool],
+                        [tool for tool in tools if isinstance(tool, FunctionTool)],
+                    )
+                    if tools
+                    else None
+                )
+
+                return gemini_model.generate_text_stream(
+                    max_tokens=resolved.max_tokens,
+                    messages=messages_cleaned,
                     prompt=prompt,
                     system_prompt=system_prompt,
-                    temperature=temperature or default_temperature,
-                    seed=seed,
-                    tools=cast(list[FunctionTool], tools),
-                    first_token_timeout=first_token_timeout,
-                    inactivity_timeout=inactivity_timeout,
+                    temperature=resolved.temperature,
+                    seed=resolved.seed,
+                    tools=function_tools,
+                    first_token_timeout=resolved.first_token_timeout,
+                    inactivity_timeout=resolved.inactivity_timeout,
                 )
             else:
-                raise ValueError(f"Invalid provider: {model.provider_name}")
+                raise ValueError(f"Invalid provider: {model_to_use.provider_name}")
 
-            for item in stream_generator:
-                yield item
+        try:
+            # For streaming, we need to handle fallback during iteration, not just during generator creation
+            for i, base_model in enumerate(models_to_try):
+                regions_to_try = self._get_regions_to_try(base_model)
+
+                if (
+                    not regions_to_try or (len(regions_to_try) == 1 and regions_to_try[0] is None)
+                ) and base_model.provider_name != LlmProviderType.OPENAI:
+                    logger.warning(f"No regions to run for model {base_model.model_name}.")
+
+                # Try each region for this model
+                for j, region in enumerate(regions_to_try):
+                    # Create a copy of the model with the specific region
+                    model_to_use = type(base_model)(
+                        model_name=base_model.model_name,
+                        defaults=base_model.defaults,
+                        region=region,
+                    )
+
+                    try:
+                        self._set_fallback_sentry_tags(
+                            model_to_use, i + 1, j + 1, len(models_to_try), region
+                        )
+
+                        # Get the generator for this model
+                        generator = _generate_text_stream_operation(model_to_use)
+
+                        # Try to consume the generator - exceptions will be raised here
+                        for item in generator:
+                            yield item
+
+                        yield model_to_use
+
+                        # If we get here, streaming was successful, so break out of all fallback loops
+                        return
+
+                    except Exception as e:
+                        if self._is_fallback_worthy_exception(e, model_to_use):
+                            is_last_region = j == len(regions_to_try) - 1
+                            is_last_model = i == len(models_to_try) - 1
+
+                            if not is_last_region:
+                                # Try next region for this model
+                                if on_fallback_used_callback:
+                                    on_fallback_used_callback()
+
+                                logger.warning(
+                                    f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                    f"due to {type(e).__name__}: {str(e)}. "
+                                    f"Trying next region ({j + 2}/{len(regions_to_try)}): {regions_to_try[j + 1]}"
+                                )
+                                continue
+                            elif not is_last_model:
+                                # Try next model
+                                if on_fallback_used_callback:
+                                    on_fallback_used_callback()
+
+                                logger.warning(
+                                    f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
+                                    f"due to {type(e).__name__}: {str(e)}. "
+                                    f"Trying next model ({i + 2}/{len(models_to_try)}): {models_to_try[i + 1].provider_name} '{models_to_try[i + 1].model_name}'"
+                                )
+                                break  # Break out of region loop to try next model
+                            else:
+                                # Last model and last region - fail
+                                logger.error(
+                                    f"Text stream generation failed with all {len(models_to_try)} models and all regions. "
+                                    f"Last attempt with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                    f"failed with {type(e).__name__}: {str(e)}"
+                                )
+                                raise e
+                        else:
+                            # Non-fallback-worthy exception, fail immediately
+                            logger.error(
+                                f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
+                                f"due to non-retryable {type(e).__name__}: {str(e)}"
+                            )
+                            raise e
 
         except Exception as e:
-            logger.exception(
-                f"Text stream generation failed with provider {model.provider_name}: {e}"
-            )
+            logger.exception(f"Text stream generation failed with all provided models: {e}")
             raise e
 
     @observe(name="Generate Text from Web Search")
@@ -1797,31 +2336,55 @@ class LlmClient:
         self,
         *,
         prompt: str,
-        model: LlmProvider,
+        model: LlmProvider | None = None,
+        models: list[LlmProvider] | None = None,
         temperature: float | None = None,
         seed: int | None = None,
         run_name: str | None = None,
     ) -> str:
-        try:
+        # Validate input parameters
+        if models is not None and model is not None:
+            raise ValueError(
+                "Cannot specify both 'model' and 'models' parameters. Use 'models' for fallback functionality or 'model' for single model usage."
+            )
+
+        if models is None and model is None:
+            raise ValueError("Must specify either 'model' or 'models' parameter.")
+
+        # Convert single model to list for unified processing
+        models_to_try = models if models is not None else ([model] if model is not None else [])
+
+        if not models_to_try:
+            raise ValueError("At least one model must be provided.")
+
+        def _generate_text_from_web_search_operation(model_to_use: LlmProvider) -> str:
             if run_name:
                 langfuse_context.update_current_observation(name=run_name + " - Generate Text")
 
-            sentry_sdk.set_tag("llm_provider", model.provider_name)
+            resolved = self._resolve_parameters(
+                defaults=model_to_use.defaults,
+                temperature=temperature,
+                seed=seed,
+            )
 
-            defaults = model.defaults
-            default_temperature = defaults.temperature if defaults else None
-
-            if model.provider_name == LlmProviderType.GEMINI:
-                model = cast(GeminiProvider, model)
-                return model.search_the_web(
-                    prompt, temperature=temperature or default_temperature, seed=seed
+            if model_to_use.provider_name == LlmProviderType.GEMINI:
+                gemini_model = cast(GeminiProvider, model_to_use)
+                return gemini_model.search_the_web(
+                    prompt, temperature=resolved.temperature, seed=resolved.seed
                 )
             else:
-                raise ValueError(f"Invalid provider: {model.provider_name}")
-        except Exception as e:
-            logger.exception(
-                f"Text generation from web failed with provider {model.provider_name}: {e}"
+                raise ValueError(
+                    f"Web search is only supported for Gemini provider, got: {model_to_use.provider_name}"
+                )
+
+        try:
+            return self._execute_with_fallback(
+                models=models_to_try,
+                operation_name="Web search text generation",
+                operation_func=_generate_text_from_web_search_operation,
             )
+        except Exception as e:
+            logger.exception(f"Web search text generation failed with all provided models: {e}")
             raise e
 
     @staticmethod
@@ -1881,16 +2444,16 @@ class LlmClient:
         thinking_signature: str | None = None,
     ) -> Message:
         if model.provider_name == LlmProviderType.OPENAI:
-            model = cast(OpenAiProvider, model)
-            return model.construct_message_from_stream(content_chunks, tool_calls)
+            openai_model = cast(OpenAiProvider, model)
+            return openai_model.construct_message_from_stream(content_chunks, tool_calls)
         elif model.provider_name == LlmProviderType.ANTHROPIC:
-            model = cast(AnthropicProvider, model)
-            return model.construct_message_from_stream(
+            anthropic_model = cast(AnthropicProvider, model)
+            return anthropic_model.construct_message_from_stream(
                 content_chunks, tool_calls, thinking_content_chunks, thinking_signature
             )
         elif model.provider_name == LlmProviderType.GEMINI:
-            model = cast(GeminiProvider, model)
-            return model.construct_message_from_stream(content_chunks, tool_calls)
+            gemini_model = cast(GeminiProvider, model)
+            return gemini_model.construct_message_from_stream(content_chunks, tool_calls)
         else:
             raise ValueError(f"Invalid provider: {model.provider_name}")
 
@@ -1899,8 +2462,8 @@ class LlmClient:
         self, contents: str, display_name: str, model: LlmProvider, ttl: int = 3600
     ) -> str:
         if model.provider_name == LlmProviderType.GEMINI:
-            model = cast(GeminiProvider, model)
-            cache_name = model.create_cache(contents, display_name, ttl)
+            gemini_model = cast(GeminiProvider, model)
+            cache_name = gemini_model.create_cache(contents, display_name, ttl)
             if not cache_name:
                 raise ValueError("Failed to create cache")
             return cache_name
@@ -1910,8 +2473,8 @@ class LlmClient:
     @sentry_sdk.trace
     def get_cache(self, display_name: str, model: LlmProvider) -> str | None:
         if model.provider_name == LlmProviderType.GEMINI:
-            model = cast(GeminiProvider, model)
-            return model.get_cache(display_name)
+            gemini_model = cast(GeminiProvider, model)
+            return gemini_model.get_cache(display_name)
         else:
             raise ValueError("Manual cache retrieval is only supported for Gemini.")
 
