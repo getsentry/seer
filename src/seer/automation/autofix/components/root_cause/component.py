@@ -5,6 +5,7 @@ from langfuse.decorators import observe
 
 from seer.automation.agent.agent import AgentConfig, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
+from seer.automation.agent.models import Message
 from seer.automation.autofix.autofix_agent import AutofixAgent
 from seer.automation.autofix.autofix_context import AutofixContext
 from seer.automation.autofix.components.root_cause.models import (
@@ -42,13 +43,33 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
 
             sentry_sdk.set_tag("is_rethinking", len(request.initial_memory) > 0)
 
+            # Sanitize initial memory to ensure it only contains Message objects
+            raw_initial_memory = request.initial_memory
+            cleaned_initial_memory: list[Message] = []
+
+            if raw_initial_memory:
+                for item in raw_initial_memory:
+                    if isinstance(item, Message):
+                        cleaned_initial_memory.append(item)
+                    # Add logic here to handle dicts or other types like BreadcrumbsDetails
+                    # by converting them to Message objects, e.g.:
+                    # elif isinstance(item, BreadcrumbsDetails):
+                    #     cleaned_initial_memory.append(
+                    #         Message(role="system", content=f"System Log: [{item.level or 'INFO'}] {item.message or 'Unknown log entry'}")
+                    #     )
+                    # elif isinstance(item, dict):
+                    #     try:
+                    #         cleaned_initial_memory.append(Message.model_validate(item))
+                    #     except ValidationError:
+                    #         logger.warning(f"Skipping invalid item in initial_memory: {item}")
+
             agent = AutofixAgent(
                 tools=(tools.get_tools(can_access_repos=bool(readable_repos))),
                 config=AgentConfig(
                     interactive=True,
                 ),
                 context=self.context,
-                memory=request.initial_memory,
+                memory=cleaned_initial_memory,  # Use the cleaned memory
                 name="Root Cause Analysis Agent",
             )
 
