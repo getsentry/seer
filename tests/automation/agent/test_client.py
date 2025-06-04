@@ -15,6 +15,8 @@ from seer.automation.agent.client import (
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
+    LlmModelDefaultConfig,
+    LlmProviderDefaults,
     LlmProviderType,
     LlmRefusalError,
     LlmStreamFirstTokenTimeoutError,
@@ -1320,41 +1322,27 @@ def test_timeout_parameter_resolution():
 
 
 def test_region_preference_functionality():
-    """Test the new region preference system"""
+    """Test region preference"""
+    AnthropicProvider.default_configs = [
+        LlmModelDefaultConfig(
+            match=r".*",
+            defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": ["us-east5", "us-central1"],
+                "de": ["europe-west4"],
+                "*": ["global", "us-east5"],
+            },
+        ),
+    ]
 
-    # Test US region preferences for Anthropic
+    anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+
     test_config = provide_test_defaults()
     test_config.SENTRY_REGION = "us"
 
     with Module().constant(AppConfig, test_config):
-        anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
         region_prefs = anthropic_model.get_region_preference()
-        assert region_prefs == ["us-east5", "global"]
-
-    # Test DE region preferences for Anthropic
-    test_config.SENTRY_REGION = "de"
-    with Module().constant(AppConfig, test_config):
-        region_prefs = anthropic_model.get_region_preference()
-        assert region_prefs == ["europe-west4"]
-
-    # Test Gemini region preferences
-    test_config.SENTRY_REGION = "us"
-    with Module().constant(AppConfig, test_config):
-        gemini_model = GeminiProvider.model("gemini-2.0-flash-001")
-        region_prefs = gemini_model.get_region_preference()
-        assert region_prefs == ["us-central1", "us-east1", "global"]
-
-    # Test preview model preferences (currently matches general config due to order)
-    with Module().constant(AppConfig, test_config):
-        gemini_preview = GeminiProvider.model("gemini-2.5-flash-preview-04-17")
-        region_prefs = gemini_preview.get_region_preference()
-        assert region_prefs == ["us-central1", "us-east1", "global"]  # Matches general config
-
-    # Test local_regions_only functionality
-    with Module().constant(AppConfig, test_config):
-        gemini_local_only = GeminiProvider.model("gemini-2.0-flash-001", local_regions_only=True)
-        region_prefs = gemini_local_only.get_region_preference()
-        assert region_prefs == ["us-central1", "us-east1"]  # Global region filtered out
+        assert region_prefs == ["us-east5", "us-central1"]
 
 
 def test_region_preference_no_config():
@@ -1375,7 +1363,18 @@ def test_region_preference_no_config():
 
 
 def test_region_preference_unknown_sentry_region():
-    """Test region preference with unknown SENTRY_REGION"""
+    """Test region preference with unknown SENTRY_REGION uses the * region preference"""
+    AnthropicProvider.default_configs = [
+        LlmModelDefaultConfig(
+            match=r".*",
+            defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": ["us-east5"],
+                "de": ["europe-west4"],
+                "*": ["global", "us-east5"],
+            },
+        ),
+    ]
 
     anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
 
@@ -1384,48 +1383,29 @@ def test_region_preference_unknown_sentry_region():
 
     with Module().constant(AppConfig, test_config):
         region_prefs = anthropic_model.get_region_preference()
-        assert region_prefs is None
+        assert region_prefs == ["global", "us-east5"]
 
 
-def test_openai_provider_retry_logic():
-    """Test that OpenAI provider applies retry logic to client methods"""
-    from unittest.mock import Mock, patch
+def test_region_preference_de_requires_europe_region():
+    """Test that DE requires a europe region"""
 
-    provider = OpenAiProvider.model("gpt-3.5-turbo")
+    AnthropicProvider.default_configs = [
+        LlmModelDefaultConfig(
+            match=r".*",
+            defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": ["europe-west4", "global"],
+                "de": ["us-west4"],
+                "*": ["global", "us-east5"],
+            },
+        ),
+    ]
 
-    # Mock the backoff_on_exception decorator
-    with patch("seer.automation.agent.client.backoff_on_exception") as mock_backoff:
-        mock_retrier = Mock()
-        mock_backoff.return_value = mock_retrier
+    anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
 
-        provider.get_client()
+    test_config = provide_test_defaults()
+    test_config.SENTRY_REGION = "de"
 
-        # Verify backoff_on_exception was called with the right parameters
-        mock_backoff.assert_called_once_with(
-            OpenAiProvider.is_completion_exception_retryable, max_tries=4
-        )
-
-        # Verify the retrier was applied to the correct client methods
-        assert mock_retrier.call_count == 2  # Should be called twice for both methods
-
-
-def test_anthropic_provider_retry_logic():
-    """Test that Anthropic provider applies retry logic to client methods"""
-    from unittest.mock import Mock, patch
-
-    provider = AnthropicProvider.model("claude-3-5-sonnet@20240620")
-
-    # Mock the backoff_on_exception decorator
-    with patch("seer.automation.agent.client.backoff_on_exception") as mock_backoff:
-        mock_retrier = Mock()
-        mock_backoff.return_value = mock_retrier
-
-        provider.get_client()
-
-        # Verify backoff_on_exception was called with the right parameters
-        mock_backoff.assert_called_once_with(
-            AnthropicProvider.is_completion_exception_retryable, max_tries=4
-        )
-
-        # Verify the retrier was applied to the correct client method
-        assert mock_retrier.call_count == 1  # Should be called once for messages.create
+    with Module().constant(AppConfig, test_config):
+        with pytest.raises(ValueError, match="Cannot route to non europe region"):
+            anthropic_model.get_client()

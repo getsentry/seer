@@ -97,13 +97,20 @@ class BaseLlmProvider:
         if config.region_preference is None:
             return None
 
-        if app_config.SENTRY_REGION != "de":
-            # All regions except DE will use the US region preference
-            return config.region_preference["us"]
+        if app_config.SENTRY_REGION == "de":
+            return config.region_preference["de"]
 
         if app_config.SENTRY_REGION in config.region_preference:
             return config.region_preference[app_config.SENTRY_REGION]
 
+        if "*" in config.region_preference:
+            return config.region_preference["*"]
+
+        # All regions except DE will use the US region preference if no generic preference is available.
+        if "us" in config.region_preference:
+            return config.region_preference["us"]
+
+        # If no region preference is available, return None
         return None
 
     def copy(self, **kwargs):
@@ -625,7 +632,11 @@ class AnthropicProvider(BaseLlmProvider):
         LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
-            region_preference={"us": ["europe-west4", "global"], "de": ["europe-west4"]},
+            region_preference={
+                "us": ["europe-west4", "global"],
+                "de": ["europe-west4"],
+                "*": ["global", "us-east5"],
+            },
         ),
     ]
 
@@ -1109,7 +1120,7 @@ class GeminiProvider(BaseLlmProvider):
             match=r".*-preview-.*",  # contains the substring "-preview-"
             defaults=LlmProviderDefaults(temperature=0.0),
             region_preference={
-                "us": ["us-central1", "global"],
+                "us": ["global", "us-central1"],
                 # Leave blank for de as preview models are not available in de
             },
         ),
@@ -1117,7 +1128,7 @@ class GeminiProvider(BaseLlmProvider):
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
             region_preference={
-                "us": ["us-central1", "us-east1", "global"],
+                "us": ["global", "us-central1", "us-east1"],
                 "de": ["europe-west1", "europe-west4"],
             },
         ),
