@@ -1,7 +1,7 @@
 import textwrap
 
 import sentry_sdk
-from langfuse.decorators import langfuse_context, observe
+from langfuse.decorators import observe
 from pydantic import BaseModel
 
 from seer.automation.agent.client import GeminiProvider, LlmClient
@@ -225,12 +225,10 @@ def run_summarize_issue(request: SummarizeIssueRequest) -> SummarizeIssueRespons
     return summary.to_summarize_issue_response(request.group_id)
 
 
-@observe(name="Get Fixability Score")
 @sentry_sdk.trace
 def run_fixability_score(
     request: GetFixabilityScoreRequest, autofixability_model: AutofixabilityModel
 ) -> SummarizeIssueResponse:
-    langfuse_context.update_current_trace(session_id=f"group:{request.group_id}")
     with Session() as session:
         db_state = session.get(DbIssueSummary, request.group_id)
         if not db_state:
@@ -249,7 +247,6 @@ def run_fixability_score(
     return issue_summary.to_summarize_issue_response(request.group_id)
 
 
-@observe(name="Evaluate Autofixability")
 @sentry_sdk.trace
 def evaluate_autofixability(
     issue_summary: IssueSummaryWithScores, autofixability_model: AutofixabilityModel
@@ -261,6 +258,6 @@ def evaluate_autofixability(
         f"Possible cause: {issue_summary.possible_cause}"
     )
     score = autofixability_model.score(issue_summary_input)
-    is_fixable = score > 0.663  # This flag isn't used. Thresholds are in getsentry/sentry
+    is_fixable = score > 0.66  # This flag isn't used. Thresholds are in getsentry/sentry
     sentry_sdk.set_tag("is_fixable", is_fixable)
     return score, is_fixable
