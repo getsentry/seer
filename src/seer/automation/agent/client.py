@@ -549,7 +549,7 @@ class AnthropicProvider(BaseLlmProvider):
         if self.region:
             selected_region = self.region
         elif app_config.DEV:
-            selected_region = "global"
+            selected_region = "us-east5"
         elif app_config.SENTRY_REGION == "de":
             selected_region = "europe-west4"
         elif (
