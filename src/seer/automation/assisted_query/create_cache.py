@@ -5,6 +5,7 @@ import sentry_sdk
 from seer.automation.agent.client import LlmClient
 from seer.automation.assisted_query.models import CreateCacheRequest, CreateCacheResponse
 from seer.automation.assisted_query.prompts import get_cache_prompt
+from seer.automation.assisted_query.tools import SearchTools
 from seer.automation.assisted_query.utils import get_cache_display_name, get_model_provider
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
@@ -107,8 +108,13 @@ def create_cache(
         fields=all_fields, field_values=filtered_field_values, no_values=no_values
     )
 
+    tools = SearchTools(org_id, project_ids)
+
     cache_name = llm_client.create_cache(
-        display_name=cache_diplay_name, contents=cache_prompt, model=get_model_provider()
+        display_name=cache_diplay_name,
+        contents=cache_prompt,
+        model=get_model_provider(),
+        tools=tools.get_tools(),
     )
 
     return CreateCacheResponse(

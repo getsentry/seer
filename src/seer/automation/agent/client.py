@@ -31,6 +31,7 @@ from google.genai.types import (
     Part,
     ThinkingConfig,
 )
+from google.genai.types import Tool
 from google.genai.types import Tool as GeminiTool
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import openai
@@ -1112,6 +1113,11 @@ class GeminiProvider:
                     ),
                 ),
             )
+            # print("---------------response-----------------")
+            # print("--------------------------------")
+            # print(response)
+            # print("--------------------------------")
+            # print("--------------------------------")
             if response.parsed is not None:
                 break
 
@@ -1255,6 +1261,7 @@ class GeminiProvider:
         temperature: float | None = None,
         seed: int | None = None,
         max_tokens: int | None = None,
+        cache_name: str | None = None,
     ):
         message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
             messages=messages,
@@ -1273,6 +1280,7 @@ class GeminiProvider:
                 temperature=temperature or 0.0,
                 seed=seed,
                 max_output_tokens=max_tokens or 8192,
+                cached_content=cache_name,
             ),
         )
 
@@ -1481,7 +1489,13 @@ class GeminiProvider:
 
     @observe(name="Create Gemini cache")
     @sentry_sdk.trace
-    def create_cache(self, contents: str, display_name: str, ttl: int = 3600) -> str | None:
+    def create_cache(
+        self,
+        contents: str,
+        display_name: str,
+        ttl: int = 3600,
+        tools: list[Tool] | None = None,
+    ) -> str | None:
         """
         Create a cache for the given content and display name. We will use the display name as the key.
         If the cache already exists, it will be updated with the new content.
@@ -1490,6 +1504,7 @@ class GeminiProvider:
             content: The content to cache.
             display_name: The display name to be used as the key of the cache.
             ttl: The time to live (in seconds) for the cache. Defaults to 1 hour.
+            tools: The tools to be used in the cache.
         Returns:
             Cache name as specified by Gemini.
         """
@@ -1508,6 +1523,7 @@ class GeminiProvider:
                 display_name=display_name,
                 contents=contents,
                 ttl=f"{ttl}s",
+                tools=tools,
             ),
         )
         return cache.name
@@ -1545,6 +1561,7 @@ class LlmClient:
         timeout: float | None = None,
         predicted_output: str | None = None,
         reasoning_effort: str | None = None,
+        cache_name: str | None = None,
     ) -> LlmGenerateTextResponse:
         try:
             if run_name:
@@ -1603,6 +1620,7 @@ class LlmClient:
                     temperature=temperature or default_temperature,
                     seed=seed,
                     tools=cast(list[FunctionTool], tools),
+                    cache_name=cache_name,
                 )
             else:
                 raise ValueError(f"Invalid provider: {model.provider_name}")
@@ -1888,11 +1906,16 @@ class LlmClient:
 
     @sentry_sdk.trace
     def create_cache(
-        self, contents: str, display_name: str, model: LlmProvider, ttl: int = 3600
+        self,
+        contents: str,
+        display_name: str,
+        model: LlmProvider,
+        ttl: int = 3600,
+        tools: list[FunctionDeclaration] | None = None,
     ) -> str:
         if model.provider_name == LlmProviderType.GEMINI:
             model = cast(GeminiProvider, model)
-            cache_name = model.create_cache(contents, display_name, ttl)
+            cache_name = model.create_cache(contents, display_name, ttl, tools)
             if not cache_name:
                 raise ValueError("Failed to create cache")
             return cache_name

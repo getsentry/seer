@@ -281,6 +281,9 @@ def get_cache_prompt(
 
         As we can see, for each group by, we are visualizing them independently on their own charts. You must only do this if you are grouping by a field and you have multiple group by fields. Otherwise, just return a single visualization.
 
+        ## Tools
+        You have access to tools to get more context for fields and their respective values. You should use these tools to get more context for fields and their respective values.
+
         ------
 
         ## Available Fields (YOU MUST ONLY USE THESE):
@@ -386,6 +389,7 @@ def get_final_query_prompt(
         2. Be a valid query
         3. Provide a meaningfully different approach from other options
         4. Have a confidence score that justifies its inclusion
+        5. Provide a clear, but succinct explanation of why you chose to use the query and why you are confident it will return the most relevant results. If you do not use the provided tools, you must explain why.
 
         Only return additional options if you are absolutely confident they will provide unique value to the user.
         Return options in order of confidence score from highest to lowest.
@@ -434,6 +438,8 @@ def get_query_or_fields_prompt(natural_language_query: str) -> str:
         Some fields are more likely to have high cardinality values, such as span.description or http.url which can have thousands of unique values.
         If we did not provide the values for one of the fields you need more values for, you will get access to more values for that field, even the ones that are not in the <available_values> section.
 
+        You also have access to tools to get specific context for the fields you need more values for. You should use these tools as you need them. Feel free to make multiple tool calls if needed.
+
         ## Examples:
 
         **Simple query**: "Show me HTTP client requests"
@@ -450,3 +456,34 @@ def get_query_or_fields_prompt(natural_language_query: str) -> str:
 
         ## User's query: "{natural_language_query}"
         """
+
+
+def get_one_shot_prompt(natural_language_query: str) -> str:
+    return f"""
+    Based on the user's natural language query and the search guidelines provided, your task is to generate valid Sentry search queries directly (for simple cases or if the query is gibberish).
+
+    ## If you can generate queries directly:
+    Return a list of 1-3 ModelResponse objects with complete query information.
+    Do this for simple queries like:
+    - "Show me HTTP requests" = span.op:http.client
+    - "Database operations" = span.op:db
+    - "Slow post requests" = http.request_method:POST AND span.duration:>500ms
+    Remember, you MUST use what is provided in the <available_fields> section and the <available_values> section to generate the queries.
+    You must be EXTREMELY CONFIDENT that the query will return the most relevant results, otherwise, you should request more context.
+
+
+    If you cannot generate a valid query, return None. This would be in cases where you need more context to generate a valid query.
+    In a future step, you will be given the opportunity to request more context through tools.
+
+    ## User's query: "{natural_language_query}"
+    """
+
+
+def get_fields_call_prompt(natural_language_query: str) -> str:
+    return f"""
+    Based on the user's natural language query, the search guidelines provided, and your current context, your task is to request specific fields you need to generate accurate queries (for complex cases).
+
+    You have access to tools to get more context for fields and their respective values. You should use these tools to get more context for fields and their respective values.
+
+    ## User's query: "{natural_language_query}"
+    """

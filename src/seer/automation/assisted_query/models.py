@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from seer.automation.agent.models import ToolCall
+
 
 class CreateCacheRequest(BaseModel):
     org_id: int
@@ -50,6 +52,15 @@ class RelevantFieldsResponse(BaseModel):
     requested_fields: list[str]
 
 
+class RequestedFieldsAndToolCalls(BaseModel):
+    requested_fields: list[str]
+    tool_calls: list[ToolCall]
+
+
 class QueryOrFieldsResponse(BaseModel):
     queries: list[ModelResponse] | None = None
-    requested_fields: list[str] | None = None
+    fields_and_tool_calls: RequestedFieldsAndToolCalls | None = None
+
+
+class TestResponse(BaseModel):
+    response: str

@@ -1,4 +1,6 @@
-from seer.automation.agent.tools import ClaudeTool, FunctionTool
+from google.genai.types import FunctionDeclaration, Tool
+
+# from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.dependency_injection import inject, injected
 from seer.rpc import RpcClient
 
@@ -35,33 +37,59 @@ class SearchTools:
             response.get("values", []) if response else []
         )  # TODO: Probably should not fail quietly?
 
-    def get_tools(self) -> list[ClaudeTool | FunctionTool]:
+    def get_tools(self) -> list[Tool]:
 
         # TODO: Simplify example in the description
-        tools: list[ClaudeTool | FunctionTool] = [
-            FunctionTool(
-                name="substring_values_search",
-                fn=self.substring_values_search,
-                description='Searches for values for a given field if it contains a given substring. ie: If a field "food" has values ["apple", "cheesesteak", "grilled cheese", "fish and chips", "mac and cheese", "banana", "fries with cheese and onions"]and the substring "cheese" is given, it will return ["cheesesteak", "grilled cheese", "mac and cheese", "fries with cheese and onions"]',
-                parameters=[
-                    {
-                        "name": "field",
-                        "type": "string",
-                        "description": "The field for which you are requesting values for.",
-                    },
-                    {
-                        "name": "substring",
-                        "type": "string",
-                        "description": "The substring match you want to search values for.",
-                    },
-                    {
-                        "name": "stats_period",
-                        "type": "string",
-                        "stats_period": "The timerange relative to now which you want to search for. Defaults to 48h (between now and 48 hours ago)",
-                    },
-                ],
-                required=["field", "substring"],
+        tools: list[Tool] = [
+            Tool(
+                function_declarations=[
+                    FunctionDeclaration(
+                        name="substring_values_search",
+                        description='Searches for values for a given field if it contains a given substring. ie: If a field "food" has values ["apple", "cheesesteak", "grilled cheese", "fish and chips", "mac and cheese", "banana", "fries with cheese and onions"]and the substring "cheese" is given, it will return ["cheesesteak", "grilled cheese", "mac and cheese", "fries with cheese and onions"]. You may need to make multiple tool calls to get all the values you need by searching for different substrings.',
+                        parameters={
+                            "type": "object",
+                            "properties": {
+                                "field": {
+                                    "type": "string",
+                                    "description": "The field for which you are requesting values for. Required.",
+                                },
+                                "substring": {
+                                    "type": "string",
+                                    "description": "The substring match you want to search values for. Required.",
+                                },
+                                "stats_period": {
+                                    "type": "string",
+                                    "description": "The timerange relative to now which you want to search for. Defaults to 48h (between now and 48 hours ago). Optional.",
+                                },
+                            },
+                            "required": ["field", "substring"],
+                        },
+                    )
+                ]
             )
         ]
+        # FunctionTool(
+        #     name="substring_values_search",
+        #     fn=self.substring_values_search,
+        #     description='Searches for values for a given field if it contains a given substring. ie: If a field "food" has values ["apple", "cheesesteak", "grilled cheese", "fish and chips", "mac and cheese", "banana", "fries with cheese and onions"]and the substring "cheese" is given, it will return ["cheesesteak", "grilled cheese", "mac and cheese", "fries with cheese and onions"]. You may need to make multiple tool calls to get all the values you need by searching for different substrings.',
+        #     parameters=[
+        #         {
+        #             "name": "field",
+        #             "type": "string",
+        #             "description": "The field for which you are requesting values for.",
+        #         },
+        #         {
+        #             "name": "substring",
+        #             "type": "string",
+        #             "description": "The substring match you want to search values for.",
+        #         },
+        #         {
+        #             "name": "stats_period",
+        #             "type": "string",
+        #             "stats_period": "The timerange relative to now which you want to search for. Defaults to 48h (between now and 48 hours ago)",
+        #         },
+        #     ],
+        #     required=["field", "substring"],
+        # )
 
         return tools
