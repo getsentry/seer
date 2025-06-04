@@ -214,9 +214,10 @@ class RepoManager:
 
                         # Check for cancellation
                         if self.is_cancelled:
-                            raise RepoInitializationError(
-                                f"Download cancelled for {self.repo_client.repo_full_name}"
+                            logger.info(
+                                f"Download cancelled for {self.repo_client.repo_full_name}, but continuing anyway"
                             )
+                            return self.repo_path
             else:
                 logger.error(
                     f"Failed to download tarball from {tarball_url}. Response status: {response.status_code}, text: {response.text}"
