@@ -542,7 +542,7 @@ class AnthropicProvider(BaseLlmProvider):
         supported_models_on_global_endpoint: list[str] = [
             # NOTE: disabling global endpoint while we're on provisioned throughput
             # "claude-3-5-sonnet-v2@20241022",
-            # "claude-3-7-sonnet@20250219",
+            "claude-3-7-sonnet@20250219",
         ]
 
         # Use provided region if available, otherwise fall back to automatic region selection
