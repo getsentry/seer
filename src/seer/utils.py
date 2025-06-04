@@ -7,10 +7,12 @@ import time
 import weakref
 from enum import Enum
 from queue import Empty, Full, Queue
-from typing import Any, Callable, Iterable, Sequence, TypeVar
+from typing import Any, Callable, Iterable, Iterator, Sequence, TypeVar
 
 from sqlalchemy.orm import DeclarativeBase, Session
 from tqdm.auto import tqdm
+
+from seer.automation.agent.models import StreamResetException
 
 logger = logging.getLogger(__name__)
 
@@ -218,3 +220,67 @@ def tqdm_sized(
         for batch in iterable:
             pbar.update(length(batch))
             yield batch
+
+
+def backoff_on_generator(
+    generator_func: Callable[..., Iterator[Any]],
+    is_exception_retryable: Callable[[Exception], bool],
+    max_tries: int = 2,
+    sleep_sec_scaler: Callable[[int], float] | None = None,
+    jitterer: Callable[[], float] = lambda: random.uniform(0, 0.5),
+    long_wait_threshold_sec: float | None = None,
+    long_wait_callback: Callable[[], None] | None = None,
+):
+    """
+    Wraps a generator function with retry logic that applies during iteration.
+    Unlike backoff_on_exception, this handles exceptions that occur during generator iteration.
+    """
+    if max_tries < 1:
+        raise ValueError("max_tries must be at least 1")
+
+    if sleep_sec_scaler is None:
+        sleep_sec_scaler = lambda num_tries: min(2**num_tries, 10.0)
+
+    def retrying_generator(*args, **kwargs):
+        last_exception = None
+
+        for num_tries in range(1, max_tries + 1):
+            try:
+                # Create a fresh generator for each attempt
+                generator = generator_func(*args, **kwargs)
+
+                # Yield all items from the generator
+                for item in generator:
+                    yield item
+
+                # If we get here, the generator completed successfully
+                if num_tries > 1:
+                    logger.info(f"Retried generator successful after {num_tries} tries.")
+                return
+
+            except Exception as exception:
+                last_exception = exception
+                if is_exception_retryable(exception):
+                    if num_tries < max_tries:  # Don't sleep on the last attempt
+                        sleep_sec = sleep_sec_scaler(num_tries) + jitterer()
+                        if (
+                            long_wait_threshold_sec is not None
+                            and long_wait_callback is not None
+                            and sleep_sec > long_wait_threshold_sec
+                        ):
+                            long_wait_callback()
+                        logger.info(
+                            f"Generator encountered {exception_formatter(exception)}. Sleeping for "
+                            f"{sleep_sec} seconds before try {num_tries + 1}/{max_tries}."
+                        )
+                        yield StreamResetException()
+                        time.sleep(sleep_sec)
+                else:
+                    raise exception
+
+        raise MaxTriesExceeded(
+            f"Max tries ({max_tries}) exceeded for generator. "
+            f"Last exception: {exception_formatter(last_exception)}"
+        ) from last_exception
+
+    return retrying_generator

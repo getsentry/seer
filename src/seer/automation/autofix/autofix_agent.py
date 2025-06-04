@@ -11,6 +11,7 @@ from seer.automation.agent.models import (
     LlmGenerateTextResponse,
     LlmResponseMetadata,
     Message,
+    StreamResetException,
     ToolCall,
     Usage,
 )
@@ -125,11 +126,6 @@ class AutofixAgent(LlmAgent):
 
         return messages
 
-    def _fallback_callback(self):
-        self.context.event_manager.add_log(
-            "Our LLM provider is overloaded. Now retrying desperately..."
-        )
-
     def _get_completion(self, run_config: RunConfig, messages: list[Message]):
         """
         Streams the preliminary output to the current step and only returns when output is complete
@@ -152,7 +148,6 @@ class AutofixAgent(LlmAgent):
             temperature=run_config.temperature or 0.0,
             reasoning_effort=run_config.reasoning_effort,
             max_tokens=run_config.max_tokens,
-            on_fallback_used_callback=self._fallback_callback,
         )
 
         model_used = run_config.models[0] if run_config.models else run_config.model
@@ -210,6 +205,21 @@ class AutofixAgent(LlmAgent):
                 tool_calls.append(chunk)
             elif isinstance(chunk, Usage):
                 usage += chunk
+            elif isinstance(chunk, StreamResetException):
+                content_chunks = []
+                thinking_content_chunks = []
+                tool_calls = []
+                thinking_signature = None
+
+                self.accumulated_thinking_chunks = []
+
+                with self.context.state.update() as cur:
+                    cur_step = cur.steps[-1]
+                    cur_step.clear_output_stream()
+
+                self.context.event_manager.add_log(
+                    "Our LLM provider is overloaded. Now retrying desperately..."
+                )
             elif hasattr(chunk, "model_name") and hasattr(chunk, "provider_name"):
                 model_used = chunk
 

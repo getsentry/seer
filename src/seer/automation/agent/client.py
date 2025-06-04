@@ -53,6 +53,7 @@ from seer.automation.agent.models import (
     LlmStreamTimeoutError,
     Message,
     ResolvedParameters,
+    StreamResetException,
     StructuredOutputType,
     ToolCall,
     Usage,
@@ -61,11 +62,13 @@ from seer.automation.agent.tools import ClaudeTool, FunctionTool
 from seer.bootup import module
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
-from seer.utils import backoff_on_exception
+from seer.utils import backoff_on_exception, backoff_on_generator
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
+
+DEFAULT_BACKOFF_MAX_TRIES = 4
 
 
 @dataclass
@@ -73,6 +76,8 @@ class BaseLlmProvider:
     model_name: str
     defaults: LlmProviderDefaults | None = None
     region: str | None = None
+    backoff_max_tries: int = DEFAULT_BACKOFF_MAX_TRIES
+    sleep_sec_scaler: Callable[[int], float] | None = None
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]]
 
@@ -100,6 +105,17 @@ class BaseLlmProvider:
             return config.region_preference[app_config.SENTRY_REGION]
 
         return None
+
+    def copy(self, **kwargs):
+        params = {
+            "model_name": self.model_name,
+            "defaults": self.defaults,
+            "region": self.region,
+            "backoff_max_tries": self.backoff_max_tries,
+            "sleep_sec_scaler": self.sleep_sec_scaler,
+        }
+        params.update(kwargs)
+        return type(self)(**params)
 
 
 def _iterate_with_timeouts(
@@ -187,6 +203,12 @@ class OpenAiProvider(BaseLlmProvider):
         ),
     ]
 
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        return isinstance(exception, openai.InternalServerError) or isinstance(
+            exception, LlmStreamTimeoutError
+        )
+
     @inject
     def get_client(self, app_config: AppConfig = injected) -> openai.Client:
         if app_config.SENTRY_REGION == "de":
@@ -195,13 +217,6 @@ class OpenAiProvider(BaseLlmProvider):
             raise ValueError("Cannot set region for OpenAiProvider")
 
         client = openai.Client(max_retries=4)
-
-        # Apply backoff retry mechanism to client methods
-        retrier = backoff_on_exception(
-            OpenAiProvider.is_completion_exception_retryable, max_tries=4
-        )
-        client.chat.completions.create = retrier(client.chat.completions.create)  # type: ignore[method-assign]
-        client.beta.chat.completions.parse = retrier(client.beta.chat.completions.parse)  # type: ignore[method-assign]
 
         return client
 
@@ -247,18 +262,11 @@ class OpenAiProvider(BaseLlmProvider):
         )
 
     @staticmethod
-    def is_completion_exception_retryable(exception: Exception) -> bool:
-        return isinstance(exception, openai.InternalServerError) or isinstance(
-            exception, LlmStreamTimeoutError
-        )
-
-    @staticmethod
     def is_input_too_long(exception: Exception) -> bool:
         return isinstance(exception, openai.BadRequestError) and "context_length_exceeded" in str(
             exception
         )
 
-    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -273,72 +281,81 @@ class OpenAiProvider(BaseLlmProvider):
         predicted_output: str | None = None,
         reasoning_effort: str | None = None,
     ):
-        message_dicts, tool_dicts = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
-            reasoning_effort=reasoning_effort,
-        )
+        @sentry_sdk.trace
+        def _generate_text():
+            message_dicts, tool_dicts = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+                reasoning_effort=reasoning_effort,
+            )
 
-        openai_client = self.get_client()
+            openai_client = self.get_client()
 
-        completion = openai_client.chat.completions.create(
-            model=self.model_name,
-            messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
-            temperature=temperature,
-            seed=seed,
-            tools=(
-                cast(Iterable[ChatCompletionToolParam], tool_dicts)
-                if tool_dicts
-                else openai.NotGiven()
-            ),
-            max_tokens=max_tokens or openai.NotGiven(),
-            timeout=timeout or openai.NotGiven(),
-            prediction=(
-                {
-                    "type": "content",
-                    "content": predicted_output,
-                }
-                if predicted_output
-                else openai.NotGiven()
-            ),
-            reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
-        )
-
-        openai_message = completion.choices[0].message
-        if openai_message.refusal:
-            raise LlmRefusalError(completion.choices[0].message.refusal)
-
-        message = Message(
-            content=openai_message.content,
-            role=openai_message.role,
-            tool_calls=(
-                [
-                    ToolCall(id=call.id, function=call.function.name, args=call.function.arguments)
-                    for call in openai_message.tool_calls
-                ]
-                if openai_message.tool_calls
-                else None
-            ),
-        )
-
-        usage = Usage(
-            completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
-            prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
-            total_tokens=completion.usage.total_tokens if completion.usage else 0,
-        )
-
-        return LlmGenerateTextResponse(
-            message=message,
-            metadata=LlmResponseMetadata(
+            completion = openai_client.chat.completions.create(
                 model=self.model_name,
-                provider_name=self.provider_name,
-                usage=usage,
-            ),
-        )
+                messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
+                temperature=temperature,
+                seed=seed,
+                tools=(
+                    cast(Iterable[ChatCompletionToolParam], tool_dicts)
+                    if tool_dicts
+                    else openai.NotGiven()
+                ),
+                max_tokens=max_tokens or openai.NotGiven(),
+                timeout=timeout or openai.NotGiven(),
+                prediction=(
+                    {
+                        "type": "content",
+                        "content": predicted_output,
+                    }
+                    if predicted_output
+                    else openai.NotGiven()
+                ),
+                reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
+            )
 
-    @sentry_sdk.trace
+            openai_message = completion.choices[0].message
+            if openai_message.refusal:
+                raise LlmRefusalError(completion.choices[0].message.refusal)
+
+            message = Message(
+                content=openai_message.content,
+                role=openai_message.role,
+                tool_calls=(
+                    [
+                        ToolCall(
+                            id=call.id, function=call.function.name, args=call.function.arguments
+                        )
+                        for call in openai_message.tool_calls
+                    ]
+                    if openai_message.tool_calls
+                    else None
+                ),
+            )
+
+            usage = Usage(
+                completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
+                prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
+                total_tokens=completion.usage.total_tokens if completion.usage else 0,
+            )
+
+            return LlmGenerateTextResponse(
+                message=message,
+                metadata=LlmResponseMetadata(
+                    model=self.model_name,
+                    provider_name=self.provider_name,
+                    usage=usage,
+                ),
+            )
+
+        return backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )(_generate_text)()
+
     def generate_structured(
         self,
         *,
@@ -353,52 +370,60 @@ class OpenAiProvider(BaseLlmProvider):
         timeout: float | None = None,
         reasoning_effort: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
-        message_dicts, tool_dicts = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
-            reasoning_effort=reasoning_effort,
-        )
+        @sentry_sdk.trace
+        def _generate_structured():
+            message_dicts, tool_dicts = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+                reasoning_effort=reasoning_effort,
+            )
 
-        openai_client = self.get_client()
+            openai_client = self.get_client()
 
-        completion = openai_client.beta.chat.completions.parse(
-            model=self.model_name,
-            messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
-            temperature=temperature,
-            seed=seed,
-            tools=(
-                cast(Iterable[ChatCompletionToolParam], tool_dicts)
-                if tool_dicts
-                else openai.NotGiven()
-            ),
-            response_format=response_format,
-            max_tokens=max_tokens or openai.NotGiven(),
-            timeout=timeout or openai.NotGiven(),
-            reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
-        )
-
-        openai_message = completion.choices[0].message
-        if openai_message.refusal:
-            raise LlmRefusalError(completion.choices[0].message.refusal)
-
-        parsed = cast(StructuredOutputType, completion.choices[0].message.parsed)
-
-        usage = Usage(
-            completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
-            prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
-            total_tokens=completion.usage.total_tokens if completion.usage else 0,
-        )
-
-        return LlmGenerateStructuredResponse(
-            parsed=parsed,
-            metadata=LlmResponseMetadata(
+            completion = openai_client.beta.chat.completions.parse(
                 model=self.model_name,
-                provider_name=self.provider_name,
-                usage=usage,
-            ),
-        )
+                messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
+                temperature=temperature,
+                seed=seed,
+                tools=(
+                    cast(Iterable[ChatCompletionToolParam], tool_dicts)
+                    if tool_dicts
+                    else openai.NotGiven()
+                ),
+                response_format=response_format,
+                max_tokens=max_tokens or openai.NotGiven(),
+                timeout=timeout or openai.NotGiven(),
+                reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
+            )
+
+            openai_message = completion.choices[0].message
+            if openai_message.refusal:
+                raise LlmRefusalError(completion.choices[0].message.refusal)
+
+            parsed = cast(StructuredOutputType, completion.choices[0].message.parsed)
+
+            usage = Usage(
+                completion_tokens=completion.usage.completion_tokens if completion.usage else 0,
+                prompt_tokens=completion.usage.prompt_tokens if completion.usage else 0,
+                total_tokens=completion.usage.total_tokens if completion.usage else 0,
+            )
+
+            return LlmGenerateStructuredResponse(
+                parsed=parsed,
+                metadata=LlmResponseMetadata(
+                    model=self.model_name,
+                    provider_name=self.provider_name,
+                    usage=usage,
+                ),
+            )
+
+        return backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )(_generate_structured)()
 
     @staticmethod
     def to_message_dict(message: Message) -> ChatCompletionMessageParam:
@@ -479,8 +504,6 @@ class OpenAiProvider(BaseLlmProvider):
 
         return message_dicts, tool_dicts
 
-    @observe(as_type="generation", name="OpenAI Stream")
-    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -496,83 +519,93 @@ class OpenAiProvider(BaseLlmProvider):
         first_token_timeout: float,
         inactivity_timeout: float,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
-        message_dicts, tool_dicts = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
-            reasoning_effort=reasoning_effort,
-        )
+        @observe(as_type="generation", name="OpenAI Stream")
+        @sentry_sdk.trace
+        def _stream_with_retries():
+            message_dicts, tool_dicts = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+                reasoning_effort=reasoning_effort,
+            )
 
-        openai_client = self.get_client()
+            openai_client = self.get_client()
 
-        stream = openai_client.chat.completions.create(
-            model=self.model_name,
-            messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
-            temperature=temperature,
-            seed=seed,
-            tools=(
-                cast(Iterable[ChatCompletionToolParam], tool_dicts)
-                if tool_dicts
-                else openai.NotGiven()
-            ),
-            max_tokens=max_tokens or openai.NotGiven(),
-            timeout=timeout or openai.NotGiven(),
-            stream=True,
-            stream_options={"include_usage": True},
-            reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
-        )
+            stream = openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=cast(Iterable[ChatCompletionMessageParam], message_dicts),
+                temperature=temperature,
+                seed=seed,
+                tools=(
+                    cast(Iterable[ChatCompletionToolParam], tool_dicts)
+                    if tool_dicts
+                    else openai.NotGiven()
+                ),
+                max_tokens=max_tokens or openai.NotGiven(),
+                timeout=timeout or openai.NotGiven(),
+                stream=True,
+                stream_options={"include_usage": True},
+                reasoning_effort=reasoning_effort if reasoning_effort else openai.NotGiven(),
+            )
 
-        current_tool_call: dict[str, Any] | None = None
-        current_tool_call_index = 0
+            current_tool_call: dict[str, Any] | None = None
+            current_tool_call_index = 0
 
-        def cleanup():
-            try:
-                stream.response.close()
-            except Exception:
-                pass
+            def cleanup():
+                try:
+                    stream.response.close()
+                except Exception:
+                    pass
 
-        for chunk in _iterate_with_timeouts(
-            stream,
-            first_token_timeout=first_token_timeout,
-            inactivity_timeout=inactivity_timeout,
-            on_cleanup=cleanup,
-        ):
-            if not chunk.choices and chunk.usage:
-                usage = Usage(
-                    completion_tokens=chunk.usage.completion_tokens,
-                    prompt_tokens=chunk.usage.prompt_tokens,
-                    total_tokens=chunk.usage.total_tokens,
-                )
-                yield usage
-                langfuse_context.update_current_observation(model=self.model_name, usage=usage)
-                break
+            for chunk in _iterate_with_timeouts(
+                stream,
+                first_token_timeout=first_token_timeout,
+                inactivity_timeout=inactivity_timeout,
+                on_cleanup=cleanup,
+            ):
+                if not chunk.choices and chunk.usage:
+                    usage = Usage(
+                        completion_tokens=chunk.usage.completion_tokens,
+                        prompt_tokens=chunk.usage.prompt_tokens,
+                        total_tokens=chunk.usage.total_tokens,
+                    )
+                    yield usage
+                    langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+                    break
 
-            delta = chunk.choices[0].delta
-            if delta.tool_calls:
-                tool_call = delta.tool_calls[0]
+                delta = chunk.choices[0].delta
+                if delta.tool_calls:
+                    tool_call = delta.tool_calls[0]
 
-                if (
-                    not current_tool_call or current_tool_call_index != tool_call.index
-                ):  # Start of new tool call
-                    current_tool_call_index = tool_call.index
-                    if current_tool_call:
-                        yield ToolCall(**current_tool_call)
-                    current_tool_call = None
-                    current_tool_call = {
-                        "id": tool_call.id,
-                        "function": tool_call.function.name if tool_call.function.name else "",
-                        "args": (
-                            tool_call.function.arguments if tool_call.function.arguments else ""
-                        ),
-                    }
-                else:
-                    if tool_call.function.arguments:
-                        current_tool_call["args"] += tool_call.function.arguments
-            if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
-                yield ToolCall(**current_tool_call)
-            if delta.content:
-                yield "content", delta.content
+                    if (
+                        not current_tool_call or current_tool_call_index != tool_call.index
+                    ):  # Start of new tool call
+                        current_tool_call_index = tool_call.index
+                        if current_tool_call:
+                            yield ToolCall(**current_tool_call)
+                        current_tool_call = None
+                        current_tool_call = {
+                            "id": tool_call.id,
+                            "function": tool_call.function.name if tool_call.function.name else "",
+                            "args": (
+                                tool_call.function.arguments if tool_call.function.arguments else ""
+                            ),
+                        }
+                    else:
+                        if tool_call.function.arguments:
+                            current_tool_call["args"] += tool_call.function.arguments
+                if chunk.choices[0].finish_reason == "tool_calls" and current_tool_call:
+                    yield ToolCall(**current_tool_call)
+                if delta.content:
+                    yield "content", delta.content
+
+        return backoff_on_generator(
+            lambda: _stream_with_retries(),
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )()
 
     def construct_message_from_stream(
         self, content_chunks: list[str], tool_calls: list[ToolCall]
@@ -596,6 +629,23 @@ class AnthropicProvider(BaseLlmProvider):
         ),
     ]
 
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        retryable_errors = (
+            "Internal server error",
+            "not_found_error",
+            "404, 'message': 'Publisher Model",
+        )
+        return (
+            (
+                isinstance(exception, anthropic.AnthropicError)
+                and any(error in str(exception) for error in retryable_errors)
+            )
+            or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, LlmNoCompletionTokensError)
+            or "incomplete chunked read" in str(exception)
+        )
+
     @inject
     def get_client(self, app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
         project_id = app_config.GOOGLE_CLOUD_PROJECT
@@ -604,6 +654,10 @@ class AnthropicProvider(BaseLlmProvider):
         # Use provided region if available, otherwise fall back to automatic region selection
         if self.region:
             selected_region = self.region
+
+        # Always overwrite
+        if app_config.DEV:
+            selected_region = "us-east5"
 
         if not selected_region:
             raise ValueError(
@@ -624,12 +678,6 @@ class AnthropicProvider(BaseLlmProvider):
             base_url=base_url,
             max_retries=max_retries,
         )
-
-        # Apply backoff retry mechanism to client methods
-        retrier = backoff_on_exception(
-            AnthropicProvider.is_completion_exception_retryable, max_tries=4
-        )
-        client.messages.create = retrier(client.messages.create)  # type: ignore[method-assign]
 
         return client
 
@@ -672,23 +720,10 @@ class AnthropicProvider(BaseLlmProvider):
             ),
         )
 
-        return cls(model_name=model_name, defaults=merged_defaults, region=region)
-
-    @staticmethod
-    def is_completion_exception_retryable(exception: Exception) -> bool:
-        retryable_errors = (
-            "Internal server error",
-            "not_found_error",
-            "404, 'message': 'Publisher Model",
-        )
-        return (
-            (
-                isinstance(exception, anthropic.AnthropicError)
-                and any(error in str(exception) for error in retryable_errors)
-            )
-            or isinstance(exception, LlmStreamTimeoutError)
-            or isinstance(exception, LlmNoCompletionTokensError)
-            or "incomplete chunked read" in str(exception)
+        return cls(
+            model_name=model_name,
+            defaults=merged_defaults,
+            region=region,
         )
 
     @staticmethod
@@ -696,9 +731,6 @@ class AnthropicProvider(BaseLlmProvider):
         error_msg = str(exception)
         return ("Prompt is too long" in error_msg) or ("exceed context limit" in error_msg)
 
-    @observe(as_type="generation", name="Anthropic Generation")
-    @sentry_sdk.trace
-    @inject
     def generate_text(
         self,
         *,
@@ -711,55 +743,64 @@ class AnthropicProvider(BaseLlmProvider):
         timeout: float | None = None,
         reasoning_effort: str | None = None,
     ):
-        message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
-        )
+        @observe(as_type="generation", name="Anthropic Generation")
+        @sentry_sdk.trace
+        def _generate_text():
+            message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+            )
 
-        anthropic_client = self.get_client()
+            anthropic_client = self.get_client()
 
-        completion = anthropic_client.messages.create(
-            system=system_prompt_block or NOT_GIVEN,
-            model=self.model_name,
-            tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
-            messages=cast(Iterable[MessageParam], message_dicts),
-            max_tokens=max_tokens or 8192,
-            temperature=temperature or NOT_GIVEN,
-            timeout=timeout or NOT_GIVEN,
-            thinking=(
-                ThinkingConfigEnabledParam(
-                    type="enabled",
-                    budget_tokens=(
-                        1024
-                        if reasoning_effort == "low"
-                        else 4092 if reasoning_effort == "medium" else 8192
-                    ),
-                )
-                if reasoning_effort
-                else NOT_GIVEN
-            ),
-        )
-
-        message = self._format_claude_response_to_message(completion)
-
-        usage = Usage(
-            completion_tokens=completion.usage.output_tokens,
-            prompt_tokens=completion.usage.input_tokens,
-            total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
-        )
-
-        langfuse_context.update_current_observation(model=self.model_name, usage=usage)
-
-        return LlmGenerateTextResponse(
-            message=message,
-            metadata=LlmResponseMetadata(
+            completion = anthropic_client.messages.create(
+                system=system_prompt_block or NOT_GIVEN,
                 model=self.model_name,
-                provider_name=self.provider_name,
-                usage=usage,
-            ),
-        )
+                tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
+                messages=cast(Iterable[MessageParam], message_dicts),
+                max_tokens=max_tokens or 8192,
+                temperature=temperature or NOT_GIVEN,
+                timeout=timeout or NOT_GIVEN,
+                thinking=(
+                    ThinkingConfigEnabledParam(
+                        type="enabled",
+                        budget_tokens=(
+                            1024
+                            if reasoning_effort == "low"
+                            else 4092 if reasoning_effort == "medium" else 8192
+                        ),
+                    )
+                    if reasoning_effort
+                    else NOT_GIVEN
+                ),
+            )
+
+            message = self._format_claude_response_to_message(completion)
+
+            usage = Usage(
+                completion_tokens=completion.usage.output_tokens,
+                prompt_tokens=completion.usage.input_tokens,
+                total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
+            )
+
+            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+            return LlmGenerateTextResponse(
+                message=message,
+                metadata=LlmResponseMetadata(
+                    model=self.model_name,
+                    provider_name=self.provider_name,
+                    usage=usage,
+                ),
+            )
+
+        return backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )(_generate_text)()
 
     @staticmethod
     def _format_claude_response_to_message(completion: anthropic.types.Message) -> Message:
@@ -893,8 +934,6 @@ class AnthropicProvider(BaseLlmProvider):
 
         return message_dicts, tool_dicts, system_prompt_block
 
-    @observe(as_type="generation", name="Anthropic Stream")
-    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -909,112 +948,135 @@ class AnthropicProvider(BaseLlmProvider):
         first_token_timeout: float,
         inactivity_timeout: float,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
-        message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
-        )
+        @observe(as_type="generation", name="Anthropic Stream")
+        @sentry_sdk.trace
+        def _stream_with_retries():
+            message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+            )
 
-        anthropic_client = self.get_client()
+            anthropic_client = self.get_client()
 
-        stream = anthropic_client.messages.create(
-            system=system_prompt_block or NOT_GIVEN,
-            model=self.model_name,
-            tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
-            messages=cast(Iterable[MessageParam], message_dicts),
-            max_tokens=max_tokens or 8192,
-            temperature=temperature or NOT_GIVEN,
-            timeout=timeout or NOT_GIVEN,
-            stream=True,
-            thinking=(
-                ThinkingConfigEnabledParam(
-                    type="enabled",
-                    budget_tokens=(
-                        1024
-                        if reasoning_effort == "low"
-                        else 4092 if reasoning_effort == "medium" else 8192
-                    ),
+            stream = anthropic_client.messages.create(
+                system=system_prompt_block or NOT_GIVEN,
+                model=self.model_name,
+                tools=cast(Iterable[ToolParam], tool_dicts) if tool_dicts else NOT_GIVEN,
+                messages=cast(Iterable[MessageParam], message_dicts),
+                max_tokens=max_tokens or 8192,
+                temperature=temperature or NOT_GIVEN,
+                timeout=timeout or NOT_GIVEN,
+                stream=True,
+                thinking=(
+                    ThinkingConfigEnabledParam(
+                        type="enabled",
+                        budget_tokens=(
+                            1024
+                            if reasoning_effort == "low"
+                            else 4092 if reasoning_effort == "medium" else 8192
+                        ),
+                    )
+                    if reasoning_effort
+                    else NOT_GIVEN
+                ),
+            )
+
+            try:
+                current_tool_call: dict[str, Any] | None = None
+                current_input_json = []
+                total_input_write_tokens = 0
+                total_input_read_tokens = 0
+                total_input_tokens = 0
+                total_output_tokens = 0
+
+                yielded_content = False
+
+                def cleanup():
+                    try:
+                        stream.response.close()
+                    except Exception:
+                        pass
+
+                for chunk in _iterate_with_timeouts(
+                    stream,
+                    first_token_timeout=first_token_timeout,
+                    inactivity_timeout=inactivity_timeout,
+                    on_cleanup=cleanup,
+                ):
+                    if chunk.type == "message_start" and chunk.message.usage:
+                        if chunk.message.usage.cache_creation_input_tokens:
+                            total_input_write_tokens += (
+                                chunk.message.usage.cache_creation_input_tokens
+                            )
+                        if chunk.message.usage.cache_read_input_tokens:
+                            total_input_read_tokens += chunk.message.usage.cache_read_input_tokens
+                        total_input_tokens += chunk.message.usage.input_tokens
+                        total_output_tokens += chunk.message.usage.output_tokens
+                    elif chunk.type == "message_delta" and chunk.usage:
+                        total_output_tokens += chunk.usage.output_tokens
+
+                    if chunk.type == "message_stop":
+                        break
+                    elif chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
+                        yield "content", chunk.delta.text
+                        yielded_content = True
+                    elif (
+                        chunk.type == "content_block_delta" and chunk.delta.type == "thinking_delta"
+                    ):
+                        yield "thinking_content", chunk.delta.thinking
+                    elif (
+                        chunk.type == "content_block_delta"
+                        and chunk.delta.type == "signature_delta"
+                    ):
+                        yield "thinking_signature", chunk.delta.signature
+                    elif (
+                        chunk.type == "content_block_start"
+                        and chunk.content_block.type == "tool_use"
+                    ):
+                        # Start accumulating a new tool call
+                        current_tool_call = {
+                            "id": chunk.content_block.id,
+                            "function": chunk.content_block.name,
+                            "args": "",
+                        }
+                    elif (
+                        chunk.type == "content_block_delta"
+                        and chunk.delta.type == "input_json_delta"
+                    ):
+                        # Accumulate the input JSON
+                        if current_tool_call:
+                            current_input_json.append(chunk.delta.partial_json)
+                    elif chunk.type == "content_block_stop" and current_tool_call:
+                        # Tool call is complete, yield it
+                        current_tool_call["args"] = "".join(current_input_json)
+                        yield ToolCall(**current_tool_call)
+                        current_tool_call = None
+                        current_input_json = []
+                        yielded_content = True
+
+                if not yielded_content or total_output_tokens == 0:
+                    raise LlmNoCompletionTokensError("No content returned from Claude")
+            finally:
+                usage = Usage(
+                    completion_tokens=total_output_tokens,
+                    prompt_tokens=total_input_tokens,
+                    total_tokens=total_input_tokens + total_output_tokens,
+                    prompt_cache_write_tokens=total_input_write_tokens,
+                    prompt_cache_read_tokens=total_input_read_tokens,
                 )
-                if reasoning_effort
-                else NOT_GIVEN
-            ),
-        )
+                yield usage
+                langfuse_context.update_current_observation(
+                    model=self.model_name, usage=usage.to_langfuse_usage()
+                )
 
-        try:
-            current_tool_call: dict[str, Any] | None = None
-            current_input_json = []
-            total_input_write_tokens = 0
-            total_input_read_tokens = 0
-            total_input_tokens = 0
-            total_output_tokens = 0
-
-            yielded_content = False
-
-            def cleanup():
-                try:
-                    stream.response.close()
-                except Exception:
-                    pass
-
-            for chunk in _iterate_with_timeouts(
-                stream,
-                first_token_timeout=first_token_timeout,
-                inactivity_timeout=inactivity_timeout,
-                on_cleanup=cleanup,
-            ):
-                if chunk.type == "message_start" and chunk.message.usage:
-                    if chunk.message.usage.cache_creation_input_tokens:
-                        total_input_write_tokens += chunk.message.usage.cache_creation_input_tokens
-                    if chunk.message.usage.cache_read_input_tokens:
-                        total_input_read_tokens += chunk.message.usage.cache_read_input_tokens
-                    total_input_tokens += chunk.message.usage.input_tokens
-                    total_output_tokens += chunk.message.usage.output_tokens
-                elif chunk.type == "message_delta" and chunk.usage:
-                    total_output_tokens += chunk.usage.output_tokens
-
-                if chunk.type == "message_stop":
-                    break
-                elif chunk.type == "content_block_delta" and chunk.delta.type == "text_delta":
-                    yield "content", chunk.delta.text
-                    yielded_content = True
-                elif chunk.type == "content_block_delta" and chunk.delta.type == "thinking_delta":
-                    yield "thinking_content", chunk.delta.thinking
-                elif chunk.type == "content_block_delta" and chunk.delta.type == "signature_delta":
-                    yield "thinking_signature", chunk.delta.signature
-                elif chunk.type == "content_block_start" and chunk.content_block.type == "tool_use":
-                    # Start accumulating a new tool call
-                    current_tool_call = {
-                        "id": chunk.content_block.id,
-                        "function": chunk.content_block.name,
-                        "args": "",
-                    }
-                elif chunk.type == "content_block_delta" and chunk.delta.type == "input_json_delta":
-                    # Accumulate the input JSON
-                    if current_tool_call:
-                        current_input_json.append(chunk.delta.partial_json)
-                elif chunk.type == "content_block_stop" and current_tool_call:
-                    # Tool call is complete, yield it
-                    current_tool_call["args"] = "".join(current_input_json)
-                    yield ToolCall(**current_tool_call)
-                    current_tool_call = None
-                    current_input_json = []
-                    yielded_content = True
-
-            if not yielded_content or total_output_tokens == 0:
-                raise LlmNoCompletionTokensError("No content returned from Claude")
-        finally:
-            usage = Usage(
-                completion_tokens=total_output_tokens,
-                prompt_tokens=total_input_tokens,
-                total_tokens=total_input_tokens + total_output_tokens,
-                prompt_cache_write_tokens=total_input_write_tokens,
-                prompt_cache_read_tokens=total_input_read_tokens,
-            )
-            yield usage
-            langfuse_context.update_current_observation(
-                model=self.model_name, usage=usage.to_langfuse_usage()
-            )
+        return backoff_on_generator(
+            lambda: _stream_with_retries(),
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )()
 
     def construct_message_from_stream(
         self,
@@ -1044,7 +1106,7 @@ class GeminiProvider(BaseLlmProvider):
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
-            match=r"-preview-",  # contains the substring "-preview-"
+            match=r".*-preview-.*",  # contains the substring "-preview-"
             defaults=LlmProviderDefaults(temperature=0.0),
             region_preference={
                 "us": ["us-central1", "global"],
@@ -1060,6 +1122,32 @@ class GeminiProvider(BaseLlmProvider):
             },
         ),
     ]
+
+    @staticmethod
+    def is_completion_exception_retryable(exception: Exception) -> bool:
+        retryable_errors = (
+            # https://sentry.sentry.io/issues/6301072208
+            "TLS/SSL connection has been closed",
+            "Max retries exceeded with url",
+            "Internal error",
+            "499 CANCELLED",
+        )
+
+        return (
+            isinstance(exception, ServerError)
+            or (
+                isinstance(exception, ClientError)
+                and any(error in str(exception) for error in retryable_errors)
+            )
+            or isinstance(exception, LlmNoCompletionTokensError)
+            or isinstance(exception, LlmStreamTimeoutError)
+            or isinstance(exception, ChunkedEncodingError)
+            or isinstance(exception, json.JSONDecodeError)
+        )
+
+    @staticmethod
+    def is_input_too_long(exception: Exception) -> bool:
+        return isinstance(exception, ClientError) and "input token count" in str(exception)
 
     def get_region_preference(self) -> list[str]:
         region_preference = super().get_region_preference()
@@ -1082,11 +1170,7 @@ class GeminiProvider(BaseLlmProvider):
             vertexai=True,
             location=self.region,
         )
-        # The gemini client currently doesn't have a built-in retry mechanism.
-        retrier = backoff_on_exception(
-            GeminiProvider.is_completion_exception_retryable, max_tries=4
-        )
-        client.models.generate_content = retrier(client.models.generate_content)  # type: ignore[method-assign]
+
         return client
 
     @classmethod
@@ -1126,62 +1210,42 @@ class GeminiProvider(BaseLlmProvider):
             local_regions_only=local_regions_only,
         )
 
-    @observe(as_type="generation", name="Gemini Generation with Grounding")
-    @sentry_sdk.trace
     def search_the_web(
         self, prompt: str, temperature: float | None = None, seed: int | None = None
     ) -> str:
-        client = self.get_client()
-        google_search_tool = GeminiTool(google_search=GoogleSearch())
+        @observe(as_type="generation", name="Gemini Generation with Grounding")
+        @sentry_sdk.trace
+        def _search_the_web():
+            client = self.get_client()
+            google_search_tool = GeminiTool(google_search=GoogleSearch())
 
-        response = client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=GenerateContentConfig(
-                tools=[google_search_tool],
-                response_modalities=["TEXT"],
-                temperature=temperature or 0.0,
-                seed=seed,
-            ),
-        )
-        answer = ""
-        if (
-            response.candidates
-            and response.candidates[0].content
-            and response.candidates[0].content.parts
-        ):
-            for each in response.candidates[0].content.parts:
-                if each.text:
-                    answer += each.text
-        return answer
-
-    @staticmethod
-    def is_completion_exception_retryable(exception: Exception) -> bool:
-        retryable_errors = (
-            # https://sentry.sentry.io/issues/6301072208
-            "TLS/SSL connection has been closed",
-            "Max retries exceeded with url",
-            "Internal error",
-            "499 CANCELLED",
-        )
-        return (
-            isinstance(exception, ServerError)
-            or (
-                isinstance(exception, ClientError)
-                and any(error in str(exception) for error in retryable_errors)
+            response = client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=GenerateContentConfig(
+                    tools=[google_search_tool],
+                    response_modalities=["TEXT"],
+                    temperature=temperature or 0.0,
+                    seed=seed,
+                ),
             )
-            or isinstance(exception, LlmNoCompletionTokensError)
-            or isinstance(exception, LlmStreamTimeoutError)
-            or isinstance(exception, ChunkedEncodingError)
-            or isinstance(exception, json.JSONDecodeError)
-        )
+            answer = ""
+            if (
+                response.candidates
+                and response.candidates[0].content
+                and response.candidates[0].content.parts
+            ):
+                for each in response.candidates[0].content.parts:
+                    if each.text:
+                        answer += each.text
+            return answer
 
-    @staticmethod
-    def is_input_too_long(exception: Exception) -> bool:
-        return isinstance(exception, ClientError) and "input token count" in str(exception)
+        return backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )(_search_the_web)()
 
-    @observe(as_type="generation", name="Gemini Generation")
-    @sentry_sdk.trace
     def generate_structured(
         self,
         *,
@@ -1196,71 +1260,80 @@ class GeminiProvider(BaseLlmProvider):
         cache_name: str | None = None,
         thinking_budget: int | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
-        )
+        @observe(as_type="generation", name="Gemini Generation")
+        @sentry_sdk.trace
+        def _generate_structured():
+            message_dicts, tool_dicts, final_system_prompt = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+            )
 
-        client = self.get_client()
+            client = self.get_client()
 
-        max_retries = 2  # Gemini sometimes doesn't fill in response.parsed
-        for _ in range(max_retries + 1):
-            response = client.models.generate_content(
-                model=self.model_name,
-                contents=message_dicts,  # type: ignore[arg-type]
-                config=GenerateContentConfig(
-                    tools=tool_dicts,
-                    response_modalities=["TEXT"],
-                    temperature=temperature or 0.0,
-                    seed=seed,
-                    response_mime_type="application/json",
-                    max_output_tokens=max_tokens or 8192,
-                    response_schema=response_format,
-                    cached_content=cache_name,
-                    thinking_config=(
-                        ThinkingConfig(thinking_budget=thinking_budget)
-                        if thinking_budget is not None
-                        else None
+            max_retries = 2  # Gemini sometimes doesn't fill in response.parsed
+            for _ in range(max_retries + 1):
+                response = client.models.generate_content(
+                    model=self.model_name,
+                    system_instruction=final_system_prompt,
+                    contents=message_dicts,  # type: ignore[arg-type]
+                    config=GenerateContentConfig(
+                        tools=tool_dicts,
+                        response_modalities=["TEXT"],
+                        temperature=temperature or 0.0,
+                        seed=seed,
+                        response_mime_type="application/json",
+                        max_output_tokens=max_tokens or 8192,
+                        response_schema=response_format,
+                        cached_content=cache_name,
+                        thinking_config=(
+                            ThinkingConfig(thinking_budget=thinking_budget)
+                            if thinking_budget is not None
+                            else None
+                        ),
                     ),
+                )
+                if response.parsed is not None:
+                    break
+
+            usage = Usage(
+                completion_tokens=(
+                    response.usage_metadata.candidates_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.candidates_token_count is not None
+                    else 0
+                ),
+                prompt_tokens=(
+                    response.usage_metadata.prompt_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.prompt_token_count is not None
+                    else 0
+                ),
+                total_tokens=(
+                    response.usage_metadata.total_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.total_token_count is not None
+                    else 0
                 ),
             )
-            if response.parsed is not None:
-                break
+            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
 
-        usage = Usage(
-            completion_tokens=(
-                response.usage_metadata.candidates_token_count
-                if response.usage_metadata
-                and response.usage_metadata.candidates_token_count is not None
-                else 0
-            ),
-            prompt_tokens=(
-                response.usage_metadata.prompt_token_count
-                if response.usage_metadata
-                and response.usage_metadata.prompt_token_count is not None
-                else 0
-            ),
-            total_tokens=(
-                response.usage_metadata.total_token_count
-                if response.usage_metadata and response.usage_metadata.total_token_count is not None
-                else 0
-            ),
-        )
-        langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+            return LlmGenerateStructuredResponse(
+                parsed=response.parsed,  # type: ignore[arg-type]
+                metadata=LlmResponseMetadata(
+                    model=self.model_name,
+                    provider_name=self.provider_name,
+                    usage=usage,
+                ),
+            )
 
-        return LlmGenerateStructuredResponse(
-            parsed=response.parsed,  # type: ignore[arg-type]
-            metadata=LlmResponseMetadata(
-                model=self.model_name,
-                provider_name=self.provider_name,
-                usage=usage,
-            ),
-        )
+        return backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )(_generate_structured)()
 
-    @observe(as_type="generation", name="Gemini Stream")
-    @sentry_sdk.trace
     def generate_text_stream(
         self,
         *,
@@ -1274,92 +1347,103 @@ class GeminiProvider(BaseLlmProvider):
         first_token_timeout: float,
         inactivity_timeout: float,
     ) -> Iterator[str | ToolCall | Usage]:
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
+        @observe(as_type="generation", name="Gemini Stream")
+        @sentry_sdk.trace
+        def _stream_with_retries():
+            message_dicts, tool_dicts, system_prompt_processed = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+            )
+
+            client = self.get_client()
+
+            total_prompt_tokens = 0
+            total_completion_tokens = 0
+            output_yielded = False
+
+            try:
+                stream = client.models.generate_content_stream(
+                    model=self.model_name,
+                    contents=message_dicts,  # type: ignore[arg-type]
+                    config=GenerateContentConfig(
+                        tools=tool_dicts,
+                        system_instruction=system_prompt_processed,
+                        response_modalities=["TEXT"],
+                        temperature=temperature or 0.0,
+                        seed=seed,
+                        max_output_tokens=max_tokens or 8192,
+                        thinking_config=ThinkingConfig(include_thoughts=True),
+                    ),
+                )
+
+                current_tool_call: dict[str, Any] | None = None
+
+                def cleanup():
+                    try:
+                        stream.response.close()
+                    except Exception:
+                        pass
+
+                for chunk in _iterate_with_timeouts(
+                    stream,
+                    first_token_timeout=first_token_timeout,
+                    inactivity_timeout=inactivity_timeout,
+                    on_cleanup=cleanup,
+                ):
+
+                    # Handle function calls
+                    if (
+                        chunk.candidates
+                        and chunk.candidates[0].content
+                        and chunk.candidates[0].content.parts
+                        and chunk.candidates[0].content.parts[0].function_call
+                    ):
+                        function_call = chunk.candidates[0].content.parts[0].function_call
+                        if function_call.name and function_call.args and not current_tool_call:
+                            current_tool_call = {
+                                "id": str(hash(function_call.name + str(function_call.args))),
+                                "function": function_call.name,
+                                "args": json.dumps(function_call.args),
+                            }
+                            yield ToolCall(**current_tool_call)
+                            output_yielded = True
+                            current_tool_call = None
+                    # Handle text chunks
+                    elif chunk.text is not None:
+                        yield "content", str(chunk.text)  # type: ignore[misc]
+                        output_yielded = True
+
+                    # Update token counts if available
+                    if chunk.usage_metadata:
+                        if chunk.usage_metadata.prompt_token_count is not None:
+                            total_prompt_tokens = chunk.usage_metadata.prompt_token_count
+                        if chunk.usage_metadata.candidates_token_count is not None:
+                            total_completion_tokens = chunk.usage_metadata.candidates_token_count
+
+                if not output_yielded:
+                    raise LlmNoCompletionTokensError("No output returned from Gemini")
+            finally:
+                # Yield final usage statistics
+                usage = Usage(
+                    completion_tokens=total_completion_tokens,
+                    prompt_tokens=total_prompt_tokens,
+                    total_tokens=total_prompt_tokens + total_completion_tokens,
+                )
+                yield usage
+                langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+        # Apply retry logic to the generator
+        retrying_stream = backoff_on_generator(
+            lambda: _stream_with_retries(),
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
         )
 
-        client = self.get_client()
+        return retrying_stream()
 
-        total_prompt_tokens = 0
-        total_completion_tokens = 0
-        output_yielded = False
-
-        try:
-            stream = client.models.generate_content_stream(
-                model=self.model_name,
-                contents=message_dicts,  # type: ignore[arg-type]
-                config=GenerateContentConfig(
-                    tools=tool_dicts,
-                    system_instruction=system_prompt,
-                    response_modalities=["TEXT"],
-                    temperature=temperature or 0.0,
-                    seed=seed,
-                    max_output_tokens=max_tokens or 8192,
-                    thinking_config=ThinkingConfig(include_thoughts=True),
-                ),
-            )
-
-            current_tool_call: dict[str, Any] | None = None
-
-            def cleanup():
-                try:
-                    stream.response.close()
-                except Exception:
-                    pass
-
-            for chunk in _iterate_with_timeouts(
-                stream,
-                first_token_timeout=first_token_timeout,
-                inactivity_timeout=inactivity_timeout,
-                on_cleanup=cleanup,
-            ):
-
-                # Handle function calls
-                if (
-                    chunk.candidates
-                    and chunk.candidates[0].content
-                    and chunk.candidates[0].content.parts
-                    and chunk.candidates[0].content.parts[0].function_call
-                ):
-                    function_call = chunk.candidates[0].content.parts[0].function_call
-                    if function_call.name and function_call.args and not current_tool_call:
-                        current_tool_call = {
-                            "id": str(hash(function_call.name + str(function_call.args))),
-                            "function": function_call.name,
-                            "args": json.dumps(function_call.args),
-                        }
-                        yield ToolCall(**current_tool_call)
-                        output_yielded = True
-                        current_tool_call = None
-                # Handle text chunks
-                elif chunk.text is not None:
-                    yield "content", str(chunk.text)  # type: ignore[misc]
-                    output_yielded = True
-
-                # Update token counts if available
-                if chunk.usage_metadata:
-                    if chunk.usage_metadata.prompt_token_count is not None:
-                        total_prompt_tokens = chunk.usage_metadata.prompt_token_count
-                    if chunk.usage_metadata.candidates_token_count is not None:
-                        total_completion_tokens = chunk.usage_metadata.candidates_token_count
-
-            if not output_yielded:
-                raise LlmNoCompletionTokensError("No output returned from Gemini")
-        finally:
-            # Yield final usage statistics
-            usage = Usage(
-                completion_tokens=total_completion_tokens,
-                prompt_tokens=total_prompt_tokens,
-                total_tokens=total_prompt_tokens + total_completion_tokens,
-            )
-            yield usage
-            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
-
-    @observe(as_type="generation", name="Gemini Generation")
-    @sentry_sdk.trace
     def generate_text(
         self,
         *,
@@ -1371,58 +1455,68 @@ class GeminiProvider(BaseLlmProvider):
         seed: int | None = None,
         max_tokens: int | None = None,
     ):
-        message_dicts, tool_dicts, system_prompt = self._prep_message_and_tools(
-            messages=messages,
-            prompt=prompt,
-            system_prompt=system_prompt,
-            tools=tools,
-        )
+        @observe(as_type="generation", name="Gemini Generation")
+        @sentry_sdk.trace
+        def _generate_text():
+            message_dicts, tool_dicts, final_system_prompt = self._prep_message_and_tools(
+                messages=messages,
+                prompt=prompt,
+                system_prompt=system_prompt,
+                tools=tools,
+            )
 
-        client = self.get_client()
-        response = client.models.generate_content(
-            model=self.model_name,
-            contents=message_dicts,  # type: ignore[arg-type]
-            config=GenerateContentConfig(
-                tools=tool_dicts,
-                system_instruction=system_prompt,
-                temperature=temperature or 0.0,
-                seed=seed,
-                max_output_tokens=max_tokens or 8192,
-            ),
-        )
-
-        message = self._format_gemini_response_to_message(response)
-
-        usage = Usage(
-            completion_tokens=(
-                response.usage_metadata.candidates_token_count
-                if response.usage_metadata
-                and response.usage_metadata.candidates_token_count is not None
-                else 0
-            ),
-            prompt_tokens=(
-                response.usage_metadata.prompt_token_count
-                if response.usage_metadata
-                and response.usage_metadata.prompt_token_count is not None
-                else 0
-            ),
-            total_tokens=(
-                response.usage_metadata.total_token_count
-                if response.usage_metadata and response.usage_metadata.total_token_count is not None
-                else 0
-            ),
-        )
-
-        langfuse_context.update_current_observation(model=self.model_name, usage=usage)
-
-        return LlmGenerateTextResponse(
-            message=message,
-            metadata=LlmResponseMetadata(
+            client = self.get_client()
+            response = client.models.generate_content(
                 model=self.model_name,
-                provider_name=self.provider_name,
-                usage=usage,
-            ),
-        )
+                contents=message_dicts,  # type: ignore[arg-type]
+                config=GenerateContentConfig(
+                    tools=tool_dicts,
+                    system_instruction=final_system_prompt,
+                    temperature=temperature or 0.0,
+                    seed=seed,
+                    max_output_tokens=max_tokens or 8192,
+                ),
+            )
+
+            message = self._format_gemini_response_to_message(response)
+
+            usage = Usage(
+                completion_tokens=(
+                    response.usage_metadata.candidates_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.candidates_token_count is not None
+                    else 0
+                ),
+                prompt_tokens=(
+                    response.usage_metadata.prompt_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.prompt_token_count is not None
+                    else 0
+                ),
+                total_tokens=(
+                    response.usage_metadata.total_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.total_token_count is not None
+                    else 0
+                ),
+            )
+
+            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+
+            return LlmGenerateTextResponse(
+                message=message,
+                metadata=LlmResponseMetadata(
+                    model=self.model_name,
+                    provider_name=self.provider_name,
+                    usage=usage,
+                ),
+            )
+
+        return backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )(_generate_text)()
 
     @classmethod
     def _prep_message_and_tools(
@@ -1639,6 +1733,11 @@ class GeminiProvider(BaseLlmProvider):
                 return cache.name
         return None
 
+    def copy(self, **kwargs):
+        model = super().copy(**kwargs)
+        model.local_regions_only = self.local_regions_only
+        return model
+
 
 LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
@@ -1783,17 +1882,12 @@ class LlmClient:
             # Try each region for this model
             for j, region in enumerate(regions_to_try):
                 # Create a copy of the model with the specific region
-                model_to_use = type(base_model)(
-                    model_name=base_model.model_name,
-                    defaults=base_model.defaults,
-                    region=region,
-                )
+                model_to_use = base_model.copy(region=region)
 
                 try:
                     self._set_fallback_sentry_tags(model_to_use, i + 1, j + 1, len(models), region)
 
                     return operation_func(model_to_use)
-
                 except Exception as e:
                     if self._is_fallback_worthy_exception(e, model_to_use):
                         is_last_region = j == len(regions_to_try) - 1
@@ -2135,7 +2229,6 @@ class LlmClient:
         reasoning_effort: str | None = None,
         first_token_timeout: float | None = None,
         inactivity_timeout: float | None = None,
-        on_fallback_used_callback: Callable[[], None] | None = None,
     ) -> Iterator[Tuple[str, str] | ToolCall | Usage | LlmProvider]:
         # Validate input parameters
         if models is not None and model is not None:
@@ -2260,11 +2353,7 @@ class LlmClient:
                 # Try each region for this model
                 for j, region in enumerate(regions_to_try):
                     # Create a copy of the model with the specific region
-                    model_to_use = type(base_model)(
-                        model_name=base_model.model_name,
-                        defaults=base_model.defaults,
-                        region=region,
-                    )
+                    model_to_use = base_model.copy(region=region)
 
                     try:
                         self._set_fallback_sentry_tags(
@@ -2290,25 +2379,25 @@ class LlmClient:
 
                             if not is_last_region:
                                 # Try next region for this model
-                                if on_fallback_used_callback:
-                                    on_fallback_used_callback()
-
                                 logger.warning(
                                     f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
                                     f"due to {type(e).__name__}: {str(e)}. "
                                     f"Trying next region ({j + 2}/{len(regions_to_try)}): {regions_to_try[j + 1]}"
                                 )
+
+                                yield StreamResetException()
+
                                 continue
                             elif not is_last_model:
                                 # Try next model
-                                if on_fallback_used_callback:
-                                    on_fallback_used_callback()
-
                                 logger.warning(
                                     f"Text stream generation failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
                                     f"due to {type(e).__name__}: {str(e)}. "
                                     f"Trying next model ({i + 2}/{len(models_to_try)}): {models_to_try[i + 1].provider_name} '{models_to_try[i + 1].model_name}'"
                                 )
+
+                                yield StreamResetException()
+
                                 break  # Break out of region loop to try next model
                             else:
                                 # Last model and last region - fail

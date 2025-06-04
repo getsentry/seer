@@ -8,6 +8,12 @@ DEFAULT_FIRST_TOKEN_TIMEOUT = 40.0
 DEFAULT_INACTIVITY_TIMEOUT = 20.0
 
 
+class StreamResetException(Exception):
+    """Raised when the stream is reset."""
+
+    pass
+
+
 class ToolCall(BaseModel):
     id: Optional[str] = None
     function: str
