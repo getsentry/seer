@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import threading
 import time
 from urllib.parse import urlparse
 
@@ -9,6 +10,7 @@ import datadog
 import flask
 import requests
 import sentry_sdk
+import socketio  # Add this import for python-socketio client
 import websockets
 from datadog.dogstatsd.base import statsd
 from flask import Blueprint, Flask, jsonify
@@ -507,43 +509,63 @@ def summarize_issue_websocket_endpoint(
         logger.error("No websocket_url provided in request.")
         raise InternalServerError("No websocket_url provided.")
 
-    async def stream_and_send_messages(websocket_url, data):
-        try:
-            async with websockets.connect(websocket_url) as ws:
-                stream = run_summarize_issue_streaming(data)
+    def stream_and_send_messages(socketio_url, channel, data):
+        sio = socketio.Client()
+        connected_event = threading.Event()
 
-                for chunk in stream:
-                    print(type(chunk), chunk)
-                    message = None
-                    if isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == "content":
-                        message = json.dumps({"message": chunk[1]})
-                    else:
-                        message = json.dumps({"message": str(chunk)})
-                    await ws.send(message)
-                await ws.close()
-            print("Websocket connection closed")
+        @sio.event
+        def connect():
+            print("SocketIO client connected")
+            connected_event.set()
+
+        try:
+            sio.connect(socketio_url)
+            connected_event.wait()  # Wait until connected
+
+            sio.emit("signin", {"user": "seer", "channel": channel})
+            stream = run_summarize_issue_streaming(data)
+            for chunk in stream:
+                if isinstance(chunk, tuple) and len(chunk) == 2 and chunk[0] == "content":
+                    print("sending message", chunk[1])
+                    sio.emit("message", {"user": "seer", "text": str(chunk[1]), "channel": channel})
+            sio.disconnect()
+            print("SocketIO client disconnected")
         except Exception as e:
-            logger.exception("Error connecting to websocket or sending message")
+            logger.exception("Error connecting to socketio or sending message")
             raise
 
     try:
-        if "localhost" in data.websocket_url:
-            websocket_url = data.websocket_url.replace("localhost", "host.docker.internal")
-        else:
-            websocket_url = data.websocket_url
-        print(websocket_url)
-        asyncio.run(stream_and_send_messages(websocket_url, data))
+        # Convert websocket_url to socketio_url and extract room
+        # Example: ws://localhost:8080/socket.io/?EIO=4&transport=websocket&room=abc123
+        # Client connects to http://localhost:8080 and joins room abc123
+        parsed = urlparse(data.websocket_url)
+        # Use http(s)://host:port as socketio_url
+        socketio_url = (
+            f"{parsed.scheme.replace('ws', 'http')}://{parsed.hostname}:{parsed.port or 80}"
+        )
+        # Extract room from query or path
+        # Assume room is the last part of the path or a query param
+        channel = None
+        if "room=" in (parsed.query or ""):
+            for q in parsed.query.split("&"):
+                if q.startswith("room="):
+                    channel = q.split("=")[1]
+                    break
+        if not channel:
+            # fallback: try to get from path
+            parts = parsed.path.rstrip("/").split("/")
+            if parts:
+                channel = parts[-1]
+        if not channel:
+            logger.error("Could not determine channel from websocket_url")
+            raise InternalServerError("Could not determine channel from websocket_url")
+        if "localhost" in socketio_url:
+            socketio_url = socketio_url.replace("localhost", "host.docker.internal")
+        print(f"Connecting to {socketio_url}, channel {channel}")
+        stream_and_send_messages(socketio_url, channel, data)
     except Exception as e:
-        logger.exception("Error in websocket communication")
+        logger.exception("Error in socketio communication")
         raise InternalServerError from e
-
-    channel_id = websocket_url.rstrip("/").split("/")[-2]
-    parsed = urlparse(websocket_url)
-    response = requests.post(f"http://{parsed.netloc}/api/deleteroom", json={"roomId": channel_id})
-    if response.status_code == 200:
-        print(f"Deleted channel {channel_id}")
-    else:
-        print(f"Failed to delete channel {channel_id}: {response.status_code}")
 
     return SummarizeIssueWebsocketResponse(
         message="Issue summarized and message sent to websocket."
