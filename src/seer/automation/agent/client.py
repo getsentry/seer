@@ -82,14 +82,14 @@ class BaseLlmProvider:
     default_configs: ClassVar[list[LlmModelDefaultConfig]]
 
     @classmethod
-    def get_config(cls, model_name: str):
+    def get_config(cls, model_name: str) -> LlmModelDefaultConfig | None:
         for config in cls.default_configs:
             if re.match(config.match, model_name):
                 return config
         return None
 
     @inject
-    def get_region_preference(self, app_config: AppConfig = injected):
+    def get_region_preference(self, app_config: AppConfig = injected) -> list[str] | None:
         config = self.get_config(self.model_name)
         if config is None:
             return None
@@ -525,7 +525,7 @@ class OpenAiProvider(BaseLlmProvider):
         reasoning_effort: str | None = None,
         first_token_timeout: float,
         inactivity_timeout: float,
-    ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage | StreamResetException]:
         @observe(as_type="generation", name="OpenAI Stream")
         @sentry_sdk.trace
         def _stream_with_retries():
@@ -958,7 +958,7 @@ class AnthropicProvider(BaseLlmProvider):
         reasoning_effort: str | None = None,
         first_token_timeout: float,
         inactivity_timeout: float,
-    ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage | StreamResetException]:
         @observe(as_type="generation", name="Anthropic Stream")
         @sentry_sdk.trace
         def _stream_with_retries():
@@ -1160,9 +1160,10 @@ class GeminiProvider(BaseLlmProvider):
     def is_input_too_long(exception: Exception) -> bool:
         return isinstance(exception, ClientError) and "input token count" in str(exception)
 
-    def get_region_preference(self) -> list[str]:
+    @inject
+    def get_region_preference(self, app_config: AppConfig = injected) -> list[str] | None:
         region_preference = super().get_region_preference()
-        if self.local_regions_only:
+        if region_preference and self.local_regions_only:
             return [region for region in region_preference if region != "global"]
         return region_preference
 
@@ -1357,7 +1358,7 @@ class GeminiProvider(BaseLlmProvider):
         max_tokens: int | None = None,
         first_token_timeout: float,
         inactivity_timeout: float,
-    ) -> Iterator[str | ToolCall | Usage]:
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage | StreamResetException]:
         @observe(as_type="generation", name="Gemini Stream")
         @sentry_sdk.trace
         def _stream_with_retries():
@@ -1948,9 +1949,13 @@ class LlmClient:
         """Get the list of regions to try for a given model."""
         if model.region is not None:
             return [model.region]
+
+        region_preference = model.get_region_preference()
+        if region_preference is not None:
+            # Cast to list[str | None] to handle type compatibility
+            return list(region_preference)
         else:
-            region_preference = model.get_region_preference()
-            return region_preference if region_preference else [None]
+            return [None]
 
     def _set_fallback_sentry_tags(
         self,
@@ -2240,7 +2245,7 @@ class LlmClient:
         reasoning_effort: str | None = None,
         first_token_timeout: float | None = None,
         inactivity_timeout: float | None = None,
-    ) -> Iterator[Tuple[str, str] | ToolCall | Usage | LlmProvider]:
+    ) -> Iterator[Tuple[str, str] | ToolCall | Usage | LlmProvider | StreamResetException]:
         # Validate input parameters
         if models is not None and model is not None:
             raise ValueError(
@@ -2258,7 +2263,7 @@ class LlmClient:
 
         def _generate_text_stream_operation(
             model_to_use: LlmProvider,
-        ) -> Iterator[Tuple[str, str] | ToolCall | Usage]:
+        ) -> Iterator[Tuple[str, str] | ToolCall | Usage | StreamResetException]:
             if run_name:
                 langfuse_context.update_current_observation(
                     name=run_name + " - Generate Text Stream"
@@ -2562,18 +2567,20 @@ class LlmClient:
         self, contents: str, display_name: str, model: LlmProvider, ttl: int = 3600
     ) -> str:
         if model.provider_name == LlmProviderType.GEMINI:
-            gemini_model = cast(GeminiProvider, model)
 
-            gemini_model.local_regions_only = True  # Local region is required for caching to work
+            def _create_cache(model_to_use: LlmProvider):
+                gemini_model = cast(GeminiProvider, model_to_use)
+                gemini_model.local_regions_only = (
+                    True  # Local region is required for caching to work
+                )
 
-            def _create_cache(model_to_use: GeminiProvider):
-                cache_name = model_to_use.create_cache(contents, display_name, ttl)
+                cache_name = gemini_model.create_cache(contents, display_name, ttl)
                 if not cache_name:
                     raise ValueError("Failed to create cache")
                 return cache_name
 
             return self._execute_with_fallback(
-                models=[gemini_model],
+                models=[model],
                 operation_name="Create cache",
                 operation_func=_create_cache,
             )
@@ -2583,15 +2590,16 @@ class LlmClient:
     @sentry_sdk.trace
     def get_cache(self, display_name: str, model: LlmProvider) -> str | None:
         if model.provider_name == LlmProviderType.GEMINI:
-            gemini_model = cast(GeminiProvider, model)
 
-            gemini_model.local_regions_only = True  # Local region is required for caching to work
-
-            def _create_cache(model_to_use: GeminiProvider):
-                return model_to_use.get_cache(display_name)
+            def _create_cache(model_to_use: LlmProvider):
+                gemini_model = cast(GeminiProvider, model_to_use)
+                gemini_model.local_regions_only = (
+                    True  # Local region is required for caching to work
+                )
+                return gemini_model.get_cache(display_name)
 
             return self._execute_with_fallback(
-                models=[gemini_model],
+                models=[model],
                 operation_name="Get cache",
                 operation_func=_create_cache,
             )
