@@ -5,12 +5,14 @@ on:
     types:
       - opened
       - synchronize
+      - ready_for_review
 
 jobs:
   relevant-warnings:
     name: Relevant Warnings
     runs-on: ubuntu-latest
     continue-on-error: true
+    if: github.event.pull_request.draft == false
 
     steps:
       - name: Checkout

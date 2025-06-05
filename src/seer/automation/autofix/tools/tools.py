@@ -127,7 +127,7 @@ class BaseTools:
             if repo_manager.initialization_future
         ]
 
-        self.context.event_manager.add_log("Waiting for your repositories to download...")
+        self.context.event_manager.add_log("Cloning your repositories...")
 
         # Use concurrent.futures.wait with a single timeout for all futures
         done_not_done: tuple[Set[Future[Any]], Set[Future[Any]]] = wait(

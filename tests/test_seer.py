@@ -1033,6 +1033,54 @@ class TestSeer(unittest.TestCase):
                     content_type="application/json",
                 )
 
+    @mock.patch("seer.app.run_repo_archive_cleanup.apply_async")
+    def test_autofix_cache_ttl_start_endpoint_success(self, mock_run_repo_archive_cleanup):
+        """Test successful autofix cache TTL start endpoint in development mode"""
+        # Prepare test data
+        test_data = AutofixNoopRequest()
+
+        # Mock the config to be in DEV mode
+        with mock.patch("seer.app.resolve") as mock_resolve:
+            mock_config = mock.Mock()
+            mock_config.DEV = True
+            mock_resolve.return_value = mock_config
+
+            # Make a POST request to the endpoint
+            response = app.test_client().post(
+                "/v1/automation/autofix/cache-ttl/start",
+                data=test_data.model_dump_json(),
+                content_type="application/json",
+            )
+
+            # Assert that the response is correct
+            self.assertEqual(response.status_code, 200)
+            response_data = json.loads(response.get_data(as_text=True))
+            self.assertEqual(response_data, {"started": True, "run_id": -1})
+
+            # Assert that run_repo_archive_cleanup.apply_async was called
+            mock_run_repo_archive_cleanup.assert_called_once()
+
+    def test_autofix_cache_ttl_start_endpoint_non_dev_mode(self):
+        """Test autofix cache TTL start endpoint raises error in non-development mode"""
+        # Prepare test data
+        test_data = AutofixNoopRequest()
+
+        # Mock the config to be in production mode
+        with mock.patch("seer.app.resolve") as mock_resolve:
+            mock_config = mock.Mock()
+            mock_config.DEV = False
+            mock_resolve.return_value = mock_config
+
+            # Make a POST request to the endpoint and expect a RuntimeError
+            with pytest.raises(
+                RuntimeError, match="The cache ttl endpoint is only available in development mode"
+            ):
+                app.test_client().post(
+                    "/v1/automation/autofix/cache-ttl/start",
+                    data=test_data.model_dump_json(),
+                    content_type="application/json",
+                )
+
 
 @parametrize(count=1)
 def test_prepared_statements_disabled(

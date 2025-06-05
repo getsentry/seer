@@ -45,34 +45,51 @@ def _init_stumpy():
 
 @celery_app.task
 @sentry_sdk.trace
-def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
+def cleanup_timeseries_and_predict(
+    external_alert_id: int | None,
+    date_threshold: float,
+    external_alert_source_id: int | None = None,
+    external_alert_source_type: int | None = None,
+):
+    """
+    The source_id and source_type parameters are added at the end and have default parameters to keep the method signature backward compatible.
+    Otherwise, any tasks already queued when this change is deployed will fail.
+    """
     sentry_sdk.set_tag(AnomalyDetectionTags.SEER_FUNCTIONALITY, "anomaly_detection")
     span = sentry_sdk.get_current_span()
 
     if span is not None:
-        span.set_tag("alert_id", alert_id)
+        span.set_tag("alert_id", external_alert_id)
+        span.set_tag("alert_source_id", external_alert_source_id)
+        span.set_tag("alert_source_type", external_alert_source_type)
 
     logger.info(
         "Deleting timeseries points over 28 days old and updating matrix profiles",
-        extra={"alert_id": alert_id},
+        extra={
+            "alert_id": external_alert_id,
+            "alert_source_id": external_alert_source_id,
+            "alert_source_type": external_alert_source_type,
+        },
     )
 
     # Perform a dummy call to Stumpy to force compilation
     _init_stumpy()
 
-    _toggle_data_purge_flag(alert_id)
+    _toggle_data_purge_flag(external_alert_id, external_alert_source_id, external_alert_source_type)
 
     with Session() as session:
-        alert = (
-            session.query(DbDynamicAlert)
-            .filter(DbDynamicAlert.external_alert_id == alert_id)
-            .one_or_none()
+        db_accessor = DbAlertDataAccessor()
+        alert = db_accessor.query_db_alert_or_raise(
+            session=session,
+            external_alert_id=external_alert_id,
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
         )
 
-        if alert is None:
-            raise ValueError(f"Alert with id {alert_id} not found")
         if len(alert.timeseries) == 0:
-            logger.warning(f"Alert with id {alert_id} has no timeseries")
+            logger.warning(
+                f"Alert with id {external_alert_id} and source id {external_alert_source_id} and source type {external_alert_source_type} has no timeseries"
+            )
         else:
             config = AnomalyDetectionConfig(
                 time_period=alert.config["time_period"],
@@ -89,23 +106,24 @@ def cleanup_timeseries_and_predict(alert_id: int, date_threshold: float):
             if len(alert.timeseries) > 0:
                 updated_timeseries_points = _update_matrix_profiles(alert, config)
                 predictions = _fit_predict(alert, config)
-                db_accessor = DbAlertDataAccessor()
                 db_accessor.store_prophet_predictions(alert.id, predictions)
             else:
                 # Reset the window size to 0 if there are no timeseries points left
                 alert.anomaly_algo_data = {"window_size": 0}
-                logger.warn(f"Alert with id {alert_id} has empty timeseries data after pruning")
+                logger.warn(
+                    f"Alert with id {external_alert_id} and source id {external_alert_source_id} and source type {external_alert_source_type} has empty timeseries data after pruning"
+                )
                 updated_timeseries_points = 0
 
             session.commit()
             logger.info(
-                f"Deleted {deleted_timeseries_points} timeseries points and {prophet_deleted_timeseries_points} prophet prediction points in alertd id {alert_id}"
+                f"Deleted {deleted_timeseries_points} timeseries points and {prophet_deleted_timeseries_points} prophet prediction points in alertd id {external_alert_id} and source id {external_alert_source_id} and source type {external_alert_source_type}"
             )
             logger.info(
-                f"Updated matrix profiles for {updated_timeseries_points} points in alertd id {alert_id}"
+                f"Updated matrix profiles for {updated_timeseries_points} points in alertd id {external_alert_id} and source id {external_alert_source_id} and source type {external_alert_source_type}"
             )
 
-    _toggle_data_purge_flag(alert_id)
+    _toggle_data_purge_flag(external_alert_id, external_alert_source_id, external_alert_source_type)
 
 
 @sentry_sdk.trace
@@ -148,6 +166,8 @@ def _save_timeseries_history(
         for ts in timeseries:
             history_record = DbDynamicAlertTimeSeriesHistory(
                 alert_id=alert.external_alert_id,
+                external_alert_source_id=alert.external_alert_source_id,
+                external_alert_source_type=alert.external_alert_source_type,
                 timestamp=ts.timestamp,
                 anomaly_type=ts.anomaly_type,
                 value=ts.value,
@@ -158,6 +178,8 @@ def _save_timeseries_history(
         for prophet_ts in prophet_timeseries:
             prophet_history_record = DbProphetAlertTimeSeriesHistory(
                 alert_id=alert.external_alert_id,
+                external_alert_source_id=alert.external_alert_source_id,
+                external_alert_source_type=alert.external_alert_source_type,
                 timestamp=prophet_ts.timestamp,
                 yhat=prophet_ts.yhat,
                 yhat_lower=prophet_ts.yhat_lower,
@@ -231,17 +253,24 @@ def _fit_predict(
 
 
 @sentry_sdk.trace
-def _toggle_data_purge_flag(alert_id: int):
+def _toggle_data_purge_flag(
+    alert_id: int | None,
+    external_alert_source_id: int | None,
+    external_alert_source_type: int | None,
+):
 
     with Session() as session:
-        alert = (
-            session.query(DbDynamicAlert)
-            .filter(DbDynamicAlert.external_alert_id == alert_id)
-            .one_or_none()
+        alert = DbAlertDataAccessor().query_db_alert_or_none(
+            session=session,
+            external_alert_id=alert_id,
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
         )
 
         if alert is None:
-            raise ValueError(f"Alert with id {alert_id} not found")
+            raise ValueError(
+                f"Alert with id {alert_id} and source id {external_alert_source_id} and source type {external_alert_source_type} not found"
+            )
         new_flag = (
             TaskStatus.PROCESSING
             if alert.data_purge_flag == TaskStatus.QUEUED

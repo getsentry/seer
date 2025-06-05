@@ -192,16 +192,18 @@ def retry_once_with_modified_input(
     return decorator
 
 
-def prefix_logger(prefix: str, logger: logging.Logger) -> logging.LoggerAdapter:
+def prefix_logger(
+    prefix: str, logger: logging.Logger, extra: dict[str, Any] | None = None
+) -> logging.LoggerAdapter:
     """
-    Returns a logger that prefixes all messages with `prefix`.
+    Returns a logger that prefixes all messages with `prefix` and includes extra context.
     """
 
     class PrefixedLoggingAdapter(logging.LoggerAdapter):
         def process(self, msg, kwargs):
             return f"{prefix}{msg}", kwargs
 
-    return PrefixedLoggingAdapter(logger)
+    return PrefixedLoggingAdapter(logger, extra=extra)
 
 
 _Batch = TypeVar("_Batch")

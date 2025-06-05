@@ -3,6 +3,7 @@ import logging
 import sentry_sdk
 from psycopg import Connection
 from sentry_sdk.integrations import Integration
+from sentry_sdk.transport import HttpTransport
 from sentry_sdk.types import Event
 
 # Make sure this import is here
@@ -44,6 +45,24 @@ def bootup(
 
 
 @inject
+class CustomTransport(HttpTransport):
+    def __init__(self, *args, config: AppConfig = injected, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config = config
+
+    def capture_envelope(self, envelope):
+        try:
+            # Set public key to seer's public key
+            envelope.headers["trace"]["public_key"] = sentry_sdk.utils.Dsn(
+                self.config.SENTRY_DSN
+            ).public_key
+        except KeyError:
+            pass
+
+        super().capture_envelope(envelope)
+
+
+@inject
 def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = injected) -> None:
     def before_send(event: Event, hint: dict) -> Event | None:
         if "exc_info" in hint:
@@ -66,6 +85,7 @@ def initialize_sentry_sdk(integrations: list[Integration], config: AppConfig = i
             "continuous_profiling_auto_start": True,
             "enable_logs": True,
         },
+        transport=CustomTransport,
     )
 
     if config.SENTRY_REGION:

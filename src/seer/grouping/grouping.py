@@ -172,7 +172,7 @@ class GroupingLookup:
         :param stacktrace: The stacktrace to encode.
         :return: The embedding of the stacktrace.
         """
-        return self.model.encode(stacktrace)
+        return self.model.encode(stacktrace, show_progress_bar=False)
 
     @sentry_sdk.tracing.trace
     @handle_out_of_memory
@@ -184,7 +184,9 @@ class GroupingLookup:
         :return: The embeddings of the stacktraces.
         """
 
-        return self.model.encode(sentences=stacktraces, batch_size=batch_size)
+        return self.model.encode(
+            sentences=stacktraces, batch_size=batch_size, show_progress_bar=False
+        )
 
     @sentry_sdk.tracing.trace
     def query_nearest_k_neighbors(

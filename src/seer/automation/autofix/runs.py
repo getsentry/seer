@@ -96,7 +96,7 @@ def create_initial_autofix_run(request: AutofixRequest) -> DbState[AutofixContin
 def validate_repo_branches_exist(
     repos: list[RepoDefinition], event_manager: AutofixEventManager
 ) -> bool:
-    for repo in repos:
+    def _check_branch_exists(repo):
         if repo.provider == "github":
             if repo.branch_name:
                 try:
@@ -107,8 +107,17 @@ def validate_repo_branches_exist(
                             f"The branch {repo.branch_name} does not exist in the repository {repo.full_name} or Autofix doesn't have access to it."
                         )
                     return False
+        return True
 
-    return True
+    if len(repos) > 1:
+        with ThreadPoolExecutor(initializer=copy_modules_initializer()) as executor:
+            results = list(executor.map(_check_branch_exists, repos))
+        return all(results)
+    else:
+        for repo in repos:
+            if not _check_branch_exists(repo):
+                return False
+        return True
 
 
 def update_repo_access_and_properties(

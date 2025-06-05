@@ -251,19 +251,28 @@ def extract_parsed_model(completion: ParsedChatCompletion[T]) -> T:
     return structured_message.parsed
 
 
-def detect_encoding(raw_data: bytes, fallback_encoding: str = "utf-8"):
+def decode_raw_data(raw_data: bytes) -> tuple[str, str]:
     """
-    Try to detect the encoding of the given data using chardet library. If the confidence is not high enough, fallback.
+    Try to decode as UTF-8 first (the standard for most repos).
+    If that fails, use chardet to guess the encoding.
+    If that fails, raise an error.
     """
     try:
-        result = chardet.detect(raw_data)
-        encoding = result["encoding"] if result["confidence"] > 0.9 else fallback_encoding
-    # if something went wrong, fallback
-    except Exception as e:
-        logger.exception(f"Error detecting encoding of data: {e}")
-        encoding = fallback_encoding
-
-    return encoding
+        # Try UTF-8 first, since it's the most common file encoding
+        content = raw_data.decode("utf-8")
+        return content, "utf-8"
+    except UnicodeDecodeError:
+        # If it's not utf-8, use chardet to guess the encoding
+        detected = chardet.detect(raw_data)
+        encoding = detected.get("encoding")
+        if not encoding:
+            # If chardet returns None, i.e. no encoding detected, raise an error
+            raise Exception("Could not detect encoding with chardet.")
+        try:
+            return raw_data.decode(encoding), encoding
+        except UnicodeDecodeError as e:
+            # If the detected encoding does not work, raise an error
+            raise Exception(f"Could not decode raw data with detected encoding '{encoding}': {e}")
 
 
 def batch_texts_by_token_count(

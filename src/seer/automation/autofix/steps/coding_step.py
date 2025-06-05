@@ -167,4 +167,5 @@ class AutofixCodingStep(AutofixPipelineStep):
                 ),
             ),
             queue=app_config.CELERY_WORKER_QUEUE,
+            run_sync=True,
         )

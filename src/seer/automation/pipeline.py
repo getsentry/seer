@@ -101,9 +101,8 @@ class PipelineStep(abc.ABC, Generic[_RequestType, _ContextType]):
     @cached_property
     def logger(self):
         run_id = self.context.run_id
-        name = self.name
-        prefix = f"[{run_id=}] [{name}] "
-        return prefix_logger(prefix, logger)
+        prefix = f"[{self.name}] "
+        return prefix_logger(prefix, logger, extra={"run_id": run_id})
 
     @staticmethod
     @abc.abstractmethod
@@ -150,8 +149,10 @@ class PipelineChain(PipelineStep):
     A PipelineStep which can call other steps.
     """
 
-    def next(self, sig: SerializedSignature | Signature, **apply_async_kwargs):
-        if PIPELINE_SYNC_SIGNAL in self.context.signals:
+    def next(
+        self, sig: SerializedSignature | Signature, run_sync: bool = False, **apply_async_kwargs
+    ):
+        if PIPELINE_SYNC_SIGNAL in self.context.signals or run_sync:
             signature(sig).apply(**apply_async_kwargs)
         else:
             signature(sig).apply_async(**apply_async_kwargs)

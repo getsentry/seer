@@ -3,6 +3,7 @@ import unittest
 from datetime import datetime, timedelta
 
 import numpy as np
+from sqlalchemy import and_, or_
 
 from seer.anomaly_detection.accessors import DbAlertDataAccessor
 from seer.anomaly_detection.detectors.anomaly_detectors import MPBatchAnomalyDetector
@@ -28,9 +29,11 @@ from seer.db import (
 class TestCleanupTasks(unittest.TestCase):
     def _save_alert(
         self,
-        external_alert_id: int,
+        external_alert_id: int | None,
         num_old_points: int,
         num_new_points: int,
+        external_alert_source_id: int | None = None,
+        external_alert_source_type: int | None = None,
     ):
         # Helper function to save an alert with a given number of old and new points
         organization_id = 100
@@ -78,6 +81,8 @@ class TestCleanupTasks(unittest.TestCase):
             organization_id=organization_id,
             project_id=project_id,
             external_alert_id=external_alert_id,
+            external_alert_source_id=external_alert_source_id,
+            external_alert_source_type=external_alert_source_type,
             config=config,
             timeseries=points,
             anomalies=anomalies,
@@ -85,11 +90,23 @@ class TestCleanupTasks(unittest.TestCase):
             data_purge_flag=TaskStatus.NOT_QUEUED,
         )
         with Session() as session:
-            alert = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
-                .one_or_none()
-            )
+            if external_alert_id is not None:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(
+                        DbDynamicAlert.external_alert_id == external_alert_id,
+                    )
+                    .one_or_none()
+                )
+            else:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(
+                        DbDynamicAlert.external_alert_source_id == external_alert_source_id,
+                        DbDynamicAlert.external_alert_source_type == external_alert_source_type,
+                    )
+                    .one_or_none()
+                )
             assert alert is not None
             assert len(alert.timeseries) == len(points)
 
@@ -97,10 +114,12 @@ class TestCleanupTasks(unittest.TestCase):
 
     def _save_prophet_predictions(
         self,
-        external_alert_id: int,
+        external_alert_id: int | None,
         num_points_old: int,
         num_points_new: int,
         first_timestamp: float = None,
+        external_alert_source_id: int | None = None,
+        external_alert_source_type: int | None = None,
     ):
 
         cur_ts = first_timestamp if first_timestamp else datetime.now().timestamp()
@@ -121,11 +140,21 @@ class TestCleanupTasks(unittest.TestCase):
 
         with Session() as session:
 
-            alert = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
-                .one_or_none()
-            )
+            if external_alert_id is not None:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(DbDynamicAlert.external_alert_id == external_alert_id)
+                    .one_or_none()
+                )
+            else:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(
+                        DbDynamicAlert.external_alert_source_id == external_alert_source_id,
+                        DbDynamicAlert.external_alert_source_type == external_alert_source_type,
+                    )
+                    .one_or_none()
+                )
 
             assert alert is not None
 
@@ -149,19 +178,19 @@ class TestCleanupTasks(unittest.TestCase):
 
     def test_cleanup_invalid_alert_id(self):
         with self.assertRaises(ValueError, msg="Alert with id 100 not found"):
-            cleanup_timeseries_and_predict(100, datetime.now().timestamp())
+            cleanup_timeseries_and_predict(100, datetime.now().timestamp(), None, None)
 
     def test_cleanup_timeseries_no_points(self):
         # Save alert with no points
         external_alert_id, config, _, _, _ = self._save_alert(0, 0, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold, None, None)
 
     def test_only_old_points_deleted(self):
         # Create and save alert with 1000 points (all old)
         external_alert_id, config, points, anomalies, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold, None, None)
 
         # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
         with Session() as session:
@@ -177,105 +206,149 @@ class TestCleanupTasks(unittest.TestCase):
             assert alert.anomaly_algo_data["window_size"] == 0
             assert len(alert.prophet_predictions) == 0
 
-    def test_cleanup_timeseries(
-        self,
-    ):
-
-        # Create and save alert with 2000 points (1000 old, 1000 new)
-        external_alert_id, config, points, anomalies, _ = self._save_alert(0, 1000, 1000)
-
-        first_timestamp = points[0].timestamp
-
-        external_alert_id, prophet_predictions = self._save_prophet_predictions(
-            0, 1000, 0, first_timestamp
-        )
-
-        points_new = points[1000:]
-        ts_new = TimeSeries(
-            timestamps=np.array([point.timestamp for point in points_new]),
-            values=np.array([point.value for point in points_new]),
-        )
-        anomalies_new = MPBatchAnomalyDetector().detect(
-            ts_new, config
-        )  # TODO: This test will need to be updated when the combined anomalies are implemented
-
-        old_timeseries_points = []
-        with Session() as session:
-            alert = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
-                .one_or_none()
+    def test_cleanup_timeseries(self):
+        ids = [
+            (1, None, None),
+            (None, 2, 2),
+            (5, 10, 1),
+        ]
+        for external_alert_id, external_alert_source_id, external_alert_source_type in ids:
+            print(
+                f"Testing with external_alert_id: {external_alert_id}, external_alert_source_id: {external_alert_source_id}, external_alert_source_type: {external_alert_source_type}"
             )
-            assert alert is not None
-            assert len(alert.timeseries) == 2000
-            assert len(alert.prophet_predictions) == 1000
-            old_timeseries_points = alert.timeseries
 
-        date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
-
-        # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
-        with Session() as session:
-            alert = (
-                session.query(DbDynamicAlert)
-                .filter(DbDynamicAlert.external_alert_id == external_alert_id)
-                .one_or_none()
+            # Create and save alert with 2000 points (1000 old, 1000 new)
+            _, config, points, anomalies, _ = self._save_alert(
+                external_alert_id, 1000, 1000, external_alert_source_id, external_alert_source_type
             )
-            assert alert is not None
-            assert alert.data_purge_flag == TaskStatus.NOT_QUEUED
-            assert len(alert.timeseries) == 1000
 
-            assert "window_size" in alert.anomaly_algo_data
-            assert alert.anomaly_algo_data["window_size"] == anomalies_new.window_size
-            new_timeseries_points = alert.timeseries
-            assert old_timeseries_points != new_timeseries_points
+            first_timestamp = points[0].timestamp
 
-            for old, new, algo_data in zip(
-                old_timeseries_points[1000:],
-                new_timeseries_points,
-                anomalies_new.get_anomaly_algo_data(len(points_new)),
-            ):
-                assert new.timestamp.timestamp() > date_threshold
-                assert old.timestamp == new.timestamp
-                assert old.value == new.value
-                if new.anomaly_algo_data is not None and algo_data is None:
-                    assert new.anomaly_algo_data["mp_suss"] is None
-                    assert (
-                        "dist" in new.anomaly_algo_data["mp_fixed"]
-                        and "idx" in new.anomaly_algo_data["mp_fixed"]
-                        and "l_idx" in new.anomaly_algo_data["mp_fixed"]
-                        and "r_idx" in new.anomaly_algo_data["mp_fixed"]
+            _, prophet_predictions = self._save_prophet_predictions(
+                external_alert_id,
+                1000,
+                0,
+                first_timestamp,
+                external_alert_source_id,
+                external_alert_source_type,
+            )
+
+            points_new = points[1000:]
+            ts_new = TimeSeries(
+                timestamps=np.array([point.timestamp for point in points_new]),
+                values=np.array([point.value for point in points_new]),
+            )
+            anomalies_new = MPBatchAnomalyDetector().detect(
+                ts_new, config
+            )  # TODO: This test will need to be updated when the combined anomalies are implemented
+
+            old_timeseries_points = []
+            with Session() as session:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(
+                        or_(
+                            DbDynamicAlert.external_alert_id == external_alert_id,
+                            and_(
+                                DbDynamicAlert.external_alert_source_id == external_alert_source_id,
+                                DbDynamicAlert.external_alert_source_type
+                                == external_alert_source_type,
+                            ),
+                        )
                     )
+                    .one_or_none()
+                )
+                assert alert is not None
+                assert len(alert.timeseries) == 2000
+                assert len(alert.prophet_predictions) == 1000
+                old_timeseries_points = alert.timeseries
 
-                if new.anomaly_algo_data is not None and algo_data is not None:
-                    assert (
-                        new.anomaly_algo_data["mp_suss"]["dist"] == algo_data["dist"]
-                        and new.anomaly_algo_data["mp_suss"]["idx"] == algo_data["idx"]
-                        and new.anomaly_algo_data["mp_suss"]["l_idx"] == algo_data["l_idx"]
-                        and new.anomaly_algo_data["mp_suss"]["r_idx"] == algo_data["r_idx"]
+            date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
+            cleanup_timeseries_and_predict(
+                external_alert_id,
+                date_threshold,
+                external_alert_source_id,
+                external_alert_source_type,
+            )
+
+            # Confirm if points are being deleted and matrix profile recalculated after cleanup task is called
+            with Session() as session:
+                alert = (
+                    session.query(DbDynamicAlert)
+                    .filter(
+                        or_(
+                            DbDynamicAlert.external_alert_id == external_alert_id,
+                            and_(
+                                DbDynamicAlert.external_alert_source_id == external_alert_source_id,
+                                DbDynamicAlert.external_alert_source_type
+                                == external_alert_source_type,
+                            ),
+                        )
                     )
-                    # Commenting fixed window logic for now as we are not using it
-                    # assert (
-                    #     "dist" in new.anomaly_algo_data["mp_fixed"]
-                    #     and "idx" in new.anomaly_algo_data["mp_fixed"]
-                    #     and "l_idx" in new.anomaly_algo_data["mp_fixed"]
-                    #     and "r_idx" in new.anomaly_algo_data["mp_fixed"]
-                    # )
+                    .one_or_none()
+                )
+                assert alert is not None
+                assert alert.data_purge_flag == TaskStatus.NOT_QUEUED
+                assert len(alert.timeseries) == 1000
+
+                assert "window_size" in alert.anomaly_algo_data
+                assert alert.external_alert_id == external_alert_id
+                assert alert.external_alert_source_id == external_alert_source_id
+                assert alert.external_alert_source_type == external_alert_source_type
+                assert alert.anomaly_algo_data["window_size"] == anomalies_new.window_size
+                new_timeseries_points = alert.timeseries
+                assert old_timeseries_points != new_timeseries_points
+
+                for old, new, algo_data in zip(
+                    old_timeseries_points[1000:],
+                    new_timeseries_points,
+                    anomalies_new.get_anomaly_algo_data(len(points_new)),
+                ):
+                    assert new.timestamp.timestamp() > date_threshold
+                    assert old.timestamp == new.timestamp
+                    assert old.value == new.value
+                    if new.anomaly_algo_data is not None and algo_data is None:
+                        assert new.anomaly_algo_data["mp_suss"] is None
+                        assert (
+                            "dist" in new.anomaly_algo_data["mp_fixed"]
+                            and "idx" in new.anomaly_algo_data["mp_fixed"]
+                            and "l_idx" in new.anomaly_algo_data["mp_fixed"]
+                            and "r_idx" in new.anomaly_algo_data["mp_fixed"]
+                        )
+
+                    if new.anomaly_algo_data is not None and algo_data is not None:
+                        assert (
+                            new.anomaly_algo_data["mp_suss"]["dist"] == algo_data["dist"]
+                            and new.anomaly_algo_data["mp_suss"]["idx"] == algo_data["idx"]
+                            and new.anomaly_algo_data["mp_suss"]["l_idx"] == algo_data["l_idx"]
+                            and new.anomaly_algo_data["mp_suss"]["r_idx"] == algo_data["r_idx"]
+                        )
+                        # Commenting fixed window logic for now as we are not using it
+                        # assert (
+                        #     "dist" in new.anomaly_algo_data["mp_fixed"]
+                        #     and "idx" in new.anomaly_algo_data["mp_fixed"]
+                        #     and "l_idx" in new.anomaly_algo_data["mp_fixed"]
+                        #     and "r_idx" in new.anomaly_algo_data["mp_fixed"]
+                        # )
 
         # Fails due to invalid alert_id
         with self.assertRaises(Exception):
-            cleanup_timeseries_and_predict(999, date_threshold)
+            cleanup_timeseries_and_predict(999, date_threshold, None, None)
+        with self.assertRaises(Exception):
+            cleanup_timeseries_and_predict(None, date_threshold, 999, 1)
+        with self.assertRaises(Exception):
+            cleanup_timeseries_and_predict(99, date_threshold, 999, 1)
 
     def test_make_prophet_predictions(self):
         # Create and save alert with 6 points (3 old, 3 new)
         external_alert_id, config, points, anomalies, cur_timestamp = self._save_alert(777, 4800, 1)
         first_timestamp = points[0].timestamp
         external_alert_id, prophet_predictions = self._save_prophet_predictions(
-            777, 0, 6, first_timestamp
+            777, 0, 6, first_timestamp, None, None
         )
 
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold, None, None)
 
         with Session() as session:
             alert = (
@@ -296,9 +369,9 @@ class TestCleanupTasks(unittest.TestCase):
     def test_cleanup_disabled_alerts(self):
         # Create and save alerts with old points
         external_alert_id1, _, _, _, _ = self._save_alert(1, 1000, 0)
-        external_alert_id2, _, _, _, _ = self._save_alert(2, 500, 0)
-        external_alert_id3, _, _, _, _ = self._save_alert(3, 0, 500)
-        external_alert_id4, _, _, _, _ = self._save_alert(4, 0, 500)
+        external_alert_id2, _, _, _, _ = self._save_alert(2, 500, 0, 1, 1)
+        external_alert_id3, _, _, _, _ = self._save_alert(3, 0, 500, None, None)
+        external_alert_id4, _, _, _, _ = self._save_alert(4, 0, 500, None, None)
 
         # Set last_queued_at to be over 28 days ago for alerts 1 and 2
         with Session() as session:
@@ -363,7 +436,7 @@ class TestCleanupTasks(unittest.TestCase):
         # Create and save alert with 1000 points (all old)
         external_alert_id, _, _, _, _ = self._save_alert(0, 1000, 0)
         date_threshold = (datetime.now() - timedelta(days=28)).timestamp()
-        cleanup_timeseries_and_predict(external_alert_id, date_threshold)
+        cleanup_timeseries_and_predict(external_alert_id, date_threshold, None, None)
 
         # Confirm the historical table is populated with 1000 points
 

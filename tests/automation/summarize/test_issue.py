@@ -57,7 +57,7 @@ class TestSummarizeIssue:
         print(f"Actual result scores: {result.scores}")
 
         expected_result = IssueSummaryWithScores(
-            title="red-timothy-sandwich: Data Corruption?",
+            title="red-timothy-sandwich: Data Corruption Possible",
             whats_wrong="**red-timothy-sandwich** is the main issue.",
             session_related_issues="Other issues: **cyan-vincent-banana**, **green-fred-tennis**.",
             possible_cause="Perhaps a **data corruption** issue is the root cause.",

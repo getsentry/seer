@@ -22,10 +22,13 @@ def get_cache_prompt(
         ---
         # Key Concepts:
         - Trace:
-          - A trace represents a single transaction or request through your system. This includes things like user browser sessions, HTTP requests, DB queries, middleware, caches and more.
+          - A trace represents a collection of one or more transactions through your system.
+          - Each trace consists of one or more tree-like structures called transactions, with nodes called spans.
+        - Transaction:
+          - A transaction represents a single instance of a service being called. This includes things like user browser sessions, DB server requests, backend requests with API calls, browser page-loads, work done by caching services, and more.
           - It captures a series of operations (spans) that show how different parts of your application interacted during that transaction.
         - Span
-          - A span represents an individual operation within a trace. This could be a database query, HTTP request, or UI rendering task.
+          - A span represents an individual operation or unit of work within a trace. This could be an individual database query, HTTP request, or UI rendering task.
           - Each span has:
             - Attributes: Key-value pairs like http.method, db.query, span.description, or custom attributes like cart.value, provide additional context that can be useful for debugging and investigating patterns. These are either numbers or strings. Note: numeric span attributes can be used to calculate span metrics, shown below.
             - Duration (span.duration): The time the operation took, used to measure performance.
@@ -43,7 +46,7 @@ def get_cache_prompt(
 
         # Search Query and Syntax Guidelines:
         You will use the user's query below to create a valid Sentry search query. The search query will be used to filter the traces and spans that are displayed in the Trace Explorer page and ultimately help you answer the user's question.
-        You will be given a list of available fields and functions that you can use to create your query. You must only use these fields and functions to create your query.
+        You will be given a list of available fields that you can use to create your query. You must only use these fields to create your query.
         You must adhere to the following query syntax guidelines:
 
         ## Search Query Syntax Guidelines
@@ -78,7 +81,6 @@ def get_cache_prompt(
 
         Here are some examples of valid comparison operator searches:
 
-        - event.timestamp:>2023-09-28T00:00:00-07:00
         - count_dead_clicks:<=10
         - transaction.duration:>5s
         - span.duration:>500ms
@@ -234,17 +236,6 @@ def get_cache_prompt(
 
         When creating a query, do not include any escape tokens. Return it as directly as possible
 
-        ## Time-Based Queries
-
-        Sentry supports time-based queries to filter data by time.
-        - Use relative time
-          - timestamp:-24h (timestamp is after 24 hours ago)
-          - timestamp:+7d (timestamp is before 7 days ago)
-        - Use absolute time with comparison operators:
-          - timestamp:>2025-05-12 (date)
-          - timestamp:<=2025-05-12T00:00:00Z (date and time in UTC)
-          - timestamp:>=2025-05-12T00:00:00+00:00 (date, time, and specific timezone)
-
         ## Visualization Guidelines
 
         You must also select the right chart type and y-axes for the query.
@@ -283,13 +274,13 @@ def get_cache_prompt(
 
         ------
 
-        ## Available Fields and Functions (YOU MUST ONLY USE THESE):
+        ## Available Fields (YOU MUST ONLY USE THESE):
 
         If a field does not have a description, please infer the type of the field and the description based on the name.
 
-        <available_fields_and_functions>
+        <available_fields>
         {fields_with_definitions}
-        </available_fields_and_functions>
+        </available_fields>
 
         """
     )
@@ -369,7 +360,8 @@ def get_final_query_prompt(
         1. Deeply analyze the available values for each field to identify patterns
         2. For String fields, decide whether to use exact matches or wildcards based on the patterns found
         3. For numeric fields, use comparison operators to find close or exact matches
-        4. Construct the query using the most appropriate matching strategy
+        4. Explain succinctly in two sentences maximum why you generated this query. If you think that you did not have enough information or did not know how to properly construct the overall query, please explain what additional information and context you would have needed to successfuly create it.
+        5. Construct the overall query using the most appropriate matching strategy
 
         Please include a float confidence score between 0 and 1, where 0 is the least confident and 1 is the most confident, for each query option based on how confident you are that the query will return the most relevant results. Be as granular as possible going up to 3 decimal places.
 
@@ -407,4 +399,46 @@ def get_final_query_prompt(
 
         Here is the user's natural language query:
         {natural_language_query}
+        """
+
+
+def get_query_or_fields_prompt(natural_language_query: str) -> str:
+    """
+    Combined prompt that either generates queries directly for simple cases,
+    or requests specific fields for complex cases that need more context.
+    """
+    return f"""
+        Based on the user's natural language query and the search guidelines provided, your task is to either:
+        1. Generate valid Sentry search queries directly (for simple cases or if the query is gibberish)
+        2. Request specific fields you need to generate accurate queries (for complex cases)
+
+        ## If you can generate queries directly:
+        Return a list of 1-3 ModelResponse objects with complete query information.
+        Do this for simple queries like:
+        - "Show me HTTP requests" = span.op:http.client
+        - "Database operations" = span.op:db
+        - "Slow post requests" = http.request_method:POST AND span.duration:>500ms
+        Remember, you MUST use what is provided in the <available_fields> section and the <available_values> section to generate the queries.
+        You must be EXTREMELY CONFIDENT that the query will return the most relevant results, otherwise, you should request more context.
+
+        ## If you need more context:
+        Return a list of field names you need more values for. Remember, you only have access to up to 15 values for for only 125 fields.
+        Some fields are more likely to have high cardinality values, such as span.description or http.url which can have thousands of unique values.
+        If we did not provide the values for one of the fields you need more values for, you will get access to more values for that field, even the ones that are not in the <available_values> section.
+
+        ## Examples:
+
+        **Simple query**: "Show me HTTP client requests"
+        **Response**: Return queries directly using span.op:http.client
+
+        **Need more context**: "Slowest requests to our payment API"
+        **Response**: Request fields like ["span.description", "http.url"] to find payment-related operations and potential patterns.
+
+        Analyze the query and respond with EITHER:
+        - queries: [list of ModelResponse objects] (if you can generate directly)
+        - requested_fields: [list of field names] (if you need more context)
+
+        NEVER return both - you MUST choose one approach based on query complexity and the context provided (fields, values, and user's natural language query).
+
+        ## User's query: "{natural_language_query}"
         """

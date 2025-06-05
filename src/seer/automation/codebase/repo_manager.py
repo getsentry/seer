@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from typing import Callable
 
 import git
+import requests
 import sentry_sdk
 from google.cloud import storage  # type:ignore
 from sqlalchemy.orm import Session as SQLAlchemySession
@@ -39,7 +40,7 @@ class RepoInitializationError(RuntimeError):
 
 class RepoManager:
     """
-    A client for downloading and syncing git repositories using GitPython.
+    A client for downloading and syncing git repositories using GitHub tarball downloads.
     """
 
     repo_client: RepoClient
@@ -52,7 +53,6 @@ class RepoManager:
     organization_id: int | None
     project_id: int | None
 
-    _use_gcs: bool
     _last_liveness_update: float
     _trigger_liveness_probe: Callable[[], None] | None
 
@@ -81,8 +81,6 @@ class RepoManager:
         self._trigger_liveness_probe = trigger_liveness_probe
         self.is_cancelled = False
         self._last_liveness_update = 0.0
-
-        self._use_gcs = organization_id == 1
 
     @staticmethod
     def make_blob_name(
@@ -130,38 +128,18 @@ class RepoManager:
         logger.info(f"Initializing repo {self.repo_client.repo_full_name}")
 
         try:
-            if self.is_cancelled:
-                return
-
-            if not self._use_gcs or not self.gcs_archive_exists():
-                self._clone_repo()
-
-            else:
+            self._download_github_tar()
+        except RepoInitializationError as e:
+            if "Download cancelled for" in str(e):
                 logger.info(
-                    f"Using repository archive from GCS for {self.repo_client.repo_full_name}: {self.get_bucket_name()}/{self.blob_name}"
+                    f"Repository download for {self.repo_client.repo_full_name} was cancelled (expected)."
                 )
-                self.download_from_gcs()
-
-            if self.is_cancelled:
-                return
-
-            self._sync_repo()
-
-            if self.is_cancelled:
-                return
-        except RepoInitializationError as rie:
-            if "cancelled" in str(rie).lower():
-                logger.warning(
-                    f"Repo initialization for {self.repo_client.repo_full_name} was cancelled: {rie}"
-                )
-                # No re-raise, as this is a graceful cancellation
             else:
                 logger.exception(
-                    "Failed to initialize repo (RepoInitializationError)",
-                    extra={"repo": self.repo_client.repo_full_name},
+                    "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
                 )
                 self.cleanup()
-                raise  # Re-raise if not a cancellation
+                raise
         except Exception:
             logger.exception(
                 "Failed to initialize repo", extra={"repo": self.repo_client.repo_full_name}
@@ -199,98 +177,156 @@ class RepoManager:
             raise
 
     @sentry_sdk.trace
-    def _clone_repo(self) -> str:
+    def _download_github_tar(self) -> str:
         """
-        Clone a repository to a local temporary directory.
+        Download a repository tarball from GitHub at a specific SHA.
         """
-        repo_clone_url = self.repo_client.get_clone_url_with_auth()
+        commit_sha = self.repo_client.base_commit_sha
 
         try:
             logger.info(
-                f"Cloning repository {self.repo_client.repo_full_name} to {self.repo_path} with depth=1"
+                f"Downloading repository {self.repo_client.repo_full_name} tarball for commit {commit_sha}"
             )
 
             cleanup_dir(self.repo_path)
+            os.makedirs(self.repo_path, exist_ok=True)
+
+            # Get the tarball URL from GitHub
+            tarball_url = self.repo_client.repo.get_archive_link("tarball", ref=commit_sha)
+            tarfile_path = os.path.join(self.tmp_dir, f"{commit_sha}.tar.gz")
 
             start_time = time.time()
-            self.git_repo = git.Repo.clone_from(
-                repo_clone_url,
-                self.repo_path,
-                progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
-                depth=1,
-                no_checkout=True,
+
+            # Download the tarball with authentication
+            response = requests.get(
+                tarball_url,
+                stream=True,
+                headers={"Authorization": f"token {self.repo_client.github_auth.token}"},
             )
+
+            if response.status_code == 200:
+                with open(tarfile_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                        # Call throttled liveness probe during download
+                        self._throttled_liveness_probe()
+
+                        # Check for cancellation
+                        if self.is_cancelled:
+                            raise RepoInitializationError(
+                                f"Download cancelled for {self.repo_client.repo_full_name}"
+                            )
+            else:
+                logger.error(
+                    f"Failed to download tarball from {tarball_url}. Response status: {response.status_code}, text: {response.text}"
+                )
+                raise RepoInitializationError(
+                    f"Failed to download tarball from GitHub: HTTP {response.status_code}"
+                )
+
+            # Extract tarball into the repo directory
+            logger.info(f"Extracting repository tarball to {self.repo_path}")
+            with tarfile.open(tarfile_path, "r:gz") as tar:
+                # Get all members and validate them for security
+                members = tar.getmembers()
+                if not members:
+                    raise RepoInitializationError("Empty tarball downloaded")
+
+                # Validate tar members to prevent directory traversal attacks
+                safe_members = self._validate_tar_members(members)
+                if not safe_members:
+                    raise RepoInitializationError(
+                        "No safe members found in tarball after validation"
+                    )
+
+                # GitHub tarballs have a top-level directory, extract to a temp location first
+                temp_extract_path = os.path.join(self.tmp_dir, "extract_temp")
+                os.makedirs(temp_extract_path, exist_ok=True)
+                tar.extractall(path=temp_extract_path, members=safe_members)
+
+                # Find the root directory (should be the only directory)
+                extracted_items = os.listdir(temp_extract_path)
+                if not extracted_items:
+                    raise RepoInitializationError("No files extracted from tarball")
+
+                root_folder = extracted_items[0]
+                root_folder_path = os.path.join(temp_extract_path, root_folder)
+
+                if not os.path.isdir(root_folder_path):
+                    raise RepoInitializationError(
+                        "Unexpected tarball structure - no root directory found"
+                    )
+
+                # Move all contents from the root folder to the repo path
+                for item in os.listdir(root_folder_path):
+                    source_path = os.path.join(root_folder_path, item)
+                    dest_path = os.path.join(self.repo_path, item)
+
+                    if os.path.isdir(source_path):
+                        shutil.move(source_path, dest_path)
+                    else:
+                        # Skip symlinks to avoid issues
+                        if not os.path.islink(source_path):
+                            shutil.copy2(source_path, dest_path)
+
+                # Clean up the temporary extraction directory
+                shutil.rmtree(temp_extract_path)
+
+                # Remove all unsupported files
+                valid_files = self.repo_client.get_valid_file_paths()
+                for root, dirs, files in os.walk(self.repo_path, topdown=False):
+                    for file in files:
+                        # Compute relative path from repo_path
+                        rel_path = os.path.relpath(os.path.join(root, file), self.repo_path)
+                        rel_path = rel_path.replace(os.sep, "/")  # Normalize to forward slashes
+                        if rel_path not in valid_files:
+                            try:
+                                os.remove(os.path.join(root, file))
+                                logger.info(f"Removed unsupported file from download: {rel_path}")
+                            except Exception as e:
+                                logger.warning(f"Failed to remove file {rel_path}: {e}")
+                    # Remove empty directories
+                    if root != self.repo_path and not os.listdir(root):
+                        try:
+                            os.rmdir(root)
+                        except Exception as e:
+                            logger.warning(f"Failed to remove directory {root}: {e}")
+
+            # Clean up the tarball file
+            if os.path.exists(tarfile_path):
+                os.unlink(tarfile_path)
+
+            # Initialize a git repo object for the extracted directory
+            self.git_repo = git.Repo.init(self.repo_path)
+
             end_time = time.time()
             logger.info(
-                f"Cloned repository {self.repo_client.repo_full_name} in {end_time - start_time} seconds"
+                f"Downloaded and extracted repository {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
             )
 
             return self.repo_path
-        except git.exc.GitCommandError as e:
-            if self.is_cancelled and not e.stderr.strip():
-                raise RepoInitializationError(
-                    f"Clone cancelled for {self.repo_client.repo_full_name}"
-                )
-            else:
-                logger.exception(
-                    "Failed to clone repository",
-                    extra={"repo": self.repo_client.repo_full_name, "git_stderr": e.stderr},
-                )
-                self.git_repo = None  # clear the repo to fail the available check
-                raise
+
+        except RepoInitializationError:
+            # Re-raise RepoInitializationError as-is
+            self.git_repo = None
+            raise
         except Exception as exc:
             if self.is_cancelled:
                 raise RepoInitializationError(
-                    f"Clone cancelled for {self.repo_client.repo_full_name} during {exc!r}"
+                    f"Download cancelled for {self.repo_client.repo_full_name} during {exc!r}"
                 )
             logger.exception(
-                "Failed to clone repository (unexpected error)",
+                "Failed to download repository tarball (unexpected error)",
                 extra={"repo": self.repo_client.repo_full_name},
             )
-            self.git_repo = None  # clear the repo to fail the available check
+            self.git_repo = None
             raise
-
-    @sentry_sdk.trace
-    def _sync_repo(self):
-        """
-        Ensure the repository is up to date with only the target commit.
-        """
-        logger.info(f"Syncing repository {self.repo_client.repo_full_name}")
-
-        try:
-            start_time = time.time()
-            commit_sha = self.repo_client.base_commit_sha
-
-            # Reset any perceived local changes first
-            self.git_repo.git.reset("--hard")
-            # Clean any untracked files
-            self.git_repo.git.clean("-fdx")
-
-            auth_url = self.repo_client.get_clone_url_with_auth()
-
-            # Fetch only the specific commit
-            self.git_repo.git.execute(["git", "fetch", "--depth=1", auth_url, commit_sha])
-
-            # Force checkout to avoid the "local changes" error
-            logger.info(f"Checking out commit {commit_sha}")
-            self.git_repo.git.checkout(commit_sha, force=True)
-
-            end_time = time.time()
-            logger.info(
-                f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
-            )
-
-            if self._use_gcs:
-                self._verify_repo_state()
-        except Exception:
-            logger.exception(
-                "Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
-            )
-            self.git_repo = None  # clear the repo to fail the available check
 
     def _verify_repo_state(self, repo_path: str | None = None):
         """
-        Verify the repository state to ensure it is in the expected state at the right commit. Only use this for Debugging because it's slow.
+        Verify the repository state to ensure it contains the expected files.
+        For git-cloned repos, also verify the commit SHA.
         Should silently error to Sentry.
         """
         if repo_path is None:
@@ -304,16 +340,25 @@ class RepoManager:
 
         if self.git_repo is None:
             return logger.exception(
-                RepoInitializationError("Repository is not cloned"),
+                RepoInitializationError("Repository is not initialized"),
                 extra={"repo": self.repo_client.repo_full_name},
             )
 
-        if self.git_repo.head.commit.hexsha != self.repo_client.base_commit_sha:
-            return logger.exception(
-                RepoInitializationError("Repository is not at the right commit"),
-                extra={"repo": self.repo_client.repo_full_name},
+        # Check commit SHA if this is a git-cloned repo with history
+        try:
+            if hasattr(self.git_repo, "head") and self.git_repo.head.is_valid():
+                if self.git_repo.head.commit.hexsha != self.repo_client.base_commit_sha:
+                    return logger.exception(
+                        RepoInitializationError("Repository is not at the right commit"),
+                        extra={"repo": self.repo_client.repo_full_name},
+                    )
+        except (git.exc.InvalidGitRepositoryError, AttributeError):
+            # This is expected for tarball-downloaded repos which don't have git history
+            logger.debug(
+                f"Repository {self.repo_client.repo_full_name} has no git history (tarball download)"
             )
 
+        # Verify that expected files exist in the repository
         invalid_file_paths = set()
         repo_file_paths = self.repo_client.get_valid_file_paths()
         for file_path in repo_file_paths:
@@ -344,6 +389,57 @@ class RepoManager:
         ):
             self._trigger_liveness_probe()
             self._last_liveness_update = current_time
+
+    def _validate_tar_members(self, members, strip_prefix=None):
+        """
+        Validate tar archive members to prevent directory traversal attacks.
+
+        Args:
+            members: List of tar members to validate
+            strip_prefix: Optional prefix to strip from member names
+
+        Returns:
+            List of safe tar members with validated paths
+        """
+        safe_members = []
+        for member in members:
+            original_name = member.name
+
+            # Strip prefix if provided
+            if strip_prefix and member.name.startswith(strip_prefix):
+                member.name = member.name.replace(strip_prefix, "", 1)
+            elif strip_prefix:
+                # If we expect a prefix but it's not there, try without the trailing slash
+                prefix_no_slash = strip_prefix.rstrip("/")
+                if member.name.startswith(prefix_no_slash):
+                    member.name = member.name.replace(prefix_no_slash, "", 1)
+
+            # Validate the path is not absolute BEFORE normalizing
+            if os.path.isabs(member.name):
+                logger.warning(f"Skipping absolute path: {original_name} -> {member.name}")
+                continue
+
+            # Validate the path doesn't contain directory traversal elements BEFORE normalizing
+            if any(part == ".." for part in member.name.split("/")):
+                logger.warning(
+                    f"Skipping path with directory traversal: {original_name} -> {member.name}"
+                )
+                continue
+
+            # Remove leading slashes to normalize the path (after validation)
+            member.name = member.name.lstrip("/")
+
+            # Additional check for empty names after processing
+            if not member.name or member.name == "/":
+                logger.warning(f"Skipping empty or root path: {original_name} -> {member.name}")
+                continue
+
+            safe_members.append(member)
+
+        logger.info(
+            f"Validated {len(safe_members)} safe members out of {len(members)} total members"
+        )
+        return safe_members
 
     def _copy_repo(self, target_folder: str = "copied_repo"):
         """
@@ -617,19 +713,7 @@ class RepoManager:
                 # Get all members of the archive
                 members = tar.getmembers()
                 # Strip the top directory from paths and validate paths
-                safe_members = []
-                for member in members:
-                    # Prevent path traversal attacks
-                    if member.name.startswith("copied_repo/"):
-                        member.name = member.name.replace("copied_repo/", "", 1)
-                    else:
-                        member.name = member.name.replace("copied_repo", "", 1)
-
-                    # Ensure the path doesn't contain dangerous patterns like "../"
-                    if ".." not in member.name and not os.path.isabs(member.name):
-                        safe_members.append(member)
-                    else:
-                        logger.warning(f"Skipping potentially unsafe path: {member.name}")
+                safe_members = self._validate_tar_members(members, strip_prefix="copied_repo/")
 
                 # Extract with modified and validated paths
                 tar.extractall(path=self.repo_path, members=safe_members)
@@ -640,6 +724,12 @@ class RepoManager:
             logger.debug(f"Debug ls of repo path {self.repo_path}: {os.listdir(self.repo_path)}")
 
             self.git_repo = git.Repo(self.repo_path)
+
+            with Session() as session:
+                repo_archive = self.get_db_archive_entry(session)
+                if repo_archive:
+                    repo_archive.last_downloaded_at = datetime.datetime.now(datetime.UTC)
+                    session.commit()
 
             logger.info(f"Successfully downloaded repository from GCS to {self.repo_path}")
         except Exception:
@@ -716,3 +806,139 @@ class RepoManager:
         self.git_repo = None
 
         logger.info(f"Cleaned up repo for {self.repo_client.repo_full_name}")
+
+    @sentry_sdk.trace
+    def delete_archive(self):
+        """
+        Delete the repository archive from both GCS and the database.
+
+        This method removes the archive blob from Google Cloud Storage and deletes
+        the corresponding database record. It's designed to be safe to call even
+        if the archive doesn't exist in one or both locations.
+
+        Raises:
+            RepoInitializationError: If organization_id is not set
+            Exception: Any errors during the deletion process
+        """
+        if self.organization_id is None:
+            raise RepoInitializationError("Organization ID is not set, can't delete archive")
+
+        logger.info(f"Deleting repository archive: {self.get_bucket_name()}/{self.blob_name}")
+
+        try:
+            # Delete the GCS blob first
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(self.get_bucket_name())
+            blob = bucket.blob(self.blob_name)
+
+            if blob.exists():
+                blob.delete()
+                logger.info(f"Deleted GCS blob: {self.get_bucket_name()}/{self.blob_name}")
+            else:
+                logger.info(
+                    f"GCS blob not found (already deleted?): {self.get_bucket_name()}/{self.blob_name}"
+                )
+
+            # Delete the database record
+            with Session() as session:
+                repo_archive = self.get_db_archive_entry(session)
+                if repo_archive:
+                    session.delete(repo_archive)
+                    session.commit()
+                    logger.info(f"Deleted database record for archive: {self.blob_name}")
+                else:
+                    logger.info(f"Database record not found (already deleted?): {self.blob_name}")
+
+            logger.info(f"Successfully deleted repository archive: {self.blob_name}")
+
+        except Exception:
+            logger.exception(f"Failed to delete repository archive: {self.blob_name}")
+            raise
+
+    @sentry_sdk.trace
+    def _clone_repo(self) -> str:
+        """
+        Clone a repository to a local temporary directory.
+        """
+        repo_clone_url = self.repo_client.get_clone_url_with_auth()
+
+        try:
+            logger.info(
+                f"Cloning repository {self.repo_client.repo_full_name} to {self.repo_path} with depth=1"
+            )
+
+            cleanup_dir(self.repo_path)
+
+            start_time = time.time()
+            self.git_repo = git.Repo.clone_from(
+                repo_clone_url,
+                self.repo_path,
+                progress=lambda *args, **kwargs: self._throttled_liveness_probe(),
+                depth=1,
+                no_checkout=True,
+            )
+            end_time = time.time()
+            logger.info(
+                f"Cloned repository {self.repo_client.repo_full_name} in {end_time - start_time} seconds"
+            )
+
+            return self.repo_path
+        except git.exc.GitCommandError as e:
+            if self.is_cancelled and not e.stderr.strip():
+                raise RepoInitializationError(
+                    f"Clone cancelled for {self.repo_client.repo_full_name}"
+                )
+            else:
+                logger.exception(
+                    "Failed to clone repository",
+                    extra={"repo": self.repo_client.repo_full_name, "git_stderr": e.stderr},
+                )
+                self.git_repo = None  # clear the repo to fail the available check
+                raise
+        except Exception as exc:
+            if self.is_cancelled:
+                raise RepoInitializationError(
+                    f"Clone cancelled for {self.repo_client.repo_full_name} during {exc!r}"
+                )
+            logger.exception(
+                "Failed to clone repository (unexpected error)",
+                extra={"repo": self.repo_client.repo_full_name},
+            )
+            self.git_repo = None  # clear the repo to fail the available check
+            raise
+
+    @sentry_sdk.trace
+    def _sync_repo(self):
+        """
+        Ensure the repository is up to date with only the target commit.
+        """
+        logger.info(f"Syncing repository {self.repo_client.repo_full_name}")
+
+        try:
+            start_time = time.time()
+            commit_sha = self.repo_client.base_commit_sha
+
+            # Reset any perceived local changes first
+            self.git_repo.git.reset("--hard")
+            # Clean any untracked files
+            self.git_repo.git.clean("-fdx")
+
+            auth_url = self.repo_client.get_clone_url_with_auth()
+
+            # Fetch only the specific commit
+            self.git_repo.git.execute(["git", "fetch", "--depth=1", auth_url, commit_sha])
+
+            # Force checkout to avoid the "local changes" error
+            logger.info(f"Checking out commit {commit_sha}")
+            self.git_repo.git.checkout(commit_sha, force=True)
+
+            end_time = time.time()
+            logger.info(
+                f"Checked out repo {self.repo_client.repo_full_name} to commit {commit_sha} in {end_time - start_time} seconds"
+            )
+
+        except Exception:
+            logger.exception(
+                "Failed to sync repository", extra={"repo": self.repo_client.repo_full_name}
+            )
+            self.git_repo = None  # clear the repo to fail the available check

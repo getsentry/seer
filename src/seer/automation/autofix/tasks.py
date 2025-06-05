@@ -422,6 +422,7 @@ def receive_user_message(request: AutofixUpdateRequest):
         SeerEventNames.AUTOFIX_USER_QUESTION_RESPONSE_RECEIVED,
         {
             "run_id": cur_state.run_id,
+            "group_id": cur_state.request.issue.id,
             "step_to_restart": step_to_restart.key if step_to_restart else None,
         },
     )
@@ -577,7 +578,8 @@ def restart_from_point_with_feedback(
         request.payload.retain_insight_card_index
     )  # this is the index of the insight that triggered the rethink. If it's None, it was triggered when there were no insights. If it's greater than the last insight index, it was triggered on a final output (e.g. root cause, solution, etc.) or by adding an insight to the end of the chain.
 
-    step = state.get().find_step(index=step_index)
+    cur = state.get()
+    step = cur.find_step(index=step_index)
     if not isinstance(step, DefaultStep):
         raise ValueError("Cannot rethink steps without insights.")
 
@@ -585,6 +587,7 @@ def restart_from_point_with_feedback(
         SeerEventNames.AUTOFIX_RESTARTED_FROM_POINT,
         {
             "run_id": request.run_id,
+            "group_id": cur.request.issue.id,
             "restarting_step": step.key,
         },
     )
