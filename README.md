@@ -36,6 +36,19 @@ Download model artifacts:
 gsutil cp -r gs://sentry-ml/seer/models .
 ```
 If you see a prompt "Reauthentication required. Please insert your security key and press enter...", re-authenticate using the command `gcloud auth login` and set the project id to the one for Seer.
+
+### First time setting up Seer
+
+1. Build the images & apply database migrations:
+   ```bash
+   make update
+   ```
+
+2. Run the development environment:
+   ```bash
+   make dev
+   ```
+
 ### Running Seer
 
 1. Start the development environment:
@@ -58,17 +71,16 @@ If you see a prompt "Reauthentication required. Please insert your security key 
 
 ## Integrating with Local Sentry
 
-1. Expose port 9091 in your local Sentry configuration
-2. Add the following to `~/.sentry/sentry.conf.py`:
+Calling your Local Seer instance from Sentry should work right away, as Sentry in development is setup to call Seer at port 9091.
 
-   ```python
-   SEER_RPC_SHARED_SECRET = ["seers-also-very-long-value-haha"]
-   SENTRY_FEATURES['projects:ai-autofix'] = True
-   SENTRY_FEATURES['organizations:issue-details-autofix-ui'] = True
-   ```
+### Calling Local Sentry from your Local Seer
+Add the following to `~/.sentry/sentry.conf.py`:
 
-3. For local development, you may need to bypass certain checks in the Sentry codebase
-4. Restart both Sentry and Seer
+```python
+SEER_RPC_SHARED_SECRET = ["seers-also-very-long-value-haha"]
+```
+
+Then restart Sentry.
 
 > [!NOTE]
 > Set `NO_SENTRY_INTEGRATION=1` in `.env` to ignore Local Sentry Integration
@@ -116,6 +128,24 @@ LANGFUSE_HOST=...
 ## Autofix
 
 Autofix is an AI agent that identifies root causes of Sentry issues and suggests fixes.
+
+### Running Autofix Locally
+
+Set the below in your `sentry.conf.py` file:
+
+```
+SENTRY_FEATURES["organizations:gen-ai-features"] = True
+SENTRY_FEATURES["organizations:gen-ai-consent"] = True
+SENTRY_FEATURES["organizations:trigger-autofix-on-issue-summary"] = True
+```
+
+and restart Sentry.
+
+You may need some issues to run on, run the below in your Sentry workspace to load some mock issues:
+
+```bash
+bin/load-mocks
+```
 
 ### Running Evaluations
 
