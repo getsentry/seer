@@ -540,9 +540,7 @@ def summarize_issue_websocket_endpoint(
         # Client connects to http://localhost:8080 and joins room abc123
         parsed = urlparse(data.websocket_url)
         # Use http(s)://host:port as socketio_url
-        socketio_url = (
-            f"{parsed.scheme.replace('ws', 'http')}://{parsed.hostname}:{parsed.port or 80}"
-        )
+        socketio_url = f"{parsed.scheme.replace('ws', 'http')}://{parsed.hostname}"
         # Extract room from query or path
         # Assume room is the last part of the path or a query param
         channel = None
