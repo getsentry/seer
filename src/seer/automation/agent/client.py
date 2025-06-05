@@ -1876,7 +1876,6 @@ class LlmClient:
         models: list[LlmProvider],
         operation_name: str,
         operation_func: Callable[[LlmProvider], Any],
-        on_fallback_used_callback: Callable[[], None] | None = None,
     ) -> Any:
         """
         Execute an operation with fallback through a list of models.
@@ -1906,10 +1905,6 @@ class LlmClient:
                         is_last_model = i == len(models) - 1
 
                         if not is_last_region:
-                            # Try next region for this model
-                            if on_fallback_used_callback:
-                                on_fallback_used_callback()
-
                             logger.warning(
                                 f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
                                 f"due to {type(e).__name__}: {str(e)}. "
@@ -1917,10 +1912,6 @@ class LlmClient:
                             )
                             continue
                         elif not is_last_model:
-                            # Try next model
-                            if on_fallback_used_callback:
-                                on_fallback_used_callback()
-
                             logger.warning(
                                 f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
                                 f"due to {type(e).__name__}: {str(e)}. "
@@ -1990,7 +1981,6 @@ class LlmClient:
         timeout: float | None = None,
         predicted_output: str | None = None,
         reasoning_effort: str | None = None,
-        on_fallback_used_callback: Callable[[], None] | None = None,
     ) -> LlmGenerateTextResponse:
         # Validate input parameters
         if models is not None and model is not None:
@@ -2095,7 +2085,6 @@ class LlmClient:
                 models=models_to_try,
                 operation_name="Text generation",
                 operation_func=_generate_text_operation,
-                on_fallback_used_callback=on_fallback_used_callback,
             )
         except Exception as e:
             logger.exception(f"Text generation failed with all provided models: {e}")
