@@ -8,13 +8,14 @@ from seer.automation.codebase.repo_client import (
     autocorrect_repo_name,
     get_repo_client,
 )
+from seer.automation.models import RepoDefinition
 from seer.automation.pipeline import PipelineContext
 
 
 class BasePipelineContext(PipelineContext, ABC):
     state: Any  # Child class specific state
     event_manager: Any
-    repos: list
+    repos: list[RepoDefinition]
 
     @property
     def run_id(self) -> int:

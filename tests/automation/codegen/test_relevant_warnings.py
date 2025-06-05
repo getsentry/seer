@@ -556,6 +556,19 @@ class TestFetchIssuesComponent:
         return FetchIssuesComponent(mock_context)
 
     @patch("seer.rpc.DummyRpcClient.call")
+    def test_bad_provider_raw(self, component: FetchIssuesComponent):
+        mock_repo = MagicMock()
+        mock_repo.provider = "github"
+        mock_repo.provider_raw = None
+        mock_repo.external_id = "123123"
+        mock_context = MagicMock(spec=CodegenContext)
+        mock_context.repos = [mock_repo]
+        mock_context.run_id = 1
+        component = FetchIssuesComponent(mock_context)
+        with pytest.raises(TypeError):
+            component.invoke(CodeFetchIssuesRequest(organization_id=1, pr_files=[]))
+
+    @patch("seer.rpc.DummyRpcClient.call")
     def test_invoke_filters_files(
         self, mock_rpc_client_call: Mock, component: FetchIssuesComponent
     ):
