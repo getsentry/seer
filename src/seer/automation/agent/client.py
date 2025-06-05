@@ -2564,6 +2564,8 @@ class LlmClient:
         if model.provider_name == LlmProviderType.GEMINI:
             gemini_model = cast(GeminiProvider, model)
 
+            gemini_model.local_regions_only = True  # Local region is required for caching to work
+
             def _create_cache(model_to_use: GeminiProvider):
                 cache_name = model_to_use.create_cache(contents, display_name, ttl)
                 if not cache_name:
@@ -2582,7 +2584,17 @@ class LlmClient:
     def get_cache(self, display_name: str, model: LlmProvider) -> str | None:
         if model.provider_name == LlmProviderType.GEMINI:
             gemini_model = cast(GeminiProvider, model)
-            return gemini_model.get_cache(display_name)
+
+            gemini_model.local_regions_only = True  # Local region is required for caching to work
+
+            def _create_cache(model_to_use: GeminiProvider):
+                return model_to_use.get_cache(display_name)
+
+            return self._execute_with_fallback(
+                models=[gemini_model],
+                operation_name="Get cache",
+                operation_func=_create_cache,
+            )
         else:
             raise ValueError("Manual cache retrieval is only supported for Gemini.")
 

@@ -1109,7 +1109,7 @@ def test_gemini_generate_text_from_web_search_with_models_list():
 @pytest.mark.vcr()
 def test_gemini_create_cache():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-001")
+    model = GeminiProvider.model("gemini-2.0-flash-001", local_regions_only=True)
 
     contents = "test" * 5000  # Min cache is 4096
 
@@ -1139,7 +1139,7 @@ def test_gemini_create_cache_invalid_provider():
 @pytest.mark.vcr()
 def test_gemini_create_cache_same_display_name():
     llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-001")
+    model = GeminiProvider.model("gemini-2.0-flash-001", local_regions_only=True)
 
     contents = "test" * 5000  # Min cache is 4096
 
@@ -1165,15 +1165,19 @@ def test_gemini_create_cache_same_display_name():
 
 @pytest.mark.vcr()
 def test_gemini_get_cache():
-    llm_client = LlmClient()
-    model = GeminiProvider.model("gemini-2.0-flash-001")
+    test_config = provide_test_defaults()
+    test_config.SENTRY_REGION = "us"
 
-    contents = "test" * 5000  # Min cache is 4096
-    original_cache = llm_client.create_cache(
-        contents=contents,
-        display_name="test_cache_get",
-        model=model,
-    )
+    with Module().constant(AppConfig, test_config):
+        llm_client = LlmClient()
+        model = GeminiProvider.model("gemini-2.0-flash-001", local_regions_only=True)
+
+        contents = "test" * 5000  # Min cache is 4096
+        original_cache = llm_client.create_cache(
+            contents=contents,
+            display_name="test_cache_get",
+            model=model,
+        )
 
     retrieved_cache = llm_client.get_cache(display_name="test_cache_get", model=model)
 

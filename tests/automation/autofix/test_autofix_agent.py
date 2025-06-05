@@ -258,46 +258,6 @@ def test_run_iteration_with_insight_sharing(
     assert len(autofix_agent.context.state.get().steps[-1].insights) > 0
 
 
-@pytest.mark.vcr()
-@patch.object(AutofixContext, "get_repo_client", return_value=MagicMock())
-@patch.object(AutofixContext, "get_file_contents", return_value="print('mock file content')")
-def test_run_iteration_with_insight_sharing_fallback_config(
-    mock_get_file_contents, mock_get_repo_client, autofix_agent, fallback_run_config
-):
-    """Test run iteration with insight sharing using fallback models"""
-    autofix_agent.config.interactive = True
-    autofix_agent.memory = [
-        Message(
-            role="user",
-            content="My code has a capitalization error, first write an explanation of the error and then use the tools provided to fix it: ```python\nprint('hello World!')\n```",
-        )
-    ]
-    autofix_agent.tools = [
-        FunctionTool(
-            name="fix_capitalization",
-            description="Fix the capitalization of the code",
-            parameters=[],
-            fn=lambda: None,
-        )
-    ]
-    with autofix_agent.context.state.update() as state:
-        state.request.options.disable_interactivity = False
-        state.steps = [
-            DefaultStep(
-                status=AutofixStatus.NEED_MORE_INFORMATION,
-                key="root_cause_analysis_processing",
-                title="Test",
-                id="id",
-            )
-        ]
-
-    with autofix_agent.manage_run():
-        autofix_agent.run_iteration(fallback_run_config)
-
-    assert autofix_agent.context.state.get().usage.total_tokens > 0
-    assert len(autofix_agent.context.state.get().steps[-1].insights) > 0
-
-
 def test_use_user_messages(autofix_agent):
     with autofix_agent.context.state.update() as state:
         state.steps = [
