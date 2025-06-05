@@ -129,6 +129,24 @@ LANGFUSE_HOST=...
 
 Autofix is an AI agent that identifies root causes of Sentry issues and suggests fixes.
 
+### Running Autofix Locally
+
+Set the below in your `sentry.conf.py` file:
+
+```
+SENTRY_FEATURES["organizations:gen-ai-features"] = True
+SENTRY_FEATURES["organizations:gen-ai-consent"] = True
+SENTRY_FEATURES["organizations:trigger-autofix-on-issue-summary"] = True
+```
+
+and restart Sentry.
+
+You may need some issues to run on, run the below in your Sentry workspace to load some mock issues:
+
+```bash
+bin/load-mocks
+```
+
 ### Running Evaluations
 
 Send a POST request to `/v1/automation/autofix/evaluations/start` with the following JSON body:
