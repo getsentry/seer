@@ -1,6 +1,7 @@
 import logging
 
 from seer.automation.agent.models import Message
+from seer.automation.codebase.repo_client import RepoClientType, get_repo_client
 from seer.automation.codegen.codegen_event_manager import CodegenEventManager
 from seer.automation.codegen.models import CodegenContinuation, UnitTestRunMemory
 from seer.automation.codegen.state import CodegenContinuationState
@@ -34,6 +35,17 @@ class CodegenContext(BasePipelineContext):
         self.event_manager = CodegenEventManager(state)
 
         logger.info(f"CodegenContext initialized with run_id {self.run_id}")
+
+    def get_repo_client(
+        self,
+        repo_name: str | None = None,
+        repo_external_id: str | None = None,
+        type: RepoClientType = RepoClientType.READ,
+    ):
+        repos = self.state.get().readable_repos
+        return get_repo_client(
+            repos=repos, repo_name=repo_name, repo_external_id=repo_external_id, type=type
+        )
 
     @classmethod
     def from_run_id(cls, run_id: int, type: DbStateRunTypes = DbStateRunTypes.UNIT_TEST):
