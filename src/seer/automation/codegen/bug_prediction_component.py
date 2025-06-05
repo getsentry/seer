@@ -9,7 +9,7 @@ from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.client import AnthropicProvider, GeminiProvider, LlmClient
 from seer.automation.autofix.prompts import format_repo_prompt
 from seer.automation.autofix.tools.tools import BaseTools
-from seer.automation.codebase.models import format_diff
+from seer.automation.codebase.models import PullRequest
 from seer.automation.codebase.repo_client import RepoClientType
 from seer.automation.codegen.codegen_context import CodegenContext
 from seer.automation.codegen.models import (
@@ -40,10 +40,10 @@ class FilterFilesComponent(BaseComponent[FilterFilesRequest, FilterFilesOutput])
         self, request: FilterFilesRequest, llm_client: LlmClient = injected
     ) -> FilterFilesOutput:
         pr_files_filterable = [
-            pr_file for pr_file in request.pr_files if pr_file.should_show_hunks()
+            pr_file for pr_file in request.pull_request.files if pr_file.should_show_hunks
         ]
         pr_files_not_filterable = [
-            pr_file for pr_file in request.pr_files if not pr_file.should_show_hunks()
+            pr_file for pr_file in request.pull_request.files if not pr_file.should_show_hunks
         ]  # We can include these basically for free as context
 
         if len(pr_files_filterable) <= request.num_files_desired:
@@ -51,18 +51,21 @@ class FilterFilesComponent(BaseComponent[FilterFilesRequest, FilterFilesOutput])
             # Choosing to leave them in b/c they may be useful context for the draft agent.
             # Can eval this choice to see if it causes the draft agent to under-scrutinize files
             # which happen to have tests but are buggy.
-            return FilterFilesOutput(pr_files=request.pr_files)
+            return FilterFilesOutput(pr_files=request.pull_request.files)
 
         if request.shuffle_files:
             # Avoid bias for files that are near the top of the list, usually alphabetical.
             random.Random(42).shuffle(pr_files_filterable)
 
-        filenames = tuple(pr_file.filename for pr_file in pr_files_filterable)
-        FilenameFromThisPR: TypeAlias = Literal[filenames]  # type: ignore[valid-type]
-
+        FilenameFromThisPR: TypeAlias = Literal[tuple(pr_file.filename for pr_file in pr_files_filterable)]  # type: ignore[valid-type]
         response = llm_client.generate_structured(
             prompt=BugPredictionPrompts.format_prompt_file_filter(
-                pr_files_filterable, num_files_desired=request.num_files_desired
+                pull_request=PullRequest(
+                    files=pr_files_filterable,
+                    title=request.pull_request.title,
+                    description=request.pull_request.description,
+                ),
+                num_files_desired=request.num_files_desired,
             ),
             model=GeminiProvider.model("gemini-2.0-flash-001"),
             response_format=list[FilenameFromThisPR],
@@ -95,7 +98,7 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
         self,
         tools: BaseTools,
         repos_str: str,
-        diff: str,
+        pull_request: PullRequest,
         hypotheses_unstructured: str,
         hypothesis_num: int,
         hypothesis: BugPredictorHypothesis,
@@ -108,7 +111,7 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
                     system_prompt=BugPredictionPrompts.format_system_msg(),
                     prompt=BugPredictionPrompts.format_prompt_followup(
                         repos_str=repos_str,
-                        diff=diff,
+                        pull_request=pull_request,
                         hypothesis_unstructured=hypotheses_unstructured,
                         hypothesis=hypothesis.content,
                     ),
@@ -135,11 +138,9 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
     ) -> BugPredictorOutput:
         langfuse_parent_trace_id = langfuse_context.get_current_trace_id()
         langfuse_parent_observation_id = langfuse_context.get_current_observation_id()
+        self.logger.info(f"Follow along at {langfuse_context.get_current_trace_url()}")
 
         repos_str = format_repo_prompt(readable_repos=self.context.state.get().readable_repos)
-        diff = format_diff(pr_files=request.pr_files)
-
-        self.logger.info(f"Follow along at {langfuse_context.get_current_trace_url()}")
 
         with BaseTools(self.context, repo_client_type=RepoClientType.READ) as tools:
             # Step 1a: draft hypotheses + further research questions.
@@ -148,7 +149,7 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
                 run_config=RunConfig(
                     system_prompt=BugPredictionPrompts.format_system_msg(),
                     prompt=BugPredictionPrompts.format_prompt_draft_hypotheses(
-                        repos_str=repos_str, diff=diff
+                        repos_str=repos_str, pull_request=request.pull_request
                     ),
                     max_iterations=32,
                     model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
@@ -180,7 +181,11 @@ class BugPredictorComponent(BaseComponent[BugPredictorRequest, BugPredictorOutpu
 
             # Step 2: verify. Mine evidence for or against each hypothesis.
             verify_hypothesis = partial(
-                self._verify_hypothesis, tools, repos_str, diff, hypotheses_unstructured
+                self._verify_hypothesis,
+                tools,
+                repos_str,
+                request.pull_request,
+                hypotheses_unstructured,
             )
             verify_hypothesis = observe(name="Verify Hypothesis")(verify_hypothesis)
             # Decorating at the function definition causes the run to hang when using
