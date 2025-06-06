@@ -592,3 +592,26 @@ class DbReviewCommentEmbedding(Base):
         ),
         Index("ix_review_comments_is_good_pattern", "is_good_pattern"),
     )
+
+
+class DbLlmRegionBlacklist(Base):
+    """Store temporarily blacklisted LLM provider regions that have failed recently"""
+
+    __tablename__ = "llm_region_blacklist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider_name: Mapped[str] = mapped_column(String, nullable=False)
+    model_name: Mapped[str] = mapped_column(String, nullable=False)
+    region: Mapped[str] = mapped_column(String, nullable=False)
+    blacklisted_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
+    )
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
+    failure_reason: Mapped[str] = mapped_column(String, nullable=True)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("provider_name", "model_name", "region"),
+        Index("ix_llm_region_blacklist_provider_model", "provider_name", "model_name"),
+        Index("ix_llm_region_blacklist_expires_at", "expires_at"),
+    )
