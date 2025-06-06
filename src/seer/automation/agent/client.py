@@ -684,6 +684,7 @@ class AnthropicProvider(BaseLlmProvider):
         project_id = app_config.GOOGLE_CLOUD_PROJECT
 
         # Use provided region if available, otherwise fall back to automatic region selection
+        selected_region: str | None = None
         if self.region:
             selected_region = self.region
 
