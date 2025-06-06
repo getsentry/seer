@@ -1284,9 +1284,21 @@ class GeminiProvider(BaseLlmProvider):
             langfuse_context.update_current_observation(
                 model=self.model_name,
                 usage=Usage(
-                    completion_tokens=response.usage_metadata.candidates_token_count,
-                    prompt_tokens=response.usage_metadata.prompt_token_count,
-                    total_tokens=response.usage_metadata.total_token_count,
+                    completion_tokens=(
+                        response.usage_metadata.candidates_token_count
+                        if response.usage_metadata
+                        else None
+                    ),
+                    prompt_tokens=(
+                        response.usage_metadata.prompt_token_count
+                        if response.usage_metadata
+                        else None
+                    ),
+                    total_tokens=(
+                        response.usage_metadata.total_token_count
+                        if response.usage_metadata
+                        else None
+                    ),
                 ),
                 metadata={"region": self.region},
             )
