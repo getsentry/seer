@@ -106,10 +106,6 @@ class AppConfig(BaseModel):
 
     CELERY_WORKER_QUEUE: str = "seer"
 
-    # LLM Region Blacklist settings
-    LLM_REGION_BLACKLIST_ENABLED: ParseBool = True
-    LLM_REGION_BLACKLIST_DURATION_SECONDS: ParseInt = 60 * 5  # 5 minutes
-
     # Test utility that disables deployment conditional behavior.
     # Update this to reflect new kinds of conditional behavior by adding
     # more test coverage and locking them in.

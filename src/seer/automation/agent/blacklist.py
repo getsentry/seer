@@ -4,28 +4,23 @@ import logging
 from sqlalchemy import and_, delete, select
 from sqlalchemy.dialects.postgresql import insert
 
-from seer.configuration import AppConfig
 from seer.db import DbLlmRegionBlacklist, Session, SQLAlchemySession
-from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
+
+LLM_REGION_BLACKLIST_DURATION_SECONDS = 300  # 5 minutes
 
 
 class LlmRegionBlacklistService:
     """Service for managing temporarily blacklisted LLM provider regions"""
 
     @staticmethod
-    @inject
     def is_region_blacklisted(
         provider_name: str,
         model_name: str,
         region: str,
-        config: AppConfig = injected,
     ) -> bool:
         """Check if a specific provider/model/region combination is currently blacklisted"""
-        if not config.LLM_REGION_BLACKLIST_ENABLED:
-            return False
-
         with Session() as session:
             now = datetime.datetime.now(datetime.UTC)
 
@@ -44,23 +39,16 @@ class LlmRegionBlacklistService:
             return result is not None
 
     @staticmethod
-    @inject
     def add_to_blacklist(
         provider_name: str,
         model_name: str,
         region: str,
         failure_reason: str | None = None,
-        config: AppConfig = injected,
     ) -> None:
         """Add a provider/model/region combination to the blacklist"""
-        if not config.LLM_REGION_BLACKLIST_ENABLED:
-            return
-
         with Session() as session:
             now = datetime.datetime.now(datetime.UTC)
-            expires_at = now + datetime.timedelta(
-                seconds=config.LLM_REGION_BLACKLIST_DURATION_SECONDS
-            )
+            expires_at = now + datetime.timedelta(seconds=LLM_REGION_BLACKLIST_DURATION_SECONDS)
 
             # Use upsert to handle the case where the entry already exists
             stmt = insert(DbLlmRegionBlacklist).values(
@@ -112,15 +100,13 @@ class LlmRegionBlacklistService:
             )
 
     @staticmethod
-    @inject
     def get_non_blacklisted_regions(
         provider_name: str,
         model_name: str,
         candidate_regions: list[str | None],
-        config: AppConfig = injected,
     ) -> list[str | None]:
         """Filter a list of regions to remove any that are currently blacklisted"""
-        if not config.LLM_REGION_BLACKLIST_ENABLED or not candidate_regions:
+        if not candidate_regions:
             return candidate_regions
 
         if None in candidate_regions:

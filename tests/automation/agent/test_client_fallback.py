@@ -1,4 +1,3 @@
-import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import anthropic
@@ -696,8 +695,6 @@ class TestBlacklistIntegration:
     @pytest.fixture
     def mock_config(self):
         config = MagicMock()
-        config.LLM_REGION_BLACKLIST_ENABLED = True
-        config.LLM_REGION_BLACKLIST_DURATION_SECONDS = 300
         config.SENTRY_REGION = "us"
         config.DEV = False
         config.GOOGLE_CLOUD_PROJECT = "test-project"
@@ -910,42 +907,6 @@ class TestBlacklistIntegration:
                 # With multiple models, should return empty
                 regions = client._get_regions_to_try(provider, num_models_to_try=2)
                 assert regions == []
-
-    def test_blacklisting_disabled_no_filtering(self, mock_config):
-        """Test that blacklisting is bypassed when disabled"""
-        mock_config.LLM_REGION_BLACKLIST_ENABLED = False
-
-        module = Module()
-        module.constant(AppConfig, mock_config)
-
-        with module:
-            client = LlmClient()
-
-            provider = AnthropicProvider.model("claude-3-sonnet-20240620")
-
-            # Manually add to blacklist database (bypassing service)
-            with Session() as session:
-                entry = DbLlmRegionBlacklist(
-                    provider_name="anthropic",
-                    model_name="claude-3-sonnet-20240620",
-                    region="us-east-1",
-                    blacklisted_at=datetime.datetime.now(datetime.timezone.utc),
-                    expires_at=datetime.datetime.now(datetime.timezone.utc)
-                    + datetime.timedelta(hours=1),
-                    failure_count=1,
-                )
-                session.add(entry)
-                session.commit()
-
-            from unittest.mock import patch
-
-            # Mock region preferences
-            with patch.object(
-                provider, "get_region_preference", return_value=["us-east-1", "eu-west-1"]
-            ):
-                # Should return all regions since blacklisting is disabled
-                regions = client._get_regions_to_try(provider, num_models_to_try=1)
-                assert set(regions) == {"us-east-1", "eu-west-1"}
 
     def test_streaming_blacklisting_integration(self, mock_config):
         """Test that streaming operations integrate with blacklisting"""
