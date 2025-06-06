@@ -614,7 +614,7 @@ class DbLlmRegionBlacklist(Base):
         DateTime, nullable=False, default=datetime.datetime.now(datetime.UTC)
     )
     expires_at: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
-    failure_reason: Mapped[str] = mapped_column(String, nullable=True)
+    failure_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     __table_args__ = (
