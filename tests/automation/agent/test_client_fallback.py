@@ -1,8 +1,10 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, Mock, patch
 
+import anthropic
 import pytest
 from pydantic import BaseModel
 
+from seer.automation.agent.blacklist import LlmRegionBlacklistService
 from seer.automation.agent.client import (
     AnthropicProvider,
     GeminiProvider,
@@ -12,10 +14,15 @@ from seer.automation.agent.client import (
 from seer.automation.agent.models import (
     LlmGenerateStructuredResponse,
     LlmGenerateTextResponse,
+    LlmNoRegionsToRunError,
     LlmProviderDefaults,
     LlmProviderType,
+    Usage,
 )
 from seer.automation.agent.tools import FunctionTool
+from seer.configuration import AppConfig
+from seer.db import DbLlmRegionBlacklist, Session
+from seer.dependency_injection import Module
 
 
 class TestParameterResolution:
@@ -344,7 +351,6 @@ class TestFallbackBehavior:
 
     def test_region_fallback_behavior(self):
         """Test that fallback tries all regions for a model before moving to next model"""
-        from unittest.mock import Mock, patch
 
         llm_client = LlmClient()
 
@@ -408,7 +414,6 @@ class TestFallbackBehavior:
 
     def test_region_fallback_multiple_models(self):
         """Test region fallback across multiple models"""
-        from unittest.mock import Mock, patch
 
         llm_client = LlmClient()
 
@@ -675,3 +680,306 @@ class TestEdgeCasesAndErrorHandling:
         assert resolved.temperature == 0.5  # From defaults
         assert resolved.max_tokens == 1000  # From defaults
         assert resolved.seed is None  # No default, remains None
+
+
+class TestBlacklistIntegration:
+    """Test integration of blacklisting with fallback behavior"""
+
+    @pytest.fixture(autouse=True)
+    def setup_db(self):
+        """Set up database for each test"""
+        with Session() as session:
+            session.query(DbLlmRegionBlacklist).delete()
+            session.commit()
+
+    @pytest.fixture
+    def mock_config(self):
+        config = MagicMock()
+        config.SENTRY_REGION = "us"
+        config.DEV = False
+        config.GOOGLE_CLOUD_PROJECT = "test-project"
+        return config
+
+    def test_no_regions_to_run_error_single_model(self, mock_config):
+        """Test that LlmNoRegionsToRunError is raised when no regions are available for single model"""
+
+        module = Module()
+        module.constant(AppConfig, mock_config)
+
+        with module:
+            client = LlmClient()
+
+            # Create provider with multiple regions - need two models to avoid single model bypass
+            provider1 = AnthropicProvider.model("claude-3-sonnet-20240620")
+            provider2 = GeminiProvider.model("gemini-1.5-pro")
+
+            # Mock region preferences and blacklist all regions for both providers
+            with (
+                patch.object(
+                    provider1, "get_region_preference", return_value=["us-east-1", "eu-west-1"]
+                ),
+                patch.object(provider2, "get_region_preference", return_value=["us-central1"]),
+            ):
+                # Blacklist all regions for both providers
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "us-east-1"
+                )
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "eu-west-1"
+                )
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "gemini", "gemini-1.5-pro", "us-central1"
+                )
+
+                def failing_operation(model):
+                    return "should not reach here"
+
+                # Should raise LlmNoRegionsToRunError since all regions for all models are blacklisted
+                with pytest.raises(
+                    LlmNoRegionsToRunError, match="No more models/regions to run for completion"
+                ):
+                    client._execute_with_fallback(
+                        models=[provider1, provider2],
+                        operation_name="Test operation",
+                        operation_func=failing_operation,
+                    )
+
+    def test_fallback_to_next_model_when_all_regions_blacklisted(self, mock_config):
+        """Test that fallback moves to next model when all regions of first model are blacklisted"""
+
+        module = Module()
+        module.constant(AppConfig, mock_config)
+
+        with module:
+            client = LlmClient()
+
+            # Create two providers
+            provider1 = AnthropicProvider.model("claude-3-sonnet-20240620")
+            provider2 = GeminiProvider.model("gemini-1.5-pro")
+
+            call_count = 0
+
+            def mock_operation(model):
+                nonlocal call_count
+                call_count += 1
+                return f"success with {model.provider_name}"
+
+            # Mock region preferences for both models
+            with (
+                patch.object(
+                    provider1, "get_region_preference", return_value=["us-east-1", "eu-west-1"]
+                ),
+                patch.object(provider2, "get_region_preference", return_value=["us-central1"]),
+            ):
+                # Blacklist all regions for first provider
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "us-east-1"
+                )
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "eu-west-1"
+                )
+
+                # Should succeed with second provider
+                result = client._execute_with_fallback(
+                    models=[provider1, provider2],
+                    operation_name="Test operation",
+                    operation_func=mock_operation,
+                )
+
+                assert result == f"success with {LlmProviderType.GEMINI}"
+                assert call_count == 1  # Only called for second provider
+
+    def test_blacklisting_during_fallback_execution(self, mock_config):
+        """Test that regions are added to blacklist during fallback execution"""
+
+        module = Module()
+        module.constant(AppConfig, mock_config)
+
+        with module:
+            client = LlmClient()
+
+            provider = AnthropicProvider.model("claude-3-sonnet-20240620")
+
+            call_count = 0
+            attempted_regions = []
+
+            def failing_operation(model):
+                nonlocal call_count, attempted_regions
+                call_count += 1
+                attempted_regions.append(model.region)
+
+                # Fail with retryable error
+                raise anthropic.RateLimitError(
+                    "Rate limit exceeded", response=Mock(status_code=429), body=None
+                )
+
+            # Mock region preferences
+            with patch.object(
+                provider, "get_region_preference", return_value=["us-east-1", "eu-west-1"]
+            ):
+                # Should fail after trying all regions
+                with pytest.raises(anthropic.RateLimitError):
+                    client._execute_with_fallback(
+                        models=[provider],
+                        operation_name="Test operation",
+                        operation_func=failing_operation,
+                    )
+
+                assert call_count == 2
+                assert attempted_regions == ["us-east-1", "eu-west-1"]
+
+                # Verify both regions were added to blacklist
+                assert LlmRegionBlacklistService.is_region_blacklisted(
+                    "anthropic", "claude-3-sonnet-20240620", "us-east-1"
+                )
+                assert LlmRegionBlacklistService.is_region_blacklisted(
+                    "anthropic", "claude-3-sonnet-20240620", "eu-west-1"
+                )
+
+    def test_get_regions_to_try_with_blacklisting(self, mock_config):
+        """Test that _get_regions_to_try properly filters blacklisted regions"""
+        from unittest.mock import patch
+
+        module = Module()
+        module.constant(AppConfig, mock_config)
+
+        with module:
+            client = LlmClient()
+
+            provider = AnthropicProvider.model("claude-3-sonnet-20240620")
+
+            # Mock region preferences
+            with patch.object(
+                provider,
+                "get_region_preference",
+                return_value=["us-east-1", "eu-west-1", "ap-southeast-1"],
+            ):
+                # Initially all regions should be available
+                regions = client._get_regions_to_try(provider, num_models_to_try=1)
+                assert set(regions) == {"us-east-1", "eu-west-1", "ap-southeast-1"}
+
+                # Blacklist one region
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "us-east-1"
+                )
+
+                # Should filter out blacklisted region
+                regions = client._get_regions_to_try(provider, num_models_to_try=1)
+                assert set(regions) == {"eu-west-1", "ap-southeast-1"}
+
+                # Blacklist another region
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "eu-west-1"
+                )
+
+                # Should filter out both blacklisted regions
+                regions = client._get_regions_to_try(provider, num_models_to_try=1)
+                assert set(regions) == {"ap-southeast-1"}
+
+    def test_single_model_bypass_blacklist_behavior(self, mock_config):
+        """Test that single model configurations bypass blacklist and try the first region again"""
+
+        module = Module()
+        module.constant(AppConfig, mock_config)
+
+        with module:
+            client = LlmClient()
+
+            # Create provider with multiple regions
+            provider = AnthropicProvider.model("claude-3-sonnet-20240620")
+
+            # Mock region preferences and blacklist all regions
+            with patch.object(
+                provider, "get_region_preference", return_value=["us-east-1", "eu-west-1"]
+            ):
+                # Blacklist all regions
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "us-east-1"
+                )
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "eu-west-1"
+                )
+
+                # With single model, should still return first region due to bypass logic
+                regions = client._get_regions_to_try(provider, num_models_to_try=1)
+                assert regions == ["us-east-1"]  # First region returned despite blacklist
+
+                # With multiple models, should return empty
+                regions = client._get_regions_to_try(provider, num_models_to_try=2)
+                assert regions == []
+
+    def test_streaming_blacklisting_integration(self, mock_config):
+        """Test that streaming operations integrate with blacklisting"""
+
+        module = Module()
+        module.constant(AppConfig, mock_config)
+
+        with module:
+            client = LlmClient()
+
+            provider = AnthropicProvider.model("claude-3-sonnet-20240620")
+
+            # Mock region preferences
+            with patch.object(
+                provider, "get_region_preference", return_value=["us-east-1", "eu-west-1"]
+            ):
+                # Blacklist first region
+                LlmRegionBlacklistService.add_to_blacklist(
+                    "anthropic", "claude-3-sonnet-20240620", "us-east-1"
+                )
+
+                # Mock the streaming operation to track which regions are tried
+                attempted_regions = []
+
+                def mock_stream_operation(model_to_use):
+                    attempted_regions.append(model_to_use.region)
+                    # Simulate successful stream
+                    yield ("content", "test response")
+                    yield Usage(completion_tokens=10, prompt_tokens=5, total_tokens=15)
+
+                # This would normally be called internally, but we'll simulate the logic
+                models_to_try = [provider]
+
+                for i, base_model in enumerate(models_to_try):
+                    regions_to_try = client._get_regions_to_try(
+                        base_model, num_models_to_try=len(models_to_try)
+                    )
+
+                    # Should only have one region (eu-west-1) since us-east-1 is blacklisted
+                    assert regions_to_try == ["eu-west-1"]
+
+                    for j, region in enumerate(regions_to_try):
+                        model_to_use = base_model.copy(region=region)
+
+                        # Simulate the streaming operation
+                        stream_results = list(mock_stream_operation(model_to_use))
+                        assert len(stream_results) == 2  # content + usage
+                        break
+                    break
+
+                # Should only have tried the non-blacklisted region
+                assert attempted_regions == ["eu-west-1"]
+
+    def test_single_region_provider_bypass_blacklist(self, mock_config):
+        """Test that single region providers bypass blacklist when only one model to try"""
+        module = Module()
+        module.constant(AppConfig, mock_config)
+
+        with module:
+            client = LlmClient()
+
+            # Create provider with single specific region
+            provider = AnthropicProvider.model("claude-3-sonnet-20240620", region="us-east-1")
+
+            # Blacklist the only region
+            LlmRegionBlacklistService.add_to_blacklist(
+                "anthropic", "claude-3-sonnet-20240620", "us-east-1"
+            )
+
+            # Should still return the region when only one model to try
+            regions = client._get_regions_to_try(provider, num_models_to_try=1)
+            assert regions == ["us-east-1"]
+
+            # But should filter it out when multiple models to try
+            regions = client._get_regions_to_try(provider, num_models_to_try=2)
+            assert regions == []
