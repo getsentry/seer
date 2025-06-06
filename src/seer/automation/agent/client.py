@@ -644,8 +644,12 @@ class AnthropicProvider(BaseLlmProvider):
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
             region_preference={
-                "us": ["us-east5", "global", "europe-west4"],
-                "de": ["europe-west4", "europe-west1"],
+                "us": [
+                    "us-east5",
+                    "global",
+                    "europe-west4",
+                ],  # us-east5 is anthropic default, europe-west4 is where we have it set to before, as a fallback.
+                "de": ["europe-west4", "europe-west1"],  # europe-west1 is anthropic default
                 "*": ["global", "us-east5"],
             },
         ),
