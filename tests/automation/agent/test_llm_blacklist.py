@@ -249,6 +249,55 @@ class TestLlmRegionBlacklistService:
             assert len(remaining_entries) == 1
             assert remaining_entries[0].region == "us-west-2"  # Non-expired entry should remain
 
+    def test_concurrent_blacklist_additions_same_region(self):
+        """Test that concurrent additions to blacklist for same region work correctly"""
+        # This test simulates what could happen if multiple processes try to blacklist
+        # the same region simultaneously
+
+        # First, create an active blacklist
+        LlmRegionBlacklistService.add_to_blacklist(
+            provider_name="anthropic",
+            model_name="claude-3-sonnet",
+            region="us-east-1",
+            failure_reason="First failure",
+        )
+
+        # Get the current entry to check blacklisted_at time
+        with Session() as session:
+            first_entry = (
+                session.query(DbLlmRegionBlacklist)
+                .filter_by(
+                    provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
+                )
+                .first()
+            )
+            first_blacklisted_at = first_entry.blacklisted_at
+
+        # Add to blacklist again (should extend existing)
+        LlmRegionBlacklistService.add_to_blacklist(
+            provider_name="anthropic",
+            model_name="claude-3-sonnet",
+            region="us-east-1",
+            failure_reason="Second failure",
+        )
+
+        # Verify only one entry exists and it was extended
+        with Session() as session:
+            entries = (
+                session.query(DbLlmRegionBlacklist)
+                .filter_by(
+                    provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
+                )
+                .all()
+            )
+
+            assert len(entries) == 1
+            entry = entries[0]
+            assert entry.failure_reason == "Second failure"
+            assert entry.failure_count == 2
+            # Should have same blacklisted_at (same blacklist period)
+            assert entry.blacklisted_at == first_blacklisted_at
+
 
 class TestLlmClientBlacklistIntegration:
     """Test integration of blacklisting with LlmClient"""
