@@ -1827,28 +1827,22 @@ class LlmClient:
     def _is_fallback_worthy_exception(exception: Exception, provider: LlmProvider) -> bool:
         """
         Determine if an exception warrants trying the next model in a fallback sequence.
-        Currently targets 429 (rate limit) and 422 (unprocessable entity) errors.
+        Currently targets 429 (rate limit) errors.
         """
 
         if isinstance(exception, LlmStreamTimeoutError):
             return True
 
         if provider.provider_name == LlmProviderType.OPENAI:
-            return (
-                isinstance(exception, openai.RateLimitError)
-                or (isinstance(exception, openai.BadRequestError) and "422" in str(exception))
-                or (
-                    isinstance(exception, openai.APIStatusError)
-                    and exception.status_code in [422, 429]
-                )
+            return isinstance(exception, openai.RateLimitError) or (
+                isinstance(exception, openai.APIStatusError) and exception.status_code in [429]
             )
         elif provider.provider_name == LlmProviderType.ANTHROPIC:
             return (
                 isinstance(exception, anthropic.RateLimitError)
-                or (isinstance(exception, anthropic.BadRequestError) and "422" in str(exception))
                 or (
                     isinstance(exception, anthropic.APIStatusError)
-                    and exception.status_code in [422, 429]
+                    and exception.status_code in [429]
                 )
                 or any(
                     message in str(exception)
@@ -1861,7 +1855,7 @@ class LlmClient:
         elif provider.provider_name == LlmProviderType.GEMINI:
             return (
                 isinstance(exception, ClientError)
-                and exception.code in [422, 429]
+                and exception.code in [429]
                 or any(
                     message in str(exception)
                     for message in [
