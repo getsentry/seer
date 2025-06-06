@@ -289,6 +289,11 @@ class OpenAiProvider(BaseLlmProvider):
         reasoning_effort: str | None = None,
     ):
         @sentry_sdk.trace
+        @backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )
         def _generate_text():
             message_dicts, tool_dicts = self._prep_message_and_tools(
                 messages=messages,
@@ -357,11 +362,7 @@ class OpenAiProvider(BaseLlmProvider):
                 ),
             )
 
-        return backoff_on_exception(
-            is_exception_retryable=self.is_completion_exception_retryable,
-            max_tries=self.backoff_max_tries,
-            sleep_sec_scaler=self.sleep_sec_scaler,
-        )(_generate_text)()
+        return _generate_text()
 
     def generate_structured(
         self,
@@ -378,6 +379,11 @@ class OpenAiProvider(BaseLlmProvider):
         reasoning_effort: str | None = None,
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         @sentry_sdk.trace
+        @backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )
         def _generate_structured():
             message_dicts, tool_dicts = self._prep_message_and_tools(
                 messages=messages,
@@ -426,11 +432,7 @@ class OpenAiProvider(BaseLlmProvider):
                 ),
             )
 
-        return backoff_on_exception(
-            is_exception_retryable=self.is_completion_exception_retryable,
-            max_tries=self.backoff_max_tries,
-            sleep_sec_scaler=self.sleep_sec_scaler,
-        )(_generate_structured)()
+        return _generate_structured()
 
     @staticmethod
     def to_message_dict(message: Message) -> ChatCompletionMessageParam:
@@ -608,7 +610,7 @@ class OpenAiProvider(BaseLlmProvider):
                     yield "content", delta.content
 
         return backoff_on_generator(
-            lambda: _stream_with_retries(),
+            _stream_with_retries,
             is_exception_retryable=self.is_completion_exception_retryable,
             max_tries=self.backoff_max_tries,
             sleep_sec_scaler=self.sleep_sec_scaler,
@@ -756,6 +758,11 @@ class AnthropicProvider(BaseLlmProvider):
     ):
         @observe(as_type="generation", name="Anthropic Generation")
         @sentry_sdk.trace
+        @backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )
         def _generate_text():
             message_dicts, tool_dicts, system_prompt_block = self._prep_message_and_tools(
                 messages=messages,
@@ -807,11 +814,7 @@ class AnthropicProvider(BaseLlmProvider):
                 ),
             )
 
-        return backoff_on_exception(
-            is_exception_retryable=self.is_completion_exception_retryable,
-            max_tries=self.backoff_max_tries,
-            sleep_sec_scaler=self.sleep_sec_scaler,
-        )(_generate_text)()
+        return _generate_text()
 
     @staticmethod
     def _format_claude_response_to_message(completion: anthropic.types.Message) -> Message:
@@ -1083,7 +1086,7 @@ class AnthropicProvider(BaseLlmProvider):
                 )
 
         return backoff_on_generator(
-            lambda: _stream_with_retries(),
+            _stream_with_retries,
             is_exception_retryable=self.is_completion_exception_retryable,
             max_tries=self.backoff_max_tries,
             sleep_sec_scaler=self.sleep_sec_scaler,
@@ -1227,6 +1230,11 @@ class GeminiProvider(BaseLlmProvider):
     ) -> str:
         @observe(as_type="generation", name="Gemini Generation with Grounding")
         @sentry_sdk.trace
+        @backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )
         def _search_the_web():
             client = self.get_client()
             google_search_tool = GeminiTool(google_search=GoogleSearch())
@@ -1252,11 +1260,7 @@ class GeminiProvider(BaseLlmProvider):
                         answer += each.text
             return answer
 
-        return backoff_on_exception(
-            is_exception_retryable=self.is_completion_exception_retryable,
-            max_tries=self.backoff_max_tries,
-            sleep_sec_scaler=self.sleep_sec_scaler,
-        )(_search_the_web)()
+        return _search_the_web()
 
     def generate_structured(
         self,
@@ -1274,6 +1278,11 @@ class GeminiProvider(BaseLlmProvider):
     ) -> LlmGenerateStructuredResponse[StructuredOutputType]:
         @observe(as_type="generation", name="Gemini Generation")
         @sentry_sdk.trace
+        @backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )
         def _generate_structured():
             message_dicts, tool_dicts, final_system_prompt = self._prep_message_and_tools(
                 messages=messages,
@@ -1340,11 +1349,7 @@ class GeminiProvider(BaseLlmProvider):
                 ),
             )
 
-        return backoff_on_exception(
-            is_exception_retryable=self.is_completion_exception_retryable,
-            max_tries=self.backoff_max_tries,
-            sleep_sec_scaler=self.sleep_sec_scaler,
-        )(_generate_structured)()
+        return _generate_structured()
 
     def generate_text_stream(
         self,
@@ -1448,7 +1453,7 @@ class GeminiProvider(BaseLlmProvider):
 
         # Apply retry logic to the generator
         retrying_stream = backoff_on_generator(
-            lambda: _stream_with_retries(),
+            _stream_with_retries,
             is_exception_retryable=self.is_completion_exception_retryable,
             max_tries=self.backoff_max_tries,
             sleep_sec_scaler=self.sleep_sec_scaler,
@@ -1469,6 +1474,11 @@ class GeminiProvider(BaseLlmProvider):
     ):
         @observe(as_type="generation", name="Gemini Generation")
         @sentry_sdk.trace
+        @backoff_on_exception(
+            is_exception_retryable=self.is_completion_exception_retryable,
+            max_tries=self.backoff_max_tries,
+            sleep_sec_scaler=self.sleep_sec_scaler,
+        )
         def _generate_text():
             message_dicts, tool_dicts, final_system_prompt = self._prep_message_and_tools(
                 messages=messages,
@@ -1524,11 +1534,7 @@ class GeminiProvider(BaseLlmProvider):
                 ),
             )
 
-        return backoff_on_exception(
-            is_exception_retryable=self.is_completion_exception_retryable,
-            max_tries=self.backoff_max_tries,
-            sleep_sec_scaler=self.sleep_sec_scaler,
-        )(_generate_text)()
+        return _generate_text()
 
     @classmethod
     def _prep_message_and_tools(
@@ -1756,6 +1762,20 @@ LlmProvider = Union[OpenAiProvider, AnthropicProvider, GeminiProvider]
 
 class LlmClient:
     @staticmethod
+    def _resolve_parameter(
+        explicit_value: Any,
+        defaults: LlmProviderDefaults | None,
+        param_name: str,
+        fallback_default: Any = None,
+    ) -> Any:
+        """Helper to resolve a parameter using precedence: explicit > defaults > fallback."""
+        if explicit_value is not None:
+            return explicit_value
+        if defaults and getattr(defaults, param_name, None) is not None:
+            return getattr(defaults, param_name)
+        return fallback_default
+
+    @staticmethod
     def _resolve_parameters(
         *,
         defaults: LlmProviderDefaults | None,
@@ -1772,54 +1792,18 @@ class LlmClient:
         Returns a ResolvedParameters Pydantic model with resolved parameter values.
         """
         return ResolvedParameters(
-            temperature=(
-                temperature
-                if temperature is not None
-                else (
-                    defaults.temperature if defaults and defaults.temperature is not None else None
-                )
+            temperature=LlmClient._resolve_parameter(temperature, defaults, "temperature"),
+            max_tokens=LlmClient._resolve_parameter(max_tokens, defaults, "max_tokens"),
+            seed=LlmClient._resolve_parameter(seed, defaults, "seed"),
+            reasoning_effort=LlmClient._resolve_parameter(
+                reasoning_effort, defaults, "reasoning_effort"
             ),
-            max_tokens=(
-                max_tokens
-                if max_tokens is not None
-                else (defaults.max_tokens if defaults and defaults.max_tokens is not None else None)
+            timeout=LlmClient._resolve_parameter(timeout, defaults, "timeout"),
+            first_token_timeout=LlmClient._resolve_parameter(
+                first_token_timeout, defaults, "first_token_timeout", DEFAULT_FIRST_TOKEN_TIMEOUT
             ),
-            seed=(
-                seed
-                if seed is not None
-                else (defaults.seed if defaults and defaults.seed is not None else None)
-            ),
-            reasoning_effort=(
-                reasoning_effort
-                if reasoning_effort is not None
-                else (
-                    defaults.reasoning_effort
-                    if defaults and defaults.reasoning_effort is not None
-                    else None
-                )
-            ),
-            timeout=(
-                timeout
-                if timeout is not None
-                else (defaults.timeout if defaults and defaults.timeout is not None else None)
-            ),
-            first_token_timeout=(
-                first_token_timeout
-                if first_token_timeout is not None
-                else (
-                    defaults.first_token_timeout
-                    if defaults and defaults.first_token_timeout is not None
-                    else DEFAULT_FIRST_TOKEN_TIMEOUT
-                )
-            ),
-            inactivity_timeout=(
-                inactivity_timeout
-                if inactivity_timeout is not None
-                else (
-                    defaults.inactivity_timeout
-                    if defaults and defaults.inactivity_timeout is not None
-                    else DEFAULT_INACTIVITY_TIMEOUT
-                )
+            inactivity_timeout=LlmClient._resolve_parameter(
+                inactivity_timeout, defaults, "inactivity_timeout", DEFAULT_INACTIVITY_TIMEOUT
             ),
         )
 
@@ -1882,7 +1866,7 @@ class LlmClient:
             if (
                 not regions_to_try or (len(regions_to_try) == 1 and regions_to_try[0] is None)
             ) and base_model.provider_name != LlmProviderType.OPENAI:
-                logger.warning(f"No regions to run for model {base_model.model_name}.")
+                logger.error(f"No regions to run for model {base_model.model_name}.")
 
             # Try each region for this model
             for j, region in enumerate(regions_to_try):
@@ -1899,14 +1883,14 @@ class LlmClient:
                         is_last_model = i == len(models) - 1
 
                         if not is_last_region:
-                            logger.warning(
+                            logger.error(
                                 f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' "
                                 f"due to {type(e).__name__}: {str(e)}. "
                                 f"Trying next region ({j + 2}/{len(regions_to_try)}): {regions_to_try[j + 1]}"
                             )
                             continue
                         elif not is_last_model:
-                            logger.warning(
+                            logger.error(
                                 f"{operation_name} failed with {model_to_use.provider_name} model '{model_to_use.model_name}' (all regions tried) "
                                 f"due to {type(e).__name__}: {str(e)}. "
                                 f"Trying next model ({i + 2}/{len(models)}): {models[i + 1].provider_name} '{models[i + 1].model_name}'"

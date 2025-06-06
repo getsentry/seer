@@ -217,6 +217,8 @@ class AutofixAgent(LlmAgent):
                     cur_step = cur.steps[-1]
                     cur_step.clear_output_stream()
 
+                cleared = True
+
                 self.context.event_manager.add_log(
                     "Our LLM provider is overloaded. Now retrying desperately..."
                 )
