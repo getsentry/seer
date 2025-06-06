@@ -98,7 +98,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
                 agent.tools = []
                 response = agent.run(
                     run_config=RunConfig(
-                        model=AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        model=AnthropicProvider.model("claude-sonnet-4@20250514"),
                         prompt=RootCauseAnalysisPrompts.root_cause_proposal_msg(),
                         system_prompt=RootCauseAnalysisPrompts.format_system_msg(
                             repos_str=repos_str, mode="reasoning"

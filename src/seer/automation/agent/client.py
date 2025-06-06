@@ -640,6 +640,15 @@ class AnthropicProvider(BaseLlmProvider):
                 "*": ["global", "us-east5"],
             },
         ),
+        LlmModelDefaultConfig(
+            match="claude-sonnet-4@20250514",
+            defaults=LlmProviderDefaults(temperature=0.0, max_tokens=100000),
+            region_preference={
+                "us": ["global", "us-east5"],
+                "de": ["europe-west1"],
+                "*": ["global", "us-east5"],
+            },
+        ),
     ]
 
     @staticmethod
