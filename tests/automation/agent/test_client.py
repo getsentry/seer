@@ -1393,19 +1393,7 @@ def test_region_preference_unknown_sentry_region():
 def test_region_preference_de_requires_europe_region():
     """Test that DE requires a europe region"""
 
-    AnthropicProvider.default_configs = [
-        LlmModelDefaultConfig(
-            match=r".*",
-            defaults=LlmProviderDefaults(temperature=0.0),
-            region_preference={
-                "us": ["europe-west4", "global"],
-                "de": ["us-west4"],
-                "*": ["global", "us-east5"],
-            },
-        ),
-    ]
-
-    anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620")
+    anthropic_model = AnthropicProvider.model("claude-3-5-sonnet@20240620", region="us-west4")
 
     test_config = provide_test_defaults()
     test_config.SENTRY_REGION = "de"

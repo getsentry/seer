@@ -632,11 +632,31 @@ class AnthropicProvider(BaseLlmProvider):
 
     default_configs: ClassVar[list[LlmModelDefaultConfig]] = [
         LlmModelDefaultConfig(
+            match=r"^claude-sonnet-4@20250514$",
+            defaults=LlmProviderDefaults(temperature=0.0),
+            region_preference={
+                "us": [
+                    "us-east1",
+                    "us-east5",
+                    "global",
+                ],  # We have sonnet 4 PT for us-east1, us-east5 is anthropic default w/ higher quota
+                "de": [
+                    "europe-west4",
+                    "europe-west1",
+                ],  # We have sonnet 4 PT for europe-west4, europe-west1 is anthropic default w/ higher quota
+                "*": ["global", "us-east5"],
+            },
+        ),
+        LlmModelDefaultConfig(
             match=r".*",
             defaults=LlmProviderDefaults(temperature=0.0),
             region_preference={
-                "us": ["europe-west4", "global"],
-                "de": ["europe-west4"],
+                "us": [
+                    "us-east5",
+                    "global",
+                    "europe-west4",
+                ],  # us-east5 is anthropic default w/ higher quota, europe-west4 is where we have it set to before, as a fallback.
+                "de": ["europe-west4", "europe-west1"],  # europe-west1 is anthropic default
                 "*": ["global", "us-east5"],
             },
         ),
@@ -662,15 +682,11 @@ class AnthropicProvider(BaseLlmProvider):
     @inject
     def get_client(self, app_config: AppConfig = injected) -> anthropic.AnthropicVertex:
         project_id = app_config.GOOGLE_CLOUD_PROJECT
-        max_retries = 8
 
         # Use provided region if available, otherwise fall back to automatic region selection
+        selected_region: str | None = None
         if self.region:
             selected_region = self.region
-
-        # Always overwrite
-        if app_config.DEV:
-            selected_region = "us-east5"
 
         if not selected_region:
             raise ValueError(
@@ -689,7 +705,7 @@ class AnthropicProvider(BaseLlmProvider):
             project_id=project_id,
             region=selected_region,
             base_url=base_url,
-            max_retries=max_retries,
+            max_retries=1,
         )
 
         return client
@@ -803,7 +819,11 @@ class AnthropicProvider(BaseLlmProvider):
                 total_tokens=completion.usage.input_tokens + completion.usage.output_tokens,
             )
 
-            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+            langfuse_context.update_current_observation(
+                model=self.model_name,
+                usage=usage,
+                metadata={"region": self.region},
+            )
 
             return LlmGenerateTextResponse(
                 message=message,
@@ -1082,7 +1102,9 @@ class AnthropicProvider(BaseLlmProvider):
                 )
                 yield usage
                 langfuse_context.update_current_observation(
-                    model=self.model_name, usage=usage.to_langfuse_usage()
+                    model=self.model_name,
+                    usage=usage.to_langfuse_usage(),
+                    metadata={"region": self.region},
                 )
 
         return backoff_on_generator(
@@ -1258,6 +1280,34 @@ class GeminiProvider(BaseLlmProvider):
                 for each in response.candidates[0].content.parts:
                     if each.text:
                         answer += each.text
+
+            usage = Usage(
+                completion_tokens=(
+                    response.usage_metadata.candidates_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.candidates_token_count is not None
+                    else 0
+                ),
+                prompt_tokens=(
+                    response.usage_metadata.prompt_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.prompt_token_count is not None
+                    else 0
+                ),
+                total_tokens=(
+                    response.usage_metadata.total_token_count
+                    if response.usage_metadata
+                    and response.usage_metadata.total_token_count is not None
+                    else 0
+                ),
+            )
+
+            langfuse_context.update_current_observation(
+                model=self.model_name,
+                usage=usage,
+                metadata={"region": self.region},
+            )
+
             return answer
 
         return _search_the_web()
@@ -1338,7 +1388,11 @@ class GeminiProvider(BaseLlmProvider):
                     else 0
                 ),
             )
-            langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+            langfuse_context.update_current_observation(
+                model=self.model_name,
+                usage=usage,
+                metadata={"region": self.region},
+            )
 
             return LlmGenerateStructuredResponse(
                 parsed=response.parsed,  # type: ignore[arg-type]
@@ -1449,7 +1503,11 @@ class GeminiProvider(BaseLlmProvider):
                     total_tokens=total_prompt_tokens + total_completion_tokens,
                 )
                 yield usage
-                langfuse_context.update_current_observation(model=self.model_name, usage=usage)
+                langfuse_context.update_current_observation(
+                    model=self.model_name,
+                    usage=usage,
+                    metadata={"region": self.region},
+                )
 
         # Apply retry logic to the generator
         retrying_stream = backoff_on_generator(
