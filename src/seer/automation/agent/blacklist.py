@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from seer.automation.codebase.utils import ensure_timezone_aware
 from seer.configuration import AppConfig
-from seer.db import DbLlmRegionBlacklist, Session
+from seer.db import DbLlmRegionBlacklist, Session, SQLAlchemySession
 from seer.dependency_injection import inject, injected
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ class LlmRegionBlacklistService:
         model_name: str,
         candidate_regions: list[str | None],
         config: AppConfig = injected,
-    ) -> list[str]:
+    ) -> list[str | None]:
         """Filter a list of regions to remove any that are currently blacklisted"""
         if not config.LLM_REGION_BLACKLIST_ENABLED or not candidate_regions:
             return candidate_regions
@@ -122,6 +122,10 @@ class LlmRegionBlacklistService:
             # Clean up expired entries
             LlmRegionBlacklistService._cleanup_expired_entries(session, now)
 
+            string_regions = [r for r in candidate_regions if r is not None]
+            if not string_regions:
+                return []
+
             # Get all blacklisted regions for this provider/model
             blacklisted_regions = set(
                 session.scalars(
@@ -129,7 +133,7 @@ class LlmRegionBlacklistService:
                         and_(
                             DbLlmRegionBlacklist.provider_name == provider_name,
                             DbLlmRegionBlacklist.model_name == model_name,
-                            DbLlmRegionBlacklist.region.in_(candidate_regions),
+                            DbLlmRegionBlacklist.region.in_(string_regions),
                             DbLlmRegionBlacklist.expires_at > now,
                         )
                     )
@@ -148,7 +152,7 @@ class LlmRegionBlacklistService:
             return filtered_regions
 
     @staticmethod
-    def _cleanup_expired_entries(session: Session, now: datetime.datetime) -> None:
+    def _cleanup_expired_entries(session: SQLAlchemySession, now: datetime.datetime) -> None:
         """Remove expired blacklist entries"""
         deleted_count = session.execute(
             delete(DbLlmRegionBlacklist).where(DbLlmRegionBlacklist.expires_at <= now)
@@ -221,20 +225,30 @@ class LlmRegionBlacklistService:
                 .order_by(DbLlmRegionBlacklist.expires_at)
             ).all()
 
-            return [
-                {
-                    "region": entry.region,
-                    "blacklisted_at": entry.blacklisted_at.isoformat(),
-                    "expires_at": entry.expires_at.isoformat(),
-                    "failure_reason": entry.failure_reason,
-                    "failure_count": entry.failure_count,
-                    "time_remaining_minutes": int(
+            result = []
+            for entry in entries:
+                # expires_at should never be None due to nullable=False in DB schema
+                expires_at_aware = ensure_timezone_aware(entry.expires_at)
+                if expires_at_aware is not None:
+                    time_remaining = int(
                         (
-                            ensure_timezone_aware(entry.expires_at)
-                            - datetime.datetime.now(datetime.timezone.utc)
+                            expires_at_aware - datetime.datetime.now(datetime.timezone.utc)
                         ).total_seconds()
                         / 60
-                    ),
-                }
-                for entry in entries
-            ]
+                    )
+                else:
+                    # This should never happen since expires_at is not nullable
+                    time_remaining = 0
+
+                result.append(
+                    {
+                        "region": entry.region,
+                        "blacklisted_at": entry.blacklisted_at.isoformat(),
+                        "expires_at": entry.expires_at.isoformat(),
+                        "failure_reason": entry.failure_reason,
+                        "failure_count": entry.failure_count,
+                        "time_remaining_minutes": time_remaining,
+                    }
+                )
+
+            return result

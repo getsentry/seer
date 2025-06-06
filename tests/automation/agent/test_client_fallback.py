@@ -789,7 +789,7 @@ class TestBlacklistIntegration:
                     operation_func=mock_operation,
                 )
 
-                assert result == "success with gemini"
+                assert result == f"success with {LlmProviderType.GEMINI}"
                 assert call_count == 1  # Only called for second provider
 
     def test_blacklisting_during_fallback_execution(self, mock_config):

@@ -31,7 +31,9 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, insert
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Mapped
+from sqlalchemy.orm import Session as SQLAlchemySession
+from sqlalchemy.orm import mapped_column, relationship, sessionmaker
 
 from seer.configuration import AppConfig
 from seer.dependency_injection import inject, injected
@@ -69,7 +71,12 @@ class Base(DeclarativeBase):
 # Initialized in src/app.run
 db: SQLAlchemy = SQLAlchemy(model_class=Base)
 migrate = Migrate(directory="src/migrations")
+
+# Session factory for creating database sessions
 Session = sessionmaker(autoflush=False, expire_on_commit=False)
+
+# Explicitly export the SQLAlchemy Session type for type annotations
+__all__ = ["Session", "SQLAlchemySession"]
 
 
 class TaskStatus(StrEnum):
