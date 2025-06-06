@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-DEFAULT_BACKOFF_MAX_TRIES = 4
+DEFAULT_BACKOFF_MAX_TRIES = 3
 
 
 @dataclass
