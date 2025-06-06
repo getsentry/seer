@@ -45,6 +45,7 @@ from seer.automation.agent.models import (
     LlmGenerateTextResponse,
     LlmModelDefaultConfig,
     LlmNoCompletionTokensError,
+    LlmNoRegionsToRunError,
     LlmProviderDefaults,
     LlmProviderType,
     LlmRefusalError,
@@ -1863,10 +1864,16 @@ class LlmClient:
         for i, base_model in enumerate(models):
             regions_to_try = self._get_regions_to_try(base_model)
 
-            if (
-                not regions_to_try or (len(regions_to_try) == 1 and regions_to_try[0] is None)
-            ) and base_model.provider_name != LlmProviderType.OPENAI:
-                logger.error(f"No regions to run for model {base_model.model_name}.")
+            if len(regions_to_try) == 0:
+                if i == len(models) - 1:
+                    raise LlmNoRegionsToRunError("No regions to run for completion")
+                else:
+                    logger.warning(
+                        f"No regions to run for model {base_model.model_name}. "
+                        f"Trying next model ({i + 2}/{len(models)}): {models[i + 1].provider_name} '{models[i + 1].model_name}'"
+                    )
+
+                    continue
 
             # Try each region for this model
             for j, region in enumerate(regions_to_try):
@@ -1942,10 +1949,6 @@ class LlmClient:
         regions_to_check = [r for r in candidate_regions if r is not None]
 
         if regions_to_check:
-            if len(regions_to_check) == 1:
-                # No need to check blacklist if there's only one region to try
-                return regions_to_check
-
             # Filter out blacklisted regions
             non_blacklisted_regions = LlmRegionBlacklistService.get_non_blacklisted_regions(
                 provider_name=model.provider_name,
@@ -2377,10 +2380,16 @@ class LlmClient:
             for i, base_model in enumerate(models_to_try):
                 regions_to_try = self._get_regions_to_try(base_model)
 
-                if (
-                    not regions_to_try or (len(regions_to_try) == 1 and regions_to_try[0] is None)
-                ) and base_model.provider_name != LlmProviderType.OPENAI:
-                    logger.warning(f"No regions to run for model {base_model.model_name}.")
+                if len(regions_to_try) == 0:
+                    if i == len(models_to_try) - 1:
+                        raise LlmNoRegionsToRunError("No regions to run for completion")
+                    else:
+                        logger.warning(
+                            f"No regions to run for model {base_model.model_name}. "
+                            f"Trying next model ({i + 2}/{len(models_to_try)}): {models_to_try[i + 1].provider_name} '{models_to_try[i + 1].model_name}'"
+                        )
+
+                        continue
 
                 # Try each region for this model
                 for j, region in enumerate(regions_to_try):

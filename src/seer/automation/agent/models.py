@@ -159,3 +159,9 @@ class LlmNoCompletionTokensError(Exception):
     """Raised when the LLM returns no completion tokens."""
 
     pass
+
+
+class LlmNoRegionsToRunError(Exception):
+    """Raised when there are no regions to run for a completion."""
+
+    pass
