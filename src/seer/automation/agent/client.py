@@ -1883,7 +1883,13 @@ class LlmClient:
                 try:
                     self._set_fallback_sentry_tags(model_to_use, i + 1, j + 1, len(models), region)
 
-                    return operation_func(model_to_use)
+                    result = operation_func(model_to_use)
+
+                    logger.info(
+                        f"Successfully completed {operation_name} with {model_to_use.provider_name} model '{model_to_use.model_name}' region '{region}' after {i} model retries and {j} region retries."
+                    )
+
+                    return result
                 except Exception as e:
                     if self._is_fallback_worthy_exception(e, model_to_use):
                         # Add the failing region to blacklist if applicable
@@ -1934,6 +1940,7 @@ class LlmClient:
 
     def _get_regions_to_try(self, model: LlmProvider, num_models_to_try: int) -> list[str | None]:
         """Get the list of regions to try for a given model, filtered by blacklist."""
+        candidate_regions: list[str | None] = []
         if model.region is not None:
             candidate_regions = [model.region]
         else:
@@ -1946,7 +1953,7 @@ class LlmClient:
                 return [None]
 
         # Filter out None values for blacklist checking (None means no specific region)
-        regions_to_check = [r for r in candidate_regions if r is not None]
+        regions_to_check: list[str | None] = [r for r in candidate_regions if r is not None]
 
         if regions_to_check:
             if len(regions_to_check) == 1 and num_models_to_try == 1:
@@ -1961,7 +1968,7 @@ class LlmClient:
             )
 
             # Reconstruct the list with None values preserved at original positions
-            filtered_regions = []
+            filtered_regions: list[str | None] = []
             blacklisted_count = 0
             for region in candidate_regions:
                 if region is None:

@@ -1,6 +1,5 @@
 import datetime
 import logging
-from typing import List, Optional
 
 from sqlalchemy import and_, delete, select
 from sqlalchemy.dialects.postgresql import insert
@@ -54,7 +53,7 @@ class LlmRegionBlacklistService:
         provider_name: str,
         model_name: str,
         region: str,
-        failure_reason: Optional[str] = None,
+        failure_reason: str | None = None,
         config: AppConfig = injected,
     ) -> None:
         """Add a provider/model/region combination to the blacklist"""
@@ -106,11 +105,15 @@ class LlmRegionBlacklistService:
     def get_non_blacklisted_regions(
         provider_name: str,
         model_name: str,
-        candidate_regions: List[str],
+        candidate_regions: list[str | None],
         config: AppConfig = injected,
-    ) -> List[str]:
+    ) -> list[str]:
         """Filter a list of regions to remove any that are currently blacklisted"""
         if not config.LLM_REGION_BLACKLIST_ENABLED or not candidate_regions:
+            return candidate_regions
+
+        if None in candidate_regions:
+            # If none is in there, regions probably aren't that important
             return candidate_regions
 
         with Session() as session:
@@ -194,7 +197,7 @@ class LlmRegionBlacklistService:
         provider_name: str,
         model_name: str,
         config: AppConfig = injected,
-    ) -> List[dict]:
+    ) -> list[dict]:
         """Get current blacklist status for a provider/model combination"""
         if not config.LLM_REGION_BLACKLIST_ENABLED:
             return []

@@ -448,7 +448,7 @@ class TestLlmClientBlacklistIntegration:
             )
 
             # Get regions to try
-            regions = client._get_regions_to_try(anthropic_provider)
+            regions = client._get_regions_to_try(anthropic_provider, num_models_to_try=1)
 
             # Should not include the blacklisted region
             assert "europe-west4" not in regions
@@ -456,7 +456,7 @@ class TestLlmClientBlacklistIntegration:
             assert len(regions) > 0
 
     def test_get_regions_to_try_with_single_region_not_filtered(self, mock_config):
-        """Test that single region providers are not filtered by blacklist"""
+        """Test that single region providers are not filtered by blacklist when only one model to try"""
         module = Module()
         module.constant(AppConfig, mock_config)
 
@@ -475,8 +475,8 @@ class TestLlmClientBlacklistIntegration:
                 region="us-east-1",
             )
 
-            # Should still return the region (single region not filtered)
-            regions = client._get_regions_to_try(provider)
+            # Should still return the region (single region not filtered when only one model to try)
+            regions = client._get_regions_to_try(provider, num_models_to_try=1)
             assert regions == ["us-east-1"]
 
     def test_get_regions_to_try_with_no_regions_available(self, mock_config, anthropic_provider):
@@ -488,7 +488,7 @@ class TestLlmClientBlacklistIntegration:
             client = LlmClient()
 
             # Get all available regions first
-            original_regions = client._get_regions_to_try(anthropic_provider)
+            original_regions = client._get_regions_to_try(anthropic_provider, num_models_to_try=2)
 
             # Blacklist all regions
             for region in original_regions:
@@ -500,7 +500,7 @@ class TestLlmClientBlacklistIntegration:
                     )
 
             # Should return empty list or only None values
-            regions = client._get_regions_to_try(anthropic_provider)
+            regions = client._get_regions_to_try(anthropic_provider, num_models_to_try=2)
             non_none_regions = [r for r in regions if r is not None]
             assert len(non_none_regions) == 0
 
