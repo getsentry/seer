@@ -1817,6 +1817,10 @@ class LlmClient:
         if isinstance(exception, LlmStreamTimeoutError):
             return True
 
+        if provider.is_completion_exception_retryable(exception):
+            # We fallback on all retryable exceptions
+            return True
+
         if provider.provider_name == LlmProviderType.OPENAI:
             return isinstance(exception, openai.RateLimitError) or (
                 isinstance(exception, openai.APIStatusError) and exception.status_code in [429]
