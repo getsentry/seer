@@ -635,8 +635,15 @@ class AnthropicProvider(BaseLlmProvider):
             match=r"^claude-sonnet-4@20250514$",
             defaults=LlmProviderDefaults(temperature=0.0),
             region_preference={
-                "us": ["us-east1", "us-east5", "global"],
-                "de": ["europe-west4", "europe-west1"],
+                "us": [
+                    "us-east1",
+                    "us-east5",
+                    "global",
+                ],  # We have sonnet 4 PT for us-east1, us-east5 is anthropic default
+                "de": [
+                    "europe-west4",
+                    "europe-west1",
+                ],  # We have sonnet 4 PT for europe-west4, europe-west1 is anthropic default
                 "*": ["global", "us-east5"],
             },
         ),
