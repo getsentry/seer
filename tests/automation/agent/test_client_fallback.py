@@ -1,9 +1,9 @@
-from unittest.mock import patch, Mock
 import json
+from unittest.mock import Mock, patch
 
-import pytest
 import anthropic
 import openai
+import pytest
 from google.genai.errors import ClientError, ServerError
 from pydantic import BaseModel
 from requests.exceptions import ChunkedEncodingError
