@@ -208,6 +208,7 @@ class RepoClient:
 
     supported_providers = ["github"]
 
+    @sentry_sdk.trace
     def __init__(
         self, app_id: int | str | None, private_key: str | None, repo_definition: RepoDefinition
     ):
