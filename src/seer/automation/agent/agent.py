@@ -34,7 +34,8 @@ class RunConfig(BaseModel):
         default=16, description="Maximum number of iterations the agent can perform"
     )
     max_tokens: int | None = None
-    model: LlmProvider
+    model: LlmProvider | None = None
+    models: list[LlmProvider] | None = None
     memory_storage_key: str | None = None
     temperature: float | None = 0.0
     run_name: str | None = None
@@ -63,6 +64,7 @@ class LlmAgent:
         return self.client.generate_text(
             messages=self.memory,
             model=run_config.model,
+            models=run_config.models,
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
             temperature=run_config.temperature or 0.0,

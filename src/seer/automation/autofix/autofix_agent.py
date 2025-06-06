@@ -1,7 +1,7 @@
 import contextlib
 import logging
 from concurrent.futures import Executor, Future, ThreadPoolExecutor
-from typing import Callable, Optional
+from typing import Optional
 
 import sentry_sdk
 from langfuse.decorators import langfuse_context, observe
@@ -9,9 +9,9 @@ from langfuse.decorators import langfuse_context, observe
 from seer.automation.agent.agent import AgentConfig, LlmAgent, RunConfig
 from seer.automation.agent.models import (
     LlmGenerateTextResponse,
-    LlmProviderType,
     LlmResponseMetadata,
     Message,
+    StreamResetException,
     ToolCall,
     Usage,
 )
@@ -21,7 +21,7 @@ from seer.automation.autofix.components.insight_sharing.component import create_
 from seer.automation.autofix.models import AutofixContinuation, AutofixStatus, DefaultStep
 from seer.automation.state import State
 from seer.dependency_injection import copy_modules_initializer
-from seer.utils import backoff_on_exception, retry_once_with_modified_input
+from seer.utils import retry_once_with_modified_input
 
 logger = logging.getLogger(__name__)
 
@@ -142,18 +142,15 @@ class AutofixAgent(LlmAgent):
         stream = self.client.generate_text_stream(
             messages=messages,
             model=run_config.model,
+            models=run_config.models,
             system_prompt=run_config.system_prompt if run_config.system_prompt else None,
             tools=(self.tools if len(self.tools) > 0 else None),
             temperature=run_config.temperature or 0.0,
             reasoning_effort=run_config.reasoning_effort,
-            first_token_timeout=(
-                90.0
-                if (run_config.model.provider_name == LlmProviderType.OPENAI)
-                and run_config.model.model_name.startswith("o")
-                else 40.0
-            ),
             max_tokens=run_config.max_tokens,
         )
+
+        model_used = run_config.models[0] if run_config.models else run_config.model
 
         cleared = False
         for chunk in stream:
@@ -208,20 +205,42 @@ class AutofixAgent(LlmAgent):
                 tool_calls.append(chunk)
             elif isinstance(chunk, Usage):
                 usage += chunk
+            elif isinstance(chunk, StreamResetException):
+                content_chunks = []
+                thinking_content_chunks = []
+                tool_calls = []
+                thinking_signature = None
+
+                self.accumulated_thinking_chunks = []
+
+                with self.context.state.update() as cur:
+                    cur_step = cur.steps[-1]
+                    cur_step.clear_output_stream()
+
+                cleared = True
+
+                self.context.event_manager.add_log(
+                    "Our LLM provider is overloaded. Now retrying desperately..."
+                )
+            elif hasattr(chunk, "model_name") and hasattr(chunk, "provider_name"):
+                model_used = chunk
+
+        if model_used is None:
+            raise ValueError("No model information available for completion response")
 
         message = self.client.construct_message_from_stream(
             content_chunks=content_chunks,
             thinking_content_chunks=thinking_content_chunks,
             thinking_signature=thinking_signature,
             tool_calls=tool_calls,
-            model=run_config.model,
+            model=model_used,
         )
 
         return LlmGenerateTextResponse(
             message=message,
             metadata=LlmResponseMetadata(
-                model=run_config.model.model_name,
-                provider_name=run_config.model.provider_name,
+                model=model_used.model_name,
+                provider_name=model_used.provider_name,
                 usage=usage,
             ),
         )
@@ -229,33 +248,13 @@ class AutofixAgent(LlmAgent):
     def get_completion(
         self,
         run_config: RunConfig,
-        max_tries: int = 4,
-        sleep_sec_scaler: Callable[[int], float] = lambda num_tries: 2**num_tries,
     ):
         """
         Streams the preliminary output to the current step and only returns when output is complete.
 
-        The completion request is retried `max_tries - 1` times if a retryable exception was just
-        raised, e.g, Anthropic's API is overloaded.
-
-        Additionally, if the input is too long, the tool messages are truncated and the completion is retried once.
+        If the input is too long, the tool messages are truncated and the completion is retried once.
+        Retryable exceptions (e.g., provider overload) are handled at the provider level.
         """
-
-        def _long_wait_logger():
-            self.context.event_manager.add_log(
-                "Our LLM provider is overloaded. Now retrying desperately..."
-            )
-
-        is_exception_retryable = getattr(
-            run_config.model, "is_completion_exception_retryable", lambda _: False
-        )
-        retrier = backoff_on_exception(
-            is_exception_retryable,
-            max_tries=max_tries,
-            sleep_sec_scaler=sleep_sec_scaler,
-            long_wait_callback=_long_wait_logger,
-            long_wait_threshold_sec=10,
-        )
 
         is_input_too_long_func = getattr(run_config.model, "is_input_too_long", lambda _: False)
         retry_input_too_long_decorator = retry_once_with_modified_input(
@@ -267,7 +266,7 @@ class AutofixAgent(LlmAgent):
         def attempt_completion(messages_to_send: list[Message]):
             return self._get_completion(run_config, messages=messages_to_send)
 
-        final_attempt_func = retry_input_too_long_decorator(retrier(attempt_completion))
+        final_attempt_func = retry_input_too_long_decorator(attempt_completion)
 
         return final_attempt_func(messages_to_send=self.memory)
 

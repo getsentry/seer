@@ -85,7 +85,6 @@ def create_query_from_natural_language(
         response_format=QueryOrFieldsResponse,
         temperature=0.2,
         thinking_budget=0,
-        use_local_endpoint=True,
     )
 
     if initial_response.parsed and initial_response.parsed.queries:
@@ -109,7 +108,6 @@ def create_query_from_natural_language(
             cache_name=cache_name,
             response_format=RelevantFieldsResponse,
             thinking_budget=0,
-            use_local_endpoint=True,
         )
         requested_fields = (
             relevant_fields_response.parsed.requested_fields
@@ -153,6 +151,5 @@ def create_query_from_natural_language(
         response_format=list[ModelResponse],
         temperature=0.2,
         thinking_budget=0,
-        use_local_endpoint=True,
     )
     return generated_query
