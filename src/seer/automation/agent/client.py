@@ -705,7 +705,7 @@ class AnthropicProvider(BaseLlmProvider):
             project_id=project_id,
             region=selected_region,
             base_url=base_url,
-            max_retries=3,
+            max_retries=1,
         )
 
         return client
