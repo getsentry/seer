@@ -182,10 +182,10 @@ class TestLlmRegionBlacklistService:
 
             assert is_blacklisted is False
 
-        # Verify expired entry was cleaned up
+        # Verify expired entry is still present (not cleaned up automatically)
         with Session() as session:
             count = session.query(DbLlmRegionBlacklist).count()
-            assert count == 0
+            assert count == 1
 
     def test_is_region_blacklisted_disabled_returns_false(self, mock_config_disabled):
         """Test that is_region_blacklisted returns False when disabled"""
@@ -264,136 +264,47 @@ class TestLlmRegionBlacklistService:
 
             assert filtered_regions == candidate_regions
 
-    def test_clear_blacklist_for_region_removes_entry(self, mock_config_enabled):
-        """Test that clear_blacklist_for_region removes the specified entry"""
-        module = Module()
-        module.constant(AppConfig, mock_config_enabled)
+    def test_cleanup_expired_entries_removes_only_expired(self, mock_config_enabled):
+        """Test that cleanup_expired_entries removes only expired entries"""
+        # Create both expired and non-expired entries
+        now = datetime.datetime.now(datetime.timezone.utc)
+        past_time = now - datetime.timedelta(hours=2)
+        future_time = now + datetime.timedelta(hours=1)
 
-        with module:
-            # Add to blacklist first
-            LlmRegionBlacklistService.add_to_blacklist(
-                provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
-            )
-
-            # Clear the blacklist
-            was_removed = LlmRegionBlacklistService.clear_blacklist_for_region(
-                provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
-            )
-
-            assert was_removed is True
-
-        # Verify entry was removed
         with Session() as session:
-            count = session.query(DbLlmRegionBlacklist).count()
-            assert count == 0
-
-    def test_clear_blacklist_for_region_returns_false_if_not_found(self, mock_config_enabled):
-        """Test that clear_blacklist_for_region returns False if entry not found"""
-        module = Module()
-        module.constant(AppConfig, mock_config_enabled)
-
-        with module:
-            was_removed = LlmRegionBlacklistService.clear_blacklist_for_region(
-                provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
-            )
-
-            assert was_removed is False
-
-    def test_clear_blacklist_for_region_disabled_returns_false(self, mock_config_disabled):
-        """Test that clear_blacklist_for_region returns False when disabled"""
-        module = Module()
-        module.constant(AppConfig, mock_config_disabled)
-
-        with module:
-            was_removed = LlmRegionBlacklistService.clear_blacklist_for_region(
-                provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
-            )
-
-            assert was_removed is False
-
-    def test_get_blacklist_status_returns_correct_info(self, mock_config_enabled):
-        """Test that get_blacklist_status returns correct information"""
-        module = Module()
-        module.constant(AppConfig, mock_config_enabled)
-
-        with module:
-            # Add multiple entries
-            LlmRegionBlacklistService.add_to_blacklist(
-                provider_name="anthropic",
-                model_name="claude-3-sonnet",
-                region="us-east-1",
-                failure_reason="Rate limit",
-            )
-            LlmRegionBlacklistService.add_to_blacklist(
-                provider_name="anthropic",
-                model_name="claude-3-sonnet",
-                region="eu-west-1",
-                failure_reason="Timeout",
-            )
-
-            status = LlmRegionBlacklistService.get_blacklist_status(
-                provider_name="anthropic", model_name="claude-3-sonnet"
-            )
-
-            assert len(status) == 2
-            regions = {entry["region"] for entry in status}
-            assert regions == {"us-east-1", "eu-west-1"}
-
-            # Check structure of returned data
-            for entry in status:
-                assert "region" in entry
-                assert "blacklisted_at" in entry
-                assert "expires_at" in entry
-                assert "failure_reason" in entry
-                assert "failure_count" in entry
-                assert "time_remaining_minutes" in entry
-                assert entry["failure_count"] >= 1
-
-    def test_get_blacklist_status_excludes_expired(self, mock_config_enabled):
-        """Test that get_blacklist_status excludes expired entries"""
-        module = Module()
-        module.constant(AppConfig, mock_config_enabled)
-
-        with module:
-            # Add current entry
-            LlmRegionBlacklistService.add_to_blacklist(
-                provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
-            )
-
-        # Add expired entry manually
-        past_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
-        with Session() as session:
+            # Add expired entry
             expired_entry = DbLlmRegionBlacklist(
                 provider_name="anthropic",
                 model_name="claude-3-sonnet",
-                region="eu-west-1",
+                region="us-east-1",
                 blacklisted_at=past_time,
-                expires_at=past_time + datetime.timedelta(minutes=1),
+                expires_at=past_time + datetime.timedelta(minutes=1),  # Already expired
+                failure_count=1,
+            )
+            # Add non-expired entry
+            active_entry = DbLlmRegionBlacklist(
+                provider_name="anthropic",
+                model_name="claude-3-sonnet",
+                region="us-west-2",
+                blacklisted_at=now,
+                expires_at=future_time,  # Not expired yet
                 failure_count=1,
             )
             session.add(expired_entry)
+            session.add(active_entry)
             session.commit()
 
-        with module:
-            status = LlmRegionBlacklistService.get_blacklist_status(
-                provider_name="anthropic", model_name="claude-3-sonnet"
-            )
+        # Run cleanup
+        with Session() as session:
+            deleted_count = LlmRegionBlacklistService.cleanup_expired_entries(session, now)
 
-            # Should only return the non-expired entry
-            assert len(status) == 1
-            assert status[0]["region"] == "us-east-1"
+        # Verify only expired entry was removed
+        assert deleted_count == 1
 
-    def test_get_blacklist_status_disabled_returns_empty(self, mock_config_disabled):
-        """Test that get_blacklist_status returns empty list when disabled"""
-        module = Module()
-        module.constant(AppConfig, mock_config_disabled)
-
-        with module:
-            status = LlmRegionBlacklistService.get_blacklist_status(
-                provider_name="anthropic", model_name="claude-3-sonnet"
-            )
-
-            assert status == []
+        with Session() as session:
+            remaining_entries = session.query(DbLlmRegionBlacklist).all()
+            assert len(remaining_entries) == 1
+            assert remaining_entries[0].region == "us-west-2"  # Non-expired entry should remain
 
 
 class TestLlmClientBlacklistIntegration:

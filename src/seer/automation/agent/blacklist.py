@@ -4,7 +4,6 @@ import logging
 from sqlalchemy import and_, delete, select
 from sqlalchemy.dialects.postgresql import insert
 
-from seer.automation.codebase.utils import ensure_timezone_aware
 from seer.configuration import AppConfig
 from seer.db import DbLlmRegionBlacklist, Session, SQLAlchemySession
 from seer.dependency_injection import inject, injected
@@ -29,9 +28,6 @@ class LlmRegionBlacklistService:
 
         with Session() as session:
             now = datetime.datetime.now(datetime.UTC)
-
-            # First, clean up expired entries
-            LlmRegionBlacklistService._cleanup_expired_entries(session, now)
 
             # Check if the region is blacklisted
             result = session.scalar(
@@ -92,6 +88,21 @@ class LlmRegionBlacklistService:
                 },
             )
 
+            current_failure_count = session.scalar(
+                select(DbLlmRegionBlacklist.failure_count).where(
+                    and_(
+                        DbLlmRegionBlacklist.provider_name == provider_name,
+                        DbLlmRegionBlacklist.model_name == model_name,
+                        DbLlmRegionBlacklist.region == region,
+                    )
+                )
+            )
+
+            if current_failure_count is not None and current_failure_count > 3:
+                logger.error(
+                    f"Region {region} for {provider_name} model '{model_name}' has failed for more than 3 times. "
+                )
+
             session.execute(stmt)
             session.commit()
 
@@ -118,9 +129,6 @@ class LlmRegionBlacklistService:
 
         with Session() as session:
             now = datetime.datetime.now(datetime.UTC)
-
-            # Clean up expired entries
-            LlmRegionBlacklistService._cleanup_expired_entries(session, now)
 
             string_regions = [r for r in candidate_regions if r is not None]
             if not string_regions:
@@ -152,7 +160,7 @@ class LlmRegionBlacklistService:
             return filtered_regions
 
     @staticmethod
-    def _cleanup_expired_entries(session: SQLAlchemySession, now: datetime.datetime) -> None:
+    def cleanup_expired_entries(session: SQLAlchemySession, now: datetime.datetime) -> int:
         """Remove expired blacklist entries"""
         deleted_count = session.execute(
             delete(DbLlmRegionBlacklist).where(DbLlmRegionBlacklist.expires_at <= now)
@@ -162,93 +170,4 @@ class LlmRegionBlacklistService:
             logger.debug(f"Cleaned up {deleted_count} expired blacklist entries")
             session.commit()
 
-    @staticmethod
-    @inject
-    def clear_blacklist_for_region(
-        provider_name: str,
-        model_name: str,
-        region: str,
-        config: AppConfig = injected,
-    ) -> bool:
-        """Manually remove a specific region from the blacklist. Returns True if entry was found and removed."""
-        if not config.LLM_REGION_BLACKLIST_ENABLED:
-            return False
-
-        with Session() as session:
-            deleted_count = session.execute(
-                delete(DbLlmRegionBlacklist).where(
-                    and_(
-                        DbLlmRegionBlacklist.provider_name == provider_name,
-                        DbLlmRegionBlacklist.model_name == model_name,
-                        DbLlmRegionBlacklist.region == region,
-                    )
-                )
-            ).rowcount
-
-            session.commit()
-
-            if deleted_count > 0:
-                logger.info(
-                    f"Manually cleared blacklist for {provider_name} '{model_name}' region '{region}'"
-                )
-                return True
-
-            return False
-
-    @staticmethod
-    @inject
-    def get_blacklist_status(
-        provider_name: str,
-        model_name: str,
-        config: AppConfig = injected,
-    ) -> list[dict]:
-        """Get current blacklist status for a provider/model combination"""
-        if not config.LLM_REGION_BLACKLIST_ENABLED:
-            return []
-
-        with Session() as session:
-            now = datetime.datetime.now(datetime.UTC)
-
-            # Clean up expired entries first
-            LlmRegionBlacklistService._cleanup_expired_entries(session, now)
-
-            # Get active blacklist entries
-            entries = session.scalars(
-                select(DbLlmRegionBlacklist)
-                .where(
-                    and_(
-                        DbLlmRegionBlacklist.provider_name == provider_name,
-                        DbLlmRegionBlacklist.model_name == model_name,
-                        DbLlmRegionBlacklist.expires_at > now,
-                    )
-                )
-                .order_by(DbLlmRegionBlacklist.expires_at)
-            ).all()
-
-            result = []
-            for entry in entries:
-                # expires_at should never be None due to nullable=False in DB schema
-                expires_at_aware = ensure_timezone_aware(entry.expires_at)
-                if expires_at_aware is not None:
-                    time_remaining = int(
-                        (
-                            expires_at_aware - datetime.datetime.now(datetime.timezone.utc)
-                        ).total_seconds()
-                        / 60
-                    )
-                else:
-                    # This should never happen since expires_at is not nullable
-                    time_remaining = 0
-
-                result.append(
-                    {
-                        "region": entry.region,
-                        "blacklisted_at": entry.blacklisted_at.isoformat(),
-                        "expires_at": entry.expires_at.isoformat(),
-                        "failure_reason": entry.failure_reason,
-                        "failure_count": entry.failure_count,
-                        "time_remaining_minutes": time_remaining,
-                    }
-                )
-
-            return result
+        return deleted_count

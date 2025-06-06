@@ -5,6 +5,7 @@ import sentry_sdk
 import sqlalchemy.sql as sql
 
 from celery_app.app import celery_app
+from seer.automation.agent.blacklist import LlmRegionBlacklistService
 from seer.db import DbIssueSummary, DbRunState, Session
 
 logger = logging.getLogger(__name__)
@@ -16,8 +17,10 @@ def delete_data_for_ttl():
     before = datetime.datetime.now() - datetime.timedelta(days=30)  # over 30 days old
     deleted_run_count = delete_all_runs_before(before)
     deleted_summary_count = delete_all_summaries_before(before)
+    deleted_blacklist_count = delete_expired_blacklist_entries_before(before)
     logger.info(f"Deleted {deleted_run_count} runs")
     logger.info(f"Deleted {deleted_summary_count} summaries")
+    logger.info(f"Deleted {deleted_blacklist_count} expired blacklist entries")
 
 
 @sentry_sdk.trace
@@ -68,3 +71,10 @@ def delete_all_summaries_before(before: datetime.datetime, batch_size=1000):
                 break
 
     return deleted_count
+
+
+@sentry_sdk.trace
+def delete_expired_blacklist_entries_before(before: datetime.datetime):
+    logger.info("Deleting expired blacklist entries")
+    with Session() as session:
+        return LlmRegionBlacklistService.cleanup_expired_entries(session, before)
