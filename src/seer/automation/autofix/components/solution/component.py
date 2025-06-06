@@ -154,20 +154,22 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                 )
 
             try:
-                de_discovery_config = {
-                    "models": [
-                        AnthropicProvider.model("claude-sonnet-4@20250514"),
-                        AnthropicProvider.model("claude-3-7-sonnet@20250219"),
-                    ],
-                    "max_tokens": 8192,
-                }
-
-                us_discovery_config = {
-                    "models": [
-                        GeminiProvider.model("gemini-2.5-pro-preview-05-06", max_tokens=32000),
-                        AnthropicProvider.model("claude-sonnet-4@20250514", max_tokens=8192),
-                    ],
-                }
+                discovery_config = (
+                    {
+                        "models": [
+                            AnthropicProvider.model("claude-sonnet-4@20250514"),
+                            AnthropicProvider.model("claude-3-7-sonnet@20250219"),
+                        ],
+                        "max_tokens": 8192,
+                    }
+                    if config.SENTRY_REGION == "de"
+                    else {
+                        "models": [
+                            GeminiProvider.model("gemini-2.5-pro-preview-05-06", max_tokens=32000),
+                            AnthropicProvider.model("claude-sonnet-4@20250514", max_tokens=8192),
+                        ],
+                    }
+                )
 
                 response = agent.run(
                     run_config=RunConfig(
@@ -178,11 +180,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
                         run_name="Solution Discovery",
                         max_iterations=64,
                         temperature=0.0,
-                        **(
-                            de_discovery_config
-                            if config.SENTRY_REGION == "de"
-                            else us_discovery_config
-                        ),
+                        **discovery_config,
                     ),
                 )
 

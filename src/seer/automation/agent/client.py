@@ -639,11 +639,11 @@ class AnthropicProvider(BaseLlmProvider):
                     "us-east1",
                     "us-east5",
                     "global",
-                ],  # We have sonnet 4 PT for us-east1, us-east5 is anthropic default
+                ],  # We have sonnet 4 PT for us-east1, us-east5 is anthropic default w/ higher quota
                 "de": [
                     "europe-west4",
                     "europe-west1",
-                ],  # We have sonnet 4 PT for europe-west4, europe-west1 is anthropic default
+                ],  # We have sonnet 4 PT for europe-west4, europe-west1 is anthropic default w/ higher quota
                 "*": ["global", "us-east5"],
             },
         ),
@@ -655,7 +655,7 @@ class AnthropicProvider(BaseLlmProvider):
                     "us-east5",
                     "global",
                     "europe-west4",
-                ],  # us-east5 is anthropic default, europe-west4 is where we have it set to before, as a fallback.
+                ],  # us-east5 is anthropic default w/ higher quota, europe-west4 is where we have it set to before, as a fallback.
                 "de": ["europe-west4", "europe-west1"],  # europe-west1 is anthropic default
                 "*": ["global", "us-east5"],
             },
