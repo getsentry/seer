@@ -1862,11 +1862,11 @@ class LlmClient:
         For each model, tries all regions in its region preference before moving to the next model.
         """
         for i, base_model in enumerate(models):
-            regions_to_try = self._get_regions_to_try(base_model)
+            regions_to_try = self._get_regions_to_try(base_model, num_models_to_try=len(models))
 
             if len(regions_to_try) == 0:
                 if i == len(models) - 1:
-                    raise LlmNoRegionsToRunError("No regions to run for completion")
+                    raise LlmNoRegionsToRunError("No more models/regions to run for completion")
                 else:
                     logger.warning(
                         f"No regions to run for model {base_model.model_name}. "
@@ -1932,7 +1932,7 @@ class LlmClient:
 
         raise ValueError("No models provided for fallback execution")
 
-    def _get_regions_to_try(self, model: LlmProvider) -> list[str | None]:
+    def _get_regions_to_try(self, model: LlmProvider, num_models_to_try: int) -> list[str | None]:
         """Get the list of regions to try for a given model, filtered by blacklist."""
         if model.region is not None:
             candidate_regions = [model.region]
@@ -1949,6 +1949,10 @@ class LlmClient:
         regions_to_check = [r for r in candidate_regions if r is not None]
 
         if regions_to_check:
+            if len(regions_to_check) == 1 and num_models_to_try == 1:
+                # No need to check blacklist if there's only one region to try and one model to try
+                return regions_to_check
+
             # Filter out blacklisted regions
             non_blacklisted_regions = LlmRegionBlacklistService.get_non_blacklisted_regions(
                 provider_name=model.provider_name,
@@ -1966,6 +1970,12 @@ class LlmClient:
                     filtered_regions.append(region)
                 else:
                     blacklisted_count += 1
+
+            if len(filtered_regions) == 0 and num_models_to_try == 1:
+                logger.warning(
+                    f"No regions to run for {model.provider_name} model '{model.model_name}' due to blacklist but only 1 model to try, will try the first region again."
+                )
+                return regions_to_check[:1]
 
             if blacklisted_count > 0:
                 logger.info(
@@ -2378,11 +2388,14 @@ class LlmClient:
         try:
             # For streaming, we need to handle fallback during iteration, not just during generator creation
             for i, base_model in enumerate(models_to_try):
-                regions_to_try = self._get_regions_to_try(base_model)
+                regions_to_try = self._get_regions_to_try(
+                    base_model,
+                    num_models_to_try=len(models_to_try),
+                )
 
                 if len(regions_to_try) == 0:
                     if i == len(models_to_try) - 1:
-                        raise LlmNoRegionsToRunError("No regions to run for completion")
+                        raise LlmNoRegionsToRunError("No more models/regions to run for completion")
                     else:
                         logger.warning(
                             f"No regions to run for model {base_model.model_name}. "
