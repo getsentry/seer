@@ -2,7 +2,6 @@ import datetime
 import logging
 
 from sqlalchemy import and_, delete, select
-from sqlalchemy.dialects.postgresql import insert
 
 from seer.db import DbLlmRegionBlacklist, Session, SQLAlchemySession
 
@@ -50,54 +49,66 @@ class LlmRegionBlacklistService:
             now = datetime.datetime.now(datetime.UTC)
             expires_at = now + datetime.timedelta(seconds=LLM_REGION_BLACKLIST_DURATION_SECONDS)
 
-            # Use upsert to handle the case where the entry already exists
-            stmt = insert(DbLlmRegionBlacklist).values(
-                provider_name=provider_name,
-                model_name=model_name,
-                region=region,
-                blacklisted_at=now,
-                expires_at=expires_at,
-                failure_reason=failure_reason,
-                failure_count=1,
-            )
-
-            # If the entry already exists, update it with new expiry and increment failure count
-            stmt = stmt.on_conflict_do_update(
-                index_elements=[
-                    DbLlmRegionBlacklist.provider_name,
-                    DbLlmRegionBlacklist.model_name,
-                    DbLlmRegionBlacklist.region,
-                ],
-                set_={
-                    DbLlmRegionBlacklist.blacklisted_at: now,
-                    DbLlmRegionBlacklist.expires_at: expires_at,
-                    DbLlmRegionBlacklist.failure_reason: failure_reason,
-                    DbLlmRegionBlacklist.failure_count: DbLlmRegionBlacklist.failure_count + 1,
-                },
-            )
-
-            current_failure_count = session.scalar(
-                select(DbLlmRegionBlacklist.failure_count).where(
+            # Check if there's an existing non-expired entry
+            existing_entry = session.scalar(
+                select(DbLlmRegionBlacklist).where(
                     and_(
                         DbLlmRegionBlacklist.provider_name == provider_name,
                         DbLlmRegionBlacklist.model_name == model_name,
                         DbLlmRegionBlacklist.region == region,
+                        DbLlmRegionBlacklist.expires_at > now,
                     )
                 )
             )
 
-            if current_failure_count is not None and current_failure_count > 3:
+            if existing_entry:
+                # Extend the existing non-expired blacklist
+                existing_entry.expires_at = expires_at
+                existing_entry.failure_reason = failure_reason
+                existing_entry.failure_count += 1
+                current_failure_count = existing_entry.failure_count
+
+                logger.warning(
+                    f"Extended {provider_name} model '{model_name}' region '{region}' blacklist "
+                    f"until {expires_at.isoformat()} due to: {failure_reason or 'unknown error'}"
+                )
+            else:
+                # Clean up any expired entries for this combination
+                session.execute(
+                    delete(DbLlmRegionBlacklist).where(
+                        and_(
+                            DbLlmRegionBlacklist.provider_name == provider_name,
+                            DbLlmRegionBlacklist.model_name == model_name,
+                            DbLlmRegionBlacklist.region == region,
+                            DbLlmRegionBlacklist.expires_at <= now,
+                        )
+                    )
+                )
+
+                # Create a new blacklist entry
+                new_entry = DbLlmRegionBlacklist(
+                    provider_name=provider_name,
+                    model_name=model_name,
+                    region=region,
+                    blacklisted_at=now,
+                    expires_at=expires_at,
+                    failure_reason=failure_reason,
+                    failure_count=1,
+                )
+                session.add(new_entry)
+                current_failure_count = 1
+
+                logger.warning(
+                    f"Added {provider_name} model '{model_name}' region '{region}' to blacklist "
+                    f"until {expires_at.isoformat()} due to: {failure_reason or 'unknown error'}"
+                )
+
+            if current_failure_count > 3:
                 logger.error(
                     f"Region {region} for {provider_name} model '{model_name}' has failed for more than 3 times. "
                 )
 
-            session.execute(stmt)
             session.commit()
-
-            logger.warning(
-                f"Added {provider_name} model '{model_name}' region '{region}' to blacklist "
-                f"until {expires_at.isoformat()} due to: {failure_reason or 'unknown error'}"
-            )
 
     @staticmethod
     def get_non_blacklisted_regions(

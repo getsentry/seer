@@ -52,7 +52,7 @@ class TestLlmRegionBlacklistService:
             assert entry.expires_at > now_utc
 
     def test_add_to_blacklist_updates_existing_entry(self):
-        """Test that adding an existing entry updates it and increments failure count"""
+        """Test that adding an existing non-expired entry extends it and increments failure count"""
         # Add first time
         LlmRegionBlacklistService.add_to_blacklist(
             provider_name="anthropic",
@@ -61,7 +61,7 @@ class TestLlmRegionBlacklistService:
             failure_reason="First failure",
         )
 
-        # Add second time
+        # Add second time (should extend the existing entry)
         LlmRegionBlacklistService.add_to_blacklist(
             provider_name="anthropic",
             model_name="claude-3-sonnet",
@@ -83,6 +83,52 @@ class TestLlmRegionBlacklistService:
             entry = entries[0]
             assert entry.failure_reason == "Second failure"
             assert entry.failure_count == 2
+
+    def test_add_to_blacklist_creates_new_entry_after_expiry(self):
+        """Test that adding to blacklist creates a new entry when previous one has expired"""
+        # Manually create an expired entry
+        past_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
+        with Session() as session:
+            expired_entry = DbLlmRegionBlacklist(
+                provider_name="anthropic",
+                model_name="claude-3-sonnet",
+                region="us-east-1",
+                blacklisted_at=past_time,
+                expires_at=past_time + datetime.timedelta(minutes=1),  # Already expired
+                failure_count=5,  # Had multiple failures before
+                failure_reason="Old failure",
+            )
+            session.add(expired_entry)
+            session.commit()
+
+        # Add to blacklist again (should create new entry since old one expired)
+        LlmRegionBlacklistService.add_to_blacklist(
+            provider_name="anthropic",
+            model_name="claude-3-sonnet",
+            region="us-east-1",
+            failure_reason="New failure",
+        )
+
+        # Verify new entry was created with fresh failure count
+        with Session() as session:
+            entries = (
+                session.query(DbLlmRegionBlacklist)
+                .filter_by(
+                    provider_name="anthropic", model_name="claude-3-sonnet", region="us-east-1"
+                )
+                .all()
+            )
+
+            # Should have only one entry (expired one should be cleaned up)
+            assert len(entries) == 1
+            entry = entries[0]
+            assert entry.failure_reason == "New failure"
+            assert entry.failure_count == 1  # Should start fresh, not continue from expired entry
+            # Verify it's a new entry (not expired)
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            if entry.expires_at.tzinfo is None:
+                now_utc = now_utc.replace(tzinfo=None)
+            assert entry.expires_at > now_utc
 
     def test_is_region_blacklisted_returns_true_for_blacklisted(self):
         """Test that is_region_blacklisted returns True for blacklisted regions"""

@@ -618,7 +618,7 @@ class DbLlmRegionBlacklist(Base):
     failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     __table_args__ = (
-        UniqueConstraint("provider_name", "model_name", "region"),
+        UniqueConstraint("provider_name", "model_name", "region", "blacklisted_at"),
         Index("ix_llm_region_blacklist_provider_model", "provider_name", "model_name"),
         Index("ix_llm_region_blacklist_expires_at", "expires_at"),
     )

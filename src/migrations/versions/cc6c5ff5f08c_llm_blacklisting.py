@@ -1,8 +1,8 @@
-"""Llm Blacklisting
+"""Llm blacklisting
 
-Revision ID: 80c4604523cb
+Revision ID: cc6c5ff5f08c
 Revises: 1c4ab1bd7b98
-Create Date: 2025-06-05 17:02:52.541840
+Create Date: 2025-06-06 20:41:35.560122
 
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "80c4604523cb"
+revision = "cc6c5ff5f08c"
 down_revision = "1c4ab1bd7b98"
 branch_labels = None
 depends_on = None
@@ -29,7 +29,7 @@ def upgrade():
         sa.Column("failure_reason", sa.String(), nullable=True),
         sa.Column("failure_count", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("provider_name", "model_name", "region"),
+        sa.UniqueConstraint("provider_name", "model_name", "region", "blacklisted_at"),
     )
     with op.batch_alter_table("llm_region_blacklist", schema=None) as batch_op:
         batch_op.create_index("ix_llm_region_blacklist_expires_at", ["expires_at"], unique=False)
