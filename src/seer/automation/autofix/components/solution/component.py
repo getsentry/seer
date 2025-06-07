@@ -104,11 +104,16 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
     def invoke(
         self,
         request: SolutionRequest,
+        tools: BaseTools | None = None,
         llm_client: LlmClient = injected,
         config: AppConfig = injected,
     ) -> SolutionOutput | None:
+        should_cleanup = False
+        if not tools:
+            tools = BaseTools(self.context)
+            should_cleanup = True
 
-        with BaseTools(self.context) as tools:
+        try:
             memory = request.initial_memory
 
             state = self.context.state.get()
@@ -222,3 +227,7 @@ class SolutionComponent(BaseComponent[SolutionRequest, SolutionOutput]):
             finally:
                 with self.context.state.update() as cur:
                     cur.usage += agent.usage
+
+        finally:
+            if should_cleanup:
+                tools.cleanup()

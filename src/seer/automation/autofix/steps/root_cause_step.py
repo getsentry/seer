@@ -26,6 +26,7 @@ from seer.automation.autofix.steps.solution_step import (
     AutofixSolutionStepRequest,
 )
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.autofix.utils import find_original_snippet
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
@@ -90,103 +91,103 @@ class RootCauseStep(AutofixPipelineStep):
         if not summary:
             summary = self.context.get_issue_summary()
 
-        root_cause_output = RootCauseAnalysisComponent(self.context).invoke(
-            RootCauseAnalysisRequest(
-                event_details=event_details,
-                instruction=state.request.instruction,
-                summary=summary,
-                initial_memory=self.request.initial_memory,
-                profile=state.request.profile,
-                trace_tree=state.request.trace_tree,
-                logs=state.request.logs,
+        with BaseTools(self.context) as tools:
+            root_cause_output = RootCauseAnalysisComponent(self.context).invoke(
+                RootCauseAnalysisRequest(
+                    event_details=event_details,
+                    instruction=state.request.instruction,
+                    summary=summary,
+                    initial_memory=self.request.initial_memory,
+                    profile=state.request.profile,
+                    trace_tree=state.request.trace_tree,
+                    logs=state.request.logs,
+                ),
+                tools=tools,
             )
-        )
 
-        state = self.context.state.get()
-        if state.steps and state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
-            return
-        if make_kill_signal() in state.signals:
-            return
+            state = self.context.state.get()
+            if state.steps and state.steps[-1].status == AutofixStatus.WAITING_FOR_USER_RESPONSE:
+                return
+            if make_kill_signal() in state.signals:
+                return
 
-        # create URLs to relevant code snippets
-        reproduction_urls = self._get_reproduction_urls(root_cause_output)
-        if root_cause_output.causes and reproduction_urls:
-            root_cause_output.causes[0].reproduction_urls = reproduction_urls
+            # create URLs to relevant code snippets
+            reproduction_urls = self._get_reproduction_urls(root_cause_output)
+            if root_cause_output.causes and reproduction_urls:
+                root_cause_output.causes[0].reproduction_urls = reproduction_urls
 
-        self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
+            self.context.event_manager.send_root_cause_analysis_result(root_cause_output)
 
-        # confidence evaluation
-        if not state.request.options.disable_interactivity:
-            run_memory = self.context.get_memory("root_cause_analysis")
-            confidence_output = ConfidenceComponent(self.context).invoke(
-                ConfidenceRequest(
-                    run_memory=run_memory,
-                    step_goal_description="root cause analysis",
-                    next_step_goal_description="figuring out a solution",
+            # confidence evaluation
+            if not state.request.options.disable_interactivity:
+                run_memory = self.context.get_memory("root_cause_analysis")
+                confidence_output = ConfidenceComponent(self.context).invoke(
+                    ConfidenceRequest(
+                        run_memory=run_memory,
+                        step_goal_description="root cause analysis",
+                        next_step_goal_description="figuring out a solution",
+                    )
                 )
+                if confidence_output:
+                    with self.context.state.update() as cur:
+                        cur.steps[-1].output_confidence_score = (
+                            confidence_output.output_confidence_score
+                        )
+                        cur.steps[-1].proceed_confidence_score = (
+                            confidence_output.proceed_confidence_score
+                        )
+                        sentry_sdk.set_tags(
+                            {
+                                "has_agent_comment": bool(confidence_output.question),
+                            }
+                        )
+                        if confidence_output.question:
+                            cur.steps[-1].agent_comment_thread = CommentThread(
+                                id=str(uuid.uuid4()),
+                                messages=[
+                                    Message(role="assistant", content=confidence_output.question)
+                                ],
+                            )
+
+            self.context.event_manager.add_log(
+                "Here is Autofix's proposed root cause."
+                if root_cause_output.termination_reason is None and root_cause_output.causes
+                else "Autofix couldn't find the root cause. Maybe help Autofix rethink by editing a card above?"
             )
-            if confidence_output:
-                with self.context.state.update() as cur:
-                    cur.steps[-1].output_confidence_score = (
-                        confidence_output.output_confidence_score
-                    )
-                    cur.steps[-1].proceed_confidence_score = (
-                        confidence_output.proceed_confidence_score
-                    )
-                    sentry_sdk.set_tags(
-                        {
-                            "has_agent_comment": bool(confidence_output.question),
-                        }
-                    )
-                    if confidence_output.question:
-                        cur.steps[-1].agent_comment_thread = CommentThread(
-                            id=str(uuid.uuid4()),
-                            messages=[
-                                Message(role="assistant", content=confidence_output.question)
-                            ],
+
+            # GitHub Copilot can comment on a provided PR with the root cause analysis
+            pr_to_comment_on = state.request.options.comment_on_pr_with_url
+            if pr_to_comment_on:
+                causes = root_cause_output.causes
+                cause_string = "Autofix couldn't find a root cause for this issue."
+                if causes:
+                    cause_string = causes[0].to_markdown_string()
+                for repo in state.request.repos:
+                    if (
+                        repo.name in pr_to_comment_on and repo.owner in pr_to_comment_on
+                    ):  # crude check that the repo matches the PR we want to comment on
+                        self.context.comment_root_cause_on_pr(
+                            pr_url=pr_to_comment_on, repo_definition=repo, root_cause=cause_string
                         )
 
-        self.context.event_manager.add_log(
-            "Here is Autofix's proposed root cause."
-            if root_cause_output.termination_reason is None and root_cause_output.causes
-            else "Autofix couldn't find the root cause. Maybe help Autofix rethink by editing a card above?"
-        )
+            # Early return if no causes were found
+            if not root_cause_output.causes:
+                return
 
-        # GitHub Copilot can comment on a provided PR with the root cause analysis
-        pr_to_comment_on = state.request.options.comment_on_pr_with_url
-        if pr_to_comment_on:
-            causes = root_cause_output.causes
-            cause_string = "Autofix couldn't find a root cause for this issue."
-            if causes:
-                cause_string = causes[0].to_markdown_string()
-            for repo in state.request.repos:
-                if (
-                    repo.name in pr_to_comment_on and repo.owner in pr_to_comment_on
-                ):  # crude check that the repo matches the PR we want to comment on
-                    self.context.comment_root_cause_on_pr(
-                        pr_url=pr_to_comment_on, repo_definition=repo, root_cause=cause_string
-                    )
-
-        # Early return if no causes were found
-        if not root_cause_output.causes:
-            return
-
-        # Only proceed with solution step if we have root causes
-        self.context.event_manager.set_selected_root_cause(
-            AutofixRootCauseUpdatePayload(
-                cause_id=root_cause_output.causes[0].id,
+            # Only proceed with solution step if we have root causes
+            self.context.event_manager.set_selected_root_cause(
+                AutofixRootCauseUpdatePayload(
+                    cause_id=root_cause_output.causes[0].id,
+                )
             )
-        )
-        self.next(
-            AutofixSolutionStep.get_signature(
-                AutofixSolutionStepRequest(
-                    **self.step_request_fields,
-                    initial_memory=[],
-                ),
-            ),
-            queue=app_config.CELERY_WORKER_QUEUE,
-            run_sync=True,
-        )
+
+            # Call solution step directly without creating a new Celery task
+            solution_step_request = AutofixSolutionStepRequest(
+                **self.step_request_fields,
+                initial_memory=[],
+            )
+            solution_step = AutofixSolutionStep(solution_step_request.model_dump(mode="json"))
+            solution_step._invoke(shared_tools=tools)
 
     def _get_reproduction_urls(self, root_cause_output: RootCauseAnalysisOutput):
         reproduction_urls: list[str | None] = []
