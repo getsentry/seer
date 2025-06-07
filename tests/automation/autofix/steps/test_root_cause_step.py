@@ -25,15 +25,31 @@ from seer.automation.summarize.issue import IssueSummary
 
 
 class TestRootCauseStep(unittest.TestCase):
-    @patch("seer.automation.autofix.steps.root_cause_step.RootCauseAnalysisComponent")
-    def test_happy_path(self, mock_root_cause_component):
+    def setUp(self):
+        self.mock_tools = MagicMock()
+        self.mock_solution_instance = MagicMock()
+
+        self.mock_tools.return_value.__enter__ = MagicMock(return_value=self.mock_tools)
+        self.mock_tools.return_value.__exit__ = MagicMock(return_value=None)
+
+        self.mock_solution_instance.return_value = self.mock_solution_instance
+
+    def _create_base_mock_context(self):
+        """Helper to create basic mock context with common setup"""
         mock_context = MagicMock()
+        mock_context.event_manager = MagicMock()
+        mock_context.has_missing_codebase_indexes.return_value = False
         RootCauseStep._instantiate_context = MagicMock(return_value=mock_context)
+        return mock_context
+
+    @patch("seer.automation.autofix.steps.root_cause_step.AutofixSolutionStep")
+    @patch("seer.automation.autofix.steps.root_cause_step.BaseTools")
+    @patch("seer.automation.autofix.steps.root_cause_step.RootCauseAnalysisComponent")
+    def test_happy_path(self, mock_root_cause_component, mock_base_tools, mock_solution_step):
+        mock_context = self._create_base_mock_context()
 
         error_event = next(generate(SentryEventData))
 
-        mock_context.event_manager = MagicMock()
-        mock_context.has_missing_codebase_indexes.return_value = False
         mock_context.state.get.return_value = AutofixContinuation(
             request=AutofixRequest(
                 organization_id=1,
@@ -61,17 +77,18 @@ class TestRootCauseStep(unittest.TestCase):
         step.context.process_event_paths.assert_called()
         step.context.event_manager.send_root_cause_analysis_result.assert_called()
 
+    @patch("seer.automation.autofix.steps.root_cause_step.AutofixSolutionStep")
+    @patch("seer.automation.autofix.steps.root_cause_step.BaseTools")
     @patch("seer.automation.autofix.steps.root_cause_step.RootCauseAnalysisComponent")
-    def test_github_copilot_pr_comment(self, mock_root_cause_component):
-        mock_context = MagicMock()
-        RootCauseStep._instantiate_context = MagicMock(return_value=mock_context)
+    def test_github_copilot_pr_comment(
+        self, mock_root_cause_component, mock_base_tools, mock_solution_step
+    ):
+        mock_context = self._create_base_mock_context()
 
         error_event = next(generate(SentryEventData))
         pr_url = "https://github.com/example/repo/pull/123"
         repo = RepoDefinition(name="repo", owner="example", provider="github", external_id="123")
 
-        mock_context.event_manager = MagicMock()
-        mock_context.has_missing_codebase_indexes.return_value = False
         mock_context.state.get.return_value = AutofixContinuation(
             request=AutofixRequest(
                 organization_id=1,
@@ -125,12 +142,18 @@ class TestRootCauseStep(unittest.TestCase):
         step.context.process_event_paths.assert_called()
         step.context.event_manager.send_root_cause_analysis_result.assert_called()
 
+    @patch("seer.automation.autofix.steps.root_cause_step.AutofixSolutionStep")
+    @patch("seer.automation.autofix.steps.root_cause_step.BaseTools")
     @patch("seer.automation.autofix.steps.root_cause_step.RootCauseAnalysisComponent")
     @patch("seer.automation.autofix.steps.root_cause_step.ConfidenceComponent")
-    def test_confidence_evaluation(self, mock_confidence_component, mock_root_cause_component):
-        # Set up the mock context
-        mock_context = MagicMock()
-        RootCauseStep._instantiate_context = MagicMock(return_value=mock_context)
+    def test_confidence_evaluation(
+        self,
+        mock_confidence_component,
+        mock_root_cause_component,
+        mock_base_tools,
+        mock_solution_step,
+    ):
+        mock_context = self._create_base_mock_context()
 
         # Create a test event
         error_event = next(generate(SentryEventData))
@@ -147,8 +170,6 @@ class TestRootCauseStep(unittest.TestCase):
         )
 
         # Set up the state with interactivity enabled
-        mock_context.event_manager = MagicMock()
-        mock_context.has_missing_codebase_indexes.return_value = False
         mock_context.state.get.return_value = AutofixContinuation(
             request=AutofixRequest(
                 organization_id=1,
@@ -208,15 +229,20 @@ class TestRootCauseStep(unittest.TestCase):
             == "This is a test question"
         )
 
+    @patch("seer.automation.autofix.steps.root_cause_step.AutofixSolutionStep")
+    @patch("seer.automation.autofix.steps.root_cause_step.BaseTools")
     @patch("seer.automation.autofix.steps.root_cause_step.RootCauseAnalysisComponent")
     @patch("seer.automation.autofix.steps.root_cause_step.ConfidenceComponent")
     @patch("seer.automation.autofix.steps.root_cause_step.CommentThread")
     def test_confidence_evaluation_no_comment(
-        self, mock_comment_thread, mock_confidence_component, mock_root_cause_component
+        self,
+        mock_comment_thread,
+        mock_confidence_component,
+        mock_root_cause_component,
+        mock_base_tools,
+        mock_solution_step,
     ):
-        # Set up the mock context
-        mock_context = MagicMock()
-        RootCauseStep._instantiate_context = MagicMock(return_value=mock_context)
+        mock_context = self._create_base_mock_context()
 
         # Create a test event
         error_event = next(generate(SentryEventData))
@@ -233,8 +259,6 @@ class TestRootCauseStep(unittest.TestCase):
         )
 
         # Set up the state with interactivity enabled
-        mock_context.event_manager = MagicMock()
-        mock_context.has_missing_codebase_indexes.return_value = False
         mock_context.state.get.return_value = AutofixContinuation(
             request=AutofixRequest(
                 organization_id=1,

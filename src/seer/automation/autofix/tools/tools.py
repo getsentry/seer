@@ -52,7 +52,6 @@ class BaseTools:
         retrieval_top_k: int = 8,
         repo_client_type: RepoClientType = RepoClientType.READ,
     ):
-        print("INITIALIZING TOOLS")
         self.context = context
         self.retrieval_top_k = retrieval_top_k
         self.repo_client_type = repo_client_type
@@ -61,7 +60,6 @@ class BaseTools:
         self._download_repos()
 
     def _download_repos(self):
-        print("DOWNLOADING REPOS")
         repo_names = self._get_repo_names()
         if not repo_names:
             return
@@ -402,7 +400,6 @@ class BaseTools:
     @sentry_sdk.trace
     def cleanup(self):
         """Clean up all repository clients."""
-        print("CLEANING UP TOOLS")
         for repo_name, local_client in list(self.repo_managers.items()):
             try:
                 local_client.cleanup()
@@ -1331,7 +1328,6 @@ class SemanticSearchTools(BaseTools):
         retrieval_top_k: int = 8,
         repo_client_type: RepoClientType = RepoClientType.READ,
     ):
-        print("INITIALIZING SEMANTIC SEARCH TOOLS (no repo downloads)")
         self.context = context
         self.retrieval_top_k = retrieval_top_k
         self.repo_client_type = repo_client_type
