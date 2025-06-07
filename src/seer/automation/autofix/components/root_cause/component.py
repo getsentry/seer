@@ -31,156 +31,172 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     def invoke(
         self,
         request: RootCauseAnalysisRequest,
-        tools: BaseTools,
+        tools: BaseTools | None = None,
         llm_client: LlmClient = injected,
         config: AppConfig = injected,
     ) -> RootCauseAnalysisOutput:
-        state = self.context.state.get()
-
-        readable_repos = state.readable_repos
-        unreadable_repos = state.unreadable_repos
-
-        sentry_sdk.set_tag("is_rethinking", len(request.initial_memory) > 0)
-
-        agent = AutofixAgent(
-            tools=(tools.get_tools(can_access_repos=bool(readable_repos))),
-            config=AgentConfig(
-                interactive=True,
-            ),
-            context=self.context,
-            memory=request.initial_memory,
-            name="Root Cause Analysis Agent",
-        )
-
-        repos_str = format_repo_prompt(readable_repos, unreadable_repos)
+        should_cleanup = False
+        if not tools:
+            tools = BaseTools(self.context)
+            should_cleanup = True
 
         try:
-            de_discovery_config = {
-                "model": AnthropicProvider.model("claude-sonnet-4@20250514"),
-                "max_tokens": 8192,
-            }
-            us_discovery_config = {
-                "models": [
-                    GeminiProvider.model(
-                        "gemini-2.5-flash-preview-04-17",
-                        region="us-central1",  # Only try in this region for this model.
-                    ),
-                    GeminiProvider.model("gemini-2.5-flash-preview-05-20"),
-                ],
-                "max_tokens": 32000,
-            }
+            state = self.context.state.get()
 
-            response = agent.run(
-                run_config=RunConfig(
-                    prompt=(
-                        RootCauseAnalysisPrompts.format_default_msg(
-                            event=request.event_details.format_event(),
-                            summary=request.summary,
-                            code_map=request.profile,
-                            instruction=request.instruction,
-                            trace_tree=request.trace_tree,
-                            logs=request.logs,
-                        )
-                        if not request.initial_memory
-                        else None
-                    ),
-                    system_prompt=RootCauseAnalysisPrompts.format_system_msg(
-                        repos_str=repos_str, mode="context"
-                    ),
-                    max_iterations=64,
-                    memory_storage_key="root_cause_analysis",
-                    run_name="Root Cause Discovery",
-                    temperature=0.0,
-                    **(
-                        de_discovery_config if config.SENTRY_REGION == "de" else us_discovery_config
-                    ),
+            readable_repos = state.readable_repos
+            unreadable_repos = state.unreadable_repos
+
+            sentry_sdk.set_tag("is_rethinking", len(request.initial_memory) > 0)
+
+            agent = AutofixAgent(
+                tools=(tools.get_tools(can_access_repos=bool(readable_repos))),
+                config=AgentConfig(
+                    interactive=True,
                 ),
+                context=self.context,
+                memory=request.initial_memory,
+                name="Root Cause Analysis Agent",
             )
 
-            if not response:
-                self.context.store_memory("root_cause_analysis", agent.memory)
-                return RootCauseAnalysisOutput(
-                    causes=[],
-                    termination_reason="Something went wrong when Autofix was running.",
-                )
+            repos_str = format_repo_prompt(readable_repos, unreadable_repos)
 
-            self.context.event_manager.add_log("Simulating profound thought...")
+            try:
+                de_discovery_config = {
+                    "model": AnthropicProvider.model("claude-sonnet-4@20250514"),
+                    "max_tokens": 8192,
+                }
+                us_discovery_config = {
+                    "models": [
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-04-17",
+                            region="us-central1",  # Only try in this region for this model.
+                        ),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20"),
+                    ],
+                    "max_tokens": 32000,
+                }
 
-            # reason to propose final root cause
-            agent.tools = []
-            response = agent.run(
-                run_config=RunConfig(
-                    model=AnthropicProvider.model("claude-sonnet-4@20250514"),
-                    prompt=RootCauseAnalysisPrompts.root_cause_proposal_msg(),
-                    system_prompt=RootCauseAnalysisPrompts.format_system_msg(
-                        repos_str=repos_str, mode="reasoning"
+                response = agent.run(
+                    run_config=RunConfig(
+                        prompt=(
+                            RootCauseAnalysisPrompts.format_default_msg(
+                                event=request.event_details.format_event(),
+                                summary=request.summary,
+                                code_map=request.profile,
+                                instruction=request.instruction,
+                                trace_tree=request.trace_tree,
+                                logs=request.logs,
+                            )
+                            if not request.initial_memory
+                            else None
+                        ),
+                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(
+                            repos_str=repos_str, mode="context"
+                        ),
+                        max_iterations=64,
+                        memory_storage_key="root_cause_analysis",
+                        run_name="Root Cause Discovery",
+                        temperature=0.0,
+                        **(
+                            de_discovery_config
+                            if config.SENTRY_REGION == "de"
+                            else us_discovery_config
+                        ),
                     ),
-                    memory_storage_key="root_cause_analysis",
-                    run_name="Root Cause Proposal",
-                    temperature=1.0,
-                    reasoning_effort="high",
-                    max_tokens=32000,
-                )
-            )
-
-            if not response:
-                self.context.store_memory("root_cause_analysis", agent.memory)
-                return RootCauseAnalysisOutput(
-                    causes=[],
-                    termination_reason="Something went wrong when Autofix was running.",
                 )
 
-            if "<NO_ROOT_CAUSES>" in response:
-                reason = response.split("<NO_ROOT_CAUSES>")[1].strip()
-                if "</NO_ROOT_CAUSES>" in reason:
-                    reason = reason.split("</NO_ROOT_CAUSES>")[0].strip()
-                return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
+                if not response:
+                    self.context.store_memory("root_cause_analysis", agent.memory)
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
 
-            self.context.event_manager.add_log("Arranging data in a way that looks intentional...")
+                self.context.event_manager.add_log("Simulating profound thought...")
 
-            de_formatter_config = {
-                "model": GeminiProvider.model("gemini-2.0-flash-001"),
-                "max_tokens": 8192,
-            }
+                # reason to propose final root cause
+                agent.tools = []
+                response = agent.run(
+                    run_config=RunConfig(
+                        model=AnthropicProvider.model("claude-sonnet-4@20250514"),
+                        prompt=RootCauseAnalysisPrompts.root_cause_proposal_msg(),
+                        system_prompt=RootCauseAnalysisPrompts.format_system_msg(
+                            repos_str=repos_str, mode="reasoning"
+                        ),
+                        memory_storage_key="root_cause_analysis",
+                        run_name="Root Cause Proposal",
+                        temperature=1.0,
+                        reasoning_effort="high",
+                        max_tokens=32000,
+                    )
+                )
 
-            us_formatter_config = {
-                "models": [
-                    GeminiProvider.model(
-                        "gemini-2.5-flash-preview-04-17",
-                        region="us-central1",  # Only try in this region for this model.
+                if not response:
+                    self.context.store_memory("root_cause_analysis", agent.memory)
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
+
+                if "<NO_ROOT_CAUSES>" in response:
+                    reason = response.split("<NO_ROOT_CAUSES>")[1].strip()
+                    if "</NO_ROOT_CAUSES>" in reason:
+                        reason = reason.split("</NO_ROOT_CAUSES>")[0].strip()
+                    return RootCauseAnalysisOutput(causes=[], termination_reason=reason)
+
+                self.context.event_manager.add_log(
+                    "Arranging data in a way that looks intentional..."
+                )
+
+                de_formatter_config = {
+                    "model": GeminiProvider.model("gemini-2.0-flash-001"),
+                    "max_tokens": 8192,
+                }
+
+                us_formatter_config = {
+                    "models": [
+                        GeminiProvider.model(
+                            "gemini-2.5-flash-preview-04-17",
+                            region="us-central1",  # Only try in this region for this model.
+                        ),
+                        GeminiProvider.model("gemini-2.5-flash-preview-05-20"),
+                    ],
+                    "max_tokens": 32000,
+                }
+
+                formatted_response = llm_client.generate_structured(
+                    messages=agent.memory,
+                    prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
+                    response_format=MultipleRootCauseAnalysisOutputPrompt,
+                    run_name="Root Cause Extraction & Formatting",
+                    **(
+                        de_formatter_config if config.SENTRY_REGION == "de" else us_formatter_config
                     ),
-                    GeminiProvider.model("gemini-2.5-flash-preview-05-20"),
-                ],
-                "max_tokens": 32000,
-            }
-
-            formatted_response = llm_client.generate_structured(
-                messages=agent.memory,
-                prompt=RootCauseAnalysisPrompts.root_cause_formatter_msg(),
-                response_format=MultipleRootCauseAnalysisOutputPrompt,
-                run_name="Root Cause Extraction & Formatting",
-                **(de_formatter_config if config.SENTRY_REGION == "de" else us_formatter_config),
-            )
-
-            if not formatted_response or not getattr(formatted_response, "parsed", None):
-                return RootCauseAnalysisOutput(
-                    causes=[],
-                    termination_reason="Something went wrong when Autofix was running.",
                 )
 
-            parsed = formatted_response.parsed
-            cause = getattr(parsed, "cause", None)
-            if not cause:
-                return RootCauseAnalysisOutput(
-                    causes=[],
-                    termination_reason="Something went wrong when Autofix was running.",
-                )
+                if not formatted_response or not getattr(formatted_response, "parsed", None):
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
 
-            cause_model = cause.to_model()
-            cause_model.id = 0
-            causes = [cause_model]
-            return RootCauseAnalysisOutput(causes=causes, termination_reason=None)
+                parsed = formatted_response.parsed
+                cause = getattr(parsed, "cause", None)
+                if not cause:
+                    return RootCauseAnalysisOutput(
+                        causes=[],
+                        termination_reason="Something went wrong when Autofix was running.",
+                    )
+
+                cause_model = cause.to_model()
+                cause_model.id = 0
+                causes = [cause_model]
+                return RootCauseAnalysisOutput(causes=causes, termination_reason=None)
+
+            finally:
+                with self.context.state.update() as cur:
+                    cur.usage += agent.usage
 
         finally:
-            with self.context.state.update() as cur:
-                cur.usage += agent.usage
+            if should_cleanup:
+                tools.cleanup()
