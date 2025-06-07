@@ -275,6 +275,7 @@ class RepoManager:
 
                 # Remove all unsupported files
                 valid_files = self.repo_client.get_valid_file_paths()
+                unsupported_file_extensions = set()
                 for root, dirs, files in os.walk(self.repo_path, topdown=False):
                     for file in files:
                         # Compute relative path from repo_path
@@ -283,7 +284,7 @@ class RepoManager:
                         if rel_path not in valid_files:
                             try:
                                 os.remove(os.path.join(root, file))
-                                logger.info(f"Removed unsupported file from download: {rel_path}")
+                                unsupported_file_extensions.add(os.path.splitext(file)[1])
                             except Exception as e:
                                 logger.warning(f"Failed to remove file {rel_path}: {e}")
                     # Remove empty directories
@@ -292,6 +293,11 @@ class RepoManager:
                             os.rmdir(root)
                         except Exception as e:
                             logger.warning(f"Failed to remove directory {root}: {e}")
+
+                if unsupported_file_extensions:
+                    logger.info(
+                        f"Removed unsupported file extensions from download: {unsupported_file_extensions}"
+                    )
 
             # Clean up the tarball file
             if os.path.exists(tarfile_path):
