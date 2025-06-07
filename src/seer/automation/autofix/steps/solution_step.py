@@ -15,6 +15,7 @@ from seer.automation.autofix.config import (
 )
 from seer.automation.autofix.models import AutofixStatus, CommentThread
 from seer.automation.autofix.steps.steps import AutofixPipelineStep
+from seer.automation.autofix.tools.tools import BaseTools
 from seer.automation.models import EventDetails
 from seer.automation.pipeline import PipelineStepTaskRequest
 from seer.automation.utils import make_kill_signal
@@ -52,7 +53,7 @@ class AutofixSolutionStep(AutofixPipelineStep):
 
     @observe(name="Autofix - Solution Step")
     @sentry_sdk.trace
-    def _invoke(self, **kwargs):
+    def _invoke(self, shared_tools: BaseTools | None = None, **kwargs):
         super()._invoke()
 
         self.logger.info("Executing Autofix - Solution Step")
@@ -91,7 +92,8 @@ class AutofixSolutionStep(AutofixPipelineStep):
                 initial_memory=self.request.initial_memory,
                 profile=state.request.profile,
                 trace_tree=state.request.trace_tree,
-            )
+            ),
+            tools=shared_tools,
         )
 
         if solution_output is None:

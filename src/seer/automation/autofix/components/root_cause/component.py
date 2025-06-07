@@ -31,10 +31,16 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
     def invoke(
         self,
         request: RootCauseAnalysisRequest,
+        tools: BaseTools | None = None,
         llm_client: LlmClient = injected,
         config: AppConfig = injected,
     ) -> RootCauseAnalysisOutput:
-        with BaseTools(self.context) as tools:
+        should_cleanup = False
+        if not tools:
+            tools = BaseTools(self.context)
+            should_cleanup = True
+
+        try:
             state = self.context.state.get()
 
             readable_repos = state.readable_repos
@@ -190,3 +196,7 @@ class RootCauseAnalysisComponent(BaseComponent[RootCauseAnalysisRequest, RootCau
             finally:
                 with self.context.state.update() as cur:
                     cur.usage += agent.usage
+
+        finally:
+            if should_cleanup:
+                tools.cleanup()

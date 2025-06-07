@@ -1322,6 +1322,17 @@ class BaseTools:
 
 
 class SemanticSearchTools(BaseTools):
+    def __init__(
+        self,
+        context: AutofixContext | CodegenContext,
+        retrieval_top_k: int = 8,
+        repo_client_type: RepoClientType = RepoClientType.READ,
+    ):
+        self.context = context
+        self.retrieval_top_k = retrieval_top_k
+        self.repo_client_type = repo_client_type
+        self.repo_managers = {}
+
     def get_tools(
         self, can_access_repos: bool = True, include_claude_tools: bool = False
     ) -> list[ClaudeTool | FunctionTool]:
